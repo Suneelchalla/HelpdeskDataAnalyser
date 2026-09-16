@@ -1,6 +1,6 @@
 /* HD Dashboards — Jira Live Fetch (v3 API, extension-only, CSP-safe) */
 (function () {
-  var CFG_KEY = "hd-jira-cfg", PAGE_SIZE = 100;
+  var CFG_KEY = "hd-jira-cfg", PAGE_SIZE = 1000;
 
   /* ══════ Bridge detection via postMessage ══════ */
   var _bridgeReady = false, _seq = 0, _pending = {};
