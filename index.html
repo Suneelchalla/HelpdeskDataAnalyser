@@ -528,6 +528,10 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
         <div class="js-row"><label class="js-lbl">Next Action</label><select id="jsFldNa"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Time to First Response</label><select id="jsFldFr"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Time to Resolution</label><select id="jsFldRes"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Root Cause</label><select id="jsFldRc"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Type of Fix</label><select id="jsFldTof"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Screen Name</label><select id="jsFldSn"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Menu Head</label><select id="jsFldMh"><option value="">— not mapped —</option></select></div>
         <div></div>
       </div>
     </div>
@@ -578,7 +582,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   el("jiraSetupBtn2").onclick=openSetup;
 
   function fillSelects(fields, fm){
-    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes"};
+    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh"};
     Object.keys(ids).forEach(function(k){
       var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
       fields.forEach(function(f){
@@ -624,7 +628,9 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
       fieldMap:{
         svmInCharge: el("jsFldSvm").value, currentWorker: el("jsFldCw").value,
         nextAction: el("jsFldNa").value, timeToFirstResponse: el("jsFldFr").value,
-        timeToResolution: el("jsFldRes").value
+        timeToResolution: el("jsFldRes").value,
+        rootCause: el("jsFldRc").value, typeOfFix: el("jsFldTof").value,
+        screenName: el("jsFldSn").value, menuHead: el("jsFldMh").value
       },
       _fields: _fields||[]
     });
