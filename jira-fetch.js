@@ -1,11 +1,9 @@
-/* HD Dashboards — Jira Live Fetch (extension-only, CSP-safe) */
+/* HD Dashboards — Jira Live Fetch (v3 API, extension-only, CSP-safe) */
 (function () {
   var CFG_KEY = "hd-jira-cfg", PAGE_SIZE = 100;
 
-  /* ══════ Bridge detection via postMessage (CSP-safe) ══════ */
-  var _bridgeReady = false;
-  var _seq = 0, _pending = {};
-
+  /* ══════ Bridge detection via postMessage ══════ */
+  var _bridgeReady = false, _seq = 0, _pending = {};
   window.addEventListener("message", function (e) {
     if (!e.data) return;
     if (e.data.type === "HD_BRIDGE_READY") { _bridgeReady = true; return; }
@@ -15,21 +13,16 @@
     if (e.data.ok) cb.resolve(e.data.data);
     else cb.reject(new Error(e.data.error || "Bridge error"));
   });
-
-  /* Ping the bridge in case it loaded before us */
   window.postMessage({ type: "HD_BRIDGE_PING" }, "*");
-  /* And again after a short delay for safety */
   setTimeout(function(){ window.postMessage({ type: "HD_BRIDGE_PING" }, "*"); }, 500);
 
-  function bridgeCall(host, path) {
+  function bridgeCall(host, path, method, body) {
     if (!_bridgeReady) return Promise.reject(new Error("EXTENSION_NOT_FOUND"));
     return new Promise(function (resolve, reject) {
       var id = ++_seq;
       _pending[id] = { resolve: resolve, reject: reject };
-      window.postMessage({ type: "HD_BRIDGE_CALL", id: id, host: host, path: path }, "*");
-      setTimeout(function () {
-        if (_pending[id]) { delete _pending[id]; reject(new Error("Request timed out — is the extension enabled?")); }
-      }, 60000);
+      window.postMessage({ type: "HD_BRIDGE_CALL", id: id, host: host, path: path, method: method || "GET", body: body || null }, "*");
+      setTimeout(function () { if (_pending[id]) { delete _pending[id]; reject(new Error("Request timed out.")); } }, 60000);
     });
   }
 
@@ -38,10 +31,10 @@
   function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
 
   function testConnection(cfg) {
-    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/2/myself");
+    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/3/myself");
   }
   function discoverFields(cfg) {
-    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/2/field")
+    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/3/field")
       .then(function (fields) {
         return fields.filter(function (f) { return f.custom; })
           .sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); });
@@ -63,13 +56,12 @@
     return map;
   }
 
-  /* ══════ Paginated search ══════ */
+  /* ══════ Paginated search (v3 POST) ══════ */
   function search(host, jql, fields, onProgress) {
     var all = [];
     function page(start) {
-      var path = "/rest/api/2/search?jql=" + encodeURIComponent(jql)
-        + "&startAt=" + start + "&maxResults=" + PAGE_SIZE + "&fields=" + fields.join(",");
-      return bridgeCall(host, path).then(function (data) {
+      var body = JSON.stringify({ jql: jql, startAt: start, maxResults: PAGE_SIZE, fields: fields });
+      return bridgeCall(host, "/rest/api/3/search/jql", "POST", body).then(function (data) {
         all = all.concat(data.issues || []);
         if (onProgress) onProgress(all.length, data.total);
         return all.length < data.total ? page(start + PAGE_SIZE) : all;
@@ -115,7 +107,6 @@
     if (s.ongoingCycle) { var o = s.ongoingCycle; if (o.breached && o.elapsedTime) return "-" + (o.elapsedTime.friendly || ""); if (o.remainingTime) return o.remainingTime.friendly || ""; }
     return ""; }
 
-  /* ══════ Rows → virtual .xlsx ══════ */
   function toBlob(rows) {
     var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Jira Issues");
@@ -123,7 +114,6 @@
       { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   }
 
-  /* ══════ High-level fetch ══════ */
   function fetchAll(jql, onProgress) {
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks"];
