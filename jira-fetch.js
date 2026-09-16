@@ -44,7 +44,11 @@
     var map = {}, patterns = {
       svmInCharge: [/svm\s*in\s*charge/i], currentWorker: [/current\s*worker/i],
       nextAction: [/next\s*action/i], timeToFirstResponse: [/time\s*to\s*first\s*resp/i, /first\s*response/i],
-      timeToResolution: [/time\s*to\s*resolution/i]
+      timeToResolution: [/time\s*to\s*resolution/i],
+      rootCause: [/^root\s*cause$/i, /root\s*cause\s*category/i],
+      typeOfFix: [/type\s*of\s*fix/i],
+      screenName: [/screen\s*name/i],
+      menuHead: [/menu\s*head/i]
     };
     Object.keys(patterns).forEach(function (key) {
       for (var i = 0; i < customFields.length; i++) {
@@ -101,6 +105,10 @@
       row["Next Action"] = choice(f[fm.nextAction]);
       row["Time to first response"] = sla(f[fm.timeToFirstResponse]);
       row["Time to resolution"] = sla(f[fm.timeToResolution]);
+      row["Root Cause"] = choice(f[fm.rootCause]);
+      row["Type of Fix"] = choice(f[fm.typeOfFix]);
+      row["Screen Name"] = choice(f[fm.screenName]);
+      row["Menu Head"] = choice(f[fm.menuHead]);
       if (f.issuelinks && f.issuelinks.length) {
         var lk = [], ls = [];
         f.issuelinks.forEach(function (l) {
@@ -129,7 +137,7 @@
   function fetchAll(jql, onProgress) {
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks"];
-    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution"]
+    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
     return search(host, jql, fields, onProgress).then(function (issues) {
       var rows = transform(issues, fm), blob = toBlob(rows);
