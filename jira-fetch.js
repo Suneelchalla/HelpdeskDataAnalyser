@@ -1,28 +1,25 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   HD Dashboards — Jira Live Fetch  (jira-fetch.js · extension-only)
-   ═══════════════════════════════════════════════════════════════════════════
-   All API calls go through the HD Jira Bridge Chrome extension, which runs
-   fetch() inside a Jira tab so session cookies are included automatically.
-   No proxy, no API token.
-
-   Requires: hd-store.js, SheetJS (XLSX), HD Jira Bridge extension
-   ═══════════════════════════════════════════════════════════════════════════ */
+/* HD Dashboards — Jira Live Fetch (extension-only, CSP-safe) */
 (function () {
-  var CFG_KEY = "hd-jira-cfg";
-  var PAGE_SIZE = 100;
+  var CFG_KEY = "hd-jira-cfg", PAGE_SIZE = 100;
 
-  /* ══════ Bridge detection ══════ */
-  var _bridgeReady = !!window.__hdBridge;
-  window.addEventListener("hd-bridge-ready", function () { _bridgeReady = true; });
-
+  /* ══════ Bridge detection via postMessage (CSP-safe) ══════ */
+  var _bridgeReady = false;
   var _seq = 0, _pending = {};
+
   window.addEventListener("message", function (e) {
-    if (!e.data || e.data.type !== "HD_BRIDGE_RESULT") return;
+    if (!e.data) return;
+    if (e.data.type === "HD_BRIDGE_READY") { _bridgeReady = true; return; }
+    if (e.data.type !== "HD_BRIDGE_RESULT") return;
     var cb = _pending[e.data.id]; if (!cb) return;
     delete _pending[e.data.id];
     if (e.data.ok) cb.resolve(e.data.data);
     else cb.reject(new Error(e.data.error || "Bridge error"));
   });
+
+  /* Ping the bridge in case it loaded before us */
+  window.postMessage({ type: "HD_BRIDGE_PING" }, "*");
+  /* And again after a short delay for safety */
+  setTimeout(function(){ window.postMessage({ type: "HD_BRIDGE_PING" }, "*"); }, 500);
 
   function bridgeCall(host, path) {
     if (!_bridgeReady) return Promise.reject(new Error("EXTENSION_NOT_FOUND"));
@@ -36,11 +33,10 @@
     });
   }
 
-  /* ══════ Config (localStorage) ══════ */
+  /* ══════ Config ══════ */
   function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch (e) { return {}; } }
   function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
 
-  /* ══════ Public helpers ══════ */
   function testConnection(cfg) {
     return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/2/myself");
   }
@@ -53,11 +49,9 @@
   }
   function autoDetect(customFields) {
     var map = {}, patterns = {
-      svmInCharge:         [/svm\s*in\s*charge/i],
-      currentWorker:       [/current\s*worker/i],
-      nextAction:          [/next\s*action/i],
-      timeToFirstResponse: [/time\s*to\s*first\s*resp/i, /first\s*response/i],
-      timeToResolution:    [/time\s*to\s*resolution/i]
+      svmInCharge: [/svm\s*in\s*charge/i], currentWorker: [/current\s*worker/i],
+      nextAction: [/next\s*action/i], timeToFirstResponse: [/time\s*to\s*first\s*resp/i, /first\s*response/i],
+      timeToResolution: [/time\s*to\s*resolution/i]
     };
     Object.keys(patterns).forEach(function (key) {
       for (var i = 0; i < customFields.length; i++) {
@@ -84,26 +78,25 @@
     return page(0);
   }
 
-  /* ══════ Transform issues → Excel-like rows ══════ */
+  /* ══════ Transform ══════ */
   function transform(issues, fm) {
     return issues.map(function (issue) {
       var f = issue.fields || {}, row = {};
       row["Issue Type"] = f.issuetype ? f.issuetype.name : "";
-      row["Key"]        = issue.key || "";
-      row["Summary"]    = f.summary || "";
-      row["Status"]     = f.status ? f.status.name : "";
-      row["Priority"]   = f.priority ? f.priority.name : "";
-      row["Project"]    = f.project ? f.project.name : "";
+      row["Key"] = issue.key || ""; row["Summary"] = f.summary || "";
+      row["Status"] = f.status ? f.status.name : "";
+      row["Priority"] = f.priority ? f.priority.name : "";
+      row["Project"] = f.project ? f.project.name : "";
       row["Components"] = (f.components || []).map(function (c) { return c.name; }).join("; ");
-      row["Created"]    = f.created ? new Date(f.created) : "";
-      row["Resolved"]   = f.resolutiondate ? new Date(f.resolutiondate) : "";
-      row["Updated"]    = f.updated ? new Date(f.updated) : "";
+      row["Created"] = f.created ? new Date(f.created) : "";
+      row["Resolved"] = f.resolutiondate ? new Date(f.resolutiondate) : "";
+      row["Updated"] = f.updated ? new Date(f.updated) : "";
       row["Resolution"] = f.resolution ? f.resolution.name : "";
-      row["SVM In Charge"]          = person(f[fm.svmInCharge]);
-      row["Current Worker"]         = person(f[fm.currentWorker]);
-      row["Next Action"]            = choice(f[fm.nextAction]);
+      row["SVM In Charge"] = person(f[fm.svmInCharge]);
+      row["Current Worker"] = person(f[fm.currentWorker]);
+      row["Next Action"] = choice(f[fm.nextAction]);
       row["Time to first response"] = sla(f[fm.timeToFirstResponse]);
-      row["Time to resolution"]     = sla(f[fm.timeToResolution]);
+      row["Time to resolution"] = sla(f[fm.timeToResolution]);
       if (f.issuelinks && f.issuelinks.length) {
         var lk = [], ls = [];
         f.issuelinks.forEach(function (l) {
@@ -136,7 +129,6 @@
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks"];
     ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
-
     return search(host, jql, fields, onProgress).then(function (issues) {
       var rows = transform(issues, fm), blob = toBlob(rows);
       var name = "Jira Live \u00B7 " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + ".xlsx";
@@ -154,11 +146,10 @@
     });
   }
 
-  /* ══════ Public API ══════ */
   window.HDJira = {
     loadConfig: loadCfg, saveConfig: saveCfg,
     isBridgeAvailable: function () { return _bridgeReady; },
-    isConfigured:      function () { return _bridgeReady; },
+    isConfigured: function () { return _bridgeReady; },
     testConnection: testConnection, discoverFields: discoverFields, autoDetect: autoDetect, fetchAll: fetchAll
   };
 })();
