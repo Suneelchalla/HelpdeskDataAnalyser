@@ -58,21 +58,28 @@
 
   /* ══════ Paginated search (v3 GET with cursor pagination) ══════ */
   function search(host, jql, fields, onProgress) {
-    var all = [];
-    function page(token) {
+    var all = [], total = 0;
+
+    /* First: one lightweight call to get the real total count */
+    var countPath = "/rest/api/3/search/jql?jql=" + encodeURIComponent(jql) + "&maxResults=1&fields=key";
+    return bridgeCall(host, countPath, "GET").then(function (countData) {
+      total = countData.total || 0;
+      if (onProgress) onProgress(0, total);
+      return nextPage(null);
+    });
+
+    function nextPage(token) {
       var path = "/rest/api/3/search/jql?jql=" + encodeURIComponent(jql)
         + "&maxResults=" + PAGE_SIZE
         + "&fields=" + fields.join(",")
         + (token ? "&nextPageToken=" + encodeURIComponent(token) : "");
       return bridgeCall(host, path, "GET").then(function (data) {
         all = all.concat(data.issues || []);
-        var total = data.total || all.length;
-        if (onProgress) onProgress(all.length, total);
-        if (data.nextPageToken) return page(data.nextPageToken);
+        if (onProgress) onProgress(all.length, total || data.total || all.length);
+        if (data.nextPageToken) return nextPage(data.nextPageToken);
         return all;
       });
     }
-    return page(null);
   }
 
   /* ══════ Transform ══════ */
@@ -85,9 +92,9 @@
       row["Priority"] = f.priority ? f.priority.name : "";
       row["Project"] = f.project ? f.project.name : "";
       row["Components"] = (f.components || []).map(function (c) { return c.name; }).join("; ");
-      row["Created"] = f.created ? new Date(f.created) : "";
-      row["Resolved"] = f.resolutiondate ? new Date(f.resolutiondate) : "";
-      row["Updated"] = f.updated ? new Date(f.updated) : "";
+      row["Created"] = f.created || "";
+      row["Resolved"] = f.resolutiondate || "";
+      row["Updated"] = f.updated || "";
       row["Resolution"] = f.resolution ? f.resolution.name : "";
       row["SVM In Charge"] = person(f[fm.svmInCharge]);
       row["Current Worker"] = person(f[fm.currentWorker]);
@@ -132,9 +139,10 @@
         .then(function () {
           var cMin = null, cMax = null, rMin = null, rMax = null;
           rows.forEach(function (r) {
-            var c = r["Created"], v = r["Resolved"];
-            if (c instanceof Date && !isNaN(c)) { if (!cMin || c < cMin) cMin = c; if (!cMax || c > cMax) cMax = c; }
-            if (v instanceof Date && !isNaN(v)) { if (!rMin || v < rMin) rMin = v; if (!rMax || v > rMax) rMax = v; }
+            var c = r["Created"] ? new Date(r["Created"]) : null;
+            var v = r["Resolved"] ? new Date(r["Resolved"]) : null;
+            if (c && !isNaN(c)) { if (!cMin || c < cMin) cMin = c; if (!cMax || c > cMax) cMax = c; }
+            if (v && !isNaN(v)) { if (!rMin || v < rMin) rMin = v; if (!rMax || v > rMax) rMax = v; }
           });
           return { count: rows.length, cMin: cMin, cMax: cMax, rMin: rMin, rMax: rMax, fileName: name };
         });
