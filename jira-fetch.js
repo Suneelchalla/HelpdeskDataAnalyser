@@ -56,18 +56,23 @@
     return map;
   }
 
-  /* ══════ Paginated search (v3 POST) ══════ */
+  /* ══════ Paginated search (v3 GET with cursor pagination) ══════ */
   function search(host, jql, fields, onProgress) {
     var all = [];
-    function page(start) {
-      var body = JSON.stringify({ jql: jql, startAt: start, maxResults: PAGE_SIZE, fields: fields });
-      return bridgeCall(host, "/rest/api/3/search", "POST", body).then(function (data) {
+    function page(token) {
+      var path = "/rest/api/3/search/jql?jql=" + encodeURIComponent(jql)
+        + "&maxResults=" + PAGE_SIZE
+        + "&fields=" + fields.join(",")
+        + (token ? "&nextPageToken=" + encodeURIComponent(token) : "");
+      return bridgeCall(host, path, "GET").then(function (data) {
         all = all.concat(data.issues || []);
-        if (onProgress) onProgress(all.length, data.total);
-        return all.length < data.total ? page(start + PAGE_SIZE) : all;
+        var total = data.total || all.length;
+        if (onProgress) onProgress(all.length, total);
+        if (data.nextPageToken) return page(data.nextPageToken);
+        return all;
       });
     }
-    return page(0);
+    return page(null);
   }
 
   /* ══════ Transform ══════ */
