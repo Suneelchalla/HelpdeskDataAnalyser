@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="hd-dashboard" content="launcher">
 <title>HD Dashboards</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101828'/%3E%3Crect x='7' y='9' width='7' height='14' rx='2' fill='%232563EB'/%3E%3Crect x='18' y='9' width='7' height='14' rx='2' fill='%230F766E'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
+<script src="jira-fetch.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -196,6 +198,55 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
   .statuspill.live .dot{animation:none}
 }
 
+/* ══════ Jira Live Fetch ══════ */
+.dz-or{display:flex;align-items:center;gap:14px;margin:14px 18px 0;color:var(--faint);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:1.6px}
+.dz-or::before,.dz-or::after{content:"";flex:1;height:1px;background:var(--line)}
+.jira-row{margin:0 14px 14px;display:flex;gap:9px;align-items:center}
+.jira-btn{flex:1;background:linear-gradient(135deg,#0F766E,#12897E);color:#fff;border:none;padding:12px 18px;border-radius:10px;font-family:var(--disp);font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(15,118,110,.28)}
+.jira-btn:hover{box-shadow:0 6px 18px rgba(15,118,110,.38)}
+.jira-btn:disabled{opacity:.55;cursor:default;transform:none}
+.jira-setup{width:42px;height:42px;border-radius:10px;background:var(--paper);border:1px solid var(--line2);color:var(--ink2);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;box-shadow:var(--sh)}
+.jira-setup:hover{border-color:var(--muted);color:var(--ink)}
+.jira-hint{text-align:center;font-size:10.5px;color:var(--faint);margin:-6px 18px 14px;line-height:1.5}
+.jira-hint a{color:var(--teal);font-weight:600;cursor:pointer}
+.jira-hint a:hover{text-decoration:underline}
+.jira-connected{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--teal);letter-spacing:.3px}
+.jira-connected i{width:6px;height:6px;border-radius:50%;background:var(--teal)}
+.jira-progress{margin:14px;text-align:center}
+.jira-progress .pbar{height:6px;background:var(--line);border-radius:9px;overflow:hidden;margin:10px 0}
+.jira-progress .pfill{height:100%;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:9px;width:0%;transition:width .3s}
+.jira-progress .ptxt{font-family:var(--mono);font-size:11px;color:var(--teal);font-weight:600}
+.jira-progress .pmsg{font-size:12px;color:var(--ink2);margin-top:6px}
+/* Jira setup modal */
+.js-ov{position:fixed;inset:0;z-index:1001;background:rgba(15,23,42,.48);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:24px}
+.js-ov.open{display:flex}
+.js-panel{background:var(--card);border-radius:18px;box-shadow:var(--sh2);width:min(640px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.js-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--line)}
+.js-head .t{font-family:var(--disp);font-weight:700;font-size:17px;color:var(--ink)}
+.js-head .s{font-size:11.5px;color:var(--muted);margin-top:2px}
+.js-x{margin-left:auto;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink2);font-size:15px}
+.js-x:hover{color:var(--ink);border-color:var(--muted)}
+.js-body{flex:1;overflow:auto;padding:18px 22px}
+.js-row{margin-bottom:14px}
+.js-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px}
+.js-inp{width:100%;padding:10px 13px;border:1px solid var(--line2);border-radius:9px;font-size:13px;font-family:var(--sans);color:var(--ink);background:var(--paper);outline:none;transition:border-color .15s}
+.js-inp:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+.js-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
+.js-divider{border:none;border-top:1px dashed var(--line2);margin:16px 0}
+.js-section-title{font-family:var(--disp);font-weight:700;font-size:13px;color:var(--ink);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.js-field-map{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.js-field-map select{width:100%;padding:9px 12px;border:1px solid var(--line2);border-radius:8px;font-size:12px;font-family:var(--sans);color:var(--ink);background:var(--paper);outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239AA7B8' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.js-test{display:inline-flex;align-items:center;gap:7px;background:var(--teal);color:#fff;border:none;padding:10px 20px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:13px}
+.js-test:hover{filter:brightness(1.08)}
+.js-test:disabled{opacity:.5;cursor:default}
+.js-result{margin-top:10px;padding:9px 13px;border-radius:8px;font-size:12px;font-weight:600;display:none}
+.js-result.ok{display:block;background:var(--teal-soft);border:1px solid var(--teal-line);color:var(--teal)}
+.js-result.fail{display:block;background:#FFF1F2;border:1px solid #FECDD3;color:#BE123C}
+.js-foot{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--line)}
+.js-foot .spacer{flex:1}
+.js-jql{width:100%;padding:10px 13px;border:1px solid var(--line2);border-radius:9px;font-size:11px;font-family:var(--mono);color:var(--ink);background:var(--paper);outline:none;resize:vertical;min-height:68px;line-height:1.6;transition:border-color .15s}
+.js-jql:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+
 /* ══════ Master Data module (settings) ══════ */
 .gearbtn{width:34px;height:34px;border-radius:9px;background:var(--card);border:1px solid var(--line);color:var(--ink2);
   display:inline-flex;align-items:center;justify-content:center;font-size:16px;box-shadow:var(--sh);margin-right:10px}
@@ -302,7 +353,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
     <div class="rise d1">
       <div class="eyebrow">SVM Help Desk · analytics</div>
       <h1>One export.<br><span class="two">Three lenses.</span></h1>
-      <p class="lead">Drop a single Jira export and it powers every dashboard at once — the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, and the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries. Right-click a card to open it in its own tab.</p>
+      <p class="lead">Fetch live from Jira or drop an export — one source powers every dashboard: the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, and the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries. Right-click a card to open it in its own tab.</p>
     </div>
 
     <!-- right stage -->
@@ -329,6 +380,22 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
             <div class="t">Drop your Jira .xlsx here</div>
             <div class="s">Exported from Jira · read in your browser, stored on this device</div>
             <button class="btn" id="chooseBtn">Choose Excel file</button>
+          </div>
+          <div class="dz-or">or</div>
+          <div class="jira-row">
+            <button class="jira-btn" id="jiraFetchBtn">⚡ Fetch from Jira</button>
+            <button class="jira-setup" id="jiraSetupBtn2" title="Jira connection settings">⚙</button>
+          </div>
+          <div class="jira-hint" id="jiraHint"></div>
+        </div>
+
+        <div id="fetching" class="hidden">
+          <div class="jira-progress">
+            <div style="font-size:22px;margin-bottom:6px">⚡</div>
+            <div class="ptxt" id="fetchPct">0 %</div>
+            <div class="pbar"><div class="pfill" id="fetchFill"></div></div>
+            <div class="pmsg" id="fetchMsg">Connecting to Jira…</div>
+            <button class="ghost" id="fetchCancel" style="margin-top:12px">Cancel</button>
           </div>
         </div>
 
@@ -427,9 +494,186 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 </div>
 <div class="md-toast" id="mdToast"></div>
 
+<!-- ══════ Jira Setup modal ══════ -->
+<div class="js-ov" id="jsOv">
+  <div class="js-panel" role="dialog" aria-modal="true" aria-label="Jira setup">
+    <div class="js-head">
+      <div><div class="t">⚙ Jira Setup</div><div class="s">Map your custom fields so the dashboards read them correctly.</div></div>
+      <button class="js-x" id="jsClose">✕</button>
+    </div>
+    <div class="js-body">
+      <div class="js-row">
+        <label class="js-lbl" for="jsHost">Jira site</label>
+        <input class="js-inp" id="jsHost" placeholder="svmhelpdesk.atlassian.net">
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="js-test" id="jsTest">Test connection &amp; discover fields</button>
+        <div class="js-result" id="jsResult"></div>
+      </div>
+      <div class="js-note" style="margin-top:6px">Make sure you're <b>logged in to Jira</b> in this browser. The extension uses your active session.</div>
+
+      <hr class="js-divider">
+      <div class="js-section-title">📋 JQL Query</div>
+      <div class="js-row">
+        <textarea class="js-jql" id="jsJql"></textarea>
+        <div class="js-note">The query that runs when you click "Fetch from Jira". Edit freely.</div>
+      </div>
+
+      <hr class="js-divider">
+      <div class="js-section-title" id="jsFieldTitle">🗂 Custom Field Mapping <span style="font-weight:400;color:var(--faint);font-size:11px">(click Test above to discover)</span></div>
+      <div class="js-note" style="margin-bottom:10px">Match your Jira custom fields to the columns the dashboards expect. Auto-detected where possible.</div>
+      <div class="js-field-map" id="jsFieldMap">
+        <div class="js-row"><label class="js-lbl">SVM In Charge</label><select id="jsFldSvm"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Current Worker</label><select id="jsFldCw"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Next Action</label><select id="jsFldNa"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Time to First Response</label><select id="jsFldFr"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Time to Resolution</label><select id="jsFldRes"><option value="">— not mapped —</option></select></div>
+        <div></div>
+      </div>
+    </div>
+    <div class="js-foot">
+      <span class="spacer"></span>
+      <button class="md-btn" id="jsCancel">Cancel</button>
+      <button class="md-btn primary" id="jsSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ Jira Live Fetch wiring ══════ -->
 <script>
 var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-01" AND created <= "2026-12-31" AND project IN (ALXSVM, BLWS, CSD, ESLGEN, ECCL, FMSC, GWFC, IBEX, HSL, LSC, MILAHA, LSCSAIL, SSL, SWIPHX, TSHG, TKC, TASLI, UGL, VCL, WLS, WLSV, UAFL, NPDL, GSS)';
-var HS = window.HDStore || null;   // guard: preview may not load hd-store.js
+(function(){
+  if(!window.HDJira||!window.HDStore) return;
+  var HJ=window.HDJira, HS=window.HDStore;
+  function el(id){ return document.getElementById(id); }
+  function escH(s){ return String(s||"").replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m];}); }
+  var _fields=null;
+
+  /* ── hint below fetch button ── */
+  function updateHint(){
+    var h=el("jiraHint");
+    if(HJ.isBridgeAvailable()){
+      h.innerHTML='<span class="jira-connected"><i></i> Extension active</span> — using your Jira session · <a id="jSetupL">settings</a>';
+    } else {
+      h.innerHTML='Install the <b>HD Jira Bridge</b> Chrome extension to enable this · <a id="jSetupL">setup help</a>';
+    }
+    var a=el("jSetupL"); if(a) a.onclick=function(e){ e.preventDefault(); openSetup(); };
+  }
+  updateHint();
+  window.addEventListener("hd-bridge-ready", updateHint);
+
+  /* ── setup modal ── */
+  function openSetup(){
+    var cfg=HJ.loadConfig();
+    el("jsHost").value = cfg.jiraHost || "svmhelpdesk.atlassian.net";
+    el("jsJql").value  = cfg.jql || QUERY;
+    el("jsResult").className="js-result"; el("jsResult").textContent="";
+    if(cfg._fields && cfg._fields.length){ _fields=cfg._fields; fillSelects(cfg._fields, cfg.fieldMap||{}); }
+    el("jsOv").classList.add("open");
+  }
+  function closeSetup(){ el("jsOv").classList.remove("open"); }
+  el("jsClose").onclick=closeSetup;
+  el("jsCancel").onclick=closeSetup;
+  el("jsOv").addEventListener("click",function(e){ if(e.target===el("jsOv")) closeSetup(); });
+  el("jiraSetupBtn2").onclick=openSetup;
+
+  function fillSelects(fields, fm){
+    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes"};
+    Object.keys(ids).forEach(function(k){
+      var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
+      fields.forEach(function(f){
+        var o=document.createElement("option"); o.value=f.id; o.textContent=f.name+" ("+f.id+")";
+        if(fm[k]===f.id) o.selected=true;
+        sel.appendChild(o);
+      });
+    });
+    el("jsFieldTitle").innerHTML='🗂 Custom Field Mapping <span style="font-weight:400;color:var(--teal);font-size:11px">('+fields.length+' custom fields found)</span>';
+  }
+
+  /* ── test + discover ── */
+  el("jsTest").onclick=function(){
+    if(!HJ.isBridgeAvailable()){
+      var r=el("jsResult"); r.className="js-result fail"; r.textContent="Extension not detected. Install HD Jira Bridge first, then reload this page."; return;
+    }
+    var btn=el("jsTest"), res=el("jsResult");
+    var cfg={ jiraHost: el("jsHost").value.trim() };
+    btn.disabled=true; btn.textContent="Testing…"; res.className="js-result"; res.textContent="";
+    HJ.testConnection(cfg).then(function(user){
+      res.className="js-result ok"; res.textContent="✓ Connected as "+user.displayName;
+      btn.textContent="Discovering fields…";
+      return HJ.discoverFields(cfg);
+    }).then(function(fields){
+      _fields=fields;
+      var fm=HJ.autoDetect(fields), existing=HJ.loadConfig().fieldMap||{};
+      Object.keys(fm).forEach(function(k){ if(!existing[k]) existing[k]=fm[k]; });
+      fillSelects(fields, existing);
+      var n=Object.keys(fm).length;
+      if(n) el("jsResult").textContent+=" · Auto-detected "+n+" field"+(n>1?"s":"");
+      btn.disabled=false; btn.textContent="Test connection & discover fields";
+    }).catch(function(err){
+      res.className="js-result fail"; res.textContent="✕ "+err.message;
+      btn.disabled=false; btn.textContent="Test connection & discover fields";
+    });
+  };
+
+  /* ── save ── */
+  el("jsSave").onclick=function(){
+    HJ.saveConfig({
+      jiraHost: el("jsHost").value.trim() || "svmhelpdesk.atlassian.net",
+      jql: el("jsJql").value.trim() || QUERY,
+      fieldMap:{
+        svmInCharge: el("jsFldSvm").value, currentWorker: el("jsFldCw").value,
+        nextAction: el("jsFldNa").value, timeToFirstResponse: el("jsFldFr").value,
+        timeToResolution: el("jsFldRes").value
+      },
+      _fields: _fields||[]
+    });
+    closeSetup();
+  };
+
+  /* ── FETCH button ── */
+  el("jiraFetchBtn").onclick=function(){
+    if(!HJ.isBridgeAvailable()){ openSetup(); return; }
+    var cfg=HJ.loadConfig();
+    var jql=cfg.jql||QUERY;
+
+    el("empty").classList.add("hidden");
+    el("loaded").classList.add("hidden");
+    el("fetching").classList.remove("hidden");
+    el("fetchPct").textContent="0 %"; el("fetchFill").style.width="0%";
+    el("fetchMsg").textContent="Connecting to Jira…";
+    el("cards").classList.add("locked"); el("stage").classList.remove("live");
+
+    HJ.fetchAll(jql, function(fetched, total){
+      var p=total>0?Math.round(fetched/total*100):0;
+      el("fetchPct").textContent=p+" %"; el("fetchFill").style.width=p+"%";
+      el("fetchMsg").textContent="Fetched "+fetched.toLocaleString()+" of "+total.toLocaleString()+" tickets…";
+    }).then(function(info){
+      el("fetching").classList.add("hidden");
+      showLoaded(info.fileName, info);
+    }).catch(function(err){
+      el("fetching").classList.add("hidden");
+      el("empty").classList.remove("hidden");
+      if(err.message==="EXTENSION_NOT_FOUND"){ openSetup(); return; }
+      alert("Fetch failed: "+err.message);
+    });
+  };
+  el("fetchCancel").onclick=function(){
+    el("fetching").classList.add("hidden"); el("empty").classList.remove("hidden");
+  };
+})();
+</script>
+
+<!-- ══════════════════════ Master Data validation module ══════════════════════
+     A settings panel (gear button, top-right) that surfaces the classification
+     "master data" — Status→bucket, Person→group, Status→stage — reading the ACTUAL
+     values in the loaded export, showing how each is currently classified, and
+     flagging anything unmapped as "needs review". Corrections save to IndexedDB
+     (HDStore.saveConfig) and every dashboard applies them on load. Nothing here is
+     required for the dashboards to work; it's purely for keeping the maps correct. -->
+
+<script>
+var HS = window.HDStore || null;
 function el(id){ return document.getElementById(id); }
 
 /* ── build animated backdrop geometry ── */
