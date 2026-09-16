@@ -61,7 +61,7 @@
     var all = [];
     function page(start) {
       var body = JSON.stringify({ jql: jql, startAt: start, maxResults: PAGE_SIZE, fields: fields });
-      return bridgeCall(host, "/rest/api/3/search/jql", "POST", body).then(function (data) {
+      return bridgeCall(host, "/rest/api/3/search", "POST", body).then(function (data) {
         all = all.concat(data.issues || []);
         if (onProgress) onProgress(all.length, data.total);
         return all.length < data.total ? page(start + PAGE_SIZE) : all;
