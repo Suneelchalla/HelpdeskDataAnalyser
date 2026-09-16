@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HD Dashboards</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101828'/%3E%3Crect x='7' y='9' width='7' height='14' rx='2' fill='%232563EB'/%3E%3Crect x='18' y='9' width='7' height='14' rx='2' fill='%230F766E'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="hd-store.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EDF2F9; --card:#FFFFFF; --paper:#F5F8FC;
+  --ink:#0F172A; --ink2:#475569; --muted:#7C8AA3; --faint:#A7B3C6;
+  --line:#E4EAF2; --line2:#D3DCE8;
+  --blue:#2563EB; --blue-soft:#EFF4FF; --blue-line:#CFE0FF; --blue-glow:rgba(37,99,235,.35);
+  --teal:#0F766E; --teal-soft:#E9F9F4; --teal-line:#BCEBE2; --teal-glow:rgba(15,118,110,.32);
+  --amber:#B45309;
+  --disp:'Space Grotesk',sans-serif;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --sh:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --sh2:0 14px 34px rgba(16,24,40,.10),0 3px 10px rgba(16,24,40,.05);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+html{font-size:14px}
+body{
+  background:
+    radial-gradient(780px 520px at 8% -8%, #E3EEFF 0%, transparent 58%),
+    radial-gradient(820px 560px at 104% 110%, #DCF5EF 0%, transparent 58%),
+    var(--bg);
+  font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+::selection{background:var(--ink);color:#fff}
+a{text-decoration:none;color:inherit}
+button{cursor:pointer;font-family:inherit;transition:transform .16s,background .18s,border-color .18s,color .18s,box-shadow .2s}
+button:active{transform:translateY(1px)}
+input[type=file]{display:none}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ══════ animated live-stats backdrop ══════ */
+.statsbg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.statsbg svg{position:absolute;inset:0;width:100%;height:100%}
+.grid line{stroke:#2563EB;stroke-width:1;opacity:.05}
+.wave-area{fill:url(#wgrad);opacity:.5}
+.wave-line{fill:none;stroke:#2563EB;stroke-width:2;opacity:.14}
+.wave2-line{fill:none;stroke:#0F766E;stroke-width:2;opacity:.12}
+.wave-g,.wave2-g{will-change:transform}
+.wave-g{animation:drift 26s linear infinite}
+.wave2-g{animation:drift 38s linear infinite}
+@keyframes drift{to{transform:translateX(-33.333%)}}
+/* rising/falling bar row */
+.bars{position:absolute;left:0;right:0;bottom:0;height:34vh;display:flex;align-items:flex-end;gap:2.2vw;padding:0 4vw;opacity:.5}
+.bars i{flex:1;border-radius:6px 6px 0 0;transform-origin:bottom;background:linear-gradient(180deg,rgba(37,99,235,.16),rgba(37,99,235,.03));animation:barp 6s ease-in-out infinite}
+.bars i:nth-child(even){background:linear-gradient(180deg,rgba(15,118,110,.15),rgba(15,118,110,.03))}
+@keyframes barp{0%,100%{transform:scaleY(.28)}50%{transform:scaleY(1)}}
+/* slow pulse rings, top-right, like a live signal */
+.ping{position:absolute;top:16%;right:9%;width:14px;height:14px;border-radius:50%;background:var(--teal);opacity:.5}
+.ping::before,.ping::after{content:"";position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--teal);animation:ping 3.4s ease-out infinite}
+.ping::after{animation-delay:1.7s}
+@keyframes ping{0%{transform:scale(1);opacity:.5}100%{transform:scale(6.5);opacity:0}}
+
+/* ══════ shell (single viewport, no scroll) ══════ */
+.shell{position:relative;z-index:1;height:100vh;max-width:1240px;margin:0 auto;padding:22px 30px 18px;display:flex;flex-direction:column}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.rise{animation:rise .55s cubic-bezier(.22,1,.36,1) both}
+.d1{animation-delay:.07s}.d2{animation-delay:.14s}.d3{animation-delay:.21s}
+.hidden{display:none!important}
+
+/* rail */
+.rail{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.mk{display:flex;gap:4px;align-items:flex-end;height:24px}
+.mk i{display:block;width:7px;border-radius:2px}
+.brand{font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:-.2px}
+.rail .spacer{flex:1}
+.statuspill{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.4px;color:var(--muted);background:var(--card);border:1px solid var(--line);padding:7px 13px;border-radius:999px;text-transform:uppercase;box-shadow:var(--sh);transition:all .3s}
+.statuspill .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:all .3s}
+.statuspill.live{color:var(--teal);border-color:var(--teal-line);background:var(--teal-soft)}
+.statuspill.live .dot{background:var(--teal);box-shadow:0 0 10px var(--teal-glow);animation:beat 1.8s ease-in-out infinite}
+@keyframes beat{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* main split */
+.main{flex:1;min-height:0;display:grid;grid-template-columns:0.72fr 1.6fr;gap:34px;align-items:center}
+
+/* left — hero */
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:2.4px}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(32px,3.6vw,50px);line-height:.98;letter-spacing:-1.6px;margin:14px 0 0;color:var(--ink)}
+h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{color:var(--ink2);font-size:13.5px;line-height:1.6;margin-top:16px;max-width:400px}
+.lead b.b{color:var(--blue);font-weight:600} .lead b.t{color:var(--teal);font-weight:600}
+
+/* right — stage: source + wires + two lenses */
+.stage{position:relative}
+#wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+#wires path{fill:none;stroke-linecap:round}
+.track{stroke:var(--line2);stroke-width:1.5;stroke-dasharray:2 8;opacity:.9}
+.flow{stroke-width:2.6;opacity:0;transition:opacity .5s .2s;stroke-dasharray:5 16}
+.stage.live .track{stroke-dasharray:none;opacity:.4}
+.stage.live .flow{opacity:1;animation:march 1.1s linear infinite}
+.flow.fu{stroke:var(--blue);filter:drop-shadow(0 0 4px var(--blue-glow))}
+.flow.tr{stroke:var(--teal);filter:drop-shadow(0 0 4px var(--teal-glow))}
+.flow.wr{stroke:var(--amber);filter:drop-shadow(0 0 4px rgba(180,83,9,.35))}
+@keyframes march{to{stroke-dashoffset:-42}}
+
+.source{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh);overflow:hidden}
+.srclabel{display:flex;align-items:center;gap:9px;padding:11px 18px;border-bottom:1px solid var(--line)}
+.srclabel .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1.3px;color:var(--faint);text-transform:uppercase}
+.srclabel .line{flex:1;height:1px;background:var(--line)}
+
+.dz{margin:14px;border:1.5px dashed var(--line2);border-radius:13px;padding:22px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:radial-gradient(360px 130px at 50% 0%,rgba(37,99,235,.05),transparent 70%)}
+.dz:hover,.dz.over{border-color:var(--blue);background:radial-gradient(360px 160px at 50% 0%,rgba(37,99,235,.1),transparent 70%)}
+.dz .ic{width:46px;height:46px;margin:0 auto 10px;border-radius:13px;background:var(--blue-soft);border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center}
+.dz .ic svg{width:23px;height:23px}
+.dz .t{font-family:var(--disp);font-weight:600;font-size:15px;color:var(--ink)}
+.dz .s{font-size:11.5px;color:var(--muted);margin-top:4px}
+.dz .btn{margin-top:15px;background:var(--ink);color:#fff;border:none;padding:11px 24px;border-radius:10px;font-family:var(--disp);font-weight:600;font-size:13px}
+.dz .btn:hover{background:#1c2740}
+.dz .btn:disabled{opacity:.6;cursor:default}
+
+.filerow{display:flex;align-items:center;gap:13px;padding:15px 18px}
+.filerow .fic{width:44px;height:44px;border-radius:12px;background:var(--teal-soft);border:1px solid var(--teal-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.filerow .fic svg{width:21px;height:21px}
+.filerow .fname{font-weight:600;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filerow .fmeta{font-size:11.5px;color:var(--ink2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.filerow .fmeta .num{font-family:var(--mono);color:var(--teal);font-weight:700}
+.filerow .fmeta .sep{color:var(--faint)} .filerow .fmeta .rng{font-family:var(--mono);color:var(--ink)}
+.ghost{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:8px 14px;border-radius:9px;font-size:12px;font-weight:600;white-space:nowrap}
+.ghost:hover{border-color:var(--muted);color:var(--ink)}
+
+.fork{height:52px}
+
+.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;position:relative;z-index:2}
+.card{position:relative;display:block;border-radius:18px;padding:20px 20px 18px;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);transition:transform .2s,box-shadow .25s,border-color .2s,opacity .35s,filter .35s}
+.card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .35s,box-shadow .35s}
+.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.card .badge{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid var(--line);background:var(--paper)}
+.card .go{font-family:var(--disp);font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--faint)}
+.card .go .ar{transition:transform .2s}
+.card h2{font-family:var(--disp);font-size:18px;font-weight:700;letter-spacing:-.3px;color:var(--ink)}
+.card p{font-size:12.5px;color:var(--ink2);line-height:1.6;margin-top:8px}
+.card .feat{display:flex;flex-wrap:wrap;gap:5px;margin-top:14px}
+.card .feat span{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--ink2);background:var(--paper);border:1px solid var(--line);padding:4px 9px;border-radius:6px;letter-spacing:.2px}
+.card .lock{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;margin-top:12px}
+
+.cards.locked .card{opacity:.5;filter:grayscale(.55) brightness(1.01);pointer-events:none}
+.cards.locked .card .go,.cards.locked .card .feat{display:none}
+.cards:not(.locked) .card .lock{display:none}
+
+.cards:not(.locked) .card.fu{border-color:var(--blue-line)}
+.cards:not(.locked) .card.fu::after{background:var(--blue);box-shadow:0 0 14px var(--blue-glow)}
+.cards:not(.locked) .card.fu .badge{background:var(--blue-soft);border-color:var(--blue-line)}
+.cards:not(.locked) .card.fu .go{color:var(--blue)}
+.cards:not(.locked) .card.tr{border-color:var(--teal-line)}
+.cards:not(.locked) .card.tr::after{background:var(--teal);box-shadow:0 0 14px var(--teal-glow)}
+.cards:not(.locked) .card.tr .badge{background:var(--teal-soft);border-color:var(--teal-line)}
+.cards:not(.locked) .card.tr .go{color:var(--teal)}
+.cards:not(.locked) .card.wr{border-color:#F5D9A8}
+.cards:not(.locked) .card.wr::after{background:var(--amber);box-shadow:0 0 14px rgba(180,83,9,.3)}
+.cards:not(.locked) .card.wr .badge{background:#FEF3E2;border-color:#F5D9A8}
+.cards:not(.locked) .card.wr .go{color:var(--amber)}
+.cards:not(.locked) .card:hover{transform:translateY(-4px);box-shadow:var(--sh2)}
+.cards:not(.locked) .card:hover .go .ar{transform:translateX(4px)}
+
+/* bottom strip */
+.strip{flex-shrink:0;display:flex;align-items:center;gap:14px;margin-top:6px;position:relative}
+.strip .note{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.3px}
+.strip .spacer{flex:1}
+.qbtn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line2);color:var(--ink2);padding:8px 13px;border-radius:9px;font-size:11.5px;font-weight:600;box-shadow:var(--sh)}
+.qbtn:hover{border-color:var(--muted);color:var(--ink)}
+.qbtn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.qbtn.primary:hover{background:#1c2740}
+.qbtn.done{background:var(--teal-soft);border-color:var(--teal-line);color:var(--teal)}
+/* query popover (absolute — never adds scroll) */
+.qpop{position:absolute;right:0;bottom:46px;width:min(560px,86vw);background:#0F172A;border:1px solid #1E293B;border-radius:13px;padding:15px 16px;box-shadow:0 24px 60px rgba(16,24,40,.28);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .22s,transform .22s;z-index:5}
+.qpop.open{opacity:1;transform:none;pointer-events:auto}
+.qcode{font-family:var(--mono);font-size:11px;line-height:1.8;color:#CBD5E1;white-space:pre-wrap;word-break:break-word}
+.qcode .k{color:#60A5FA}.qcode .o{color:#F472B6}.qcode .v{color:#34D399}.qcode .n{color:#FBBF24}
+.qpoptip{font-family:var(--mono);font-size:9.5px;color:#64748B;margin-top:10px;letter-spacing:.3px}
+
+@media (max-width:900px){
+  body{overflow:auto}
+  .shell{height:auto;min-height:100vh}
+  .main{grid-template-columns:1fr;gap:26px}
+  .fork{height:40px}
+}
+@media (max-height:660px) and (min-width:901px){
+  body{overflow:auto}.shell{height:auto;min-height:100vh}
+}
+@media (max-width:560px){ .cards{grid-template-columns:1fr} .filerow{flex-wrap:wrap} }
+@media (prefers-reduced-motion:reduce){
+  .rise{animation:none}
+  .wave-g,.wave2-g,.bars i,.ping::before,.ping::after{animation:none}
+  .stage.live .flow{animation:none;stroke-dasharray:none}
+  .statuspill.live .dot{animation:none}
+}
+
+/* ══════ Master Data module (settings) ══════ */
+.gearbtn{width:34px;height:34px;border-radius:9px;background:var(--card);border:1px solid var(--line);color:var(--ink2);
+  display:inline-flex;align-items:center;justify-content:center;font-size:16px;box-shadow:var(--sh);margin-right:10px}
+.gearbtn:hover{border-color:var(--muted);color:var(--ink)}
+.md-ov{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.44);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;padding:24px}
+.md-ov.open{display:flex}
+.md-panel{background:var(--card);border-radius:18px;box-shadow:var(--sh2);width:min(920px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.md-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--line)}
+.md-head .t{font-family:var(--disp);font-weight:700;font-size:17px;color:var(--ink)}
+.md-head .s{font-size:11.5px;color:var(--muted);margin-top:2px}
+.md-x{margin-left:auto;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink2);font-size:15px}
+.md-x:hover{color:var(--ink);border-color:var(--muted)}
+.md-tabs{display:flex;gap:6px;padding:12px 22px 0}
+.md-tab{padding:9px 15px;border:1px solid var(--line);border-bottom:none;border-radius:9px 9px 0 0;background:var(--paper);color:var(--ink2);
+  font-family:var(--disp);font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:7px}
+.md-tab.on{background:var(--card);color:var(--ink);border-color:var(--line2)}
+.md-tab .cnt{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--blue-soft);color:var(--blue);border:1px solid var(--blue-line);border-radius:20px;padding:1px 7px}
+.md-tab .warn{font-family:var(--mono);font-size:10px;font-weight:700;background:#FEF3E2;color:var(--amber);border:1px solid #F5D9A8;border-radius:20px;padding:1px 7px}
+.md-body{flex:1;overflow:auto;padding:16px 22px;border-top:1px solid var(--line2)}
+.md-info{font-size:12px;color:var(--ink2);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:13px;line-height:1.55}
+.md-search{width:100%;padding:9px 12px;border:1px solid var(--line2);border-radius:9px;font-size:13px;margin-bottom:11px;font-family:inherit}
+.md-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.md-table th{text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;
+  padding:7px 10px;border-bottom:2px solid var(--line2);position:sticky;top:0;background:var(--card);z-index:1}
+.md-table td{padding:7px 10px;border-bottom:1px solid var(--line)}
+.md-table tr.review td{background:#FFFBF2}
+.md-name{font-weight:600;color:var(--ink)}
+.md-count{font-family:var(--mono);color:var(--muted);font-size:11px}
+.md-badge{font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.3px}
+.md-badge.def{background:var(--paper);color:var(--faint);border:1px solid var(--line)}
+.md-badge.cust{background:var(--teal-soft);color:var(--teal);border:1px solid var(--teal-line)}
+.md-badge.rev{background:#FEF3E2;color:var(--amber);border:1px solid #F5D9A8}
+.md-sel{padding:6px 9px;border:1px solid var(--line2);border-radius:8px;font-size:12px;font-family:inherit;background:var(--card);color:var(--ink);min-width:150px}
+.md-sel.rev{border-color:#F5D9A8;background:#FFFBF2}
+.md-foot{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--line)}
+.md-foot .note{font-size:11px;color:var(--muted)}
+.md-foot .spacer{flex:1}
+.md-btn{padding:10px 16px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:13px;border:1px solid var(--line2);background:var(--card);color:var(--ink2)}
+.md-btn:hover{border-color:var(--muted);color:var(--ink)}
+.md-btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.md-btn.primary:hover{background:#1c2740}
+.md-btn.danger{color:#B42318;border-color:#F3C6C0}
+.md-toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:1100;background:var(--ink);color:#fff;
+  font-size:13px;font-weight:600;padding:11px 18px;border-radius:10px;box-shadow:var(--sh2);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none}
+.md-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.md-empty{text-align:center;color:var(--muted);font-size:13px;padding:36px 0}
+.md-subtoggle{display:flex;gap:8px;margin-bottom:12px}
+.md-chip{padding:8px 13px;border:1px solid var(--line2);border-radius:9px;background:var(--paper);color:var(--ink2);
+  font-family:var(--disp);font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:7px}
+.md-chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.md-chip .c{font-family:var(--mono);font-size:10px;font-weight:700;background:rgba(0,0,0,.08);border-radius:20px;padding:1px 7px}
+.md-chip.on .c{background:rgba(255,255,255,.22)}
+.md-chip .r{font-family:var(--mono);font-size:10px;font-weight:700;background:#FEF3E2;color:var(--amber);border-radius:20px;padding:1px 7px}
+.md-chip.on .r{background:#F5D9A8;color:#7c3d06}
+
+/* ═══ RESPONSIVE SCALING — auto-adjust for large desktop monitors ═══ */
+@media (min-width: 1921px) and (min-height: 900px) { body { zoom: 1.18; } }
+@media (min-width: 2200px) and (min-height: 1000px) { body { zoom: 1.3; } }
+@media (min-width: 2560px) { body { zoom: 1.42; } }
+@media (min-width: 3200px) { body { zoom: 1.65; } }
+@media (min-width: 3840px) { body { zoom: 1.9; } }
+</style>
+</head>
+<body>
+
+<!-- animated live-stats backdrop -->
+<div class="statsbg" aria-hidden="true">
+  <svg preserveAspectRatio="none" id="bgsvg">
+    <defs>
+      <linearGradient id="wgrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#2563EB" stop-opacity=".10"/>
+        <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <g class="grid" id="bggrid"></g>
+    <g class="wave-g"><path class="wave-area" id="wArea"></path><path class="wave-line" id="wLine"></path></g>
+    <g class="wave2-g"><path class="wave2-line" id="wLine2"></path></g>
+  </svg>
+  <div class="bars" id="bgbars"></div>
+  <div class="ping"></div>
+</div>
+
+<div class="shell">
+
+  <!-- rail -->
+  <div class="rail rise">
+    <span class="mk">
+      <i style="height:14px;background:var(--blue)"></i>
+      <i style="height:24px;background:#5B8DEF"></i>
+      <i style="height:12px;background:#3AA79A"></i>
+      <i style="height:20px;background:var(--teal)"></i>
+    </span>
+    <span class="brand">HD Dashboards</span>
+    <span class="spacer"></span>
+    <button class="gearbtn" id="gearBtn" title="Master data validation (Status / Group / Stage mapping)">⚙️</button>
+    <span class="statuspill" id="status"><span class="dot"></span><span id="statustext">No source file</span></span>
+  </div>
+
+  <!-- main split -->
+  <div class="main">
+
+    <!-- left hero -->
+    <div class="rise d1">
+      <div class="eyebrow">SVM Help Desk · analytics</div>
+      <h1>One export.<br><span class="two">Three lenses.</span></h1>
+      <p class="lead">Drop a single Jira export and it powers every dashboard at once — the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, and the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries. Right-click a card to open it in its own tab.</p>
+    </div>
+
+    <!-- right stage -->
+    <div class="stage rise d2" id="stage">
+      <svg id="wires" preserveAspectRatio="none">
+        <path class="track" id="trackFU"></path>
+        <path class="track" id="trackTR"></path>
+        <path class="track" id="trackWR"></path>
+        <path class="flow fu" id="flowFU"></path>
+        <path class="flow tr" id="flowTR"></path>
+        <path class="flow wr" id="flowWR"></path>
+      </svg>
+
+      <div class="source" id="sourceNode">
+        <div class="srclabel"><span class="tag">Source file</span><span class="line"></span></div>
+
+        <div id="empty">
+          <div class="dz" id="dz">
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
+              </svg>
+            </div>
+            <div class="t">Drop your Jira .xlsx here</div>
+            <div class="s">Exported from Jira · read in your browser, stored on this device</div>
+            <button class="btn" id="chooseBtn">Choose Excel file</button>
+          </div>
+        </div>
+
+        <div id="loaded" class="hidden">
+          <div class="filerow">
+            <div class="fic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#0F766E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>
+              </svg>
+            </div>
+            <div style="min-width:0;flex:1">
+              <div class="fname" id="fname">—</div>
+              <div class="fmeta">
+                <span class="num" id="fcount">0</span> tickets loaded
+                <span class="sep">·</span> feeding all three
+                <span class="sep" id="fsep" style="display:none">·</span>
+                <span id="fdaterange" style="display:none">created <span class="rng" id="fcmin">—</span> → <span class="rng" id="fcmax">—</span> <span class="sep">·</span> resolved <span class="rng" id="frmin">—</span> → <span class="rng" id="frmax">—</span></span>
+              </div>
+            </div>
+            <button class="ghost" id="changeBtn">Change file</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="fork"></div>
+
+      <div class="cards locked" id="cards">
+        <a class="card fu" id="cardFU" href="followup.html">
+          <div class="top"><div class="badge">📌</div><span class="go">Open <span class="ar">→</span></span></div>
+          <h2>Follow-up Tracker</h2>
+          <p>Daily triage: what needs action, what's waiting on the client, what's with engineering — plus SLA, aging, and data gaps.</p>
+          <div class="feat"><span>HD action queue</span><span>SLA</span><span>Aging</span><span>Per-worker</span><span>Data gaps</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
+        <a class="card tr" id="cardTR" href="trend.html">
+          <div class="top"><div class="badge">📈</div><span class="go">Open <span class="ar">→</span></span></div>
+          <h2>HD Trend Tracker</h2>
+          <p>The bigger picture: HD resolved alone vs. escalated to engineering, month by month and week by week, with pivots.</p>
+          <div class="feat"><span>HD vs Engg</span><span>Trends</span><span>Week on week</span><span>Pivots</span><span>Pending</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
+        <a class="card wr" id="cardWR" href="weekly.html">
+          <div class="top"><div class="badge">🗓️</div><span class="go">Open <span class="ar">→</span></span></div>
+          <h2>Weekly Report</h2>
+          <p>Client-ready weekly report: per-client KPIs, inflow, resolved, SVM vs client, activity stages — print or save as PDF.</p>
+          <div class="feat"><span>Per client</span><span>SVM vs Client</span><span>Stages</span><span>Print / PDF</span><span>Weekly</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- bottom strip -->
+  <div class="strip rise d3">
+    <span class="note">Files stay on your device — nothing is uploaded to a server.</span>
+    <span class="spacer"></span>
+    <button class="qbtn" id="qview">🔎 View export query</button>
+    <button class="qbtn primary" id="qcopy">⧉ Copy JQL</button>
+
+    <div class="qpop" id="qpop">
+      <div class="qcode" id="qcode"><span class="k">issuetype</span> <span class="o">IN</span> <span class="v">(Incident, "Service Request")</span>
+<span class="o">AND</span> <span class="k">created</span> <span class="n">&gt;=</span> <span class="v">"2025-01-01"</span>
+<span class="o">AND</span> <span class="k">created</span> <span class="n">&lt;=</span> <span class="v">"2026-12-31"</span>
+<span class="o">AND</span> <span class="k">project</span> <span class="o">IN</span> <span class="v">(ALXSVM, BLWS, CSD, ESLGEN, ECCL, FMSC, GWFC, IBEX, HSL, LSC, MILAHA, LSCSAIL, SSL, SWIPHX, TSHG, TKC, TASLI, UGL, VCL, WLS, WLSV, UAFL, NPDL, GSS)</span></div>
+      <div class="qpoptip">Jira → Filters → Advanced search (JQL), then export to Excel (.xlsx)</div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileinput" accept=".xlsx,.xls">
+
+<!-- ══════ Master Data validation module ══════ -->
+<div class="md-ov" id="mdOv">
+  <div class="md-panel" role="dialog" aria-modal="true" aria-label="Master data validation">
+    <div class="md-head">
+      <div>
+        <div class="t">⚙️ Master Data Validation</div>
+        <div class="s">Review how statuses and people are classified. Fix anything wrong, save, and the dashboards use it.</div>
+      </div>
+      <button class="md-x" id="mdClose" aria-label="Close">✕</button>
+    </div>
+    <div class="md-tabs" id="mdTabs">
+      <button class="md-tab on" data-mdtab="status">🏷️ Status <span id="mdStatusReview"></span></button>
+      <button class="md-tab" data-mdtab="group">👥 Group <span id="mdGroupReview"></span></button>
+      <button class="md-tab" data-mdtab="stage">🗂️ Stage <span id="mdStageReview"></span></button>
+    </div>
+    <div class="md-body" id="mdBody"></div>
+    <div class="md-foot">
+      <span class="note" id="mdFootNote"></span>
+      <span class="spacer"></span>
+      <button class="md-btn danger" id="mdReset">↺ Reset this tab to defaults</button>
+      <button class="md-btn" id="mdCancel">Cancel</button>
+      <button class="md-btn primary" id="mdSave">Save &amp; re-analyse</button>
+    </div>
+  </div>
+</div>
+<div class="md-toast" id="mdToast"></div>
+
+<script>
+var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-01" AND created <= "2026-12-31" AND project IN (ALXSVM, BLWS, CSD, ESLGEN, ECCL, FMSC, GWFC, IBEX, HSL, LSC, MILAHA, LSCSAIL, SSL, SWIPHX, TSHG, TKC, TASLI, UGL, VCL, WLS, WLSV, UAFL, NPDL, GSS)';
+var HS = window.HDStore || null;   // guard: preview may not load hd-store.js
+function el(id){ return document.getElementById(id); }
+
+/* ── build animated backdrop geometry ── */
+function buildBars(){
+  var box=el("bgbars"); if(!box||box.childElementCount) return;
+  var n=Math.max(9,Math.min(16,Math.round(window.innerWidth/95)));
+  var html="";
+  for(var i=0;i<n;i++){ var dur=(4.5+Math.random()*4).toFixed(2); var del=(-Math.random()*6).toFixed(2);
+    html+='<i style="animation-duration:'+dur+'s;animation-delay:'+del+'s"></i>'; }
+  box.innerHTML=html;
+}
+function wavePath(W,H,baseY,amp,waves,close){
+  // three tiled periods across 3*W so translateX(-33%) loops seamlessly
+  var tot=W*3, step=tot/(waves*3), d="M 0 "+baseY, x=0, up=true;
+  d="M 0 "+baseY;
+  var pts=waves*3, seg=tot/pts;
+  var path="M 0 "+(baseY);
+  for(var i=1;i<=pts;i++){
+    var x1=seg*(i-0.5), y1=baseY+(i%2? -amp: amp);
+    var x2=seg*i, y2=baseY;
+    path+=" Q "+x1.toFixed(1)+" "+y1.toFixed(1)+" "+x2.toFixed(1)+" "+y2.toFixed(1);
+  }
+  if(close) path+=" L "+tot+" "+H+" L 0 "+H+" Z";
+  return path;
+}
+function buildBackdrop(){
+  var W=window.innerWidth, H=window.innerHeight, svg=el("bgsvg");
+  if(svg) svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  // gridlines
+  var g=el("bggrid"), gh=""; for(var y=Math.round(H*0.18);y<H;y+=Math.round(H/9)){ gh+='<line x1="0" y1="'+y+'" x2="'+W+'" y2="'+y+'"/>'; }
+  if(g) g.innerHTML=gh;
+  var b1=H*0.52, b2=H*0.66;
+  el("wArea").setAttribute("d", wavePath(W,H,b1,H*0.06,5,true));
+  el("wLine").setAttribute("d", wavePath(W,H,b1,H*0.06,5,false));
+  el("wLine2").setAttribute("d", wavePath(W,H,b2,H*0.045,7,false));
+  buildBars();
+}
+
+/* ── connective wires ── */
+function drawWires(){
+  var stage=el("stage"),src=el("sourceNode"),fu=el("cardFU"),tr=el("cardTR"),wr=el("cardWR"),svg=el("wires");
+  if(!stage||!src||!fu||!tr) return;
+  var sr=stage.getBoundingClientRect();
+  svg.setAttribute("viewBox","0 0 "+sr.width+" "+sr.height);
+  var s=src.getBoundingClientRect();
+  var sx=(s.left+s.width/2)-sr.left, sy=s.bottom-sr.top;
+  function pathTo(r){ var cx=(r.left+r.width/2)-sr.left, cy=r.top-sr.top, m=(sy+cy)/2;
+    return "M "+sx+" "+sy+" C "+sx+" "+m+", "+cx+" "+m+", "+cx+" "+cy; }
+  var pFU=pathTo(fu.getBoundingClientRect()),pTR=pathTo(tr.getBoundingClientRect());
+  el("trackFU").setAttribute("d",pFU); el("flowFU").setAttribute("d",pFU);
+  el("trackTR").setAttribute("d",pTR); el("flowTR").setAttribute("d",pTR);
+  if(wr){ var pWR=pathTo(wr.getBoundingClientRect()); el("trackWR").setAttribute("d",pWR); el("flowWR").setAttribute("d",pWR); }
+}
+function relayout(){ buildBackdrop(); drawWires(); }
+window.addEventListener("resize", relayout);
+
+/* count tickets + resolved date range */
+function countTickets(file){
+  return new Promise(function(res){
+    var r=new FileReader();
+    r.onload=function(e){
+      try{
+        var wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+        var sn=wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("jira issues")>-1;})
+            || wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1;})
+            || wb.SheetNames[1] || wb.SheetNames[0];
+        var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:""});
+        var cMin=null,cMax=null,rMin=null,rMax=null;
+        function upd(v,isC){ if(!v)return; var dt=v instanceof Date?v:new Date(v); if(isNaN(dt))return;
+          if(isC){ if(!cMin||dt<cMin)cMin=dt; if(!cMax||dt>cMax)cMax=dt; }
+          else   { if(!rMin||dt<rMin)rMin=dt; if(!rMax||dt>rMax)rMax=dt; } }
+        rows.forEach(function(row){
+          upd(row["Created"]||row["created"], true);
+          upd(row["Resolved"]||row["resolved"], false);
+        });
+        res({count:rows.length,cMin:cMin,cMax:cMax,rMin:rMin,rMax:rMax});
+      }catch(err){ res({count:null}); }
+    };
+    r.onerror=function(){ res({count:null}); };
+    r.readAsArrayBuffer(file);
+  });
+}
+function fmtDate(d){ if(!d)return"—"; return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"}); }
+
+function showLoaded(name,info){
+  var count=info&&info.count!=null?info.count:info;
+  el("empty").classList.add("hidden");
+  el("loaded").classList.remove("hidden");
+  el("cards").classList.remove("locked");
+  el("stage").classList.add("live");
+  el("fname").textContent=name;
+  el("fcount").textContent=(count==null?"—":(typeof count==="number"?count.toLocaleString():count));
+  var dr=el("fdaterange");
+  if(dr&&info&&(info.cMin||info.rMin)){
+    el("fcmin").textContent=fmtDate(info.cMin); el("fcmax").textContent=fmtDate(info.cMax);
+    el("frmin").textContent=fmtDate(info.rMin); el("frmax").textContent=fmtDate(info.rMax);
+    dr.style.display="inline"; el("fsep").style.display="inline";
+  }
+  var sp=el("status"); sp.classList.add("live");
+  el("statustext").textContent=(count==null?"Live":("Live · "+(typeof count==="number"?count.toLocaleString():count)+" tickets"));
+  requestAnimationFrame(function(){requestAnimationFrame(drawWires);});
+}
+function showEmpty(){
+  el("loaded").classList.add("hidden");
+  el("empty").classList.remove("hidden");
+  el("cards").classList.add("locked");
+  el("stage").classList.remove("live");
+  el("status").classList.remove("live");
+  el("statustext").textContent="No source file";
+  requestAnimationFrame(function(){requestAnimationFrame(drawWires);});
+}
+
+function handleFile(file){
+  if(!file)return;
+  var btn=el("chooseBtn"); if(btn){btn.textContent="Reading…";btn.disabled=true;}
+  countTickets(file).then(function(info){
+    if(HS){
+      HS.saveFile(file,file.name).then(function(){ HS.clearRows(); showLoaded(file.name,info); })
+      .catch(function(err){ alert("Couldn't store the file on this device: "+err.message); if(btn){btn.textContent="Choose Excel file";btn.disabled=false;} });
+    } else {
+      showLoaded(file.name,info);  // preview fallback (no persistence)
+    }
+  });
+}
+
+/* wiring */
+el("chooseBtn").onclick=function(){ el("fileinput").click(); };
+el("dz").onclick=function(){ el("fileinput").click(); };
+el("fileinput").onchange=function(e){ handleFile(e.target.files&&e.target.files[0]); e.target.value=""; };
+el("changeBtn").onclick=function(){ if(HS){HS.clearRows();HS.clearFile().then(showEmpty);}else{showEmpty();} };
+
+var dz=el("dz");
+["dragenter","dragover"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over");}); });
+["dragleave","drop"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.remove("over");}); });
+dz.addEventListener("drop",function(e){ handleFile(e.dataTransfer.files&&e.dataTransfer.files[0]); });
+
+/* query popover + copy */
+el("qview").onclick=function(e){ e.stopPropagation(); el("qpop").classList.toggle("open"); };
+document.addEventListener("click",function(e){ var p=el("qpop"); if(p.classList.contains("open")&&!p.contains(e.target)&&e.target!==el("qview")) p.classList.remove("open"); });
+el("qcopy").onclick=function(){
+  var b=el("qcopy");
+  function done(){ b.textContent="✓ Copied"; b.classList.add("done"); setTimeout(function(){b.textContent="⧉ Copy JQL";b.classList.remove("done");},1800); }
+  navigator.clipboard.writeText(QUERY).then(done)
+  .catch(function(){ var ta=document.createElement("textarea"); ta.value=QUERY; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); });
+};
+
+/* boot */
+buildBackdrop();
+requestAnimationFrame(drawWires);
+window.addEventListener("load", relayout);
+if(HS){
+  HS.loadFile().then(function(rec){
+    if(rec&&rec.blob){ countTickets(rec.blob).then(function(info){ showLoaded(rec.name,info); }); }
+    else { drawWires(); }
+  });
+} else { drawWires(); }
+</script>
+
+<!-- ══════════════════════ Master Data validation module ══════════════════════
+     A settings panel (gear button, top-right) that surfaces the classification
+     "master data" — Status→bucket, Person→group, Status→stage — reading the ACTUAL
+     values in the loaded export, showing how each is currently classified, and
+     flagging anything unmapped as "needs review". Corrections save to IndexedDB
+     (HDStore.saveConfig) and every dashboard applies them on load. Nothing here is
+     required for the dashboards to work; it's purely for keeping the maps correct. -->
+<script>
+(function(){
+  if(!window.HDStore){ var g0=document.getElementById("gearBtn"); if(g0) g0.style.display="none"; return; }
+  var HS=window.HDStore;
+  function el(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m];}); }
+
+  /* Same sheet-picker the dashboards use, so we scan exactly what they parse. */
+  function pickSheet(wb){
+    return wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("jira issues")>-1;})
+      || wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1;})
+      || wb.SheetNames[1] || wb.SheetNames[0];
+  }
+  /* Rows to scan: prefer in-app edited rows, else parse the stored Excel blob. */
+  function getRows(){
+    return HS.loadRows().then(function(edited){
+      if(edited && edited.length) return edited;
+      return HS.loadFile().then(function(rec){
+        if(!rec||!rec.blob) return null;
+        return new Promise(function(res,rej){
+          var r=new FileReader();
+          r.onload=function(e){ try{ var wb=XLSX.read(e.target.result,{type:"array",cellDates:true}); res(XLSX.utils.sheet_to_json(wb.Sheets[pickSheet(wb)],{defval:""})); }catch(err){ rej(err); } };
+          r.onerror=rej; r.readAsArrayBuffer(rec.blob);
+        });
+      });
+    });
+  }
+  /* Case-insensitive column reader keyed off the first row's headers. */
+  function colGetter(rows){
+    var km={}; if(rows[0]) Object.keys(rows[0]).forEach(function(k){ km[String(k).trim().toLowerCase()]=k; });
+    return function(row,name){ var kk=km[name]; return kk!==undefined? row[kk] : ""; };
+  }
+  /* Distinct Status values, plus people from SVM In Charge and Current Worker kept
+     as SEPARATE lists (each with ticket counts, most-used first). Rows with no value
+     in a field are counted as a "(blank)" entry per field rather than dropped, so
+     unassigned tickets are visible. The person→group directory itself is keyed by
+     name, so someone who appears in both lists shares one group. */
+  function tallyField(rows, get, col){
+    var m={}, blank=0;
+    rows.forEach(function(row){
+      var v=String(get(row,col)||"").trim();
+      if(v) m[v]=(m[v]||0)+1; else blank++;
+    });
+    var names=Object.keys(m).map(function(k){return {name:k,count:m[k]};}).sort(function(a,b){return b.count-a.count;});
+    return {names:names, blank:blank};
+  }
+  function scanData(rows){
+    var get=colGetter(rows), st={};
+    rows.forEach(function(row){ var s=String(get(row,"status")||"").trim(); if(s) st[s]=(st[s]||0)+1; });
+    var statuses=Object.keys(st).map(function(k){return {name:k,count:st[k]};}).sort(function(a,b){return b.count-a.count;});
+    return {
+      statuses: statuses,
+      svm: tallyField(rows, get, "svm in charge"),
+      cw:  tallyField(rows, get, "current worker")
+    };
+  }
+  // Distinct people needing a group across BOTH fields (for the tab's review badge).
+  function allGroupNames(){
+    if(!MD.scan) return [];
+    var seen={}, out=[];
+    (MD.scan.svm.names||[]).concat(MD.scan.cw.names||[]).forEach(function(n){ if(!seen[n.name]){seen[n.name]=1;out.push(n);} });
+    return out;
+  }
+
+  /* Working state — a fresh copy of the saved config is loaded each time the
+     panel opens, so Cancel discards unsaved edits and Save commits them. */
+  var MD={ tab:"status", groupField:"svm", rows:null, scan:null, cfg:null, search:"" };
+
+  var STATUS_OPTS=[["hd","HD (desk)"],["engg","Engineering"],["client","Client"]];
+
+  function openMaster(){
+    Promise.all([HS.loadConfig(), getRows()]).then(function(r){
+      MD.cfg=r[0]; MD.rows=r[1]||null; MD.search=""; MD.groupField="svm";
+      MD.scan=MD.rows? scanData(MD.rows) : {statuses:[],svm:{names:[],blank:0},cw:{names:[],blank:0}};
+      MD.tab="status";
+      el("mdOv").classList.add("open");
+      renderTabsState(); render();
+    });
+  }
+  function closeMaster(){ el("mdOv").classList.remove("open"); }
+
+  /* ── review counters (the "discrepancy" flags shown on each tab) ── */
+  function statusReview(s){ return !window.HDClass.isKnown(s.name) && !window.HDClass.isTerminal(s.name) && !hasOv("statusOverrides",s.name); }
+  function groupReview(n){ return window.HDGroups.defaultGroupOf(n.name)==="Others" && !hasOv("groupOverrides",window.HDGroups.normName(n.name)); }
+  function stageReview(s){ return window.HDStages.defaultStageOf(s.name)==="Other" && !hasOv("stageOverrides",s.name); }
+  function hasOv(bucket,key){ return MD.cfg && MD.cfg[bucket] && Object.prototype.hasOwnProperty.call(MD.cfg[bucket],key); }
+
+  function renderTabsState(){
+    if(!MD.scan) return;
+    var sR=MD.scan.statuses.filter(statusReview).length;
+    var gR=allGroupNames().filter(groupReview).length;   // distinct unmapped people across both fields
+    var tR=MD.scan.statuses.filter(stageReview).length;
+    el("mdStatusReview").innerHTML = sR? '<span class="warn">'+sR+' review</span>' : '<span class="cnt">'+MD.scan.statuses.length+'</span>';
+    el("mdGroupReview").innerHTML  = gR? '<span class="warn">'+gR+' review</span>' : '<span class="cnt">'+allGroupNames().length+'</span>';
+    el("mdStageReview").innerHTML  = tR? '<span class="warn">'+tR+' review</span>' : '<span class="cnt">'+MD.scan.statuses.length+'</span>';
+    document.querySelectorAll(".md-tab").forEach(function(b){ b.classList.toggle("on", b.dataset.mdtab===MD.tab); });
+  }
+
+  /* current chosen value for a row = working override, else built-in default */
+  function curStatus(name){ return (MD.cfg.statusOverrides[name]) || window.HDClass.defaultClassify3(name); }
+  function curGroup(name){ var n=window.HDGroups.normName(name); return (MD.cfg.groupOverrides[n]) || window.HDGroups.defaultGroupOf(name); }
+  function curStage(name){ return (MD.cfg.stageOverrides[name]) || window.HDStages.defaultStageOf(name); }
+
+  function badge(kind){ // def | cust | rev | term | na
+    if(kind==="rev") return '<span class="md-badge rev">needs review</span>';
+    if(kind==="cust") return '<span class="md-badge cust">customised</span>';
+    if(kind==="term") return '<span class="md-badge def">terminal · n/a</span>';
+    if(kind==="na") return '<span class="md-badge def">n/a</span>';
+    return '<span class="md-badge def">default</span>';
+  }
+  function rowKind(bucket,key,isReview){ if(hasOv(bucket,key)) return "cust"; return isReview? "rev":"def"; }
+
+  function filt(list){ var q=MD.search.trim().toLowerCase(); return q? list.filter(function(x){return x.name.toLowerCase().indexOf(q)>-1;}) : list; }
+
+  function render(){
+    var body=el("mdBody");
+    if(!MD.rows){ body.innerHTML='<div class="md-empty">No export loaded yet. Load a Jira .xlsx on the launcher first, then reopen this panel.</div>';
+      el("mdFootNote").textContent=""; return; }
+
+    var html="", note="";
+    if(MD.tab==="status"){
+      note='<b>HD</b> and <b>Engineering</b> are both the SVM side (our team); the Trend Tracker &amp; Weekly Report treat both as "SVM". <b>Client</b> = waiting on the client. Rows not in the built-in map are flagged <b>needs review</b>. Finished statuses like <b>Closed</b> need no classification and are marked <b>terminal · n/a</b>.';
+      html+=optsSearch()+'<table class="md-table"><thead><tr><th>Status</th><th>Tickets</th><th>Classification</th><th>Source</th></tr></thead><tbody>';
+      filt(MD.scan.statuses).forEach(function(s){
+        // Terminal (e.g. Closed): no owner classification applies — show as n/a, no action.
+        if(window.HDClass.isTerminal(s.name)){
+          html+='<tr><td class="md-name">'+esc(s.name)+'</td><td class="md-count">'+s.count.toLocaleString()+'</td>'+
+            '<td class="md-count">— (finished ticket)</td><td>'+badge("term")+'</td></tr>';
+          return;
+        }
+        var rev=statusReview(s), val=curStatus(s.name), kind=rowKind("statusOverrides",s.name,rev);
+        html+='<tr class="'+(kind==="rev"?"review":"")+'"><td class="md-name">'+esc(s.name)+'</td><td class="md-count">'+s.count.toLocaleString()+'</td>'+
+          '<td><select class="md-sel '+(kind==="rev"?"rev":"")+'" data-kind="status" data-key="'+esc(s.name)+'">'+
+            STATUS_OPTS.map(function(o){return '<option value="'+o[0]+'" '+(o[0]===val?"selected":"")+'>'+o[1]+'</option>';}).join("")+
+          '</select></td><td>'+badge(kind)+'</td></tr>';
+      });
+      html+='</tbody></table>';
+    } else if(MD.tab==="group"){
+      note='<b>SVM In Charge</b> and <b>Current Worker</b> are shown as separate lists — switch with the toggle below. Anyone not in the built-in directory falls to <b>Others</b> and is flagged <b>needs review</b>. A person appearing in both lists shares one group. Use <b>＋ Add group…</b> to create a new group. Tickets with no value show as a <b>(blank)</b> row.';
+      var groups=window.HDGroups.ORDER.slice(); // Group 1, Group 2, Others
+      Object.keys(MD.cfg.groupOverrides).forEach(function(k){ var v=MD.cfg.groupOverrides[k]; if(groups.indexOf(v)<0) groups.push(v); }); // include custom groups
+      var fld=MD.scan[MD.groupField]||{names:[],blank:0};
+      var fieldLabel=(MD.groupField==="svm"?"SVM In Charge":"Current Worker");
+      // sub-toggle: two chips (each shows how many need review in that field)
+      var svmR=(MD.scan.svm.names||[]).filter(groupReview).length, cwR=(MD.scan.cw.names||[]).filter(groupReview).length;
+      html+='<div class="md-subtoggle">'+
+        '<button class="md-chip'+(MD.groupField==="svm"?" on":"")+'" data-gfield="svm">SVM In Charge <span class="c">'+MD.scan.svm.names.length+'</span>'+(svmR?'<span class="r">'+svmR+'</span>':'')+'</button>'+
+        '<button class="md-chip'+(MD.groupField==="cw"?" on":"")+'" data-gfield="cw">Current Worker <span class="c">'+MD.scan.cw.names.length+'</span>'+(cwR?'<span class="r">'+cwR+'</span>':'')+'</button>'+
+      '</div>';
+      html+=optsSearch()+'<table class="md-table"><thead><tr><th>'+fieldLabel+'</th><th>Tickets</th><th>Group</th><th>Source</th></tr></thead><tbody>';
+      // blank / unassigned row first (only when there are such tickets, and not filtered out by search)
+      if(fld.blank>0 && (!MD.search || "(blank)".indexOf(MD.search.trim().toLowerCase())>-1)){
+        html+='<tr><td class="md-name" style="font-style:italic;color:var(--muted)">(blank / unassigned)</td>'+
+          '<td class="md-count">'+fld.blank.toLocaleString()+'</td>'+
+          '<td class="md-count">— (no name to map)</td><td>'+badge("na")+'</td></tr>';
+      }
+      filt(fld.names).forEach(function(n){
+        var rev=groupReview(n), val=curGroup(n.name), kind=rowKind("groupOverrides",window.HDGroups.normName(n.name),rev);
+        var opts=groups.map(function(gp){return '<option value="'+esc(gp)+'" '+(gp===val?"selected":"")+'>'+esc(gp)+'</option>';}).join("");
+        if(groups.indexOf(val)<0) opts='<option value="'+esc(val)+'" selected>'+esc(val)+'</option>'+opts;
+        html+='<tr class="'+(kind==="rev"?"review":"")+'"><td class="md-name">'+esc(n.name)+'</td><td class="md-count">'+n.count.toLocaleString()+'</td>'+
+          '<td><select class="md-sel '+(kind==="rev"?"rev":"")+'" data-kind="group" data-key="'+esc(n.name)+'">'+opts+
+            '<option value="__ADD__">＋ Add group…</option></select></td><td>'+badge(kind)+'</td></tr>';
+      });
+      html+='</tbody></table>';
+    } else { // stage
+      note='Maps each <b>Status</b> to a Weekly-Report activity stage. A status with no mapping shows as <b>Other</b> and is flagged <b>needs review</b>.';
+      var stages=window.HDStages.allStages().concat(["Other"]);
+      html+=optsSearch()+'<table class="md-table"><thead><tr><th>Status</th><th>Tickets</th><th>Activity Stage</th><th>Source</th></tr></thead><tbody>';
+      filt(MD.scan.statuses).forEach(function(s){
+        var rev=stageReview(s), val=curStage(s.name), kind=rowKind("stageOverrides",s.name,rev);
+        var opts=stages.map(function(g){return '<option value="'+esc(g)+'" '+(g===val?"selected":"")+'>'+esc(g)+'</option>';}).join("");
+        if(stages.indexOf(val)<0) opts='<option value="'+esc(val)+'" selected>'+esc(val)+'</option>'+opts;
+        html+='<tr class="'+(kind==="rev"?"review":"")+'"><td class="md-name">'+esc(s.name)+'</td><td class="md-count">'+s.count.toLocaleString()+'</td>'+
+          '<td><select class="md-sel '+(kind==="rev"?"rev":"")+'" data-kind="stage" data-key="'+esc(s.name)+'">'+opts+'</select></td><td>'+badge(kind)+'</td></tr>';
+      });
+      html+='</tbody></table>';
+    }
+    body.innerHTML='<div class="md-info">'+note+'</div>'+html;
+    var cnt=(MD.tab==="group"?(MD.scan[MD.groupField].names.length):MD.scan.statuses.length);
+    var lbl=(MD.tab==="group"?((MD.groupField==="svm"?"SVM In Charge":"Current Worker")+" · "):"");
+    el("mdFootNote").textContent=lbl+cnt+" row"+(cnt!==1?"s":"")+" · changes apply when dashboards next load";
+    bindRows();
+    renderTabsState();
+  }
+  function optsSearch(){ return '<input class="md-search" id="mdSearch" placeholder="Filter…" value="'+esc(MD.search)+'">'; }
+
+  /* Wire the dropdowns. Choosing the built-in default REMOVES the override (so the
+     row reverts to "default"); any other choice records an override. */
+  function bindRows(){
+    var s=el("mdSearch"); if(s){ s.oninput=function(){ MD.search=this.value; var pos=this.selectionStart; render(); var n=el("mdSearch"); if(n){ n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} } }; }
+    // Group tab: switch between the SVM In Charge and Current Worker lists.
+    document.querySelectorAll("[data-gfield]").forEach(function(b){ b.onclick=function(){ MD.groupField=b.dataset.gfield; MD.search=""; render(); }; });
+    document.querySelectorAll(".md-sel").forEach(function(sel){
+      sel.onchange=function(){
+        var kind=this.dataset.kind, key=this.dataset.key, val=this.value;
+        if(kind==="status"){ setOv("statusOverrides", key, val, window.HDClass.defaultClassify3(key)); }
+        else if(kind==="stage"){ setOv("stageOverrides", key, val, window.HDStages.defaultStageOf(key)); }
+        else if(kind==="group"){
+          if(val==="__ADD__"){ var g=(window.prompt("New group name:")||"").trim(); if(!g){ render(); return; } val=g; }
+          setOv("groupOverrides", window.HDGroups.normName(key), val, window.HDGroups.defaultGroupOf(key));
+        }
+        render();
+      };
+    });
+  }
+  function setOv(bucket,key,val,def){
+    if(val===def){ delete MD.cfg[bucket][key]; }   // matches built-in ⇒ drop the override
+    else { MD.cfg[bucket][key]=val; }
+  }
+
+  function toast(msg){ var t=el("mdToast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove("show"); },3200); }
+
+  function save(){
+    HS.saveConfig(MD.cfg).then(function(){
+      // keep in-memory maps consistent for anything on this page
+      window.HDClass.setOverrides(MD.cfg.statusOverrides);
+      window.HDGroups.setOverrides(MD.cfg.groupOverrides);
+      window.HDStages.setOverrides(MD.cfg.stageOverrides);
+      toast("Saved ✓  Open or refresh a dashboard to see the re-analysed numbers.");
+      render();
+    }).catch(function(err){ toast("Could not save: "+(err&&err.message||err)); });
+  }
+  function resetTab(){
+    var b=MD.tab==="status"?"statusOverrides":MD.tab==="group"?"groupOverrides":"stageOverrides";
+    if(!Object.keys(MD.cfg[b]).length){ toast("This tab already matches the defaults."); return; }
+    if(!window.confirm("Clear all your customisations on this tab and revert to the built-in defaults? (Takes effect when you Save.)")) return;
+    MD.cfg[b]={}; render();
+  }
+
+  /* ── wiring ── */
+  var gb=el("gearBtn"); if(gb) gb.onclick=openMaster;
+  el("mdClose").onclick=closeMaster;
+  el("mdCancel").onclick=closeMaster;
+  el("mdOv").addEventListener("click",function(e){ if(e.target===el("mdOv")) closeMaster(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape" && el("mdOv").classList.contains("open")) closeMaster(); });
+  el("mdSave").onclick=save;
+  el("mdReset").onclick=resetTab;
+  document.querySelectorAll(".md-tab").forEach(function(b){ b.onclick=function(){ MD.tab=b.dataset.mdtab; MD.search=""; render(); }; });
+})();
+</script>
+</body>
+</html>

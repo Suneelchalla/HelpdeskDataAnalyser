@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HD Follow-up Tracker</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563EB'/%3E%3Cpath d='M9 10h14M9 16h10M9 22h7' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='22' r='4' fill='%2360A5FA'/%3E%3Cpath d='M21.5 22l1 1 2.5-2.5' stroke='white' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="hd-store.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F1F5F9;--bg2:#FFFFFF;--card:#FFFFFF;--card-hover:#F8FAFC;
+  --border:#E2E8F0;--border2:#CBD5E1;
+  --t1:#0F172A;--t2:#475569;--t3:#94A3B8;--t4:#CBD5E1;
+  --blue:#2563EB;--blue-light:#DBEAFE;--blue-bg:#EFF6FF;--blue-dark:#1D4ED8;
+  --cyan:#0891B2;--cyan-bg:#ECFEFF;--cyan-border:#A5F3FC;
+  --amber:#D97706;--amber-bg:#FFFBEB;--amber-border:#FDE68A;
+  --violet:#7C3AED;--violet-bg:#F5F3FF;--violet-border:#DDD6FE;
+  --green:#059669;--green-bg:#ECFDF5;--green-border:#A7F3D0;
+  --rose:#E11D48;--rose-bg:#FFF1F2;--rose-border:#FECDD3;
+  --r:12px;--r2:16px;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --shadow2:0 4px 12px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.06);
+  --shadow3:0 10px 30px rgba(0,0,0,.1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px}
+body{background:var(--bg);font-family:var(--sans);color:var(--t1);-webkit-font-smoothing:antialiased;min-height:100vh}
+::selection{background:var(--blue);color:#fff}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--t4);border-radius:9px}::-webkit-scrollbar-thumb:hover{background:var(--t3)}
+select{outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px!important}
+button{cursor:pointer;font-family:inherit;transition:all .2s}button:active{transform:scale(0.97)}
+a{color:var(--blue);text-decoration:none;transition:color .15s}a:hover{color:var(--blue-dark)}
+input[type="file"]{display:none}
+input[type="text"]{outline:none;font-family:inherit}
+input[type="text"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+input[type="date"]{outline:none;font-family:inherit}
+input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.fu{animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both}
+.fu1{animation-delay:.05s}.fu2{animation-delay:.1s}.fu3{animation-delay:.15s}.fu4{animation-delay:.2s}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow);transition:box-shadow .25s}
+.card:hover{box-shadow:var(--shadow2)}
+
+/* ═══ LANDING ANIMATED BACKGROUND ═══ */
+@keyframes meshShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes floatShape{0%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-20px) rotate(180deg)}100%{transform:translateY(0) rotate(360deg)}}
+@keyframes floatSlow{0%{transform:translate(0,0) rotate(0deg) scale(1)}33%{transform:translate(30px,-25px) rotate(120deg) scale(1.1)}66%{transform:translate(-20px,15px) rotate(240deg) scale(.9)}100%{transform:translate(0,0) rotate(360deg) scale(1)}}
+@keyframes driftRight{0%{transform:translateX(-100px) translateY(0);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateX(calc(100vw + 100px)) translateY(-40px);opacity:0}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.3);opacity:1}}
+@keyframes ripple{0%{transform:scale(.8);opacity:.6}50%{transform:scale(1.2);opacity:.3}100%{transform:scale(.8);opacity:.6}}
+@keyframes orbitMove{0%{transform:rotate(0deg) translateX(120px) rotate(0deg)}100%{transform:rotate(360deg) translateX(120px) rotate(-360deg)}}
+@keyframes orbitMove2{0%{transform:rotate(0deg) translateX(180px) rotate(0deg)}100%{transform:rotate(-360deg) translateX(180px) rotate(360deg)}}
+
+.landing-wrap{position:fixed;inset:0;overflow:hidden;z-index:0}
+
+/* Animated gradient mesh */
+.mesh-bg{position:absolute;inset:0;background:linear-gradient(-45deg,#DBEAFE,#EDE9FE,#ECFEFF,#FEF3C7,#DBEAFE,#FCE7F3);background-size:400% 400%;animation:meshShift 16s ease infinite}
+
+/* Dot grid overlay */
+.dot-grid{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(148,163,184,.3) 1px,transparent 1px);background-size:32px 32px}
+
+/* Floating geometric shapes */
+.shape{position:absolute;border-radius:50%;pointer-events:none;will-change:transform}
+.shape--ring{border-radius:50%;background:transparent}
+.shape-1{width:60px;height:60px;background:rgba(37,99,235,.12);top:12%;left:8%;animation:floatShape 7s ease-in-out infinite}
+.shape-2{width:40px;height:40px;background:rgba(124,58,237,.1);border-radius:8px;top:22%;right:12%;animation:floatSlow 11s ease-in-out infinite}
+.shape-3{width:80px;height:80px;border:2px solid rgba(37,99,235,.12);top:65%;left:5%;animation:floatSlow 14s ease-in-out infinite .5s;background:none}
+.shape-4{width:24px;height:24px;background:rgba(6,182,212,.15);top:75%;right:18%;animation:floatShape 6s ease-in-out infinite 1s}
+.shape-5{width:50px;height:50px;border:2px solid rgba(124,58,237,.1);border-radius:12px;top:15%;left:42%;animation:floatSlow 9s ease-in-out infinite 2s;background:none}
+.shape-6{width:35px;height:35px;background:rgba(217,119,6,.08);border-radius:10px;top:80%;left:55%;animation:floatShape 8s ease-in-out infinite 1.5s}
+.shape-7{width:18px;height:18px;background:rgba(5,150,105,.12);top:45%;left:15%;animation:pulse 3s ease-in-out infinite}
+.shape-8{width:14px;height:14px;background:rgba(37,99,235,.15);top:35%;right:8%;animation:pulse 4s ease-in-out infinite 1s}
+.shape-9{width:100px;height:100px;border:1.5px solid rgba(6,182,212,.08);top:40%;right:3%;animation:floatSlow 18s ease-in-out infinite 3s;background:none}
+.shape-10{width:45px;height:45px;border:2px solid rgba(217,119,6,.08);border-radius:50%;bottom:15%;left:20%;animation:floatShape 10s ease-in-out infinite 2s;background:none}
+
+/* Orbit rings */
+.orbit-center{position:absolute;top:50%;left:50%;width:0;height:0}
+.orbit-dot{position:absolute;width:8px;height:8px;border-radius:50%;top:-4px;left:-4px}
+.orbit-dot-1{background:rgba(37,99,235,.2);animation:orbitMove 20s linear infinite}
+.orbit-dot-2{background:rgba(124,58,237,.15);animation:orbitMove2 28s linear infinite}
+.orbit-dot-3{background:rgba(6,182,212,.18);animation:orbitMove 24s linear infinite reverse}
+.orbit-ring{position:absolute;border-radius:50%;border:1px solid rgba(148,163,184,.1);top:50%;left:50%;transform:translate(-50%,-50%)}
+.orbit-ring-1{width:240px;height:240px}
+.orbit-ring-2{width:360px;height:360px}
+
+/* Streaking light lines */
+.streak{position:absolute;height:1px;background:linear-gradient(90deg,transparent,rgba(37,99,235,.15),rgba(124,58,237,.1),transparent);pointer-events:none;opacity:0}
+.streak-1{width:300px;top:30%;animation:driftRight 12s linear infinite 0s}
+.streak-2{width:200px;top:55%;animation:driftRight 16s linear infinite 4s}
+.streak-3{width:250px;top:78%;animation:driftRight 14s linear infinite 8s}
+
+/* Big soft color blobs */
+.blob{position:absolute;border-radius:50%;pointer-events:none;filter:blur(60px)}
+.blob-1{width:300px;height:300px;background:rgba(37,99,235,.08);top:-5%;right:-5%;animation:ripple 8s ease-in-out infinite}
+.blob-2{width:250px;height:250px;background:rgba(124,58,237,.07);bottom:-5%;left:-3%;animation:ripple 10s ease-in-out infinite 2s}
+.blob-3{width:200px;height:200px;background:rgba(6,182,212,.06);top:40%;left:-8%;animation:ripple 12s ease-in-out infinite 4s}
+
+/* ── MULTI-SELECT DROPDOWN (React) ── */
+.msel-r{position:relative;display:inline-block}
+.msel-r-btn{display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--t1);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:180px;max-width:320px;white-space:nowrap;font-family:inherit;text-align:left}
+.msel-r-btn:hover{border-color:var(--border2)}
+.msel-r-btn.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.msel-r-btn .txt{flex:1;overflow:hidden;text-overflow:ellipsis}
+.msel-r-btn .cnt{background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;flex-shrink:0}
+.msel-r-btn .arrow{color:var(--t3);font-size:10px;flex-shrink:0;transition:transform .15s}
+.msel-r-btn.open .arrow{transform:rotate(180deg)}
+.msel-r-dd{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:380px;max-height:380px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow3);z-index:200;display:flex;flex-direction:column;overflow:hidden}
+.msel-r-dd .srch{border:none;border-bottom:1px solid var(--border);padding:9px 12px;font-size:12px;color:var(--t1);font-family:inherit;outline:none;width:100%;background:var(--bg)}
+.msel-r-dd .acts{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--bg)}
+.msel-r-dd .acts button{background:none;border:1px solid var(--border);color:var(--t3);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
+.msel-r-dd .acts button:hover{color:var(--t1);border-color:var(--border2)}
+.msel-r-dd .lst{overflow-y:auto;flex:1;padding:4px 0}
+.msel-r-dd .opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--t1);transition:background .1s}
+.msel-r-dd .opt:hover{background:var(--bg)}
+.msel-r-dd .opt .chk{width:15px;height:15px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;background:#fff;transition:all .12s}
+.msel-r-dd .opt.on .chk{background:var(--blue);border-color:var(--blue)}
+.msel-r-dd .opt .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-r-dd .opt .n{font-family:var(--mono);font-size:10px;color:var(--t4)}
+.msel-r-dd .emp{padding:16px;text-align:center;color:var(--t3);font-size:11px}
+
+/* ═══ RESPONSIVE SCALING — auto-adjust for large desktop monitors ═══
+   The app is pixel-based (designed at ~1366-1920px laptop). On bigger
+   screens everything stays tiny. CSS zoom scales the entire UI
+   proportionally — fonts, padding, borders, cards, modals — so it
+   fills the viewport naturally at any resolution. */
+@media (min-width: 1921px) and (min-height: 900px) {
+  body { zoom: 1.18; }
+}
+@media (min-width: 2200px) and (min-height: 1000px) {
+  body { zoom: 1.3; }
+}
+@media (min-width: 2560px) {
+  body { zoom: 1.42; }
+}
+@media (min-width: 3200px) {
+  body { zoom: 1.65; }
+}
+@media (min-width: 3840px) {
+  body { zoom: 1.9; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useMemo,useCallback,useRef,useEffect}=React;
+const J="https://svmhelpdesk.atlassian.net/browse/";
+
+/* ═══ STATUS CLASSIFICATION (aligned with the confirmed Status→owner map used
+   by the Weekly Report & Trend Tracker). CLIENT = waiting on the client; the
+   rest (our side) splits into ENGG = with engineering/dev, HD = desk-level.
+   Client is checked first so a resolved/awaiting-confirmation ticket counts as
+   client, matching the other dashboards. Unknown statuses default to HD. */
+/* Status lists + classifier now live in hd-store.js (window.HDClass) so all
+   three dashboards share ONE canonical map and can't drift. Thin aliases below
+   keep the rest of this file unchanged. */
+const HD_S=window.HDClass.HD, CLIENT_S=window.HDClass.CLIENT, ENGG_S=window.HDClass.ENGG;
+const classify=s=>window.HDClass.classify3(s);
+/* Priority ordering + a plain next-step hint per status, for the Action Queue. */
+const PRIO_ORD={"Show Stopper":0,"Critical":1,"High":2,"Medium":3,"Low":4};
+const prioRank=p=>(PRIO_ORD[p]!==undefined?PRIO_ORD[p]:5);
+const NEXT_STEP={
+  "Resolved":"Confirm & close","Resolved With Clarification":"Confirm & close","Completed":"Confirm & close",
+  "Acknowledged":"Start work","Open":"Pick up & triage","Assign HD (WFC)":"Follow up for confirmation",
+  "Clarify":"Get clarification","Get Confirmation":"Chase confirmation","On-Hold":"Review hold reason",
+  "Re-open Review":"Review reopened ticket","Analysis & Study":"Analyse & scope","Sys/user configuration":"Configure & verify",
+  "Invoice Yet to Raise":"Raise the invoice","User Request":"Review request",
+  "Waiting for customer":"Awaiting client — chase if stale","Confirmation":"Awaiting client confirmation",
+  "Doubt Clarification":"Awaiting client clarification","Delivered":"Awaiting client verification",
+  "DB Script Delivered":"Awaiting client run","Release Move to Production":"Awaiting client go-live",
+  "Technical Analysis":"With engineering — follow up","Development In Progress":"With dev — follow up",
+  "Testing In Progress":"In testing — follow up","DB Admin Approval":"Awaiting DBA approval","Approval DB Admin":"Awaiting DBA approval"
+};
+const nextStep=(s,cat)=>NEXT_STEP[s]||(cat==="client"?"Awaiting client — chase if stale":cat==="engg"?"With engineering — follow up":"Review & act");
+
+const CL={hd:"HD Action Required",client:"Client Follow-up",engg:"Engineering Follow-up"};
+const CS={
+  hd:{c:"var(--cyan)",bg:"var(--cyan-bg)",br:"var(--cyan-border)",badge:"#0891B2",icon:"🎯",tag:"HD",desc:"Your action needed"},
+  client:{c:"var(--amber)",bg:"var(--amber-bg)",br:"var(--amber-border)",badge:"#D97706",icon:"💬",tag:"Client",desc:"Chase client response"},
+  engg:{c:"var(--violet)",bg:"var(--violet-bg)",br:"var(--violet-border)",badge:"#7C3AED",icon:"🔧",tag:"Engg",desc:"Follow up with dev team"}
+};
+const AC=["#059669","#65A30D","#CA8A04","#EA580C","#E11D48"];
+const AL=["< 1 week","1–30 days","31–60 days","61–90 days","90+ days"];
+const AS=["<1w","1-30d","31-60d","61-90d","90+d"];
+const abk=d=>d<=7?0:d<=30?1:d<=60?2:d<=90?3:4;
+function ds(v){if(!v)return 999;const d=v instanceof Date?v:new Date(v);return isNaN(d)?999:Math.max(0,Math.floor((Date.now()-d)/864e5))}
+function fd(v){if(!v)return"—";const d=v instanceof Date?v:new Date(v);return isNaN(d)?"—":d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})}
+function fm(v){if(!v)return"";const d=v instanceof Date?v:new Date(v);return isNaN(d)?"":d.toLocaleDateString("en-US",{month:"short",year:"2-digit"})}
+function px(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});const sn=wb.SheetNames.find(s=>s.toLowerCase().includes("jira"))||wb.SheetNames[1]||wb.SheetNames[0];res(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:""}));}catch(e){rej(e);}};r.onerror=rej;r.readAsArrayBuffer(file);})}
+function greeting(){const h=new Date().getHours();return h<12?"Good morning":h<17?"Good afternoon":"Good evening";}
+
+function Logo({size=28}){
+  return(<svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="32" height="32" rx="8" fill="#2563EB"/>
+    <path d="M9 10h14M9 16h10M9 22h7" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="23" cy="22" r="4" fill="#60A5FA"/>
+    <path d="M21.5 22l1 1 2.5-2.5" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>);
+}
+
+/* ─── SLA Logic ─── */
+function parseTimeToHours(str){
+  if(!str||typeof str!=="string")return null;
+  str=str.trim();
+  var neg=str.charAt(0)==="-";if(neg)str=str.slice(1);
+  var h=0,m=0;
+  var hm=str.match(/(\d+)h/);if(hm)h=parseInt(hm[1]);
+  var mm=str.match(/(\d+)m/);if(mm)m=parseInt(mm[1]);
+  if(h===0&&m===0)return null;
+  var total=h+m/60;
+  return neg?-total:total;
+}
+// SLA thresholds: {firstResponse in hours, resolution in hours}
+var SLA_THRESHOLDS={"Show Stopper":{fr:1,res:24},"Critical":{fr:1,res:24},"High":{fr:4,res:48},"Medium":{fr:8,res:72},"Low":{fr:24,res:120}};
+function checkSLA(t){
+  var priority=t.Priority||"Medium";
+  var sla=SLA_THRESHOLDS[priority]||SLA_THRESHOLDS["Medium"];
+  var frHours=parseTimeToHours(t["Time to first response"]);
+  var resHours=parseTimeToHours(t["Time to resolution"]);
+  var frBreach=frHours!==null&&frHours>sla.fr;
+  var resBreach=resHours!==null&&resHours>sla.res;
+  return{frBreach:frBreach,resBreach:resBreach,anyBreach:frBreach||resBreach};
+}
+var PRIORITY_COLORS={"Show Stopper":"#BE123C","Critical":"#E11D48","High":"#D97706","Medium":"#2563EB","Low":"#059669"};
+var PRIORITY_BG={"Show Stopper":"#FFF1F2","Critical":"#FFF1F2","High":"#FFFBEB","Medium":"#EFF6FF","Low":"#ECFDF5"};
+
+/* ─── Components ─── */
+function Ring({pct,sz=80,sw=6,color="#2563EB",track="#E2E8F0",children}){
+  const r=(sz-sw)/2,c=2*Math.PI*r,o=c-(Math.min(pct,100)/100)*c;
+  return(<div style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:sz,height:sz}}>
+    <svg width={sz} height={sz} style={{transform:"rotate(-90deg)"}}>
+      <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke={track} strokeWidth={sw}/>
+      <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke={color} strokeWidth={sw} strokeDasharray={c} strokeDashoffset={o} strokeLinecap="round" style={{transition:"stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)"}}/>
+    </svg>
+    <div style={{position:"absolute",textAlign:"center"}}>{children}</div>
+  </div>);
+}
+
+function KPI({label,value,color,bgColor,sub,onClick,active,icon}){
+  return(<div className="card" onClick={onClick} style={{
+    padding:"13px 16px",cursor:onClick?"pointer":"default",
+    borderColor:active?color:"var(--border)",background:active?(bgColor||"var(--blue-bg)"):"var(--card)",
+    transition:"all .2s"
+  }}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <div>
+        {icon&&<div style={{fontSize:15,marginBottom:8}}>{icon}</div>}
+        <div style={{fontSize:25,fontWeight:900,color:color||"var(--t1)",letterSpacing:"-1.5px",lineHeight:1,fontFeatureSettings:'"tnum"'}}>{value}</div>
+        <div style={{fontSize:10,color:"var(--t3)",marginTop:8,fontWeight:700,textTransform:"uppercase",letterSpacing:".6px"}}>{label}</div>
+      </div>
+    </div>
+    {sub&&<div style={{fontSize:11,color:"var(--t3)",marginTop:6}}>{sub}</div>}
+  </div>);
+}
+
+function ABar({bk,total,onClick,active}){
+  if(!total)return null;
+  function handleClick(idx){if(onClick)onClick(idx);}
+  return(<div>
+    <div style={{display:"flex",borderRadius:8,overflow:"hidden",height:28,background:"var(--bg)"}}>
+      {bk.map(function(c,i){return c>0?(<div key={i} onClick={function(){handleClick(i);}} title={AL[i]+": "+c} style={{
+        width:`${c/total*100}%`,background:active===i?AC[i]:`${AC[i]}CC`,
+        display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+        fontSize:11,fontWeight:700,color:"#fff",minWidth:c>0?22:0,
+        outline:active===i?"2.5px solid var(--t1)":"none",outlineOffset:-1,transition:"all .2s"
+      }}>{c}</div>):null;})}
+    </div>
+    <div style={{display:"flex",gap:16,marginTop:8}}>{AS.map(function(l,i){return(
+      <div key={i} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"var(--t3)",fontWeight:500}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:AC[i]}}/>{l}
+      </div>
+    );})}</div>
+  </div>);
+}
+
+function escCSV(v){var s=String(v==null?"":v instanceof Date&&!isNaN(v)?v.toISOString().slice(0,19).replace("T"," "):v);if(s.indexOf(",")>-1||s.indexOf('"')>-1||s.indexOf("\n")>-1)return'"'+s.replace(/"/g,'""')+'"';return s;}
+function exportFullCSV(tickets,filename){
+  if(!tickets||!tickets.length)return;
+  var colSet={},colOrder=[];
+  tickets.forEach(function(t){Object.keys(t).forEach(function(k){if(k!=="_sla"&&k!=="_raw"&&!colSet[k]){colSet[k]=1;colOrder.push(k);}});});
+  /* Append computed columns at the end */
+  colOrder.push("__Category__","__Age_Days__");
+  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days (computed)":c);}).join(",")];
+  tickets.forEach(function(t){
+    lines.push(colOrder.map(function(c){
+      if(c==="__Category__")return escCSV(CL[classify(t.Status)]||"");
+      if(c==="__Age_Days__")return ds(t.Updated||t.Created);
+      return escCSV(t[c]);
+    }).join(","));
+  });
+  var blob=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=filename||"tickets-full.csv";a.click();URL.revokeObjectURL(url);
+}
+function exportCSV(tickets,filename){ exportFullCSV(tickets,filename); }
+
+/* ─── Modal Component ─── */
+function TicketModal({data,onClose}){
+  if(!data)return null;
+  var tix=data.tickets||[];
+  return(
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{
+      position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.4)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",
+      zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeUp .25s cubic-bezier(.22,1,.36,1)"
+    }}>
+      <div style={{background:"#fff",borderRadius:20,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:1100,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
+        {/* Modal header */}
+        <div style={{padding:"20px 24px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
+          <div style={{width:40,height:40,borderRadius:10,background:data.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{data.icon}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:16,fontWeight:800,color:"var(--t1)"}}>{data.title}</div>
+            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{tix.length} ticket{tix.length!==1?"s":""}</div>
+          </div>
+          <button onClick={function(){exportFullCSV(tix,(data.title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
+          <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
+        </div>
+        {/* Modal table */}
+        <div style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr style={{background:"var(--bg)",position:"sticky",top:0,zIndex:2}}>
+              <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Key</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Summary</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Status</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Project</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
+            </tr></thead>
+            <tbody>
+              {tix.slice(0,500).map(function(t,i){
+                var a=ds(t.Updated||t.Created);var bk=abk(a);var c=classify(t.Status);var cs=CS[c];
+                var linked=t["Linked Issues"]||"";var linkedSt=t["Linked Ticket status"]||"";
+                var sla=checkSLA(t);
+                return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.anyBreach?"#FFF5F5":""}}>
+                  <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
+                    <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12,color:"var(--blue)"}}>{t.Key}</a>
+                    {sla.anyBreach&&<span title={"SLA Breach"+(sla.frBreach?" · Response":"")+(sla.resBreach?" · Resolution":"")} style={{marginLeft:5,background:"#FEE2E2",color:"#BE123C",padding:"1px 5px",borderRadius:4,fontSize:8,fontWeight:700}}>⚡SLA</span>}
+                  </td>
+                  <td style={{padding:"6px 10px",color:"var(--t2)",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
+                  <td style={{padding:"6px 10px"}}><span style={{background:cs.badge,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
+                  <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
+                  <td style={{padding:"6px 10px",fontSize:11,fontWeight:600,color:t.Priority==="Critical"||t.Priority==="Show Stopper"?"var(--rose)":t.Priority==="High"?"var(--amber)":"var(--t3)"}}>{t.Priority}</td>
+                  <td style={{padding:"6px 10px",fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {linked?<a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--blue)"}}>{linked.split(";")[0]}</a>:<span style={{color:"var(--t4)"}}>—</span>}
+                  </td>
+                  <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
+                  <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+                </tr>);
+              })}
+            </tbody>
+          </table>
+          {tix.length>500&&<div style={{padding:12,textAlign:"center",color:"var(--t3)",fontSize:11,borderTop:"1px solid var(--border)"}}>Showing 500 of {tix.length}</div>}
+          {tix.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--t3)",fontSize:13}}>No tickets in this category</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ─── Category Detail Modal (3 tabs: All Tickets, Ageing, SVM In Charge) ─── */
+function CategoryDetailModal({data,activeTab,onTabChange,onClose}){
+  if(!data)return null;
+  var tix=data.tickets||[];
+  var catTitle=data.title||"Tickets";
+  var catSubtitle=data.subtitle||tix.length+" tickets";
+  var catIcon=data.icon||"📋";
+  var catColor=data.color||"var(--violet)";
+  var catBg=data.bg||"var(--violet-bg)";
+  var catBorder=data.border||"var(--violet-border)";
+  var badgeColor=data.badgeColor||"#7C3AED";
+  const [ageFilter, setAgeFilter] = useState(null);
+  const [svmFilter, setSvmFilter] = useState(null);
+
+  /* ── Ageing buckets based on Created date ── */
+  var ageLabels=["< 7 days","7–30 days","31–60 days","61–90 days","90+ days"];
+  var ageColors=["#059669","#65A30D","#CA8A04","#EA580C","#E11D48"];
+  var ageBuckets=[[], [], [], [], []];
+  tix.forEach(function(t){
+    var age=ds(t.Created);
+    var idx=age<=7?0:age<=30?1:age<=60?2:age<=90?3:4;
+    ageBuckets[idx].push(t);
+  });
+  /* Filtered list for ageing tab */
+  var ageDisplayList = ageFilter!==null ? ageBuckets[ageFilter] : null;
+
+  /* ── SVM In Charge grouping ── */
+  var svmMap={};
+  tix.forEach(function(t){
+    var svm=t["SVM In Charge"]||"(Unassigned)";
+    svm=String(svm).trim();if(!svm||svm.toLowerCase()==="nan")svm="(Unassigned)";
+    if(!svmMap[svm])svmMap[svm]=[];
+    svmMap[svm].push(t);
+  });
+  var svmEntries=Object.entries(svmMap).sort(function(a,b){return b[1].length-a[1].length;});
+  var svmMax=svmEntries.length?svmEntries[0][1].length:1;
+  /* Color palette for SVM blocks */
+  var svmPalette=["#7C3AED","#5B21B6","#2563EB","#0891B2","#059669","#D97706","#E11D48","#9333EA","#4338CA","#0D9488","#B45309","#DC2626"];
+
+  /* ── shared ticket table ── */
+  function renderTable(list,showAge){
+    return(
+      <div style={{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr style={{background:"var(--bg)",position:"sticky",top:0,zIndex:2}}>
+            <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Key</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Summary</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Status</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Project</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
+            <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
+          </tr></thead>
+          <tbody>
+            {list.slice(0,500).map(function(t,i){
+              var a=ds(t.Updated||t.Created);var bk=abk(a);
+              var sla=checkSLA(t);var linked=t["Linked Issues"]||"";
+              return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.anyBreach?"#FFF5F5":""}}>
+                <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
+                  <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12,color:"var(--blue)"}}>{t.Key}</a>
+                  {sla.anyBreach&&<span style={{marginLeft:5,background:"#FEE2E2",color:"#BE123C",padding:"1px 5px",borderRadius:4,fontSize:8,fontWeight:700}}>⚡SLA</span>}
+                </td>
+                <td style={{padding:"6px 10px",color:"var(--t2)",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
+                <td style={{padding:"6px 10px"}}><span style={{background:badgeColor,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
+                <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
+                <td style={{padding:"6px 10px",fontSize:11,fontWeight:600,color:t.Priority==="Critical"||t.Priority==="Show Stopper"?"var(--rose)":t.Priority==="High"?"var(--amber)":"var(--t3)"}}>{t.Priority}</td>
+                <td style={{padding:"6px 10px",fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {linked?<a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--blue)"}}>{linked.split(";")[0]}</a>:<span style={{color:"var(--t4)"}}>—</span>}
+                </td>
+                <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
+                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+              </tr>);
+            })}
+          </tbody>
+        </table>
+        {list.length>500&&<div style={{padding:12,textAlign:"center",color:"var(--t3)",fontSize:11,borderTop:"1px solid var(--border)"}}>Showing 500 of {list.length}</div>}
+        {list.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--t3)",fontSize:13}}>No tickets in this category</div>}
+      </div>
+    );
+  }
+
+  return(
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{
+      position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.4)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",
+      zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeUp .25s cubic-bezier(.22,1,.36,1)"
+    }}>
+      <div style={{background:"#fff",borderRadius:20,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:1200,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
+        {/* Modal header */}
+        <div style={{padding:"20px 24px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
+          <div style={{width:44,height:44,borderRadius:12,background:catBg,border:"1px solid "+catBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{catIcon}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:18,fontWeight:800,color:"var(--t1)"}}>{catTitle}</div>
+            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{catSubtitle}</div>
+          </div>
+          <button onClick={function(){exportFullCSV(tix,(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
+          <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid var(--border)",background:"var(--bg)"}}>
+          {[["all","📋 All Tickets",tix.length],["ageing","⏰ Ageing (Created)",null],["svm","👤 SVM In Charge",svmEntries.length]].map(function(tb){
+            var id=tb[0],label=tb[1],cnt=tb[2];var active=activeTab===id;
+            return(<button key={id} onClick={function(){onTabChange(id);setAgeFilter(null);setSvmFilter(null);}} style={{
+              padding:"10px 18px",borderRadius:"10px 10px 0 0",fontSize:12,fontWeight:700,border:"1px solid "+(active?"var(--border)":"transparent"),borderBottom:active?"1px solid #fff":"1px solid var(--border)",
+              background:active?"#fff":"transparent",color:active?catColor:"var(--t3)",marginBottom:-1,display:"flex",alignItems:"center",gap:6,transition:"all .15s"
+            }}>{label}{cnt!==null&&<span style={{background:active?catColor+"18":"var(--bg)",color:active?catColor:"var(--t3)",padding:"1px 7px",borderRadius:10,fontSize:10,fontWeight:800,border:"1px solid "+(active?catColor+"44":"var(--border)")}}>{cnt}</span>}</button>);
+          })}
+        </div>
+
+        {/* Tab content */}
+        <div style={{flex:1,overflow:"auto"}}>
+
+          {/* ALL TICKETS TAB */}
+          {activeTab==="all"&&renderTable(tix)}
+
+          {/* AGEING TAB */}
+          {activeTab==="ageing"&&(
+            <div style={{padding:"16px 24px"}}>
+              {/* Ageing summary bar — each segment is clickable */}
+              <div style={{display:"flex",borderRadius:10,overflow:"hidden",height:40,background:"var(--bg)",marginBottom:14,border:"1px solid var(--border)"}}>
+                {ageBuckets.map(function(bucket,i){
+                  var pct=tix.length?bucket.length/tix.length*100:0;
+                  if(bucket.length===0)return null;
+                  var isActive=ageFilter===i;
+                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets — click to filter"} style={{
+                    width:pct+"%",background:ageColors[i],display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:12,fontWeight:800,color:"#fff",minWidth:bucket.length>0?34:0,transition:"all .3s",
+                    cursor:"pointer",opacity:ageFilter!==null&&!isActive?0.4:1,
+                    outline:isActive?"3px solid var(--t1)":"none",outlineOffset:-2,position:"relative",zIndex:isActive?1:0
+                  }}>{bucket.length}</div>);
+                })}
+              </div>
+              {/* Legend — also clickable */}
+              <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14}}>
+                {ageLabels.map(function(lbl,i){
+                  var isActive=ageFilter===i;
+                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} style={{
+                    display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,
+                    color:isActive?ageColors[i]:"var(--t2)",cursor:"pointer",
+                    background:isActive?ageColors[i]+"18":"transparent",
+                    border:isActive?"1px solid "+ageColors[i]+"44":"1px solid transparent",
+                    padding:"4px 10px",borderRadius:8,transition:"all .15s"
+                  }}>
+                    <div style={{width:10,height:10,borderRadius:3,background:ageColors[i]}}/>{lbl}: <span style={{fontFamily:"var(--mono)",fontWeight:800,color:ageColors[i]}}>{ageBuckets[i].length}</span>
+                  </div>);
+                })}
+              </div>
+
+              {/* Active filter chip */}
+              {ageFilter!==null&&(
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:ageColors[ageFilter]+"14",borderRadius:10,border:"1px solid "+ageColors[ageFilter]+"44"}}>
+                  <div style={{width:12,height:12,borderRadius:3,background:ageColors[ageFilter]}}/>
+                  <span style={{fontSize:13,fontWeight:800,color:ageColors[ageFilter]}}>{ageLabels[ageFilter]}</span>
+                  <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {ageBuckets[ageFilter].length} ticket{ageBuckets[ageFilter].length!==1?"s":""}</span>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){setAgeFilter(null);}} style={{background:ageColors[ageFilter],color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
+                </div>
+              )}
+
+              {/* Filtered: single bucket table */}
+              {ageFilter!==null&&(function(){
+                var sorted=[].concat(ageBuckets[ageFilter]).sort(function(a,b){return ds(b.Created)-ds(a.Created);});
+                return renderTable(sorted);
+              })()}
+
+              {/* Unfiltered: show all buckets */}
+              {ageFilter===null&&ageBuckets.map(function(bucket,i){
+                if(bucket.length===0)return null;
+                var sorted=[].concat(bucket).sort(function(a,b){return ds(b.Created)-ds(a.Created);});
+                return(<div key={i} style={{marginBottom:18}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                    <div style={{width:14,height:14,borderRadius:4,background:ageColors[i]}}/>
+                    <span style={{fontSize:14,fontWeight:800,color:ageColors[i]}}>{ageLabels[i]}</span>
+                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""}</span>
+                  </div>
+                  {renderTable(sorted)}
+                </div>);
+              })}
+            </div>
+          )}
+
+          {/* SVM IN CHARGE TAB */}
+          {activeTab==="svm"&&(function(){
+            var activeSvmIdx=svmFilter!==null?svmEntries.findIndex(function(e){return e[0]===svmFilter;}): -1;
+            var activeSvmColor=activeSvmIdx>=0?svmPalette[activeSvmIdx%svmPalette.length]:"#7C3AED";
+            var activeSvmTickets=activeSvmIdx>=0?svmEntries[activeSvmIdx][1]:[];
+            return(
+            <div style={{padding:"16px 24px"}}>
+              {/* SVM blocks grid — each block is clickable */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:16}}>
+                {svmEntries.map(function(entry,i){
+                  var name=entry[0],tickets=entry[1];
+                  var intensity=Math.max(0.35,tickets.length/svmMax);
+                  var color=svmPalette[i%svmPalette.length];
+                  var isActive=svmFilter===name;
+                  var isDimmed=svmFilter!==null&&!isActive;
+                  var lightBg=color+"14";var borderC=color+"44";
+                  /* Ageing breakdown within each SVM */
+                  var svmAge=[0,0,0,0,0];
+                  tickets.forEach(function(t){svmAge[abk(ds(t.Created))]++;});
+                  return(<div key={name} onClick={function(){setSvmFilter(svmFilter===name?null:name);}} style={{
+                    background:isActive?color+"22":lightBg,
+                    border:(isActive?"3px solid "+color:"2px solid "+borderC),
+                    borderRadius:14,padding:"14px 16px",
+                    cursor:"pointer",transition:"all .2s",position:"relative",overflow:"hidden",
+                    opacity:isDimmed?0.45:1,
+                    transform:isActive?"scale(1.02)":"scale(1)",
+                    boxShadow:isActive?"0 4px 16px "+color+"33":"none"
+                  }}>
+                    <div style={{position:"absolute",top:0,left:0,bottom:0,width:(intensity*100)+"%",background:color+"10",borderRadius:14,transition:"width .4s"}}/>
+                    <div style={{position:"relative",zIndex:1}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{fontSize:13,fontWeight:800,color:color,maxWidth:"70%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={name}>{name}</div>
+                        <div style={{fontSize:22,fontWeight:900,color:color,fontFamily:"var(--mono)",letterSpacing:"-1px",lineHeight:1}}>{tickets.length}</div>
+                      </div>
+                      {/* Mini ageing bars */}
+                      <div style={{display:"flex",gap:3,height:6,borderRadius:4,overflow:"hidden",background:"rgba(0,0,0,.06)"}}>
+                        {svmAge.map(function(c,j){
+                          if(c===0)return null;
+                          return(<div key={j} title={ageLabels[j]+": "+c} style={{width:(c/tickets.length*100)+"%",background:ageColors[j],minWidth:c>0?3:0}}/>);
+                        })}
+                      </div>
+                      <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
+                        {svmAge.map(function(c,j){
+                          if(c===0)return null;
+                          return(<span key={j} style={{fontSize:9,fontWeight:700,color:ageColors[j]}}>{AS[j]}:{c}</span>);
+                        })}
+                      </div>
+                    </div>
+                  </div>);
+                })}
+              </div>
+
+              {/* Active filter chip */}
+              {svmFilter!==null&&activeSvmIdx>=0&&(
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:activeSvmColor+"14",borderRadius:10,border:"1px solid "+activeSvmColor+"44"}}>
+                  <div style={{width:12,height:12,borderRadius:3,background:activeSvmColor}}/>
+                  <span style={{fontSize:13,fontWeight:800,color:activeSvmColor}}>{svmFilter}</span>
+                  <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {activeSvmTickets.length} ticket{activeSvmTickets.length!==1?"s":""}</span>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){setSvmFilter(null);}} style={{background:activeSvmColor,color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
+                </div>
+              )}
+
+              {/* Filtered: single SVM table */}
+              {svmFilter!==null&&activeSvmIdx>=0&&(function(){
+                var sorted=[].concat(activeSvmTickets).sort(function(a,b){return ds(b.Created)-ds(a.Created);});
+                return renderTable(sorted);
+              })()}
+
+              {/* Unfiltered: show all SVM sections */}
+              {svmFilter===null&&svmEntries.map(function(entry,i){
+                var name=entry[0],tickets=entry[1];
+                var color=svmPalette[i%svmPalette.length];
+                var sorted=[].concat(tickets).sort(function(a,b){return ds(b.Created)-ds(a.Created);});
+                return(<div key={name} style={{marginBottom:18}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                    <div style={{width:14,height:14,borderRadius:4,background:color}}/>
+                    <span style={{fontSize:14,fontWeight:800,color:color}}>{name}</span>
+                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {tickets.length} ticket{tickets.length!==1?"s":""}</span>
+                  </div>
+                  {renderTable(sorted)}
+                </div>);
+              })}
+            </div>);
+          })()}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"10px 24px",borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <span style={{fontSize:11,color:"var(--t3)"}}>{catTitle} · {tix.length} tickets</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ─── MultiSelect Component ─── */
+function MultiSelect({allLabel, options, selected, onChange, minWidth}){
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef();
+
+  useEffect(function(){
+    function handleClick(e){ if(ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handleClick);
+    return function(){ document.removeEventListener("mousedown", handleClick); };
+  },[]);
+
+  var filtered = search ? options.filter(function(o){ return o[0].toLowerCase().indexOf(search.toLowerCase()) > -1; }) : options;
+  var text = selected.length === 0 ? allLabel : selected.length <= 2 ? selected.join(", ") : selected.length + " selected";
+
+  function toggle(val){
+    var idx = selected.indexOf(val);
+    if(idx > -1) onChange(selected.filter(function(v){ return v !== val; }));
+    else onChange(selected.concat([val]));
+  }
+  function selectAll(){ onChange(options.map(function(o){ return o[0]; })); }
+  function clearAll(){ onChange([]); }
+
+  return(
+    <div className="msel-r" ref={ref} style={{minWidth:minWidth||180}}>
+      <button type="button" className={"msel-r-btn"+(open?" open":"")} onClick={function(){ setOpen(!open); setSearch(""); }}>
+        <span className="txt">{text}</span>
+        {selected.length > 0 && <span className="cnt">{selected.length}</span>}
+        <span className="arrow">▾</span>
+      </button>
+      {open && (
+        <div className="msel-r-dd">
+          <input className="srch" placeholder="Search…" value={search} onChange={function(e){ setSearch(e.target.value); }} onClick={function(e){ e.stopPropagation(); }} autoFocus/>
+          <div className="acts">
+            <button onClick={selectAll}>Select all</button>
+            <button onClick={clearAll}>Clear</button>
+          </div>
+          <div className="lst">
+            {filtered.length === 0 && <div className="emp">No matches</div>}
+            {filtered.map(function(o){
+              var val = o[0], count = o[1];
+              var on = selected.indexOf(val) > -1;
+              return(
+                <div key={val} className={"opt"+(on?" on":"")} onClick={function(){ toggle(val); }}>
+                  <span className="chk">{on?"✓":""}</span>
+                  <span className="lbl">{val}</span>
+                  {count !== undefined && <span className="n">{count}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main App ─── */
+/* ═══ EDITABLE DATA GRID ═══
+   Spreadsheet-style editor over the raw rows: per-column filters, global
+   search, click-to-sort, pagination, add/delete row. "Apply & Recalculate"
+   pushes edits back into the dashboard (and the shared store) so every KPI,
+   chart and pivot recomputes — no Excel re-upload needed. */
+function fmtCell(v){
+  if(v===null||v===undefined)return"";
+  if(v instanceof Date)return isNaN(v)?"":v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+  return String(v);
+}
+function DataEditor({rows,fileName,onApply,onRevert}){
+  const PAGE=50;
+  const[data,setData]=useState([]);
+  const[dirty,setDirty]=useState(false);
+  const[filters,setFilters]=useState({});
+  const[search,setSearch]=useState("");
+  const[sortCol,setSortCol]=useState(null);
+  const[sortDir,setSortDir]=useState("asc");
+  const[page,setPage]=useState(0);
+  const idRef=useRef(0);
+
+  // (Re)initialise the working copy whenever the source rows change (load / revert)
+  useEffect(function(){
+    idRef.current=0;
+    setData((rows||[]).map(function(r){return Object.assign({__id:idRef.current++},r);}));
+    setDirty(false);setPage(0);setFilters({});setSearch("");setSortCol(null);
+  },[rows]);
+
+  const cols=useMemo(function(){
+    var seen={};var out=[];
+    (data||[]).forEach(function(r){Object.keys(r).forEach(function(k){if(k!=="__id"&&!seen[k]){seen[k]=1;out.push(k);}});});
+    return out;
+  },[data]);
+
+  const view=useMemo(function(){
+    var l=data;
+    var active=Object.keys(filters).filter(function(k){return filters[k];});
+    if(active.length)l=l.filter(function(r){return active.every(function(k){return fmtCell(r[k]).toLowerCase().indexOf(filters[k].toLowerCase())>-1;});});
+    if(search){var q=search.toLowerCase();l=l.filter(function(r){return cols.some(function(k){return fmtCell(r[k]).toLowerCase().indexOf(q)>-1;});});}
+    if(sortCol){
+      l=[].concat(l).sort(function(a,b){
+        var av=a[sortCol],bv=b[sortCol];
+        if(av instanceof Date&&bv instanceof Date){return sortDir==="asc"?av-bv:bv-av;}
+        var as=fmtCell(av),bs=fmtCell(bv);
+        var an=parseFloat(as),bn=parseFloat(bs);
+        if(!isNaN(an)&&!isNaN(bn)&&as.trim()!==""&&bs.trim()!==""){return sortDir==="asc"?an-bn:bn-an;}
+        return sortDir==="asc"?as.localeCompare(bs):bs.localeCompare(as);
+      });
+    }
+    return l;
+  },[data,filters,search,sortCol,sortDir,cols]);
+
+  const pageCount=Math.max(1,Math.ceil(view.length/PAGE));
+  const cur=Math.min(page,pageCount-1);
+  const pageRows=view.slice(cur*PAGE,cur*PAGE+PAGE);
+
+  function edit(id,col,val){setData(function(prev){return prev.map(function(r){return r.__id===id?Object.assign({},r,{[col]:val}):r;});});setDirty(true);}
+  function delRow(id){setData(function(prev){return prev.filter(function(r){return r.__id!==id;});});setDirty(true);}
+  function addRow(){var blank={__id:idRef.current++};cols.forEach(function(c){blank[c]="";});setData(function(prev){return[blank].concat(prev);});setDirty(true);setPage(0);}
+  function toggleSort(c){if(sortCol===c){setSortDir(function(d){return d==="asc"?"desc":"asc";});}else{setSortCol(c);setSortDir("asc");}}
+  function setFilter(c,v){setFilters(function(prev){var n=Object.assign({},prev);if(v)n[c]=v;else delete n[c];return n;});setPage(0);}
+  function clearFilters(){setFilters({});setSearch("");setPage(0);}
+  function apply(){var clean=data.map(function(r){var o={};cols.forEach(function(c){o[c]=r[c];});return o;});onApply(clean);setDirty(false);}
+
+  var hdrStyle={padding:"8px 10px",textAlign:"left",fontSize:10,fontWeight:800,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".4px",borderBottom:"2px solid var(--border2)",background:"var(--bg)",position:"sticky",top:0,zIndex:3,whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
+  var inpStyle={width:"100%",minWidth:110,border:"1px solid transparent",borderRadius:6,padding:"5px 7px",fontSize:12,color:"var(--t1)",background:"transparent",fontFamily:"var(--sans)"};
+
+  return(<>
+    <div className="card" style={{padding:"11px 15px",marginBottom:9,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{width:42,height:42,borderRadius:10,background:"var(--blue-bg)",border:"1px solid var(--blue-light)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>✏️</div>
+      <div style={{minWidth:0}}>
+        <div style={{fontWeight:800,fontSize:15,color:"var(--t1)"}}>Edit Data {dirty&&<span style={{color:"var(--amber)",fontSize:11,fontWeight:700,marginLeft:6}}>● unsaved edits</span>}</div>
+        <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{data.length.toLocaleString()} rows · {cols.length} columns · correct any field, then Recalculate. Edits are shared with the Trend Tracker too.</div>
+      </div>
+      <div style={{flex:1}}/>
+      <input value={search} onChange={function(e){setSearch(e.target.value);setPage(0);}} placeholder="🔍 Search all columns…" style={{padding:"8px 12px",border:"1px solid var(--border)",borderRadius:8,fontSize:12,color:"var(--t1)",background:"var(--card)",fontFamily:"var(--sans)",minWidth:200}}/>
+      <button onClick={addRow} style={{background:"var(--card)",border:"1px solid var(--border2)",color:"var(--t2)",padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:600}}>＋ Row</button>
+      <button onClick={onRevert} style={{background:"var(--card)",border:"1px solid var(--border2)",color:"var(--t2)",padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:600}}>↺ Revert to upload</button>
+      <button onClick={apply} disabled={!dirty} style={{background:dirty?"var(--blue)":"var(--border)",border:"none",color:"#fff",padding:"8px 18px",borderRadius:8,fontSize:12,fontWeight:800,cursor:dirty?"pointer":"default"}}>⟳ Apply &amp; Recalculate</button>
+    </div>
+
+    {(Object.keys(filters).length>0||search)&&(<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,padding:"9px 16px",background:"var(--blue-bg)",borderRadius:8,border:"1px solid var(--blue-light)"}}>
+      <span style={{color:"var(--blue-dark)",fontSize:12,fontWeight:600}}>Showing {view.length.toLocaleString()} of {data.length.toLocaleString()} rows</span>
+      <button onClick={clearFilters} style={{marginLeft:"auto",background:"var(--blue)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:6,fontSize:10,fontWeight:700}}>✕ Clear filters</button>
+    </div>)}
+
+    <div className="card" style={{overflow:"hidden"}}>
+      <div style={{overflow:"auto",maxHeight:"62vh"}}>
+        <table style={{borderCollapse:"collapse",fontSize:12,minWidth:"100%"}}>
+          <thead>
+            <tr>
+              <th style={Object.assign({},hdrStyle,{left:0,zIndex:4,minWidth:36,textAlign:"center",cursor:"default"})}>#</th>
+              {cols.map(function(c){return(<th key={c} onClick={function(){toggleSort(c);}} style={hdrStyle} title="Click to sort">{c} <span style={{color:"var(--blue)",fontSize:9}}>{sortCol===c?(sortDir==="asc"?"↑":"↓"):""}</span></th>);})}
+            </tr>
+            <tr>
+              <th style={{position:"sticky",top:33,left:0,zIndex:4,background:"var(--bg)",borderBottom:"1px solid var(--border)"}}></th>
+              {cols.map(function(c){return(<th key={c} style={{position:"sticky",top:33,zIndex:3,background:"var(--bg)",borderBottom:"1px solid var(--border)",padding:"4px 6px"}}>
+                <input value={filters[c]||""} onChange={function(e){setFilter(c,e.target.value);}} placeholder="filter…" style={{width:"100%",minWidth:100,border:"1px solid var(--border2)",borderRadius:5,padding:"3px 6px",fontSize:11,color:"var(--t2)",background:"var(--card)",fontFamily:"var(--sans)"}}/>
+              </th>);})}
+            </tr>
+          </thead>
+          <tbody>
+            {pageRows.map(function(r){return(<tr key={r.__id} style={{borderBottom:"1px solid var(--border)"}}>
+              <td style={{position:"sticky",left:0,zIndex:1,background:"var(--card)",padding:"2px 4px",textAlign:"center"}}>
+                <button onClick={function(){delRow(r.__id);}} title="Delete row" style={{background:"transparent",border:"none",color:"var(--t4)",fontSize:13,padding:2}}>🗑</button>
+              </td>
+              {cols.map(function(c){return(<td key={c} style={{padding:0,borderRight:"1px solid var(--bg)"}}>
+                <input value={fmtCell(r[c])} onChange={function(e){edit(r.__id,c,e.target.value);}}
+                  style={inpStyle}
+                  onFocus={function(e){e.target.style.border="1px solid var(--blue)";e.target.style.background="var(--card)";}}
+                  onBlur={function(e){e.target.style.border="1px solid transparent";e.target.style.background="transparent";}}/>
+              </td>);})}
+            </tr>);})}
+            {pageRows.length===0&&(<tr><td colSpan={cols.length+1} style={{padding:24,textAlign:"center",color:"var(--t3)",fontSize:12}}>No rows match the current filters.</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderTop:"1px solid var(--border)",background:"var(--bg)"}}>
+        <span style={{fontSize:11,color:"var(--t2)"}}>Rows {view.length?cur*PAGE+1:0}–{Math.min(cur*PAGE+PAGE,view.length)} of {view.length.toLocaleString()}</span>
+        <div style={{flex:1}}/>
+        <button onClick={function(){setPage(0);}} disabled={cur===0} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur===0?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>« First</button>
+        <button onClick={function(){setPage(cur-1);}} disabled={cur===0} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur===0?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>‹ Prev</button>
+        <span style={{fontSize:11,color:"var(--t2)",fontWeight:700}}>Page {cur+1} / {pageCount}</span>
+        <button onClick={function(){setPage(cur+1);}} disabled={cur>=pageCount-1} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur>=pageCount-1?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>Next ›</button>
+        <button onClick={function(){setPage(pageCount-1);}} disabled={cur>=pageCount-1} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur>=pageCount-1?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>Last »</button>
+      </div>
+    </div>
+  </>);
+}
+
+function App(){
+  const[raw,setRaw]=useState(null);
+  const[w,setW]=useState([]);
+  const[tab,setTab]=useState("followup");
+  const[cf,setCf]=useState(null);
+  const[af,setAf]=useState(null);
+  const[sf,setSf]=useState(null);
+  const[gf,setGf]=useState(null);
+  const[pf,setPf]=useState([]);
+  const[search,setSearch]=useState("");
+  const[sortCol,setSortCol]=useState("age");
+  const[sortDir,setSortDir]=useState("desc");
+  const[loading,setLoading]=useState(false);
+  const[fn,setFn]=useState("");
+  const[statusOpen,setStatusOpen]=useState(false);
+  const[dtFrom,setDtFrom]=useState("");
+  const[dtTo,setDtTo]=useState("");
+  const[dtLabel,setDtLabel]=useState("All Time");
+  const[modal,setModal]=useState(null); // {title, icon, color, tickets}
+  const[catModal,setCatModal]=useState(null); // {tickets, title, subtitle, icon, color, bg, border, badgeColor}
+  const[catTab,setCatTab]=useState("all"); // "all" | "ageing" | "svm"
+  const fRef=useRef();
+  const blobRef=useRef(null); // original uploaded file, kept for "revert"
+
+  const handleFile=useCallback(async function(e){
+    const f=e.target.files?.[0];if(!f)return;
+    setLoading(true);setFn(f.name);
+    try{setRaw(await px(f));setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSearch("");setDtFrom("");setDtTo("");setDtLabel("All Time");setModal(null);}
+    catch(err){alert(err.message);}
+    setLoading(false);e.target.value="";
+  },[]);
+  function clr(){setCf(null);setAf(null);setSf(null);setGf(null);setSearch("");}
+  function closeModal(){setModal(null);}
+
+  /* Keyboard: Esc closes modal */
+  useEffect(function(){
+    function handleKey(e){if(e.key==="Escape"){if(catModal)setCatModal(null);else if(modal)setModal(null);}}
+    document.addEventListener("keydown",handleKey);
+    return function(){document.removeEventListener("keydown",handleKey);};
+  },[modal,catModal]);
+
+  /* Load the shared data. Prefer in-app edits (from the Edit Data tab); fall
+     back to parsing the uploaded Excel and seeding the edit store from it. */
+  useEffect(function(){
+    if(!window.HDStore)return;
+    // Apply Master Data status overrides before rendering so classify() reflects them.
+    window.HDStore.loadConfig().then(function(cfg){
+      window.HDClass.setOverrides(cfg.statusOverrides);
+      window.HDStore.loadFile().then(function(rec){
+        if(!rec){window.location.replace("index.html");return;}
+        setFn(rec.name);blobRef.current=rec.blob;setLoading(true);
+        window.HDStore.loadRows().then(function(edited){
+          if(edited&&edited.length){setRaw(edited);setLoading(false);return;}
+          px(rec.blob).then(function(rows){setRaw(rows);setLoading(false);window.HDStore.saveRows(rows);})
+            .catch(function(e){alert("Could not read stored file: "+e.message);window.location.replace("index.html");});
+        });
+      });
+    });
+  },[]);
+
+  /* Commit edits from the Edit Data tab: everything recomputes off `raw`. */
+  function applyEditedRows(newRows){
+    setRaw(newRows);setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSearch("");setModal(null);
+    if(window.HDStore)window.HDStore.saveRows(newRows);
+  }
+  /* Throw away edits and reload the originally uploaded file. */
+  function revertToUpload(){
+    if(!blobRef.current)return;
+    if(window.HDStore)window.HDStore.clearRows();
+    setLoading(true);
+    px(blobRef.current).then(function(rows){setRaw(rows);setLoading(false);if(window.HDStore)window.HDStore.saveRows(rows);});
+  }
+
+  /* SLA, Priority, and modal openers — defined after flt (below) */
+
+  /* Open modal with filtered tickets */
+  function openCatModal(c){
+    var label=CL[c];var cs=CS[c];
+    var tix=flt.filter(function(t){return classify(t.Status)===c&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
+    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:label,icon:cs.icon,color:cs.badge,tickets:tix});
+  }
+  function openHoldModal(){
+    var tix=st.hold.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"On-Hold tickets",icon:"⏸️",color:"#64748B",tickets:tix});
+  }
+  function openInvoiceModal(){
+    var tix=st.inv.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"Invoice Yet to Raise",icon:"🧾",color:"#0891B2",tickets:tix});
+  }
+  function openEnggModal(){
+    var tix=flt.filter(function(t){return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
+    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setCatModal({tickets:tix,title:"Engineering Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" with engineering / dev team",icon:"🔧",color:"var(--violet)",bg:"var(--violet-bg)",border:"var(--violet-border)",badgeColor:"#7C3AED"});setCatTab("all");
+  }
+  function openClientModal(){
+    var tix=flt.filter(function(t){return classify(t.Status)==="client"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
+    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setCatModal({tickets:tix,title:"Client Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" awaiting client response",icon:"💬",color:"var(--amber)",bg:"var(--amber-bg)",border:"var(--amber-border)",badgeColor:"#D97706"});setCatTab("all");
+  }
+  function closeCatModal(){setCatModal(null);}
+  function openAgeModal(i){
+    var tix=flt.filter(function(t){return abk(ds(t.Updated||t.Created))===i;});
+    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:AL[i]+" old tickets",icon:"⏰",color:AC[i],tickets:tix});
+  }
+  function openStatusModal(s){
+    var c=classify(s);var cs=CS[c];
+    var tix=flt.filter(function(t){return t.Status===s;});
+    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:s,icon:cs.icon,color:cs.badge,tickets:tix});
+  }
+  function openAllModal(){
+    var tix=[].concat(flt).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"All Open Tickets",icon:"📂",color:"#2563EB",tickets:tix});
+  }
+  function openDangerModal(){
+    var tix=flt.filter(function(t){return abk(ds(t.Updated||t.Created))===4;});
+    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"Danger Zone — 90+ days",icon:"🔴",color:"#E11D48",tickets:tix});
+  }
+
+  function filterCat(c){setCf(function(prev){return prev===c?null:c;});setAf(null);setSf(null);setSearch("");}
+  function filterAge(i){setAf(function(prev){return prev===i?null:i;});setCf(null);setSf(null);setSearch("");}
+  function filterStatus(s){setSf(function(prev){return prev===s?null:s;});setCf(null);setAf(null);setSearch("");}
+  function filterGap(f){setGf(function(prev){return prev===f?null:f;});}
+  function toggleSort(col){if(sortCol===col){setSortDir(function(d){return d==="asc"?"desc":"asc";});}else{setSortCol(col);setSortDir("desc");}}
+  function sortIcon(col){return sortCol===col?(sortDir==="asc"?"↑":"↓"):"";};
+
+  /* Date range presets */
+  function setDatePreset(label,from,to){setDtFrom(from||"");setDtTo(to||"");setDtLabel(label);clr();}
+  function presetAllTime(){setDatePreset("All Time","","");}
+  function presetThisMonth(){var d=new Date();var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,"0");setDatePreset("This Month",y+"-"+m+"-01","");}
+  function presetLastMonth(){var d=new Date();d.setMonth(d.getMonth()-1);var y=d.getFullYear();var m=String(d.getMonth()+1).padStart(2,"0");var last=new Date(y,d.getMonth()+1,0).getDate();setDatePreset("Last Month",y+"-"+m+"-01",y+"-"+m+"-"+String(last).padStart(2,"0"));}
+  function presetLast3M(){var d=new Date();d.setMonth(d.getMonth()-3);setDatePreset("Last 3 Months",d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"),"");}
+  function presetLast6M(){var d=new Date();d.setMonth(d.getMonth()-6);setDatePreset("Last 6 Months",d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"),"");}
+  function presetThisYear(){var y=new Date().getFullYear();setDatePreset("This Year",y+"-01-01","");}
+  function presetLastYear(){var y=new Date().getFullYear()-1;setDatePreset("Last Year",y+"-01-01",y+"-12-31");}
+
+  /* Date-filtered data — applies to EVERYTHING */
+  var dateFiltered=useMemo(function(){
+    if(!raw)return[];
+    if(!dtFrom&&!dtTo)return raw;
+    var fromMs=dtFrom?new Date(dtFrom+"T00:00:00").getTime():-Infinity;
+    var toMs=dtTo?new Date(dtTo+"T23:59:59").getTime():Infinity;
+    return raw.filter(function(t){
+      if(!t.Created)return false;
+      var d=t.Created instanceof Date?t.Created:new Date(t.Created);
+      if(isNaN(d))return false;
+      var ms=d.getTime();
+      return ms>=fromMs&&ms<=toMs;
+    });
+  },[raw,dtFrom,dtTo]);
+
+  var dateRangeText=useMemo(function(){
+    if(!dtFrom&&!dtTo)return"";
+    var parts=[];
+    if(dtFrom)parts.push("from "+fd(new Date(dtFrom)));
+    if(dtTo)parts.push("to "+fd(new Date(dtTo)));
+    return parts.join(" ");
+  },[dtFrom,dtTo]);
+
+  const op=useMemo(()=>dateFiltered?dateFiltered.filter(r=>r.Status&&r.Status!=="Closed"):[],[dateFiltered]);
+  const totalCreated=useMemo(function(){return dateFiltered?dateFiltered.length:0;},[dateFiltered]);
+  const totalClosed=useMemo(function(){return dateFiltered?dateFiltered.filter(function(t){return t.Status==="Closed";}).length:0;},[dateFiltered]);
+  const wks=useMemo(()=>{const m={};op.forEach(t=>{const x=t["Current Worker"];if(x)m[x]=(m[x]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);},[op]);
+  const pjs=useMemo(()=>{const s=new Set();op.forEach(t=>{if(t.Project)s.add(t.Project)});return[...s].sort();},[op]);
+
+  const flt=useMemo(()=>{
+    let l=op;
+    if(w.length)l=l.filter(t=>w.indexOf(t["Current Worker"])>-1);
+    if(pf.length)l=l.filter(t=>pf.indexOf(t.Project)>-1);
+    return l;
+  },[op,w,pf]);
+
+  /* All tickets filtered by worker/project (includes closed) for SLA */
+  var allFiltered=useMemo(function(){
+    var l=dateFiltered||[];
+    if(w.length)l=l.filter(function(t){return w.indexOf(t["Current Worker"])>-1;});
+    if(pf.length)l=l.filter(function(t){return pf.indexOf(t.Project)>-1;});
+    return l;
+  },[dateFiltered,w,pf]);
+
+  /* SLA breach computation — against ALL tickets in range */
+  var slaData=useMemo(function(){
+    var frBreached=[];var resBreached=[];var allBreached=[];
+    var frTotal=0;var resTotal=0;
+    allFiltered.forEach(function(t){
+      var s=checkSLA(t);
+      var frH=parseTimeToHours(t["Time to first response"]);
+      var resH=parseTimeToHours(t["Time to resolution"]);
+      if(frH!==null)frTotal++;
+      if(resH!==null)resTotal++;
+      if(s.frBreach)frBreached.push(Object.assign({},t,{_sla:s}));
+      if(s.resBreach)resBreached.push(Object.assign({},t,{_sla:s}));
+      if(s.anyBreach)allBreached.push(Object.assign({},t,{_sla:s}));
+    });
+    var frRate=frTotal>0?Math.round((frTotal-frBreached.length)/frTotal*100):100;
+    var resRate=resTotal>0?Math.round((resTotal-resBreached.length)/resTotal*100):100;
+    return{all:allBreached,fr:frBreached,res:resBreached,frTotal:frTotal,resTotal:resTotal,frRate:frRate,resRate:resRate,total:allFiltered.length};
+  },[allFiltered]);
+
+  /* Priority distribution — against open tickets */
+  var prioDist=useMemo(function(){
+    var counts={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};
+    flt.forEach(function(t){var p=t.Priority;if(counts.hasOwnProperty(p))counts[p]++;else counts["Medium"]++;});
+    return counts;
+  },[flt]);
+
+  function openSLAModal(){
+    var tix=[].concat(slaData.all).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"SLA Breached Tickets ("+tix.length+")",icon:"⚡",color:"#E11D48",tickets:tix});
+  }
+  function openSLAFRModal(){
+    var tix=[].concat(slaData.fr).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"First Response SLA Breached ("+tix.length+")",icon:"⚡",color:"#E11D48",tickets:tix});
+  }
+  function openSLAResModal(){
+    var tix=[].concat(slaData.res).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:"Resolution SLA Breached ("+tix.length+")",icon:"⚡",color:"#D97706",tickets:tix});
+  }
+  function openPriorityModal(p){
+    var tix=flt.filter(function(t){return t.Priority===p;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:p+" Priority Tickets",icon:"🔷",color:PRIORITY_COLORS[p]||"#2563EB",tickets:tix});
+  }
+
+  /* Performance modal openers */
+  function perfModal(title,icon,color,filterFn){
+    var src=allFiltered||[];
+    var tix=src.filter(filterFn).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    setModal({title:title+" ("+tix.length+")",icon:icon,color:color,tickets:tix});
+  }
+  function pmAll(){perfModal("All Handled","📋","#2563EB",function(){return true;});}
+  function pmClosed(){perfModal("Closed Tickets","✅","#059669",function(t){return t.Status==="Closed";});}
+  function pmOpen(){perfModal("Open Tickets","📂","#D97706",function(t){return t.Status!=="Closed";});}
+  function pmHdOnly(){perfModal("Closed by HD (No LRPS)","🎯","#059669",function(t){var li=t["Linked Issues"];return t.Status==="Closed"&&(!li||String(li).trim()===""||String(li).toLowerCase()==="nan");});}
+  function pmEngAsst(){perfModal("Closed with Engg (LRPS)","🔧","#7C3AED",function(t){var li=t["Linked Issues"];return t.Status==="Closed"&&li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";});}
+  function pmIncClarHd(){perfModal("Incidents — Clarification — Closed by HD","🎯","#059669",function(t){var li=t["Linked Issues"];return t.Status==="Closed"&&t["Issue Type"]==="Incident"&&t["Root Cause"]==="Client Clarification"&&(!li||String(li).trim()===""||String(li).toLowerCase()==="nan");});}
+  function pmIncClarEng(){perfModal("Incidents — Clarification — Engg Assisted","🔧","#7C3AED",function(t){var li=t["Linked Issues"];return t.Status==="Closed"&&t["Issue Type"]==="Incident"&&t["Root Cause"]==="Client Clarification"&&li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";});}
+  function pmIncidents(){perfModal("All Incidents","📋","#2563EB",function(t){return t["Issue Type"]==="Incident";});}
+  function pmIncClar(){perfModal("Incidents — Client Clarification","📋","#0891B2",function(t){return t["Issue Type"]==="Incident"&&t["Root Cause"]==="Client Clarification";});}
+
+  /* Incident + Clarification breakdown computation */
+  var incClarData=useMemo(function(){
+    var src=allFiltered||[];
+    if(w.length)src=src.filter(function(t){return w.indexOf(t["Current Worker"])>-1;});
+    if(pf.length)src=src.filter(function(t){return pf.indexOf(t.Project)>-1;});
+    var incidents=src.filter(function(t){return t["Issue Type"]==="Incident";});
+    var incClosed=incidents.filter(function(t){return t.Status==="Closed";});
+    var incClar=incidents.filter(function(t){return t["Root Cause"]==="Client Clarification";});
+    var incClarClosed=incClar.filter(function(t){return t.Status==="Closed";});
+    var hdOnly=0;var engAsst=0;
+    incClarClosed.forEach(function(t){var li=t["Linked Issues"];var has=li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";if(has)engAsst++;else hdOnly++;});
+    return{incidents:incidents.length,incClosed:incClosed.length,incClar:incClar.length,incClarClosed:incClarClosed.length,hdOnly:hdOnly,engAsst:engAsst};
+  },[allFiltered,w,pf]);
+
+  const st=useMemo(()=>{
+    const hd=[],cl=[],eng=[],hold=[],inv=[];const bk=[0,0,0,0,0];const sm={};const pm={};let ta=0;
+    flt.forEach(t=>{
+      if(t.Status==="On-Hold"){hold.push(t);}
+      else if(t.Status==="Invoice Yet to Raise"){inv.push(t);}
+      else{
+        const c=classify(t.Status);
+        if(c==="hd")hd.push(t);
+        else if(c==="engg")eng.push(t);
+        else cl.push(t);
+      }
+      const a=ds(t.Updated||t.Created);bk[abk(a)]++;ta+=a;
+      sm[t.Status]=(sm[t.Status]||0)+1;pm[t.Project]=(pm[t.Project]||0)+1;
+    });
+    return{n:flt.length,hd,cl,eng,hold,inv,avg:flt.length?Math.round(ta/flt.length):0,bk,dng:bk[4],sm,pm};
+  },[flt]);
+
+  const disp=useMemo(()=>{
+    let l=flt;
+    if(cf)l=l.filter(t=>classify(t.Status)===cf);
+    if(af!==null)l=l.filter(t=>abk(ds(t.Updated||t.Created))===af);
+    if(sf)l=l.filter(t=>t.Status===sf);
+    if(search){const s=search.toLowerCase();l=l.filter(t=>(t.Key||"").toLowerCase().includes(s)||(t.Summary||"").toLowerCase().includes(s));}
+    // Sort
+    l=[...l];
+    const dir=sortDir==="asc"?1:-1;
+    l.sort((a,b)=>{
+      if(sortCol==="age")return dir*(ds(b.Updated||b.Created)-ds(a.Updated||a.Created));
+      if(sortCol==="key")return dir*(a.Key||"").localeCompare(b.Key||"");
+      if(sortCol==="status")return dir*(a.Status||"").localeCompare(b.Status||"");
+      if(sortCol==="priority"){const po={Critical:0,"Show Stopper":0,High:1,Medium:2,Low:3};return dir*((po[a.Priority]??4)-(po[b.Priority]??4));}
+      if(sortCol==="created")return dir*(ds(b.Created)-ds(a.Created));
+      if(sortCol==="project")return dir*(a.Project||"").localeCompare(b.Project||"");
+      return 0;
+    });
+    return l;
+  },[flt,cf,af,sf,search,sortCol,sortDir]);
+
+  /* Performance */
+  const perf=useMemo(()=>{
+    if(!dateFiltered||w.length!==1)return null;
+    const all=dateFiltered.filter(t=>t["Current Worker"]===w[0]);const closed=all.filter(t=>t.Status==="Closed");const openT=all.length-closed.length;
+    const rate=all.length?Math.round(closed.length/all.length*100):0;
+    const rd=[];closed.forEach(t=>{if(t.Resolved&&t.Created){const d=Math.abs(ds(t.Created)-ds(t.Resolved));if(d<1000)rd.push(d);}});
+    const avgR=rd.length?Math.round(rd.reduce((a,b)=>a+b,0)/rd.length):0;
+    const mo={};all.forEach(t=>{if(t.Created){const m=fm(t.Created);if(m){if(!mo[m])mo[m]={cr:0,cl:0};mo[m].cr++;}}});
+    closed.forEach(t=>{if(t.Resolved){const m=fm(t.Resolved);if(m&&mo[m])mo[m].cl++;}});
+    const months=Object.entries(mo).slice(-12);
+    const bp={};all.forEach(t=>{if(t.Project){if(!bp[t.Project])bp[t.Project]={t:0,c:0};bp[t.Project].t++;}});
+    closed.forEach(t=>{if(t.Project&&bp[t.Project])bp[t.Project].c++;});
+    const tp=Object.entries(bp).sort((a,b)=>b[1].t-a[1].t).slice(0,8);
+    const bf={};all.forEach(t=>{const f=t["Type of Fix"];if(f&&f!=="nan")bf[f]=(bf[f]||0)+1;});
+    const tf=Object.entries(bf).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const br={};all.forEach(t=>{const r=t["Root Cause"];if(r&&r!=="nan")br[r]=(br[r]||0)+1;});
+    const tr=Object.entries(br).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const bt={};all.forEach(t=>{if(t["Issue Type"])bt[t["Issue Type"]]=(bt[t["Issue Type"]]||0)+1;});
+    const san=closed.filter(t=>t["Sanity Test Done"]==="Yes").length;
+    // HD-only (no LRPS) vs Engg-assisted (has LRPS)
+    var hdOnly=0;var engAsst=0;
+    closed.forEach(function(t){var li=t["Linked Issues"];var hasLRPS=li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";if(hasLRPS)engAsst++;else hdOnly++;});
+    var allHdOnly=0;var allEngAsst=0;
+    all.forEach(function(t){var li=t["Linked Issues"];var hasLRPS=li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";if(hasLRPS)allEngAsst++;else allHdOnly++;});
+    return{all:all.length,cl:closed.length,op:openT,rate,avgR,months,tp,tf,tr,bt,san,hdOnly:hdOnly,engAsst:engAsst,allHdOnly:allHdOnly,allEngAsst:allEngAsst};
+  },[dateFiltered,w]);
+  const tAvg=useMemo(()=>{if(!dateFiltered)return{r:0};const m={};dateFiltered.forEach(t=>{const x=t["Current Worker"];if(x){if(!m[x])m[x]={t:0,c:0};m[x].t++;}});dateFiltered.filter(t=>t.Status==="Closed").forEach(t=>{const x=t["Current Worker"];if(x&&m[x])m[x].c++;});const rs=Object.values(m).filter(v=>v.t>=10).map(v=>Math.round(v.c/v.t*100));return{r:rs.length?Math.round(rs.reduce((a,b)=>a+b,0)/rs.length):0};},[dateFiltered]);
+
+  /* Team-level consolidated performance */
+  const teamPerf=useMemo(function(){
+    if(!dateFiltered||!dateFiltered.length)return null;
+    var all=dateFiltered;var closed=all.filter(function(t){return t.Status==="Closed";});var openT=all.length-closed.length;
+    var rate=all.length?Math.round(closed.length/all.length*100):0;
+    var rd=[];closed.forEach(function(t){if(t.Resolved&&t.Created){var d=Math.abs(ds(t.Created)-ds(t.Resolved));if(d<1000)rd.push(d);}});
+    var avgR=rd.length?Math.round(rd.reduce(function(a,b){return a+b;},0)/rd.length):0;
+    // Monthly trend
+    var mo={};all.forEach(function(t){if(t.Created){var m=fm(t.Created);if(m){if(!mo[m])mo[m]={cr:0,cl:0};mo[m].cr++;}}});
+    closed.forEach(function(t){if(t.Resolved){var m=fm(t.Resolved);if(m&&mo[m])mo[m].cl++;}});
+    var months=Object.entries(mo).slice(-12);
+    // By project
+    var bp={};all.forEach(function(t){if(t.Project){if(!bp[t.Project])bp[t.Project]={t:0,c:0};bp[t.Project].t++;}});
+    closed.forEach(function(t){if(t.Project&&bp[t.Project])bp[t.Project].c++;});
+    var tp=Object.entries(bp).sort(function(a,b){return b[1].t-a[1].t;}).slice(0,10);
+    // By fix type
+    var bf={};all.forEach(function(t){var f=t["Type of Fix"];if(f&&f!=="nan")bf[f]=(bf[f]||0)+1;});
+    var tf=Object.entries(bf).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+    // By root cause
+    var br={};all.forEach(function(t){var r=t["Root Cause"];if(r&&r!=="nan")br[r]=(br[r]||0)+1;});
+    var tr=Object.entries(br).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+    // By issue type
+    var bt={};all.forEach(function(t){if(t["Issue Type"])bt[t["Issue Type"]]=(bt[t["Issue Type"]]||0)+1;});
+    // Per-worker leaderboard
+    var wm={};all.forEach(function(t){var x=t["Current Worker"];if(x){if(!wm[x])wm[x]={t:0,c:0,san:0,hdOnly:0,engAsst:0};wm[x].t++;}});
+    closed.forEach(function(t){var x=t["Current Worker"];if(x&&wm[x]){wm[x].c++;if(t["Sanity Test Done"]==="Yes")wm[x].san++;var li=t["Linked Issues"];var hasLRPS=li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";if(hasLRPS)wm[x].engAsst++;else wm[x].hdOnly++;}});
+    var wl=Object.entries(wm).map(function(e){return{name:e[0],total:e[1].t,closed:e[1].c,san:e[1].san,hdOnly:e[1].hdOnly,engAsst:e[1].engAsst,rate:e[1].t?Math.round(e[1].c/e[1].t*100):0};}).sort(function(a,b){return b.total-a.total;});
+    var san=closed.filter(function(t){return t["Sanity Test Done"]==="Yes";}).length;
+    // HD-only vs Engg-assisted totals
+    var hdOnlyTotal=0;var engAsstTotal=0;
+    closed.forEach(function(t){var li=t["Linked Issues"];var hasLRPS=li&&String(li).trim()!==""&&String(li).toLowerCase()!=="nan";if(hasLRPS)engAsstTotal++;else hdOnlyTotal++;});
+    return{all:all.length,cl:closed.length,op:openT,rate:rate,avgR:avgR,months:months,tp:tp,tf:tf,tr:tr,bt:bt,san:san,wl:wl,hdOnly:hdOnlyTotal,engAsst:engAsstTotal};
+  },[dateFiltered]);
+
+  /* Data Gaps */
+  const GF=["Root Cause","Components","SVM In Charge"];
+  const gd=useMemo(()=>{if(!dateFiltered)return{t:[],s:{}};let l=dateFiltered;if(w.length)l=l.filter(t=>w.indexOf(t["Current Worker"])>-1);if(pf.length)l=l.filter(t=>pf.indexOf(t.Project)>-1);
+    const ct={};GF.forEach(f=>ct[f]=0);const tx=[];
+    l.forEach(t=>{const g=GF.filter(f=>{const v=t[f];return!v||String(v).trim()===""||String(v).trim().toLowerCase()==="nan";});if(g.length){g.forEach(x=>ct[x]++);tx.push({...t,_g:g});}});
+    return{t:tx,s:ct};
+  },[dateFiltered,w,pf]);
+  const dg=useMemo(()=>gf?gd.t.filter(t=>t._g.includes(gf)):gd.t,[gd,gf]);
+
+  /* No inline upload — the file is uploaded once on the launcher (index.html)
+     and shared via IndexedDB. Show a small loading state until it arrives. */
+  if(!raw) return(
+    <div style={{height:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,background:"var(--bg)"}}>
+      <Logo size={48}/>
+      <div style={{fontSize:15,fontWeight:700,color:"var(--t1)"}}>{loading?"Loading your data…":"Opening…"}</div>
+      <div style={{fontSize:12,color:"var(--t3)"}}>Nothing loading? <a href="index.html" style={{color:"var(--blue)",fontWeight:600}}>Go to upload</a>.</div>
+    </div>
+  );
+
+  const hasF=cf||af!==null||sf||search;
+
+  /* Sortable header helper */
+  function TH(props){var col=props.col,children=props.children,align=props.align;return(<th onClick={function(){toggleSort(col);}} style={{cursor:"pointer",userSelect:"none",textAlign:align||"left",padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,whiteSpace:"nowrap"}}>
+    {children} <span style={{color:"var(--blue)",fontSize:9}}>{sortIcon(col)}</span>
+  </th>);}
+
+  return(
+    <div style={{minHeight:"100vh",background:"var(--bg)"}}>
+      {/* ─── Header ─── */}
+      <header style={{background:"#FFFFFF",borderBottom:"1px solid var(--border)",padding:"0 24px",height:50,display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
+        <Logo size={30}/>
+        <span style={{fontWeight:800,fontSize:15,color:"var(--t1)",letterSpacing:"-.2px"}}>HD Tracker</span>
+        <div style={{width:1,height:28,background:"var(--border)",margin:"0 6px"}}/>
+
+        <MultiSelect allLabel={"All Workers · "+op.length+" open"} options={wks.map(function(x){return [x[0],x[1]];})} selected={w} onChange={function(v){setW(v);clr();}} minWidth={240}/>
+        <MultiSelect allLabel="All Projects" options={pjs.map(function(p){return [p];})} selected={pf} onChange={function(v){setPf(v);clr();}} minWidth={170}/>
+        <div style={{flex:1}}/>
+
+        <nav style={{display:"flex",background:"var(--bg)",borderRadius:10,padding:3,gap:2,border:"1px solid var(--border)"}}>
+          {[["followup","📌 Follow-ups",op.length],["gaps","⚠️ Data Gaps",gd.t.length],["data","✏️ Edit Data",raw?raw.length:0]].map(function(x){var id=x[0],lb=x[1],cnt=x[2];return(
+            <button key={id} onClick={function(){setTab(id);clr();}} style={{background:tab===id?"var(--blue)":"transparent",color:tab===id?"#fff":"var(--t3)",border:"none",padding:"7px 16px",borderRadius:8,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+              {lb} <span style={{background:tab===id?"rgba(255,255,255,.2)":"rgba(0,0,0,.06)",padding:"1px 6px",borderRadius:10,fontSize:10,fontWeight:800}}>{cnt}</span>
+            </button>
+          );})}
+        </nav>
+        <button onClick={function(){window.location.href="index.html";}} style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 14px",borderRadius:8,fontSize:11,fontWeight:600}}>← Launcher</button>
+        <input type="file" accept=".xlsx,.xls" ref={fRef} onChange={handleFile}/>
+      </header>
+
+      {/* ─── Date Range Filter Bar ─── */}
+      {tab!=="data"&&<div style={{background:"#FFFFFF",borderBottom:"1px solid var(--border)",padding:"7px 24px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",position:"sticky",top:50,zIndex:99}}>
+        <span style={{fontSize:11,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginRight:4}}>📅 Date Range</span>
+
+        {/* Preset buttons */}
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {[
+            ["All Time",presetAllTime],
+            ["This Month",presetThisMonth],
+            ["Last Month",presetLastMonth],
+            ["Last 3M",presetLast3M],
+            ["Last 6M",presetLast6M],
+            ["This Year",presetThisYear],
+            ["Last Year",presetLastYear]
+          ].map(function(x){var label=x[0],fn=x[1];var active=dtLabel===label;
+            return(<button key={label} onClick={fn} style={{
+              padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:600,border:"1px solid "+(active?"var(--blue)":"var(--border)"),
+              background:active?"var(--blue)":"var(--card)",color:active?"#fff":"var(--t2)",transition:"all .15s"
+            }}>{label}</button>);
+          })}
+        </div>
+
+        <div style={{width:1,height:24,background:"var(--border)",margin:"0 6px"}}/>
+
+        {/* Custom date inputs */}
+        <span style={{fontSize:11,color:"var(--t3)",fontWeight:500}}>Custom:</span>
+        <input type="date" value={dtFrom} onChange={function(e){setDtFrom(e.target.value);setDtLabel("Custom");clr();}}
+          style={{padding:"5px 10px",border:"1px solid var(--border)",borderRadius:6,fontSize:11,color:"var(--t1)",background:"var(--card)",fontFamily:"var(--sans)"}}/>
+        <span style={{fontSize:11,color:"var(--t3)"}}>→</span>
+        <input type="date" value={dtTo} onChange={function(e){setDtTo(e.target.value);setDtLabel("Custom");clr();}}
+          style={{padding:"5px 10px",border:"1px solid var(--border)",borderRadius:6,fontSize:11,color:"var(--t1)",background:"var(--card)",fontFamily:"var(--sans)"}}/>
+
+        {(dtFrom||dtTo) && (
+          <span style={{display:"inline-flex",alignItems:"center",gap:7,background:"var(--blue-bg)",border:"1px solid var(--blue-light)",padding:"5px 13px",borderRadius:8,fontSize:11.5,fontWeight:700,color:"var(--blue)",whiteSpace:"nowrap",marginLeft:4}}>
+            {dtFrom?fd(new Date(dtFrom)):"start"} → {dtTo?fd(new Date(dtTo)):"now"}
+            <span style={{color:"var(--t2)",fontWeight:600}}> · {dateFiltered.length.toLocaleString()} records</span>
+          </span>
+        )}
+      </div>}
+
+      <main style={{padding:"12px 24px 30px",maxWidth:tab==="data"?"none":1800,margin:"0 auto"}}>
+
+      {/* ═══ FOLLOW-UPS ═══ */}
+      {tab==="followup"&&(<>
+
+        {/* Greeting */}
+        <div className="fu" style={{marginBottom:10}}>
+          <h2 style={{fontSize:22,fontWeight:800,letterSpacing:"-.3px",color:"var(--t1)"}}>
+            {greeting()}{w.length===1?`, ${w[0].split(" ")[0]}`:""}!
+          </h2>
+          <p style={{color:"var(--t2)",fontSize:13,marginTop:4}}>
+            <b onClick={function(){openAllModal();}} style={{color:"var(--t1)",cursor:"pointer",borderBottom:"1px dashed var(--t3)"}}>{st.n.toLocaleString()} open ticket{st.n!==1?"s":""}</b>
+            {" "}{w.length===1?`for ${w[0].split(" ")[0]}`:w.length>1?`for ${w.length} workers`:pf.length?`in ${pf.length} project${pf.length>1?"s":""}`:`across ${wks.length} workers`}
+            {st.hd.length>0&&<> · <b style={{color:"var(--cyan)"}}>{st.hd.length} need action</b></>}
+            {st.cl.length>0&&<> · <b onClick={function(){openClientModal();}} style={{color:"var(--amber)",cursor:"pointer",background:"var(--amber-bg)",border:"1px solid var(--amber-border)",padding:"2px 10px",borderRadius:8,fontSize:14,fontWeight:800,letterSpacing:"-.3px"}}>{st.cl.length} awaiting client</b></>}
+            {st.eng.length>0&&<> · <b onClick={function(){openEnggModal();}} style={{color:"var(--violet)",cursor:"pointer",background:"var(--violet-bg)",border:"1px solid var(--violet-border)",padding:"2px 10px",borderRadius:8,fontSize:14,fontWeight:800,letterSpacing:"-.3px"}}>{st.eng.length} with engineering</b></>}
+            {!w.length&&!pf.length&&<>. Select a worker to drill down.</>}
+          </p>
+        </div>
+
+        {/* HD action banner */}
+        {w.length>0&&st.hd.length>0&&(
+          <div className="fu fu1 card" style={{padding:"11px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:16,borderColor:"var(--cyan-border)",background:"var(--cyan-bg)"}}>
+            <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid var(--cyan-border)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🎯</div>
+            <div style={{flex:1}}><div style={{color:"var(--cyan)",fontWeight:800,fontSize:14}}>{st.hd.length} ticket{st.hd.length!==1?"s":""} need YOUR action</div>
+            <div style={{color:"var(--t2)",fontSize:12,marginTop:2}}>Open / Acknowledged / Analysis — act to progress these.</div></div>
+            <button onClick={function(){openCatModal("hd");}} style={{background:"var(--cyan)",color:"#fff",border:"none",padding:"9px 18px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0}}>View →</button>
+          </div>
+        )}
+        {w.length>0&&st.dng>0&&(
+          <div className="fu fu1 card" style={{padding:"11px 18px",marginBottom:8,display:"flex",alignItems:"center",gap:16,borderColor:"var(--rose-border)",background:"var(--rose-bg)"}}>
+            <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid var(--rose-border)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>⏰</div>
+            <div><div style={{color:"var(--rose)",fontWeight:800,fontSize:14}}>{st.dng} ticket{st.dng!==1?"s":""} stale for 90+ days</div>
+            <div style={{color:"var(--t2)",fontSize:12,marginTop:2}}>These need immediate attention or closure decision.</div></div>
+          </div>
+        )}
+
+        {/* Fires + Stale-client callouts */}
+        {(function(){
+          var all=[].concat(st.hd,st.cl,st.eng);
+          var fires=all.filter(function(t){var p=t.Priority;return (p==="Show Stopper"||p==="Critical")&&ds(t.Updated||t.Created)>14;});
+          var stale=st.cl.filter(function(t){return ds(t.Updated||t.Created)>14;});
+          if(!fires.length&&!stale.length)return null;
+          return(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:10,marginBottom:9}}>
+            {fires.length>0&&<div onClick={function(){setModal({title:"Fires — high priority & ageing",icon:"🔥",color:"#E11D48",tickets:fires});}} className="card" style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderColor:"var(--rose-border)",background:"var(--rose-bg)"}}>
+              <span style={{fontSize:20}}>🔥</span><div><div style={{color:"var(--rose)",fontWeight:800,fontSize:13.5}}>{fires.length} fire{fires.length!==1?"s":""} — high priority &amp; ageing</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Show Stopper / Critical open over 14 days — tackle first.</div></div></div>}
+            {stale.length>0&&<div onClick={function(){setModal({title:"Stale client follow-ups (over 14 days)",icon:"💬",color:"#D97706",tickets:stale});}} className="card" style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderColor:"var(--amber-border)",background:"var(--amber-bg)"}}>
+              <span style={{fontSize:20}}>💬</span><div><div style={{color:"var(--amber)",fontWeight:800,fontSize:13.5}}>{stale.length} client follow-up{stale.length!==1?"s":""} going stale</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Waiting on the client over 14 days — worth a nudge.</div></div></div>}
+          </div>);
+        })()}
+
+        {/* KPIs — triage-focused */}
+        <div className="fu fu2" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:10}}>
+          <KPI icon="📂" label="Open (total)" value={st.n.toLocaleString()} color="var(--blue)" bgColor="var(--blue-bg)" sub="All not-closed"
+            onClick={function(){openAllModal();}}/>
+          <KPI icon="🎯" label="HD Action" value={st.hd.length} color="var(--cyan)" bgColor="var(--cyan-bg)" sub="Your action needed"
+            onClick={function(){openCatModal("hd");}}/>
+          <KPI icon="💬" label="Client Followup" value={st.cl.length} color="var(--amber)" bgColor="var(--amber-bg)" sub="Chase if stale"
+            onClick={function(){openClientModal();}}/>
+          <KPI icon="🔧" label="Engg Followup" value={st.eng.length} color="var(--violet)" bgColor="var(--violet-bg)" sub="Follow up with dev"
+            onClick={function(){openEnggModal();}}/>
+          <KPI icon="⏸️" label="On-Hold" value={st.hold.length} color="#64748B" bgColor="#F1F5F9" sub="Parked — review reason"
+            onClick={function(){openHoldModal();}}/>
+          <KPI icon="🧾" label="Invoice Pending" value={st.inv.length} color="#0891B2" bgColor="#ECFEFF" sub="Yet to raise"
+            onClick={function(){openInvoiceModal();}}/>
+          <KPI icon="🔴" label="Danger 90+" value={st.dng} color="var(--rose)" bgColor="var(--rose-bg)" sub="Stale — decide or close"
+            onClick={function(){openDangerModal();}}/>
+        </div>
+
+        {/* My Action Queue — the daily driver */}
+        {(function(){
+          var q=st.hd.slice().sort(function(a,b){var pr=prioRank(a.Priority)-prioRank(b.Priority);if(pr)return pr;return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+          return(<div className="card" style={{padding:"13px 16px",marginBottom:9}}>
+            <div style={{fontSize:13,fontWeight:700,marginBottom:2,color:"var(--t1)"}}>🎯 {w?"Your":"HD"} Action Queue <span style={{fontWeight:400,color:"var(--t3)",fontSize:11}}>· {q.length} need action · sorted by priority &amp; age</span></div>
+            {q.length===0?<div style={{color:"var(--t3)",fontSize:12,padding:"10px 0"}}>Nothing needs action right now. 🎉</div>:
+            <div style={{marginTop:8}}>
+              {q.slice(0,12).map(function(t,i){var age=ds(t.Updated||t.Created);var pc=PRIORITY_COLORS[t.Priority]||"var(--t3)";
+                return(<div key={t.Key} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:i?"1px solid var(--border)":"none"}}>
+                  <span style={{width:7,height:7,borderRadius:7,background:pc,flexShrink:0}}/>
+                  <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:12,flexShrink:0,minWidth:96}}>{t.Key}</a>
+                  <span style={{flex:1,fontSize:12,color:"var(--t2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}} title={t.Summary}>{t.Summary}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:pc,flexShrink:0}}>{t.Priority||"—"}</span>
+                  <span style={{fontSize:11,color:"var(--cyan)",fontWeight:600,flexShrink:0,background:"var(--cyan-bg)",border:"1px solid var(--cyan-border)",padding:"1px 8px",borderRadius:12,whiteSpace:"nowrap"}}>{nextStep(t.Status,"hd")}</span>
+                  <span style={{fontSize:11,color:age>90?"var(--rose)":age>30?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",flexShrink:0,minWidth:38,textAlign:"right"}}>{age}d</span>
+                </div>);
+              })}
+              {q.length>12&&<div onClick={function(){openCatModal("hd");}} style={{fontSize:11,color:"var(--blue)",fontWeight:600,cursor:"pointer",marginTop:8,textAlign:"center"}}>View all {q.length} →</div>}
+            </div>}
+          </div>);
+        })()}
+
+        {/* Priority Distribution */}
+        <div className="fu fu3" style={{marginBottom:9}}>
+          {/* Priority */}
+          <div className="card" style={{padding:"13px 16px"}}>
+            <div style={{fontSize:13,fontWeight:700,marginBottom:8,color:"var(--t1)"}}>Priority Distribution <span style={{fontWeight:400,color:"var(--t3)",fontSize:11}}>· click to view</span></div>
+            <div style={{display:"flex",gap:8,alignItems:"flex-end",height:80}}>
+              {["Show Stopper","Critical","High","Medium","Low"].map(function(p){
+                var c=prioDist[p]||0;var mx=Math.max.apply(null,Object.values(prioDist))||1;
+                return(<div key={p} onClick={function(){openPriorityModal(p);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:PRIORITY_COLORS[p]}}>{c}</div>
+                  <div style={{width:"100%",borderRadius:"4px 4px 0 0",background:PRIORITY_COLORS[p],height:Math.max(c/mx*100,4)+"%",minHeight:4,transition:"height .5s",opacity:c>0?1:0.15}}/>
+                  <div style={{fontSize:8,color:"var(--t3)",fontWeight:600,textAlign:"center",lineHeight:1.1}}>{p==="Show Stopper"?"Show\nStop":p}</div>
+                </div>);
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Aging */}
+        <div className="fu fu3 card" style={{padding:"13px 16px",marginBottom:9}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:10,color:"var(--t1)"}}>Aging Distribution</div>
+          <ABar bk={st.bk} total={st.n} onClick={function(i){openAgeModal(i);}} active={null}/>
+        </div>
+
+        {/* Status pills grouped — collapsible */}
+        <div className="fu fu4 card" style={{padding:"13px 16px",marginBottom:9}}>
+          <div onClick={function(){setStatusOpen(!statusOpen);}} style={{fontSize:13,fontWeight:700,color:"var(--t1)",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",userSelect:"none"}}>
+            <span>By Status <span style={{fontWeight:400,color:"var(--t3)",fontSize:11}}>· click to filter</span></span>
+            <span style={{fontSize:18,color:"var(--t3)",transition:"transform .2s",transform:statusOpen?"rotate(0deg)":"rotate(-90deg)",display:"inline-block"}}>▾</span>
+          </div>
+          {statusOpen && <div style={{marginTop:14}}>
+          {["hd","client","engg"].map(function(ck){
+            var entries=Object.entries(st.sm).filter(function(x){return classify(x[0])===ck;}).sort(function(a,b){return b[1]-a[1];});
+            if(!entries.length)return null;
+            var cs=CS[ck];
+            return(<div key={ck} style={{marginBottom:9}}>
+              <div style={{fontSize:10,fontWeight:700,color:cs.badge,textTransform:"uppercase",letterSpacing:".6px",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <span>{cs.icon}</span>{CL[ck]}
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {entries.map(function(entry){var s=entry[0],c=entry[1];
+                  return(<button key={s} onClick={function(){openStatusModal(s);}} style={{
+                    display:"inline-flex",alignItems:"center",padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,
+                    border:"1px solid "+cs.br,cursor:"pointer",transition:"all .2s",whiteSpace:"nowrap",
+                    background:cs.bg,color:cs.badge
+                  }}>{s} <b style={{marginLeft:4}}>({c})</b></button>);
+                })}
+              </div>
+            </div>);
+          })}
+          </div>}
+        </div>
+
+        {/* Search + Filter bar + Export */}
+        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
+          <div style={{position:"relative",flex:"1 1 260px",maxWidth:360}}>
+            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"var(--t3)",fontSize:14}}>🔍</span>
+            <input type="text" value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Search by Key or Summary…"
+              style={{width:"100%",padding:"9px 14px 9px 36px",border:"1px solid var(--border)",borderRadius:8,fontSize:12,background:"var(--card)",color:"var(--t1)",transition:"all .2s"}}/>
+          </div>
+          {hasF&&(
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:"var(--blue-bg)",borderRadius:8,border:"1px solid var(--blue-light)"}}>
+              <span style={{color:"var(--blue)",fontSize:12,fontWeight:600}}>
+                {cf&&CL[cf]} {af!==null&&AL[af]} {sf&&`"${sf}"`} {search&&`"${search}"`}
+              </span>
+              <span style={{color:"var(--blue-dark)",fontWeight:800}}>→ {disp.length}</span>
+              <button onClick={function(){clr();}} style={{background:"var(--blue)",color:"#fff",border:"none",padding:"4px 12px",borderRadius:6,fontSize:10,fontWeight:700,marginLeft:4}}>✕ Clear</button>
+            </div>
+          )}
+          <div style={{flex:1}}/>
+          <button onClick={function(){exportCSV(disp,"tickets-"+(w||"all")+"-"+new Date().toISOString().slice(0,10)+".csv");}} style={{
+            background:"var(--card)",border:"1px solid var(--border)",color:"var(--t2)",padding:"8px 16px",borderRadius:8,fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:6
+          }}>📥 Export CSV</button>
+        </div>
+
+        {/* Ticket Table */}
+        <div className="card" style={{overflow:"hidden",marginBottom:10}}>
+          <div style={{overflowX:"auto",maxHeight:540,overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr>
+                <TH col="key">Key</TH>
+                <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Summary</th>
+                <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Category</th>
+                <TH col="status">Status</TH>
+                <TH col="project">Project</TH>
+                <TH col="priority">Priority</TH>
+                <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Linked</th>
+                <TH col="created">Created</TH>
+                <TH col="age" align="right">Age</TH>
+              </tr></thead>
+              <tbody>{disp.slice(0,300).map((t,i)=>{
+                const a=ds(t.Updated||t.Created);const bk=abk(a);const c=classify(t.Status);const cs=CS[c];
+                const linked=t["Linked Issues"]||"";const linkedSt=t["Linked Ticket status"]||"";
+                return(<tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
+                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}><a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12}}>{t.Key}</a></td>
+                  <td style={{padding:"7px 10px",color:"var(--t2)",maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
+                  <td style={{padding:"7px 10px"}}><span style={{background:cs.bg,color:cs.badge,border:`1px solid ${cs.br}`,padding:"3px 9px",borderRadius:6,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{cs.icon} {cs.tag}</span></td>
+                  <td style={{padding:"7px 10px"}}><span style={{background:cs.badge,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
+                  <td style={{padding:"7px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
+                  <td style={{padding:"7px 10px",fontSize:11,fontWeight:600,color:t.Priority==="Critical"||t.Priority==="Show Stopper"?"var(--rose)":t.Priority==="High"?"var(--amber)":"var(--t3)"}}>{t.Priority}</td>
+                  <td style={{padding:"7px 10px",fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={`${linked} — ${linkedSt}`}>
+                    {linked?<><a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10}}>{linked.split(";")[0]}</a>
+                    {linkedSt&&<span style={{color:"var(--t3)",marginLeft:4,fontSize:9}}>({linkedSt.split(" ").slice(0,2).join(" ")})</span>}</>:<span style={{color:"var(--t4)"}}>—</span>}
+                  </td>
+                  <td style={{padding:"7px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
+                  <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+                </tr>);
+              })}</tbody>
+            </table>
+            {disp.length>300&&<div style={{padding:12,textAlign:"center",color:"var(--t3)",fontSize:11,borderTop:"1px solid var(--border)"}}>Showing 300 of {disp.length}</div>}
+          </div>
+        </div>
+
+        {/* Worker leaderboard */}
+        {!w&&!hasF&&(
+          <div className="card" style={{overflow:"hidden"}}>
+            <div style={{padding:"11px 18px",borderBottom:"1px solid var(--border)",fontWeight:700,fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>Worker Backlog Overview</span>
+              <span style={{fontSize:11,color:"var(--t3)",fontWeight:400}}>Click a row to drill in</span>
+            </div>
+            <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{borderBottom:"2px solid var(--border)",background:"var(--bg)"}}>
+                <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px"}}>Worker</th>
+                <th style={{padding:"10px 8px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--blue)"}}>Open</th>
+                <th style={{padding:"10px 8px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--cyan)"}}>🎯 HD</th>
+                <th style={{padding:"10px 8px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--amber)"}}>💬 Client</th>
+                <th style={{padding:"10px 8px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--violet)"}}>🔧 Engg</th>
+                {AS.map((l,i)=><th key={i} style={{padding:"10px 8px",textAlign:"right",fontSize:10,fontWeight:700,color:AC[i]}}>{l}</th>)}
+              </tr></thead>
+              <tbody>{wks.slice(0,20).map(([n,c],idx)=>{
+                const wt=op.filter(t=>t["Current Worker"]===n);const bk=[0,0,0,0,0];let hd=0,cl=0,eng=0;
+                wt.forEach(t=>{bk[abk(ds(t.Updated||t.Created))]++;const cat=classify(t.Status);if(cat==="hd")hd++;else if(cat==="client")cl++;else eng++;});
+                return(<tr key={n} onClick={function(){setW([n]);clr();}} style={{cursor:"pointer",borderBottom:"1px solid var(--border)",transition:"background .15s"}} onMouseOver={function(e){e.currentTarget.style.background="var(--blue-bg)";}} onMouseOut={function(e){e.currentTarget.style.background="";}}>
+                  <td style={{padding:"7px 12px",fontWeight:600}}>{n}</td>
+                  <td style={{padding:"10px 8px",textAlign:"right",fontWeight:800,color:"var(--blue)",fontFamily:"var(--mono)"}}>{c}</td>
+                  <td style={{padding:"10px 8px",textAlign:"right",fontWeight:hd?700:400,color:hd?"var(--cyan)":"var(--t4)",fontFamily:"var(--mono)"}}>{hd||"·"}</td>
+                  <td style={{padding:"10px 8px",textAlign:"right",fontWeight:cl?700:400,color:cl?"var(--amber)":"var(--t4)",fontFamily:"var(--mono)"}}>{cl||"·"}</td>
+                  <td style={{padding:"10px 8px",textAlign:"right",fontWeight:eng?700:400,color:eng?"var(--violet)":"var(--t4)",fontFamily:"var(--mono)"}}>{eng||"·"}</td>
+                  {bk.map((v,j)=><td key={j} style={{padding:"10px 8px",textAlign:"right",fontWeight:v?700:400,color:v?AC[j]:"var(--t4)",fontFamily:"var(--mono)"}}>{v||"·"}</td>)}
+                </tr>);
+              })}</tbody>
+            </table></div>
+          </div>
+        )}
+      </>)}
+
+
+      {/* ═══ DATA GAPS ═══ */}
+      {tab==="gaps"&&(<>
+        <div className="fu card" style={{padding:"11px 18px",marginBottom:9,display:"flex",alignItems:"center",gap:16,borderColor:"var(--amber-border)",background:"var(--amber-bg)"}}>
+          <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid var(--amber-border)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>⚠️</div>
+          <div><div style={{color:"var(--amber)",fontWeight:800,fontSize:15}}>Data Quality Issues</div>
+          <div style={{color:"var(--t2)",fontSize:12,marginTop:2}}>{gd.t.length.toLocaleString()} tickets with missing fields{w?` · ${w}`:""}</div></div>
+        </div>
+        <div className="fu fu1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:12,marginBottom:9}}>
+          {GF.map(function(f){var v=gd.s[f]||0;var ac=gf===f;
+            return(<div key={f} onClick={function(){filterGap(f);}} className="card" style={{
+              padding:"16px 18px",cursor:"pointer",borderColor:ac?"var(--amber)":"var(--border)",background:ac?"var(--amber-bg)":"var(--card)"
+            }}>
+              <div style={{fontSize:26,fontWeight:900,color:v>500?"var(--rose)":v>0?"var(--amber)":"var(--green)",lineHeight:1}}>{v.toLocaleString()}</div>
+              <div style={{fontSize:10,color:"var(--t2)",marginTop:8,fontWeight:600}}>{f}</div>
+            </div>);
+          })}
+        </div>
+        {gf&&(<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,padding:"9px 16px",background:"var(--amber-bg)",borderRadius:8,border:"1px solid var(--amber-border)"}}>
+          <span style={{color:"var(--amber)",fontSize:12,fontWeight:600}}>Missing: {gf}</span>
+          <span style={{color:"var(--amber)",fontWeight:800}}>→ {dg.length.toLocaleString()}</span>
+          <button onClick={function(){setGf(null);}} style={{marginLeft:"auto",background:"var(--amber)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:6,fontSize:10,fontWeight:700}}>✕ Clear</button>
+        </div>)}
+        <div className="card" style={{overflow:"hidden"}}>
+          <div style={{overflowX:"auto",maxHeight:520,overflowY:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{borderBottom:"2px solid var(--border)",background:"var(--bg)"}}>
+                <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Key</th>
+                <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Summary</th>
+                <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Status</th>
+                <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Missing Fields</th>
+              </tr></thead>
+              <tbody>{dg.slice(0,400).map((t,i)=>(
+                <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
+                  <td style={{padding:"7px 12px",whiteSpace:"nowrap"}}><a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12}}>{t.Key}</a></td>
+                  <td style={{padding:"7px 10px",color:"var(--t2)",maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.Summary}</td>
+                  <td style={{padding:"7px 10px",color:"var(--t3)",fontSize:11}}>{t.Status}</td>
+                  <td style={{padding:"7px 10px"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{t._g.map(g=>(<span key={g} style={{background:"var(--rose-bg)",color:"var(--rose)",border:"1px solid var(--rose-border)",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600}}>{g}</span>))}</div></td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {dg.length>400&&<div style={{padding:12,textAlign:"center",color:"var(--t3)",fontSize:11,borderTop:"1px solid var(--border)"}}>Showing 400 of {dg.length.toLocaleString()}</div>}
+          </div>
+        </div>
+      </>)}
+
+      {/* ═══ EDIT DATA ═══ */}
+      {tab==="data"&&(
+        <DataEditor rows={raw} fileName={fn} onApply={applyEditedRows} onRevert={revertToUpload}/>
+      )}
+
+      <div style={{marginTop:36,textAlign:"center",color:"var(--t4)",fontSize:11,lineHeight:2}}>
+        <span style={{color:"var(--t3)",fontWeight:600}}>{fn}</span> · {raw?.length?.toLocaleString()} total
+        {(dtFrom||dtTo)&&<span> · {dateFiltered.length.toLocaleString()} in range</span>}
+        {" "}· {op.length} open · HD Follow-up Tracker
+      </div>
+      </main>
+
+      {/* ─── Ticket Modal ─── */}
+      <TicketModal data={modal} onClose={closeModal}/>
+      {/* ─── Category Detail Modal (Engg / Client Followup) ─── */}
+      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal}/>
+    </div>
+  );
+}
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>

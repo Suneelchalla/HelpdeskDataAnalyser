@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HD Weekly Report</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23B45309'/%3E%3Crect x='7' y='13' width='4' height='10' rx='1.5' fill='white'/%3E%3Crect x='14' y='9' width='4' height='14' rx='1.5' fill='white'/%3E%3Crect x='21' y='16' width='4' height='7' rx='1.5' fill='white'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="hd-store.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F4; --paper:#F6F8FA; --card:#FFFFFF;
+  --ink:#111A2B; --ink2:#3E4C63; --muted:#6B7A90; --faint:#9AA7B8; --line:#E3E8EE; --line2:#D2DAE3;
+  --hd:#0F766E; --hd2:#14B8A6; --hd-bg:#F0FBF9; --hd-soft:#D6F3EE;
+  --client:#B45309; --client2:#D97706; --client-bg:#FEF7EC; --client-soft:#FCE7C3;
+  --svm:#0F766E;
+  --accent:#B45309;
+  --p-crit:#9333EA; --p-high:#F0A6C0; --p-med:#F5C518; --p-low:#059669; --p-stop:#3949AB;
+  --r:12px; --r2:16px;
+  --disp:'Space Grotesk',sans-serif; --sans:'Inter',-apple-system,sans-serif; --mono:'JetBrains Mono',monospace;
+  --sh:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --sh2:0 6px 18px rgba(16,24,40,.09),0 2px 6px rgba(16,24,40,.05);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px}
+body{background:var(--bg);font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh}
+h1,h2,h3,.disp{font-family:var(--disp)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{cursor:pointer;font-family:inherit;transition:all .16s;border:none}
+button:active{transform:translateY(1px)}
+select,input[type=file]{font-family:var(--sans)}
+select{appearance:none;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:8px 30px 8px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.wrap{max-width:1400px;margin:0 auto;padding:16px 22px 60px}
+
+/* ── controls (screen only) ── */
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;box-shadow:var(--sh)}
+.controls .flabel{font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.7px}
+.btn{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:8px 13px;border-radius:9px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--muted);color:var(--ink)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.primary:hover{background:#26364f}
+.btn.danger:hover{border-color:var(--client2);color:var(--client)}
+.spacer{flex:1}
+/* column picker */
+.colpick{position:relative}
+.colpick>summary{list-style:none;cursor:pointer;user-select:none}
+.colpick>summary::-webkit-details-marker{display:none}
+.colpick>summary::marker{content:""}
+.colmenu{position:absolute;top:40px;left:0;z-index:30;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh2);padding:8px;min-width:190px;display:flex;flex-direction:column;gap:3px}
+.colmenu-h{font-size:9.5px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;padding:2px 6px 5px}
+.colmenu label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);padding:5px 6px;border-radius:6px;cursor:pointer}
+.colmenu label:hover{background:var(--paper)}
+.colmenu input{accent-color:var(--hd)}
+
+/* ── report sheet ── */
+.sheet{background:#fff;border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh);overflow:hidden}
+.rhead{display:flex;align-items:flex-start;gap:16px;padding:20px 26px;background:linear-gradient(180deg,#F4FAFF,#EAF4FB);border-bottom:1px solid var(--line)}
+.rhead .logo{display:flex;gap:4px;align-items:flex-end;height:34px;flex-shrink:0;margin-top:3px}
+.rhead .logo i{display:block;width:9px;border-radius:2px}
+.rhead .who{flex:1;min-width:0}
+.rhead .kicker{font-size:11px;font-weight:700;color:var(--client);text-transform:uppercase;letter-spacing:2px}
+.rhead h1{font-size:30px;font-weight:700;letter-spacing:-.6px;line-height:1.05;margin-top:2px}
+.rhead .meta{font-size:11.5px;color:var(--muted);margin-top:5px;font-family:var(--mono)}
+.rhead .asof{text-align:right;flex-shrink:0}
+.rhead .asof .box{border:1px solid var(--line2);border-radius:9px;padding:7px 12px;background:#fff;font-size:10.5px;color:var(--ink2);font-family:var(--mono)}
+.rhead .asof .box b{color:var(--ink)}
+
+.rbody{padding:18px 22px 24px}
+.sectitle{font-size:12px;font-weight:800;color:var(--ink);letter-spacing:.2px;background:#DCEBF7;border-radius:7px;padding:7px 12px;margin:16px 0 11px;display:flex;align-items:center;justify-content:space-between}
+.sectitle:first-child{margin-top:0}
+.sectitle .sub{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.2px}
+
+/* KPI tiles */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:11px}
+.kpi{border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;background:var(--paper);text-align:center}
+.kpi .lab{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+.kpi .val{font-size:26px;font-weight:800;letter-spacing:-1px;margin-top:5px;line-height:1}
+.kpi .val.sm{font-size:19px}
+.kpi.hl{background:var(--client-bg);border-color:var(--client-soft)}
+.kpi.hl2{background:var(--hd-bg);border-color:var(--hd-soft)}
+
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.chartcard{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;background:#fff;min-width:0}
+.chartcard .ct{font-size:11.5px;font-weight:700;color:var(--ink2);margin-bottom:8px}
+.chartcard svg{width:100%;height:auto;display:block;overflow:visible;max-height:210px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+.legend .li{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);font-weight:600}
+.legend .sw{width:9px;height:9px;border-radius:2px}
+
+/* matrix */
+.matrix{width:100%;border-collapse:collapse;font-size:11px}
+.matrix th,.matrix td{border:1px solid var(--line);padding:5px 8px;text-align:center;white-space:nowrap}
+.matrix thead th{background:var(--paper);font-weight:800;color:var(--ink2);font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+.matrix td.stage{text-align:left;font-weight:700;color:var(--ink)}
+.matrix td.cl{color:var(--client);font-weight:700;font-family:var(--mono)}
+.matrix td.sv{color:var(--hd);font-weight:700;font-family:var(--mono)}
+.matrix td.zero{color:var(--faint)}
+
+.hbar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.hbar-row .lb{width:120px;font-size:10.5px;color:var(--ink2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.hbar-row .bar{height:16px;border-radius:4px;background:var(--hd);min-width:2px}
+.hbar-row .n{font-size:10.5px;font-weight:700;color:var(--ink);font-family:var(--mono)}
+
+.banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:11.5px;margin-bottom:12px}
+.banner.info{background:var(--hd-bg);border:1px solid var(--hd-soft);color:var(--hd)}
+.banner.warn{background:var(--client-bg);border:1px solid var(--client-soft);color:var(--client)}
+.empty{padding:26px;text-align:center;color:var(--faint);font-size:12px}
+.foot{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);font-size:10.5px;color:var(--faint);font-family:var(--mono);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+/* clarity aids */
+.caption{font-size:11px;color:var(--muted);margin:-5px 0 11px;line-height:1.5}
+.insight{font-size:11px;color:var(--ink2);background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--client2);border-radius:8px;padding:8px 11px;margin-top:9px;line-height:1.6}
+.insight b{color:var(--ink)} .insight .up{color:var(--hd);font-weight:700} .insight .dn{color:var(--client);font-weight:700}
+.exec{border:1px solid var(--client-soft);background:linear-gradient(180deg,#FFFBF4,#FEF7EC);border-radius:var(--r);padding:15px 17px;margin-bottom:14px}
+.exec .eh{font-size:10.5px;font-weight:800;color:var(--client);text-transform:uppercase;letter-spacing:1px;margin-bottom:7px}
+.exec p{font-size:13px;color:var(--ink);line-height:1.75}
+.exec .key{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:10.5px;color:var(--ink2)}
+.exec .key .k{display:inline-flex;align-items:center;gap:6px}
+.exec .key .dot{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.kpi .hint{font-size:8.5px;color:var(--faint);margin-top:5px;font-weight:500;letter-spacing:0;text-transform:none;line-height:1.35}
+
+/* ticket tables (bottom lists + modal) */
+.ttable-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
+.ttable{width:100%;border-collapse:collapse;font-size:11px}
+.ttable th{background:var(--paper);text-align:left;padding:7px 9px;font-size:9.5px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--line2);white-space:nowrap;position:sticky;top:0}
+.ttable td{padding:5px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+.ttable td a{color:var(--hd);font-family:var(--mono);font-weight:700;font-size:11px}
+.ttable td.key{white-space:nowrap;min-width:112px}
+.ttable th:first-child{min-width:112px}
+.ttable td.sum{color:var(--ink2);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttable td.num{text-align:right;font-family:var(--mono);font-weight:700}
+.ttable tr:nth-child(even) td{background:#FBFCFE}
+.badge-na{display:inline-block;padding:1px 7px;border-radius:20px;font-size:9px;font-weight:700}
+.badge-na.svm{background:var(--hd-bg);color:var(--hd);border:1px solid var(--hd-soft)}
+.badge-na.client{background:var(--client-bg);color:var(--client);border:1px solid var(--client-soft)}
+.pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:9.5px;font-weight:600;background:var(--paper);border:1px solid var(--line);color:var(--ink2)}
+.drillhint{font-size:10px;color:var(--faint);font-weight:600;margin-left:6px}
+
+/* action callout (prints) */
+.callout{background:var(--client-bg);border:1px solid var(--client-soft);border-left:4px solid var(--client2);border-radius:10px;padding:11px 15px;margin-bottom:14px;font-size:12.5px;color:var(--ink);line-height:1.55}
+.callout b{color:var(--client)}
+/* segmented bars (priority / age) */
+.segbar{display:flex;height:28px;border-radius:8px;overflow:hidden;background:var(--paper);border:1px solid var(--line)}
+.segbar .segb{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;font-family:var(--mono);min-width:0}
+
+/* modal (screen only) */
+.ovl{position:fixed;inset:0;background:rgba(17,26,43,.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:500;display:flex;align-items:center;justify-content:center;padding:24px;animation:ovlin .18s ease both}
+@keyframes ovlin{from{opacity:0}to{opacity:1}}
+.modal{background:#fff;border-radius:var(--r2);box-shadow:0 24px 60px rgba(16,24,40,.3);width:min(1000px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line)}
+.modal .mhead .mt{font-family:var(--disp);font-weight:700;font-size:15px;color:var(--ink)}
+.modal .mhead button{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);width:30px;height:30px;border-radius:8px;font-size:14px}
+.modal .mbody{overflow:auto;padding:6px 14px 14px}
+.modal .mtools{display:flex;gap:8px;padding:8px 4px;align-items:center}
+
+.loading{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+
+/* ── PRINT ── */
+@media print{
+  @page{ size:A4 landscape; margin:9mm; }
+  body{background:#fff}
+  .noprint{display:none!important}
+  .wrap{max-width:none;padding:0}
+  .sheet{border:none;box-shadow:none;border-radius:0}
+  .rhead{padding:12px 18px}
+  .rbody{padding:10px 14px}
+  /* grids: force 2-col, align top so shorter card doesn't stretch */
+  .grid2{grid-template-columns:1fr 1fr !important;gap:8px;align-items:start}
+  .grid3{grid-template-columns:repeat(3,1fr) !important;gap:8px;align-items:start}
+  /* compact charts */
+  .chartcard{padding:7px 10px;break-inside:avoid}
+  .chartcard svg{max-height:120px}
+  .legend{margin-top:5px;gap:10px}
+  .insight{padding:5px 9px;margin-top:5px;font-size:10px;line-height:1.5}
+  /* compact sections — allow sections to start anywhere on the page */
+  .sectitle{margin:8px 0 5px;padding:5px 10px;font-size:11px}
+  .exec{padding:9px 12px;margin-bottom:8px}
+  .exec p{font-size:12px;line-height:1.55}
+  .callout{padding:8px 12px;margin-bottom:8px;font-size:11.5px}
+  /* KPIs */
+  .kpis{gap:7px}
+  .kpi{padding:8px 10px;break-inside:avoid}
+  .kpi .lab{font-size:8.5px}
+  .kpi .val{font-size:19px}
+  .kpi .hint{font-size:7.5px}
+  /* tables: small matrix stays together, long ticket tables flow across pages */
+  .matrix{break-inside:avoid}
+  .ttable-wrap{break-inside:auto}
+  .ttable thead{display:table-header-group}
+  .ttable tr{break-inside:avoid}
+  /* segmented bars */
+  .segbar{height:24px}
+  /* horizontal bars */
+  .hbar-row{margin-bottom:3px}
+  .hbar-row .bar{height:13px}
+  .hbar-row .lb{font-size:9.5px;width:100px}
+  .hbar-row .n{font-size:9.5px}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media screen and (max-width:820px){ .grid3,.grid2{grid-template-columns:1fr} }
+
+/* ═══ RESPONSIVE SCALING — auto-adjust for large desktop monitors ═══ */
+@media (min-width: 1921px) and (min-height: 900px) { body { zoom: 1.18; } }
+@media (min-width: 2200px) and (min-height: 1000px) { body { zoom: 1.3; } }
+@media (min-width: 2560px) { body { zoom: 1.42; } }
+@media (min-width: 3200px) { body { zoom: 1.65; } }
+@media (min-width: 3840px) { body { zoom: 1.9; } }
+</style>
+</head>
+<body>
+<div id="app"><div class="loading"><div style="font-size:15px;font-weight:700">Loading Weekly Report…</div><div style="font-size:12px;color:var(--muted)">Nothing loading? <a href="index.html" style="color:var(--client);font-weight:600">Go to upload</a>.</div></div></div>
+
+<script>
+/* ═══════════════════════ CONFIG ═══════════════════════ */
+var JIRA = "https://svmhelpdesk.atlassian.net/browse/";
+
+/* Status → Activity Stage. The map now lives in hd-store.js (window.HDStages) so
+   the Master Data module can edit it and it stays in one place. Thin aliases keep
+   the rest of this file unchanged; stageOf() is override-aware. There is no
+   Activity Stage column in the export, so this is derived from Status; an unknown
+   status lands in "Other" (visible) until mapped in Master Data. */
+var STAGE_MAP   = window.HDStages.defaults;
+var STAGE_ORDER = window.HDStages.ORDER;
+var STAGE_ALL   = window.HDStages.ALL;
+function stageOf(status){ return window.HDStages.stageOf(status); }
+
+var PRIO_ORDER = ["Critical","High","Medium","Low","Show Stopper"];
+var PRIO_COLOR = {"Critical":"var(--p-crit)","High":"var(--p-high)","Medium":"var(--p-med)","Low":"var(--p-low)","Show Stopper":"var(--p-stop)"};
+var WEEKS_BACK = 6;
+/* Pending-list columns: default 7 (fit an A4 landscape page); user can add/remove. */
+var DEFAULT_COLS = ["key","summary","status","stage","priority","component","age"];
+var MODAL_COLS   = ["key","summary","status","stage","priority","component","worker","next","age"];
+
+/* ═══════════════════════ HELPERS ═══════════════════════ */
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function blank(v){ return v===null||v===undefined||String(v).trim()===""||String(v).trim().toLowerCase()==="nan"; }
+function toDate(v){ if(v instanceof Date) return isNaN(v)?null:v; if(blank(v)) return null; var d=new Date(v); return isNaN(d)?null:d; }
+function pct(n,d){ return d>0? Math.round(n/d*100):0; }
+function pad2(n){ return String(n).padStart(2,"0"); }
+function fdate(d){ return d? d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—"; }
+function fdt(d){ return d? d.toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}) : "—"; }
+/* Owner (SVM vs Client) is decided by STATUS — the Jira "Next Action" column
+   isn't reliably updated, so we don't trust it. Confirmed with the team.
+   The map is now shared across all dashboards via hd-store.js (window.HDClass)
+   so it can't drift. Only statuses HDClass doesn't recognise fall back to the
+   Next Action column, then "unset". */
+function naKey(t){
+  var o = t && window.HDClass.owner(t.status);
+  if(o) return o;
+  var v=String(t&&t.na||"").trim().toUpperCase(); return v==="SVM"?"svm":v==="CLIENT"?"client":"unset";
+}
+
+/* ISO week */
+function isoWeek(d){
+  var date=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  var day=date.getUTCDay()||7; date.setUTCDate(date.getUTCDate()+4-day);
+  var ys=new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  var wk=Math.ceil((((date-ys)/86400000)+1)/7);
+  return {year:date.getUTCFullYear(), week:wk};
+}
+function wkKey(d){ if(!d) return null; var w=isoWeek(d); return w.year+"-"+pad2(w.week); }
+function wkLabel(key){ return key? "W"+key.slice(5) : "—"; }
+function lastWeeks(n){
+  var out=[], now=new Date();
+  for(var i=n-1;i>=0;i--){ var d=new Date(now.getTime()-i*7*86400000); out.push(wkKey(d)); }
+  // dedup preserving order
+  var seen={},res=[]; out.forEach(function(k){ if(!seen[k]){seen[k]=1;res.push(k);} }); return res;
+}
+
+/* ═══════════════════════ STATE ═══════════════════════ */
+var RAW=[];          // all normalized tickets (all clients)
+var RAW_ROWS=[];
+var FILENAME="";
+var DATA_ASOF=null;  // max created/resolved date
+var SNAPS={};        // captured weekly open-backlog history (survives across uploads)
+var S={ client:"", na:"", status:"", cols:DEFAULT_COLS.slice(), colsOpen:false };
+
+/* ═══════════════════════ PARSE ═══════════════════════ */
+function readFile(file){
+  return new Promise(function(res,rej){
+    var r=new FileReader();
+    r.onload=function(e){
+      try{
+        var wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+        var sn=wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("jira issues")>-1;})
+          || wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1;})
+          || wb.SheetNames[1] || wb.SheetNames[0];
+        res(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:""}));
+      }catch(err){ rej(err); }
+    };
+    r.onerror=rej; r.readAsArrayBuffer(file);
+  });
+}
+function normalize(rows){
+  if(!rows.length) return [];
+  var keymap={}; Object.keys(rows[0]).forEach(function(k){ keymap[k.trim().toLowerCase()]=k; });
+  function pick(row){ for(var i=1;i<arguments.length;i++){ var kk=keymap[arguments[i]]; if(kk!==undefined) return row[kk]; } return ""; }
+  return rows.map(function(row){
+    var comp=String(pick(row,"components")||"").trim();
+    var status=String(pick(row,"status")||"").trim();
+    return {
+      key:String(pick(row,"key")||"").trim(),
+      summary:String(pick(row,"summary")||""),
+      client:String(pick(row,"project")||"").trim(),        // "client" = Project
+      priority:String(pick(row,"priority")||"").trim(),
+      componentsRaw:comp,
+      components: blank(comp)? [] : comp.split(";").map(function(x){return x.trim();}).filter(Boolean),
+      status:status,
+      stage:stageOf(status),
+      created:toDate(pick(row,"created")),
+      resolved:toDate(pick(row,"resolved")),
+      na:String(pick(row,"next action")||"").trim(),
+      currentWorker:String(pick(row,"current worker")||"").trim(),
+      svmInCharge:String(pick(row,"svm in charge")||"").trim(),
+      _raw:row
+    };
+  }).filter(function(t){return t.key;});
+}
+function isOpen(t){ return t.status && t.status.toLowerCase()!=="closed"; }
+
+/* ═══════════════════════ AS-OF DATE ═══════════════════════ */
+function computeAsOf(){
+  var mx=0; RAW.forEach(function(t){ [t.created,t.resolved].forEach(function(d){ if(d){var m=d.getTime(); if(m>mx)mx=m;} }); });
+  DATA_ASOF = mx? new Date(mx):null;
+}
+
+/* ═══════════════════════ WEEKLY SNAPSHOTS ═══════════════════════
+   A single Jira export only knows TODAY's open state — you can't reconstruct
+   what a ticket's status was three weeks ago. So inflow (by created date) and
+   resolved (by resolved date) are reconstructable from one export, but the
+   OPEN-BACKLOG level at the end of each past week is not. captureSnapshot()
+   records that point-in-time backlog every time a fresh export is opened,
+   keyed by the export's ISO week, so the report can show a real week-over-week
+   backlog trend that accumulates over time. Re-opening within the same week
+   overwrites that week's entry (the latest export is the most current). This
+   history deliberately survives new uploads — it's reset only by the explicit
+   "Reset history" button, which calls HDStore.clearSnapshots(). */
+function captureSnapshot(){
+  var wk = wkKey(DATA_ASOF || new Date());
+  if(!wk) return;
+  var clients={};
+  function bump(c,t){
+    if(!clients[c]) clients[c]={open:0,svm:0,client:0};
+    clients[c].open++;
+    var na=naKey(t); if(na==="svm")clients[c].svm++; else if(na==="client")clients[c].client++;
+  }
+  RAW.forEach(function(t){ if(!isOpen(t))return; var c=t.client||"(no project)"; bump(c,t); bump("__ALL__",t); });
+  SNAPS[wk]={ asOf:DATA_ASOF?DATA_ASOF.getTime():null, capturedAt:Date.now(), file:FILENAME, clients:clients };
+  if(window.HDStore) window.HDStore.saveSnapshots(SNAPS);   // persist in the background
+}
+/* Ordered [{wk, open, svm, client, asOf}] for the selected client (or __ALL__). */
+function backlogHistory(clientName){
+  return Object.keys(SNAPS).sort().map(function(wk){
+    var snap=SNAPS[wk]||{}; var c=(snap.clients&&snap.clients[clientName])||null;
+    return { wk:wk, open:c?c.open:0, svm:c?c.svm:0, client:c?c.client:0, asOf:snap.asOf||null, present:!!c };
+  });
+}
+
+/* Two/three-series line chart over captured weeks (open / SVM / client). */
+function multiLineChart(weeks, series){
+  var W=Math.max(weeks.length*70,320), H=190, padL=32, padB=26, padT=22, iw=W-padL-12, ih=H-padT-padB;
+  var allv=[]; series.forEach(function(s){ s.vals.forEach(function(v){ if(v!=null)allv.push(v); }); });
+  var mx=Math.max.apply(null,allv.concat([1])), mn=0; if(mx===mn)mx=mn+1;
+  function x(i){ return padL + iw*(weeks.length===1?0.5:i/(weeks.length-1)); }
+  function y(v){ return padT + ih*(1-(v-mn)/(mx-mn)); }
+  var out="";
+  // x-axis week labels
+  weeks.forEach(function(w,i){ out+='<text x="'+x(i).toFixed(1)+'" y="'+(H-7)+'" font-size="9" fill="var(--muted)" text-anchor="middle" font-weight="600" style="pointer-events:none">'+wkLabel(w)+'</text>'; });
+  series.forEach(function(s){
+    var poly=[], dots="", labels="";
+    weeks.forEach(function(w,i){ var v=s.vals[i]; if(v==null)return; var px=x(i),py=y(v); poly.push(px.toFixed(1)+","+py.toFixed(1));
+      dots+='<circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="3.5" fill="#fff" stroke="'+s.color+'" stroke-width="2"/>';
+      if(s.labelPts) labels+='<text x="'+px.toFixed(1)+'" y="'+(py-7).toFixed(1)+'" font-size="9" fill="'+s.color+'" text-anchor="middle" font-weight="700" font-family="var(--mono)" style="pointer-events:none">'+v+'</text>';
+    });
+    out+='<polyline points="'+poly.join(" ")+'" fill="none" stroke="'+s.color+'" stroke-width="2.2" stroke-linejoin="round" style="pointer-events:none"/>'+dots+labels;
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'">'+out+'</svg>';
+}
+
+/* ═══════════════════════ DERIVE (selected client) ═══════════════════════ */
+function clientTickets(){
+  return RAW.filter(function(t){
+    if((t.client||"(no project)")!==S.client) return false;
+    if(S.na && naKey(t)!==S.na) return false;
+    if(S.status && t.status!==S.status) return false;
+    return true;
+  });
+}
+
+function kpis(ct){
+  var open=ct.filter(isOpen);
+  var svm=open.filter(function(t){return naKey(t)==="svm";}).length;
+  var cli=open.filter(function(t){return naKey(t)==="client";}).length;
+  var base=svm+cli;
+  return { total:ct.length, open:open.length, closed:ct.length-open.length,
+           svm:svm, client:cli, svmPct:pct(svm,base), clientPct:base?100-pct(svm,base):0 };
+}
+function inflowByWeek(ct,weeks){
+  var m={}; weeks.forEach(function(w){ m[w]={}; PRIO_ORDER.forEach(function(p){m[w][p]=0;}); });
+  ct.forEach(function(t){ var k=wkKey(t.created); if(k&&m[k]!==undefined){ var p=PRIO_ORDER.indexOf(t.priority)>-1?t.priority:"Medium"; m[k][p]++; } });
+  return m;
+}
+function resolvedByWeek(ct,weeks){ var m={}; weeks.forEach(function(w){m[w]=0;}); ct.forEach(function(t){ var k=wkKey(t.resolved); if(k&&m[k]!==undefined)m[k]++; }); return m; }
+function avgResDaysByWeek(ct,weeks){
+  var acc={}; weeks.forEach(function(w){acc[w]={s:0,n:0};});
+  ct.forEach(function(t){ if(t.resolved&&t.created){ var k=wkKey(t.resolved); if(acc[k]!==undefined){ var d=(t.resolved-t.created)/86400000; if(d>=0&&d<3650){acc[k].s+=d;acc[k].n++;} } } });
+  var m={}; weeks.forEach(function(w){ m[w]= acc[w].n? Math.round(acc[w].s/acc[w].n*10)/10 : null; }); return m;
+}
+function componentOpenSvm(ct){
+  var m={};
+  ct.filter(function(t){return isOpen(t)&&naKey(t)==="svm";}).forEach(function(t){
+    (t.components.length?t.components:["(none)"]).forEach(function(cm){ m[cm]=(m[cm]||0)+1; });
+  });
+  return Object.keys(m).map(function(k){return {label:k,val:m[k]};}).sort(function(a,b){return b.val-a.val;});
+}
+/* Current open tickets grouped by stage × next-action (this export only). */
+function currentStages(openList){
+  var m={}; STAGE_ORDER.forEach(function(s){ m[s]={client:0,svm:0,total:0}; });
+  openList.forEach(function(t){ var s=t.stage; if(!m[s]) m[s]={client:0,svm:0,total:0};
+    var na=naKey(t); if(na==="svm")m[s].svm++; else m[s].client++; m[s].total++; });
+  return STAGE_ORDER.map(function(s){ return {stage:s, client:m[s].client, svm:m[s].svm, total:m[s].total}; })
+                    .filter(function(r){ return r.total>0; });
+}
+
+/* ═══════════════════════ CHART BUILDERS (SVG) ═══════════════════════ */
+function stackedBars(weeks,byWeek,cats,colors){
+  var W=Math.max(weeks.length*70,300), H=190, padL=30, padB=26, padT=16, bw=Math.min(38, (W-padL)/weeks.length*0.6);
+  var tot=weeks.map(function(w){ return cats.reduce(function(a,c){return a+(byWeek[w][c]||0);},0); });
+  var mx=Math.max.apply(null,tot.concat([1]));
+  var ih=H-padT-padB, iw=W-padL;
+  var g=""; var out="";
+  weeks.forEach(function(w,i){
+    var x=padL+(iw*(i+0.5)/weeks.length)-bw/2, y=padT+ih, t=tot[i];
+    cats.forEach(function(c){ var v=byWeek[w][c]||0; if(!v)return; var h=v/mx*ih; y-=h;
+      out+='<rect class="wseg" data-wk="'+w+'" data-cat="'+esc(c)+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" fill="'+colors[c]+'" style="cursor:pointer"/>';
+      if(h>13) out+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y+h/2+3).toFixed(1)+'" font-size="9" fill="#fff" text-anchor="middle" font-weight="700" font-family="var(--mono)" style="pointer-events:none">'+v+'</text>';
+    });
+    out+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(padT+ih-t/mx*ih-4).toFixed(1)+'" font-size="10" fill="var(--ink)" text-anchor="middle" font-weight="800" font-family="var(--mono)" style="pointer-events:none">'+t+'</text>';
+    out+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-8)+'" font-size="9.5" fill="var(--muted)" text-anchor="middle" font-weight="600" style="pointer-events:none">'+wkLabel(w)+'</text>';
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'">'+g+out+'</svg>';
+}
+function simpleBars(weeks,vals,colorArr,kind){
+  var W=Math.max(weeks.length*64,300), H=180, padL=26, padB=26, padT=18, bw=Math.min(40,(W-padL)/weeks.length*0.6);
+  var nums=vals.map(function(v){return v==null?0:v;}); var mx=Math.max.apply(null,nums.concat([1]));
+  var ih=H-padT-padB, iw=W-padL, out="";
+  weeks.forEach(function(w,i){
+    var x=padL+(iw*(i+0.5)/weeks.length)-bw/2, v=vals[i];
+    var color=colorArr[i%colorArr.length];
+    if(v==null){ out+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(padT+ih-6)+'" font-size="9" fill="var(--faint)" text-anchor="middle" style="pointer-events:none">—</text>'; }
+    else { var h=v/mx*ih, y=padT+ih-h;
+      out+='<rect '+(kind?'class="wbar" data-wk="'+w+'" data-kind="'+kind+'" style="cursor:pointer" ':'')+'x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" fill="'+color+'"/>';
+      out+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(y-4).toFixed(1)+'" font-size="10" fill="var(--ink)" text-anchor="middle" font-weight="800" font-family="var(--mono)" style="pointer-events:none">'+v+'</text>';
+    }
+    out+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-8)+'" font-size="9.5" fill="var(--muted)" text-anchor="middle" font-weight="600" style="pointer-events:none">'+wkLabel(w)+'</text>';
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'">'+out+'</svg>';
+}
+function lineChartMini(weeks,vals,color,kind){
+  var W=Math.max(weeks.length*64,300), H=170, padL=30, padB=24, padT=20, iw=W-padL-10, ih=H-padT-padB;
+  var pts=[]; var nums=vals.filter(function(v){return v!=null;});
+  var mx=Math.max.apply(null,nums.concat([1])), mn=Math.min.apply(null,nums.concat([0]));
+  if(mx===mn)mx=mn+1;
+  function x(i){ return padL + iw*(weeks.length===1?0.5:i/(weeks.length-1)); }
+  function y(v){ return padT + ih*(1-(v-mn)/(mx-mn)); }
+  var poly=[], dots="", labels="";
+  weeks.forEach(function(w,i){ var v=vals[i]; if(v==null)return; var px=x(i),py=y(v); poly.push(px.toFixed(1)+","+py.toFixed(1));
+    dots+='<circle '+(kind?'class="wdot" data-wk="'+w+'" data-kind="'+kind+'" style="cursor:pointer" ':'')+'cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="'+(kind?6:3.5)+'" fill="#fff" stroke="'+color+'" stroke-width="2"/>';
+    labels+='<text x="'+px.toFixed(1)+'" y="'+(py-8).toFixed(1)+'" font-size="9.5" fill="'+color+'" text-anchor="middle" font-weight="700" font-family="var(--mono)" style="pointer-events:none">'+v+'</text>';
+  });
+  var xlab=""; weeks.forEach(function(w,i){ xlab+='<text x="'+x(i).toFixed(1)+'" y="'+(H-7)+'" font-size="9" fill="var(--muted)" text-anchor="middle" font-weight="600" style="pointer-events:none">'+wkLabel(w)+'</text>'; });
+  return '<svg viewBox="0 0 '+W+' '+H+'">'+
+    '<polyline points="'+poly.join(" ")+'" fill="none" stroke="'+color+'" stroke-width="2.2" stroke-linejoin="round" style="pointer-events:none"/>'+dots+labels+xlab+'</svg>';
+}
+function hbars(items,color){
+  if(!items.length) return '<div class="empty">No open SVM tickets for this client.</div>';
+  var mx=items[0].val||1;
+  return items.slice(0,14).map(function(it){ var w=Math.max(it.val/mx*100,3);
+    return '<div class="hbar-row hrowc" data-comp="'+esc(it.label)+'" style="cursor:pointer"><span class="lb" title="'+esc(it.label)+'">'+esc(it.label)+'</span>'+
+      '<div class="bar" style="width:'+w+'%;background:'+color+'"></div><span class="n">'+it.val+'</span></div>';
+  }).join("");
+}
+
+/* ═══════════════════════ FULL DATA EXPORT ═══════════════════════ */
+function escCSV(v){var s=String(v==null?"":v instanceof Date&&!isNaN(v)?v.toISOString().slice(0,19).replace("T"," "):v);if(s.indexOf(",")>-1||s.indexOf('"')>-1||s.indexOf("\n")>-1)return'"'+s.replace(/"/g,'""')+'"';return s;}
+function exportFullCSV(tickets,name){
+  if(!tickets||!tickets.length)return;
+  var sample=tickets[0]._raw||tickets[0]; var colOrder=[]; var colSet={};
+  Object.keys(sample).forEach(function(k){if(!colSet[k]){colSet[k]=1;colOrder.push(k);}});
+  tickets.forEach(function(t){ var raw=t._raw||t; Object.keys(raw).forEach(function(k){if(!colSet[k]){colSet[k]=1;colOrder.push(k);}});});
+  colOrder.push("__Stage__","__Next_Action__","__Age_Days__");
+  var header=colOrder.map(function(c){return escCSV(c==="__Stage__"?"Stage (computed)":c==="__Next_Action__"?"Next Action (computed)":c==="__Age_Days__"?"Age Days (computed)":c);}).join(",");
+  var lines=[header];
+  tickets.forEach(function(t){
+    var raw=t._raw||t;
+    lines.push(colOrder.map(function(c){
+      if(c==="__Stage__")return escCSV(t.stage||"");
+      if(c==="__Next_Action__"){var na=naKey(t);return escCSV(na==="svm"?"SVM":na==="client"?"Client":"Unset");}
+      if(c==="__Age_Days__")return ageDays(t);
+      return escCSV(raw[c]);
+    }).join(","));
+  });
+  var blob=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  var url=URL.createObjectURL(blob); var a=document.createElement("a");
+  a.href=url; a.download=(name||"tickets-full")+".csv"; a.click(); URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════ RENDER ═══════════════════════ */
+function caption(t){ return ''; }
+function insight(html){ return '<div class="insight">💡 '+html+'</div>'; }
+/* Top N oldest open tickets as a compact spotlight table */
+function top5OldestHTML(openList, n){
+  if(!openList.length) return '';
+  var sorted=openList.slice().sort(function(a,b){ return (ageDays(b)||0)-(ageDays(a)||0); });
+  var top=sorted.slice(0, n||5);
+  var h='<div class="ttable-wrap"><table class="ttable"><thead><tr>'+
+    '<th>Key</th><th>Summary</th><th>Status</th><th>Priority</th><th>Component</th><th>Next</th><th>Age (d)</th></tr></thead><tbody>';
+  top.forEach(function(t){
+    var na=naKey(t);
+    h+='<tr>'+
+      '<td class="key"><a href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
+      '<td class="sum" title="'+esc(t.summary)+'">'+esc(trunc(t.summary,70))+'</td>'+
+      '<td><span class="pill">'+esc(t.status||"—")+'</span></td>'+
+      '<td>'+esc(t.priority||"—")+'</td>'+
+      '<td>'+esc(t.componentsRaw||"—")+'</td>'+
+      '<td>'+(na==="svm"?'<span class="badge-na svm">SVM</span>':na==="client"?'<span class="badge-na client">Client</span>':'<span class="pill">—</span>')+'</td>'+
+      '<td class="num" style="color:var(--client);font-weight:800">'+ageDays(t)+'</td>'+
+    '</tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+/* horizontal segmented bar; parts=[{label,val,color,data}] (data = raw attr string) */
+function segBar(parts){
+  var tot=parts.reduce(function(a,p){return a+p.val;},0)||1;
+  var segs=parts.filter(function(p){return p.val>0;}).map(function(p){
+    return '<div class="segb" '+(p.data||"")+' style="width:'+Math.max(p.val/tot*100,6)+'%;background:'+p.color+';cursor:'+(p.data?"pointer":"default")+'" title="'+esc(p.label)+': '+p.val+'">'+p.val+'</div>';
+  }).join("");
+  return '<div class="segbar">'+(segs||'<div class="segb" style="width:100%;background:var(--line2);color:var(--muted)">—</div>')+'</div>';
+}
+function legendRow(parts){
+  return '<div class="legend">'+parts.map(function(p){ return '<span class="li"><span class="sw" style="background:'+p.color+'"></span>'+esc(p.label)+' <b style="color:var(--ink)">'+p.val+'</b></span>'; }).join("")+'</div>';
+}
+/* phrase a week-over-week change; goodUp=true means an increase is positive */
+function chg(cur,prev,goodUp,unit){
+  if(prev==null||cur==null) return "";
+  var d=cur-prev; unit=unit||"";
+  if(d===0) return ' (<b>level with the prior week</b>)';
+  var good=(d>0)===goodUp, cls=good?"up":"dn", ar=d>0?"▲":"▼", word=d>0?"up":"down";
+  return ' (<span class="'+cls+'">'+ar+' '+word+' '+Math.abs(d)+unit+'</span> vs prior week)';
+}
+function shortStage(s){ return s.replace(/^Stage \d+ - /,""); }
+function trunc(s,n){ s=String(s||""); return s.length>n? s.slice(0,n-1)+"…" : s; }
+function ageDays(t){ return t.created? Math.max(0,Math.floor((Date.now()-t.created)/86400000)) : ""; }
+var CUR_WK = wkKey(new Date());
+
+/* Selectable columns for the pending ticket lists. Order here = display order. */
+var COLS=[
+  {k:"key",      label:"Key",            th:'<th>Key</th>',           cell:function(t){return '<td class="key"><a href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>';}},
+  {k:"summary",  label:"Summary",        th:'<th>Summary</th>',       cell:function(t){return '<td class="sum" title="'+esc(t.summary)+'">'+esc(trunc(t.summary,80))+'</td>';}},
+  {k:"status",   label:"Status",         th:'<th>Status</th>',        cell:function(t){return '<td><span class="pill">'+esc(t.status||"—")+'</span></td>';}},
+  {k:"stage",    label:"Stage",          th:'<th>Stage</th>',         cell:function(t){return '<td>'+esc(shortStage(t.stage))+'</td>';}},
+  {k:"priority", label:"Priority",       th:'<th>Priority</th>',      cell:function(t){return '<td>'+esc(t.priority||"—")+'</td>';}},
+  {k:"component",label:"Component",      th:'<th>Component</th>',     cell:function(t){return '<td>'+esc(t.componentsRaw||"—")+'</td>';}},
+  {k:"worker",   label:"Current Worker", th:'<th>Current Worker</th>',cell:function(t){return '<td>'+esc(t.currentWorker||"—")+'</td>';}},
+  {k:"svm",      label:"SVM In Charge",  th:'<th>SVM In Charge</th>', cell:function(t){return '<td>'+esc(t.svmInCharge||t.currentWorker||"—")+'</td>';}},
+  {k:"next",     label:"Next Action",    th:'<th>Next</th>',          cell:function(t){var na=naKey(t);return '<td>'+(na==="svm"?'<span class="badge-na svm">SVM</span>':na==="client"?'<span class="badge-na client">Client</span>':'<span class="pill">—</span>')+'</td>';}},
+  {k:"created",  label:"Created",        th:'<th>Created</th>',       cell:function(t){return '<td style="white-space:nowrap">'+fdate(t.created)+'</td>';}},
+  {k:"age",      label:"Age (days)",     th:'<th>Age (d)</th>',       cell:function(t){return '<td class="num">'+ageDays(t)+'</td>';}}
+];
+/* Shared ticket table. colKeys = array of column keys to show (in COLS order).
+   Sorted oldest-first by default. */
+function ticketTable(tix,colKeys){
+  if(!tix.length) return '<div class="empty">No tickets.</div>';
+  var cols=COLS.filter(function(c){ return colKeys && colKeys.indexOf(c.k)>-1; });
+  if(!cols.length) cols=COLS.filter(function(c){ return DEFAULT_COLS.indexOf(c.k)>-1; });
+  var list=tix.slice().sort(function(a,b){ return (ageDays(b)||0)-(ageDays(a)||0); });
+  var head='<tr>'+cols.map(function(c){return c.th;}).join("")+'</tr>';
+  var body=list.map(function(t){ return '<tr>'+cols.map(function(c){return c.cell(t);}).join("")+'</tr>'; }).join("");
+  return '<div class="ttable-wrap"><table class="ttable"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+function openModal(title,tix){
+  closeModal();
+  var ov=document.createElement("div"); ov.className="ovl noprint"; ov.id="ovl";
+  ov.innerHTML='<div class="modal"><div class="mhead"><span class="mt">'+esc(title)+' \u00b7 '+tix.length+' ticket'+(tix.length!==1?'s':'')+'</span>'+
+    '<button id="mexp" class="btn" style="margin-left:auto;padding:7px 14px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data</button>'+
+    '<button id="mclose" title="Close (Esc)">\u2715</button></div>'+
+    '<div class="mbody">'+ticketTable(tix,MODAL_COLS)+'</div></div>';
+  ov.addEventListener("click",function(e){ if(e.target===ov) closeModal(); });
+  document.body.appendChild(ov);
+  var b=el("mclose"); if(b) b.onclick=closeModal;
+  var ex=el("mexp"); if(ex) ex.onclick=function(){ exportFullCSV(tix,(title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full"); };
+}
+function closeModal(){ var o=el("ovl"); if(o) o.remove(); }
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
+function openModalNote(title,html){
+  closeModal();
+  var ov=document.createElement("div"); ov.className="ovl noprint"; ov.id="ovl";
+  ov.innerHTML='<div class="modal"><div class="mhead"><span class="mt">'+esc(title)+'</span><button id="mclose">✕</button></div><div class="mbody"><div style="padding:14px;font-size:12.5px;color:var(--ink2);line-height:1.6">'+html+'</div></div></div>';
+  ov.addEventListener("click",function(e){ if(e.target===ov) closeModal(); });
+  document.body.appendChild(ov); var b=el("mclose"); if(b) b.onclick=closeModal;
+}
+
+function clientList(){
+  var m={}; RAW.forEach(function(t){ var c=t.client||"(no project)"; m[c]=(m[c]||0)+1; });
+  return Object.keys(m).map(function(k){return {name:k,n:m[k]};}).sort(function(a,b){return b.n-a.n;});
+}
+function render(){
+  var clients=clientList();
+  if(!S.client && clients.length) S.client=clients[0].name;
+  // option lists for the Next-action / Status filters (scoped to the selected client)
+  var clientAll=RAW.filter(function(t){ return (t.client||"(no project)")===S.client; });
+  var statusList=Object.keys(clientAll.reduce(function(a,t){ if(t.status)a[t.status]=1; return a; },{})).sort();
+  var naHasUnset=clientAll.some(function(t){ return naKey(t)==="unset"; });
+  if(S.status && statusList.indexOf(S.status)<0) S.status="";   // drop stale status when switching client
+  var ct=clientTickets();
+  var K=kpis(ct);
+  var weeks=lastWeeks(WEEKS_BACK);
+  var inflow=inflowByWeek(ct,weeks), resolved=resolvedByWeek(ct,weeks), resDays=avgResDaysByWeek(ct,weeks);
+  var comps=componentOpenSvm(ct);
+
+  /* ── figures for the plain-language insights ── */
+  var lastWk=weeks[weeks.length-1];
+  var inflowTot=weeks.map(function(w){ return PRIO_ORDER.reduce(function(a,p){return a+inflow[w][p];},0); });
+  var infLast=inflowTot[inflowTot.length-1], infPrev=inflowTot.length>1?inflowTot[inflowTot.length-2]:null;
+  var domP=PRIO_ORDER.slice().sort(function(a,b){return inflow[lastWk][b]-inflow[lastWk][a];})[0];
+  var domPn=inflow[lastWk][domP]||0;
+  var resArr=weeks.map(function(w){return resolved[w];});
+  var resLast=resArr[resArr.length-1], resPrev=resArr.length>1?resArr[resArr.length-2]:null;
+  var resAvg=resArr.length?Math.round(resArr.reduce(function(a,b){return a+b;},0)/resArr.length):0;
+  var svmOpenTot=comps.reduce(function(a,c){return a+c.val;},0);
+  var compTop=comps[0], compTop2=comps[1];
+  var rdVals=weeks.map(function(w){return resDays[w];}).filter(function(v){return v!=null;});
+  var rdAvg=rdVals.length?Math.round(rdVals.reduce(function(a,b){return a+b;},0)/rdVals.length*10)/10:null;
+  var rdLast=null; for(var _i=weeks.length-1;_i>=0;_i--){ if(resDays[weeks[_i]]!=null){rdLast=resDays[weeks[_i]];break;} }
+  var openList=ct.filter(isOpen);
+  var svmPending=openList.filter(function(t){return naKey(t)==="svm";});
+  var clientPending=openList.filter(function(t){return naKey(t)==="client";});
+  var clientOldest=clientPending.reduce(function(m,t){return Math.max(m,ageDays(t)||0);},0);
+  var netChange=infLast-resLast;                       // new − resolved this week
+  var openByPrio={}; PRIO_ORDER.forEach(function(p){openByPrio[p]=0;});
+  openList.forEach(function(t){ var p=PRIO_ORDER.indexOf(t.priority)>-1?t.priority:"Medium"; openByPrio[p]++; });
+  var critHigh=(openByPrio["Show Stopper"]||0)+(openByPrio["Critical"]||0)+(openByPrio["High"]||0);
+  var AGE_LABELS=["0–7d","8–30d","31–60d","60+d"], AGE_COLORS=["#059669","#F5C518","#D97706","#BE1D42"];
+  var ageCounts=[0,0,0,0], oldestOpen=0;
+  openList.forEach(function(t){ var a=ageDays(t)||0; if(a>oldestOpen)oldestOpen=a; if(a<=7)ageCounts[0]++; else if(a<=30)ageCounts[1]++; else if(a<=60)ageCounts[2]++; else ageCounts[3]++; });
+  var stageCount={}; STAGE_ALL.forEach(function(s){stageCount[s]=0;});
+  openList.forEach(function(t){ stageCount[t.stage]=(stageCount[t.stage]||0)+1; });
+  var topStage=STAGE_ORDER.filter(function(s){return s!=="Other";}).sort(function(a,b){return (stageCount[b]||0)-(stageCount[a]||0);})[0];
+  var stageRows=currentStages(openList);
+
+  /* ── captured week-over-week backlog history (from snapshots) ── */
+  var hist=backlogHistory(S.client);
+  var histWeeks=hist.map(function(h){return h.wk;});
+  var histOpenVals=hist.map(function(h){return h.open;});
+  var histSeries=[
+    {name:"Open",   color:"var(--client)",  vals:histOpenVals, labelPts:true},
+    {name:"SVM",    color:"var(--hd)",       vals:hist.map(function(h){return h.svm;})},
+    {name:"Client", color:"var(--client2)",  vals:hist.map(function(h){return h.client;})}
+  ];
+  var histLast=histOpenVals.length?histOpenVals[histOpenVals.length-1]:null;
+  var histPrev=histOpenVals.length>1?histOpenVals[histOpenVals.length-2]:null;
+
+  /* ── executive summary ── */
+  var exText='<b>'+esc(S.client)+'</b> currently has <b>'+K.open+' open ticket'+(K.open!==1?'s':'')+'</b> — '
+    +'<b style="color:var(--hd)">'+K.svm+' need SVM action</b> (our team) and <b style="color:var(--client2)">'+K.client+' are waiting on your team</b>, i.e. <b>'+K.clientPct+'%</b> of open work sits on the client side. '
+    +'<b>'+infLast+'</b> new ticket'+(infLast!==1?'s':'')+' came in during '+wkLabel(lastWk)+chg(infLast,infPrev,false)+', and <b>'+resLast+'</b> '+(resLast!==1?'were':'was')+' resolved'+chg(resLast,resPrev,true)+'. '
+    +(compTop?'The heaviest open area is <b>'+esc(compTop.label)+'</b> ('+compTop.val+' SVM ticket'+(compTop.val!==1?'s':'')+'). ':'')
+    +(topStage&&stageCount[topStage]?'Most open tickets are at <b>'+esc(shortStage(topStage))+'</b>. ':'')
+    +(oldestOpen>30?'The oldest open ticket has been open <b>'+oldestOpen+' days</b>.':'');
+
+  var app=el("app");
+  app.innerHTML=''+
+  /* controls */
+  '<div class="wrap">'+
+    '<div class="controls noprint">'+
+      '<span class="flabel">Client</span>'+
+      '<select id="csel">'+clients.map(function(c){return '<option value="'+esc(c.name)+'" '+(c.name===S.client?"selected":"")+'>'+esc(c.name)+' ('+c.n+')</option>';}).join("")+'</select>'+
+      '<span class="flabel">Next action</span>'+
+      '<select id="nasel">'+
+        '<option value="" '+(S.na===""?"selected":"")+'>All</option>'+
+        '<option value="svm" '+(S.na==="svm"?"selected":"")+'>SVM</option>'+
+        '<option value="client" '+(S.na==="client"?"selected":"")+'>Client</option>'+
+        (naHasUnset?'<option value="unset" '+(S.na==="unset"?"selected":"")+'>Unset</option>':'')+
+      '</select>'+
+      '<span class="flabel">Status</span>'+
+      '<select id="stsel"><option value="">All statuses</option>'+statusList.map(function(s){return '<option value="'+esc(s)+'" '+(S.status===s?"selected":"")+'>'+esc(s)+'</option>';}).join("")+'</select>'+
+      ((S.na||S.status)?'<button class="btn" id="clrsel">✕ Clear</button>':'')+
+      '<details class="colpick" '+(S.colsOpen?'open':'')+'>'+
+        '<summary class="btn">🧩 Columns ('+S.cols.length+')</summary>'+
+        '<div class="colmenu"><div class="colmenu-h">Pending-list columns</div>'+
+          COLS.map(function(c){ var on=S.cols.indexOf(c.k)>-1; return '<label><input type="checkbox" class="colchk" data-k="'+c.k+'" '+(on?'checked':'')+'> '+esc(c.label)+'</label>'; }).join("")+
+        '</div>'+
+      '</details>'+
+      '<span class="spacer"></span>'+
+      '<button class="btn" id="exportAllBtn" style="display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data ('+ct.length+')</button>'+
+      '<button class="btn primary" id="printbtn">\uD83D\uDDA8\uFE0F Print / Save PDF</button>'+
+      '<button class="btn" id="backbtn">\u2190 Launcher</button>'+
+    '</div>'+
+    /* the printable sheet */
+    '<div class="sheet" id="sheet">'+
+      '<div class="rhead">'+
+        '<div class="logo"><i style="height:16px;background:var(--hd)"></i><i style="height:30px;background:var(--hd2)"></i><i style="height:13px;background:var(--client2)"></i><i style="height:24px;background:var(--client)"></i></div>'+
+        '<div class="who">'+
+          '<div class="kicker">Weekly Report</div>'+
+          '<h1>'+esc(S.client)+'</h1>'+
+          '<div class="meta">Generated '+fdt(new Date())+' &nbsp;·&nbsp; '+esc(FILENAME||"—")+'</div>'+
+          ((S.na||S.status)?'<div class="meta" style="color:var(--client);font-weight:600">Filtered: '+[ (S.na?"Next action = "+(S.na==="svm"?"SVM":S.na==="client"?"Client":"Unset"):""), (S.status?"Status = "+esc(S.status):"") ].filter(Boolean).join(" · ")+'</div>':'')+
+        '</div>'+
+        '<div class="asof"><div class="box">Reporting window<br><b>'+wkLabel(weeks[0])+' → '+wkLabel(weeks[weeks.length-1])+'</b></div></div>'+
+      '</div>'+
+      '<div class="rbody">'+
+
+        /* Executive summary */
+        '<div class="exec">'+
+          '<div class="eh">📋 Summary — at a glance</div>'+
+          '<p>'+exText+'</p>'+
+          '<div class="key">'+
+            '<span class="k"><span class="dot" style="background:var(--hd)"></span><b>SVM</b> = SVM Help Desk — action on our side</span>'+
+            '<span class="k"><span class="dot" style="background:var(--client2)"></span><b>Client</b> = waiting on your team</span>'+
+            '<span class="k"><span class="dot" style="background:var(--faint)"></span><b>Open</b> = any ticket not yet closed</span>'+
+          '</div>'+
+        '</div>'+
+
+        /* Action-needed callout (prints; click to list on screen) */
+        (clientPending.length? '<div class="callout clientcallout" style="cursor:pointer">🔔 <b>Action needed from your team:</b> '+clientPending.length+' open ticket'+(clientPending.length!==1?'s':'')+' '+(clientPending.length!==1?'are':'is')+' waiting on your response'+(clientOldest?' (oldest <b>'+clientOldest+' days</b>)':'')+'. See the “Pending with Client” list at the bottom.</div>' : '')+
+
+        /* KPIs */
+        caption('The headline numbers for '+esc(S.client)+' as of this export.')+
+        '<div class="kpis">'+
+          '<div class="kpi hl" data-kpi="open" style="cursor:pointer"><div class="lab">Open Tickets</div><div class="val" style="color:var(--client)">'+K.open+'</div><div class="hint">not yet closed · click to list</div></div>'+
+          '<div class="kpi hl2" data-kpi="svm" style="cursor:pointer"><div class="lab">SVM — Action</div><div class="val" style="color:var(--hd)">'+K.svm+'</div><div class="hint">on our side · click to list</div></div>'+
+          '<div class="kpi" data-kpi="client" style="cursor:pointer"><div class="lab">Client — Waiting</div><div class="val" style="color:var(--client2)">'+K.client+'</div><div class="hint">waiting on your team · click to list</div></div>'+
+          '<div class="kpi"><div class="lab">SVM % · Client %</div><div class="val sm"><span style="color:var(--hd)">'+K.svmPct+'%</span> · <span style="color:var(--client2)">'+K.clientPct+'%</span></div><div class="hint">who acts next, share of open</div></div>'+
+          '<div class="kpi"><div class="lab">Resolved This Week</div><div class="val" style="color:var(--hd)">'+resLast+'</div><div class="hint">closed in '+wkLabel(lastWk)+'</div></div>'+
+          '<div class="kpi"><div class="lab">Net Backlog Δ</div><div class="val sm"><span style="color:'+(netChange>0?'var(--client)':netChange<0?'var(--hd)':'var(--muted)')+'">'+(netChange>0?'+':'')+netChange+'</span></div><div class="hint">new − resolved this week</div></div>'+
+        '</div>'+
+
+        /* Row 1: inflow / resolved / svm-open WoW */
+        '<div class="sectitle">Open Backlog — Urgency &amp; Age</div>'+
+        caption('How urgent and how old the open work is right now. <b>Click a segment to list those tickets.</b>')+
+        '<div class="grid2">'+
+          '<div class="chartcard"><div class="ct">Open by Priority <span style="color:var(--faint);font-weight:500">· '+critHigh+' Critical/High open</span></div>'+
+            segBar(PRIO_ORDER.map(function(p){return {label:p,val:openByPrio[p],color:PRIO_COLOR[p],data:'data-prio="'+esc(p)+'"'};}))+
+            legendRow(PRIO_ORDER.map(function(p){return {label:p,val:openByPrio[p],color:PRIO_COLOR[p]};}))+
+            insight(critHigh? ('<b>'+critHigh+'</b> of the '+openList.length+' open ticket'+(openList.length!==1?'s':'')+' '+(critHigh===1?'is':'are')+' <b>Critical or High</b> priority and '+(critHigh===1?'is':'are')+' being prioritised for resolution.') : 'None of the open tickets are Critical or High priority.')+
+          '</div>'+
+          '<div class="chartcard"><div class="ct">Open by Age <span style="color:var(--faint);font-weight:500">· oldest '+oldestOpen+'d</span></div>'+
+            segBar(AGE_LABELS.map(function(l,i){return {label:l,val:ageCounts[i],color:AGE_COLORS[i],data:'data-age="'+i+'"'};}))+
+            legendRow(AGE_LABELS.map(function(l,i){return {label:l,val:ageCounts[i],color:AGE_COLORS[i]};}))+
+            insight((ageCounts[2]+ageCounts[3])? ('<b>'+(ageCounts[2]+ageCounts[3])+'</b> open ticket'+((ageCounts[2]+ageCounts[3])!==1?'s':'')+' '+((ageCounts[2]+ageCounts[3])===1?'is':'are')+' over 30 days old'+(ageCounts[3]?', including <b>'+ageCounts[3]+'</b> beyond 60 days':'')+'. These older items are being actively reviewed to bring them to closure.') : 'All open tickets are within 30 days old.')+
+          '</div>'+
+        '</div>'+
+
+        '<div class="sectitle">Weekly Trends — Last '+WEEKS_BACK+' Weeks</div>'+
+        caption('How work came in and went out over the past '+WEEKS_BACK+' weeks. Weeks are ISO week numbers (e.g. W34). <b>Click any bar to list the tickets behind it.</b>')+
+        '<div class="grid2">'+
+          '<div class="chartcard"><div class="ct">New Tickets by Priority <span style="color:var(--faint);font-weight:500">· created each week</span></div>'+
+            stackedBars(weeks,inflow,PRIO_ORDER,PRIO_COLOR)+
+            '<div class="legend">'+PRIO_ORDER.map(function(p){return '<span class="li"><span class="sw" style="background:'+PRIO_COLOR[p]+'"></span>'+p+'</span>';}).join("")+'</div>'+
+            insight('<b>'+infLast+'</b> new ticket'+(infLast!==1?'s':'')+' in '+wkLabel(lastWk)+chg(infLast,infPrev,false)+', mostly <b>'+domP+'</b> priority ('+domPn+'). Taller bars indicate weeks with higher inbound volume.')+
+          '</div>'+
+          '<div class="chartcard"><div class="ct">Resolved Tickets <span style="color:var(--faint);font-weight:500">· closed each week</span></div>'+
+            simpleBars(weeks,weeks.map(function(w){return resolved[w];}),["#0F766E"],"resolved")+
+            insight('<b>'+resLast+'</b> resolved in '+wkLabel(lastWk)+chg(resLast,resPrev,true)+' — averaging about <b>'+resAvg+'/week</b>. Comparing this with new tickets shows whether the backlog is growing or reducing.')+
+          '</div>'+
+        '</div>'+
+
+        /* Row 2: component / resolution days */
+        '<div class="sectitle">Open Work &amp; Turnaround</div>'+
+        caption('Where the open SVM work sits, and how quickly tickets are being resolved. <b>Click a row or point to list tickets.</b>')+
+        '<div class="grid2">'+
+          '<div class="chartcard"><div class="ct">Component-Wise Open Ticket Count (SVM) <span style="color:var(--faint);font-weight:500">· by product area</span></div>'+ hbars(comps,"var(--hd)")+
+            insight(compTop? ('Open SVM work is concentrated in <b>'+esc(compTop.label)+'</b>'+(compTop2?' and <b>'+esc(compTop2.label)+'</b>':'')+' — together <b>'+pct((compTop.val+(compTop2?compTop2.val:0)),svmOpenTot)+'%</b> of the '+svmOpenTot+' open SVM ticket'+(svmOpenTot!==1?'s':'')+', where our team is focusing effort.') : 'No open tickets are currently on the SVM side for this client.')+
+          '</div>'+
+          '<div class="chartcard"><div class="ct">Average Resolution Days <span style="color:var(--faint);font-weight:500">· created → resolved</span></div>'+
+            lineChartMini(weeks,weeks.map(function(w){return resDays[w];}),"var(--client)","resdays")+
+            insight(rdAvg!=null? ('Tickets take about <b>'+rdAvg+' days</b> on average to resolve'+(rdLast!=null?' (latest week <b>'+rdLast+'d</b>)':'')+'. A rising line means tickets are taking longer to close.') : 'Not enough resolved tickets in this window to show a resolution-time trend yet.')+
+          '</div>'+
+        '</div>'+
+
+        /* Current activity-stage breakdown (this export only) */
+        '<div class="sectitle">Open Tickets by Activity Stage <span class="sub">Client vs SVM · this export</span></div>'+
+        caption('Where the open tickets sit in the delivery pipeline right now, and whose action is next. <b>Click a number to list those tickets.</b>')+
+        currentStageHTML(stageRows)+
+        insight('<b style="color:var(--client2)">Client</b> and <b style="color:var(--hd)">SVM</b> show who needs to act next on the open tickets in each phase.'+(topStage&&stageCount[topStage]?' The biggest phase is <b>'+esc(shortStage(topStage))+'</b> ('+stageCount[topStage]+' open).':'')+' A high <b style="color:var(--client2)">Client</b> count means those tickets are waiting on your team.')+
+
+        /* ── Top 5 oldest spotlight tables ── */
+        '<div class="sectitle">🔴 Top 5 Oldest — Client Side <span class="sub">longest-open items needing attention</span></div>'+
+        top5OldestHTML(openList, 5)+
+
+        '<div class="sectitle">🔴 Top 5 Oldest — SVM Side <span class="sub">longest-open items on our side</span></div>'+
+        top5OldestHTML(svmPending, 5)+
+
+        /* ── Pending ticket lists (printed in the PDF) ── */
+        '<div class="sectitle">Pending Tickets — with SVM <span class="sub">'+svmPending.length+' open · our action</span><button class="btn noprint expbtn" data-exp="svm" style="font-size:10px;padding:4px 10px;margin-left:auto">\u2B07 Export Full Data</button></div>'+
+        caption('Open tickets where the next action is on the SVM Help Desk side. Oldest first. <b class="noprint">Use “🧩 Columns” up top to choose what shows.</b>')+
+        ticketTable(svmPending,S.cols)+
+
+        '<div class="sectitle">Pending Tickets — with Client <span class="sub">'+clientPending.length+' open · awaiting your team</span><button class="btn noprint expbtn" data-exp="client" style="font-size:10px;padding:4px 10px;margin-left:auto">\u2B07 Export Full Data</button></div>'+
+        caption('Open tickets waiting on the client. Oldest first.')+
+        ticketTable(clientPending,S.cols)+
+
+        '<div class="foot"><b>'+esc(FILENAME||"—")+'</b> · '+RAW.length.toLocaleString()+' tickets loaded · '+ct.length.toLocaleString()+' for '+esc(S.client)+' · HD Weekly Report · files stay on your device</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+
+  bind();
+}
+function currentStageHTML(rows){
+  if(!rows.length) return '<div class="chartcard"><div class="empty">No open tickets for this client.</div></div>';
+  var h='<div class="ttable-wrap"><table class="matrix"><thead><tr>'+
+    '<th style="text-align:left">Activity Stage</th><th>Client</th><th>SVM</th><th>Total</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    h+='<tr><td class="stage">'+esc(r.stage)+'</td>'+
+       '<td class="scell '+(r.client?"cl":"zero")+'" data-stage="'+esc(r.stage)+'" data-na="client" style="cursor:pointer">'+(r.client||"·")+'</td>'+
+       '<td class="scell '+(r.svm?"sv":"zero")+'" data-stage="'+esc(r.stage)+'" data-na="svm" style="cursor:pointer">'+(r.svm||"·")+'</td>'+
+       '<td class="mono" style="font-weight:700">'+r.total+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  return h;
+}
+
+/* ═══════════════════════ EVENTS ═══════════════════════ */
+function bind(){
+  el("csel").onchange=function(e){ S.client=e.target.value; S.status=""; render(); };
+  el("nasel").onchange=function(e){ S.na=e.target.value; render(); };
+  el("stsel").onchange=function(e){ S.status=e.target.value; render(); };
+  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; render(); };
+  var rh=el("resethist"); if(rh) rh.onclick=function(){
+    if(!confirm("Reset all captured weekly history?\n\nThis clears the week-over-week open-backlog trend for every client and can't be undone. The current export is re-captured as a fresh starting point.")) return;
+    if(window.HDStore) window.HDStore.clearSnapshots();
+    SNAPS={}; captureSnapshot(); render();
+  };
+  var dp=document.querySelector(".colpick"); if(dp) dp.addEventListener("toggle",function(){ S.colsOpen=dp.open; });
+  document.querySelectorAll(".colchk").forEach(function(chk){ chk.onchange=function(){
+    var k=chk.dataset.k;
+    if(chk.checked){ if(S.cols.indexOf(k)<0) S.cols.push(k); }
+    else { S.cols=S.cols.filter(function(x){return x!==k;}); }
+    S.colsOpen=true; render();
+  }; });
+  var expAll=el("exportAllBtn"); if(expAll) expAll.onclick=function(){ var ct=clientTickets(); exportFullCSV(ct, "weekly-"+S.client.replace(/[^\w]+/g,"-").toLowerCase()+"-full"); };
+  el("printbtn").onclick=function(){
+    var orig=document.title;
+    function slug(s){ return String(s||"").replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"-").slice(0,60); }
+    var parts=["Weekly-Report", slug(S.client)||"All-clients"];
+    if(S.na) parts.push(S.na.toUpperCase());
+    if(S.status) parts.push(slug(S.status));
+    parts.push(new Date().toISOString().slice(0,10));
+    document.title=parts.join("_");
+    window.print();
+    setTimeout(function(){ document.title=orig; }, 1000);
+  };
+  el("backbtn").onclick=function(){ window.location.href="index.html"; };
+  bindDrill();
+}
+/* Click-to-see-tickets on every chart element (screen only; opens a modal). */
+function bindDrill(){
+  var ct=clientTickets(), openL=ct.filter(isOpen);
+  function q(sel){ return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+
+  // KPI tiles
+  q("[data-kpi]").forEach(function(n){ n.onclick=function(){
+    var k=n.dataset.kpi;
+    if(k==="open") openModal("Open tickets — "+S.client, openL);
+    else if(k==="svm") openModal("Pending with SVM — "+S.client, openL.filter(function(t){return naKey(t)==="svm";}));
+    else if(k==="client") openModal("Pending with Client — "+S.client, openL.filter(function(t){return naKey(t)==="client";}));
+  }; });
+
+  // Inflow segments (created that week + priority)
+  q(".wseg").forEach(function(n){ n.onclick=function(){
+    var w=n.dataset.wk, cat=n.dataset.cat;
+    var tix=ct.filter(function(t){ if(wkKey(t.created)!==w) return false; var p=PRIO_ORDER.indexOf(t.priority)>-1?t.priority:"Medium"; return p===cat; });
+    openModal("New in "+wkLabel(w)+" · "+cat+" priority", tix);
+  }; });
+
+  // Resolved bars
+  q(".wbar").forEach(function(n){ n.onclick=function(){
+    var w=n.dataset.wk;
+    openModal("Resolved in "+wkLabel(w)+" — "+S.client, ct.filter(function(t){return wkKey(t.resolved)===w;}));
+  }; });
+
+  // Resolution-days points (resolved that week)
+  q(".wdot").forEach(function(n){ n.onclick=function(){
+    var w=n.dataset.wk; openModal("Resolved in "+wkLabel(w)+" — "+S.client, ct.filter(function(t){return wkKey(t.resolved)===w;}));
+  }; });
+
+  // Component rows (open SVM in that component)
+  q(".hrowc").forEach(function(n){ n.onclick=function(){
+    var comp=n.dataset.comp;
+    var tix=openL.filter(function(t){ if(naKey(t)!=="svm") return false; var cs=t.components.length?t.components:["(none)"]; return cs.indexOf(comp)>-1; });
+    openModal("Open SVM · "+comp+" — "+S.client, tix);
+  }; });
+
+  // Activity-stage cells (current export)
+  q(".scell").forEach(function(n){ n.onclick=function(){
+    var st=n.dataset.stage, na=n.dataset.na;
+    var tix=openL.filter(function(t){ return t.stage===st && naKey(t)===na; });
+    openModal(shortStage(st)+" · "+(na==="svm"?"SVM":"Client")+" — "+S.client, tix);
+  }; });
+
+  // Open by Priority segments
+  q(".segb[data-prio]").forEach(function(n){ n.onclick=function(){
+    var p=n.dataset.prio;
+    var tix=openL.filter(function(t){ var pp=PRIO_ORDER.indexOf(t.priority)>-1?t.priority:"Medium"; return pp===p; });
+    openModal("Open · "+p+" priority — "+S.client, tix);
+  }; });
+  // Open by Age segments
+  q(".segb[data-age]").forEach(function(n){ n.onclick=function(){
+    var i=+n.dataset.age;
+    var tix=openL.filter(function(t){ var a=ageDays(t)||0; return i===0?a<=7:i===1?(a>7&&a<=30):i===2?(a>30&&a<=60):a>60; });
+    var labels=["0–7 days","8–30 days","31–60 days","over 60 days"];
+    openModal("Open · "+labels[i]+" old — "+S.client, tix);
+  }; });
+  // Action-needed callout → client-pending list
+  var cc=document.querySelector(".clientcallout");
+  if(cc) cc.onclick=function(){ openModal("Pending with Client — "+S.client, openL.filter(function(t){return naKey(t)==="client";})); };
+
+  // Export Full Data buttons on pending sections
+  q(".expbtn[data-exp]").forEach(function(btn){ btn.onclick=function(e){
+    e.stopPropagation();
+    var side=btn.dataset.exp;
+    var tix=side==="svm"? openL.filter(function(t){return naKey(t)==="svm";}) : openL.filter(function(t){return naKey(t)==="client";});
+    exportFullCSV(tix, "pending-"+(side==="svm"?"svm":"client")+"-"+S.client.replace(/[^\w]+/g,"-").toLowerCase()+"-full");
+  }; });
+}
+
+/* ═══════════════════════ BOOT ═══════════════════════ */
+function boot(){
+  if(!window.HDStore){ el("app").innerHTML='<div class="loading"><div style="font-size:15px;font-weight:700">Storage unavailable</div><div style="font-size:12px;color:var(--muted)">Open this from the launcher. <a href="index.html">Go to upload</a>.</div></div>'; return; }
+  Promise.all([HDStore.loadFile(), HDStore.loadRows(), HDStore.loadSnapshots(), HDStore.loadConfig()]).then(function(r){
+    var rec=r[0], edited=r[1]; SNAPS=r[2]||{};
+    // Apply Master Data overrides BEFORE normalize() — stage is baked in there.
+    var cfg=r[3]||{}; window.HDClass.setOverrides(cfg.statusOverrides); window.HDStages.setOverrides(cfg.stageOverrides);
+    if(!rec){ window.location.replace("index.html"); return; }
+    FILENAME=rec.name;
+    function go(rows){ RAW_ROWS=rows; RAW=normalize(rows); computeAsOf(); captureSnapshot(); render(); }
+    if(edited && edited.length){ go(edited); }
+    else { readFile(rec.blob).then(go).catch(function(err){ alert("Could not read stored file: "+err.message); window.location.replace("index.html"); }); }
+  });
+}
+boot();
+</script>
+</body>
+</html>

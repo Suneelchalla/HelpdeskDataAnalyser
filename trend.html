@@ -1,0 +1,2791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HD Ticket Trend Tracker</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F766E'/%3E%3Crect x='7' y='9' width='7' height='14' rx='2' fill='%235EEAD4'/%3E%3Crect x='18' y='9' width='7' height='14' rx='2' fill='%23A5B4FC'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="hd-store.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F4; --paper:#F6F8FA; --card:#FFFFFF;
+  --ink:#111A2B; --ink2:#3E4C63; --muted:#6B7A90; --faint:#9AA7B8; --line:#E3E8EE; --line2:#D2DAE3;
+  /* HD = teal, ENGG = indigo — the core duality */
+  --hd:#0F766E; --hd2:#14B8A6; --hd-soft:#D6F3EE; --hd-bg:#F0FBF9;
+  --engg:#5B57D8; --engg2:#8B87F0; --engg-soft:#E2E1FB; --engg-bg:#F3F3FE;
+  --amber:#B45309; --amber-soft:#FCE7C3; --amber-bg:#FEF7EC;
+  --rose:#BE1D42; --rose-soft:#FAD1DC; --rose-bg:#FDF0F3;
+  --slate:#334155;
+  --r:14px; --r2:18px;
+  --disp:'Space Grotesk',sans-serif; --sans:'Inter',-apple-system,sans-serif; --mono:'JetBrains Mono',monospace;
+  --sh:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --sh2:0 6px 18px rgba(16,24,40,.09),0 2px 6px rgba(16,24,40,.05);
+  --sh3:0 24px 60px rgba(16,24,40,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px}
+body{background:var(--bg);font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh}
+::selection{background:var(--hd);color:#fff}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+button{cursor:pointer;font-family:inherit;transition:all .18s}button:active{transform:translateY(1px)}
+a{color:var(--hd);text-decoration:none}a:hover{text-decoration:underline}
+input[type=file]{display:none}
+select,input[type=date]{outline:none;font-family:var(--sans);appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:30px!important}
+h1,h2,h3,.disp{font-family:var(--disp)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+@keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes float1{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+@keyframes float2{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(14px) rotate(8deg)}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes dash{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:var(--off)}}
+.up{animation:up .5s cubic-bezier(.22,1,.36,1) both}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.16s}.d4{animation-delay:.22s}.d5{animation-delay:.28s}
+/* ── on-render "data materializes" animations ── */
+@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.growb{transform-origin:bottom;animation:grow .55s cubic-bezier(.22,1,.36,1) both}
+.wipe{animation:wipe .7s cubic-bezier(.22,1,.36,1) both}
+@media (prefers-reduced-motion:reduce){
+  .up,.mbars .bar,.growb,.wipe{animation:none!important}
+  .wipe{clip-path:none!important}
+}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh)}
+.hidden{display:none!important}
+
+/* ── LANDING ── */
+.landing{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:
+  radial-gradient(1100px 600px at 15% -10%,#E4FBF6 0%,transparent 55%),
+  radial-gradient(1000px 700px at 100% 110%,#EEEDFD 0%,transparent 55%),
+  linear-gradient(160deg,#F6F8FA,#EEF1F4)}
+.deco{position:absolute;pointer-events:none;opacity:.55}
+.deco.b1{width:280px;height:280px;border-radius:60% 40% 55% 45%;background:linear-gradient(135deg,#5EEAD4,#0F766E);filter:blur(8px);top:-70px;left:-60px;animation:float1 9s ease-in-out infinite}
+.deco.b2{width:230px;height:230px;border-radius:50%;background:linear-gradient(135deg,#A5B4FC,#5B57D8);filter:blur(10px);bottom:-60px;right:-40px;animation:float2 11s ease-in-out infinite}
+.deco.ring{border:2px solid rgba(15,118,110,.15);border-radius:50%;background:none;filter:none;opacity:.7}
+.deco.r1{width:120px;height:120px;top:18%;right:16%;animation:float1 8s ease-in-out infinite}
+.deco.r2{width:70px;height:70px;bottom:20%;left:14%;border-color:rgba(91,87,216,.18);animation:float2 10s ease-in-out infinite}
+.landing-card{position:relative;z-index:2;width:100%;max-width:600px;margin:16px;text-align:center}
+.brand-mark{display:inline-flex;align-items:center;gap:11px;margin-bottom:20px}
+.brand-mark .bar{display:flex;gap:5px;align-items:flex-end;height:38px}
+.brand-mark .bar i{display:block;width:11px;border-radius:4px}
+.upload-panel{background:rgba(255,255,255,.72);backdrop-filter:blur(16px);border:1px solid #fff;border-radius:22px;padding:38px 34px;box-shadow:0 30px 70px rgba(16,24,40,.14)}
+.dz{border:2px dashed var(--line2);border-radius:16px;padding:30px 20px;transition:all .2s;background:var(--paper);cursor:pointer}
+.dz:hover,.dz.over{border-color:var(--hd);background:var(--hd-bg)}
+.btn-primary{background:linear-gradient(135deg,#0F766E,#12897E);color:#fff;border:none;padding:13px 34px;border-radius:11px;font-size:14px;font-weight:600;font-family:var(--disp);box-shadow:0 8px 22px rgba(15,118,110,.32)}
+.btn-primary:hover{box-shadow:0 10px 26px rgba(15,118,110,.4)}
+.hint-cols{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:16px}
+.hint-cols span{font-size:10.5px;color:var(--ink2);background:#fff;border:1px solid var(--line);padding:4px 9px;border-radius:20px;font-weight:500}
+
+/* ── HEADER ── */
+header.top{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:90;padding:9px 24px;display:flex;flex-direction:column;gap:8px}
+.hrow{display:flex;align-items:center;gap:12px}
+.hrow1{justify-content:space-between;flex-wrap:nowrap}
+.hspace{flex:1}
+.hactions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.filters{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:end;border-top:1px solid var(--line);padding-top:8px}
+.fcell{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fcell .flabel{margin:0}
+.fcell .fsel{width:100%}
+@media(max-width:1240px){.hrow1{flex-wrap:wrap;justify-content:flex-start}.tabs{overflow-x:visible;flex-wrap:wrap}}@media(max-width:1120px){.filters{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:680px){.filters{grid-template-columns:repeat(2,1fr)}.hactions{margin-left:0;width:100%}}
+.logo{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.logo .bar{display:flex;gap:3px;align-items:flex-end;height:22px}
+.logo .bar i{display:block;width:6px;border-radius:2px}
+.logo b{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:-.3px}
+.divider{width:1px;height:30px;background:var(--line);margin:0 2px}
+.fsel{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:500;color:var(--ink);cursor:pointer;transition:border-color .15s}
+.fsel:hover{border-color:var(--line2)}
+.fsel:focus{border-color:var(--hd);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+.flabel{font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.7px;margin-right:-6px}
+.tabs{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:3px;gap:2px;min-width:0;flex-shrink:1;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{background:none;border:none;padding:6px 11px;border-radius:8px;font-size:11.5px;font-weight:600;color:var(--muted);font-family:var(--disp);display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0}
+.tabs button.on{background:var(--ink);color:#fff}
+.tabs button .cnt{background:rgba(0,0,0,.07);padding:1px 7px;border-radius:10px;font-size:10px;font-family:var(--mono)}
+.tabs button.on .cnt{background:rgba(255,255,255,.18)}
+.ghost{background:var(--paper);border:1px solid var(--line);color:var(--ink2);padding:7px 13px;border-radius:9px;font-size:11.5px;font-weight:600}
+.ghost:hover{border-color:var(--line2)}
+
+/* ── DATE BAR ── */
+.datebar{background:transparent;border-top:1px solid var(--line);padding:8px 0 1px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:static}
+.chip{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink2)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip:hover:not(.on){border-color:var(--line2)}
+.dinput{border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:11px;color:var(--ink);background:#fff}
+.dinput:focus{border-color:var(--hd)}
+
+main{max-width:1800px;margin:0 auto;padding:14px 24px 34px}
+
+/* ── SHARED ── */
+.eyebrow{font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:1.1px}
+.sec-title{font-size:14px;font-weight:600;font-family:var(--disp);letter-spacing:-.2px}
+.sub{font-size:11.5px;color:var(--muted)}
+.click{font-size:10.5px;color:var(--faint);font-weight:500}
+.grid{display:grid;gap:10px}
+.pad{padding:14px 18px}
+
+/* dual track */
+.track{display:flex;height:30px;border-radius:9px;overflow:hidden;background:var(--paper);border:1px solid var(--line)}
+.track .seg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;cursor:pointer;transition:filter .15s;min-width:0;white-space:nowrap}
+.track .seg:hover{filter:brightness(1.08)}
+.track .seg.hd{background:linear-gradient(120deg,#0F766E,#12897E)}
+.track .seg.engg{background:linear-gradient(120deg,#5B57D8,#6D69E0)}
+.track.mini{height:9px;border-radius:5px}
+.track.mini .seg{font-size:0}
+
+/* KPI */
+.kpi{padding:12px 15px;cursor:default;transition:box-shadow .2s,transform .15s;position:relative;overflow:hidden}
+.kpi.clk{cursor:pointer}
+.kpi.clk:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
+.kpi.clickable{cursor:pointer} .kpi.clickable:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
+.dcell{cursor:pointer} .dcell:hover{background:var(--hd-bg)!important}
+.kpi .kv{font-size:25px;font-weight:700;font-family:var(--mono);letter-spacing:-1.5px;line-height:1}
+.kpi .kl{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-top:5px}
+.kpi .ks{font-size:11px;color:var(--muted);margin-top:3px}
+.kpi .tag{position:absolute;top:14px;right:16px;font-size:14px}
+
+/* ring */
+.ring-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.ring-wrap .ctr{position:absolute;text-align:center}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:2;white-space:nowrap;cursor:pointer;user-select:none}
+thead th.static{cursor:default}
+tbody td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr.rowlink{cursor:pointer;transition:background .12s}
+tbody tr.rowlink:hover{background:var(--hd-bg)}
+.jkey{font-family:var(--mono);font-weight:700;font-size:11.5px;color:var(--hd)}
+.badge{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;display:inline-block}
+.badge.hd{background:var(--hd-soft);color:var(--hd)}
+.badge.engg{background:var(--engg-soft);color:var(--engg)}
+.pill{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;background:var(--paper);color:var(--ink2);border:1px solid var(--line)}
+.trunc{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag-miss{background:var(--rose-bg);color:var(--rose);border:1px solid var(--rose-soft);padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+
+/* bars list */
+.barrow{display:flex;align-items:center;gap:11px;margin-bottom:6px;cursor:pointer;padding:2px 0}
+.barrow:hover .lbl{color:var(--ink)}
+.barrow .lbl{font-size:11px;color:var(--ink2);min-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s}
+.barrow .track2{flex:1;height:20px;border-radius:6px;background:var(--paper);overflow:hidden;display:flex}
+.barrow .fillhd{background:linear-gradient(90deg,#0F766E,#2AA79A);height:100%}
+.barrow .fillengg{background:linear-gradient(90deg,#5B57D8,#8B87F0);height:100%}
+.barrow .num{font-size:11px;color:var(--muted);font-family:var(--mono);min-width:78px;text-align:right}
+
+/* month cards (trend) */
+.mcard{border:1px solid var(--line);border-radius:14px;padding:12px 15px;background:#fff;transition:box-shadow .2s}
+.mcard:hover{box-shadow:var(--sh2)}
+.mcard .mtop{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px}
+.mcard .mmon{font-family:var(--disp);font-weight:700;font-size:16px}
+.mcard .msent{font-size:12px;color:var(--ink2);line-height:1.55;margin-bottom:12px}
+.mcard .msent b.hd{color:var(--hd)} .mcard .msent b.eg{color:var(--engg)}
+
+/* legend */
+.legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.legend .li{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2);font-weight:500}
+.legend .sw{width:11px;height:11px;border-radius:3px}
+
+/* grouped monthly bars */
+.mbars{display:flex;align-items:flex-end;gap:10px;height:180px;padding:0 4px}
+.mbars .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
+.mbars .pair{display:flex;gap:4px;align-items:flex-end;height:150px;width:100%}
+.mbars .bar{flex:1;border-radius:5px 5px 0 0;min-height:4px;transition:height .5s cubic-bezier(.22,1,.36,1);cursor:pointer;position:relative;transform-origin:bottom;animation:grow .6s cubic-bezier(.22,1,.36,1) both}
+.mbars .bar:hover{filter:brightness(1.08)}
+.mbars .bar.hd{background:linear-gradient(180deg,#2AA79A,#0F766E)}
+.mbars .bar.engg{background:linear-gradient(180deg,#8B87F0,#5B57D8)}
+.mbars .bar .v{position:absolute;top:-16px;left:0;right:0;text-align:center;font-size:9.5px;font-weight:700;color:var(--ink2);font-family:var(--mono)}
+.mbars .mx{font-size:10px;color:var(--muted);font-weight:600;white-space:nowrap}
+
+/* line chart */
+.linechart{width:100%;height:230px;position:relative}
+.lc-dot{cursor:pointer;transition:r .12s}
+.lc-dot:hover{r:7}
+.lc-tip{position:absolute;background:var(--ink);color:#fff;padding:6px 10px;border-radius:8px;font-size:11px;pointer-events:none;opacity:0;transition:opacity .12s;white-space:nowrap;z-index:5;transform:translate(-50%,-130%)}
+.lc-tip .mono{font-size:11px}
+
+/* PIVOTS */
+.pivnav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.pivnav button{background:#fff;border:1px solid var(--line);color:var(--ink2);padding:8px 14px;border-radius:9px;font-size:11.5px;font-weight:600;font-family:var(--disp)}
+.pivnav button.on{background:var(--hd);color:#fff;border-color:var(--hd)}
+.pivnav button:hover:not(.on){border-color:var(--line2)}
+.filtchip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--paper);border:1px solid var(--line);padding:4px 10px;border-radius:20px}
+.filtchip b{color:var(--hd)}
+.ptable{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.ptable th{background:var(--slate);color:#fff;padding:6px 10px;text-align:right;font-size:10.5px;font-weight:600;white-space:nowrap;border:1px solid #26303f;font-family:var(--sans)}
+.ptable th.rh{text-align:left}
+.ptable td{padding:6px 10px;text-align:right;border:1px solid var(--line);white-space:nowrap}
+.ptable td.rl{text-align:left;font-weight:600;color:var(--ink)}
+.ptable td.val{font-family:var(--mono);cursor:pointer;transition:background .12s}
+.ptable td.val:hover{background:var(--hd-bg)}
+.ptable td.val.zero{color:var(--faint);cursor:default}
+.ptable td.val.zero:hover{background:none}
+.ptable td.tot{font-family:var(--mono);font-weight:700;background:var(--paper)}
+.ptable tr.grand td{font-weight:700;background:var(--ink);color:#fff;border-color:#26303f}
+.ptable tr.grand td.val{color:#fff;cursor:pointer}
+.ptable tr.grand td.val:hover{background:#26303f}
+/* nested */
+.ptable tr.g1 td.rl{background:var(--hd-bg)} .ptable tr.g2 td.rl{background:var(--engg-bg)} .ptable tr.g0 td.rl{background:var(--paper)}
+.ptable tr.grouphdr td{font-weight:700;background:#EAEFF4;color:var(--ink);border-top:2px solid var(--line2)}
+.ptable tr.solvedhdr td.rl{padding-left:26px;font-weight:600;color:var(--ink2)}
+.ptable tr.svmrow td.rl{padding-left:44px;font-weight:500;color:var(--ink2)}
+.ptable .bhd{color:var(--hd)} .ptable .beg{color:var(--engg)}
+.pivscroll{overflow:auto;max-height:70vh;border:1px solid var(--line);border-radius:12px}
+.pivnote{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.5}
+.pivnote b{color:var(--ink2)}
+
+/* WEEK ON WEEK */
+.stackwrap{display:flex;align-items:flex-end;gap:10px;height:250px;padding:0 4px;overflow-x:auto}
+.stackwrap .col{flex:1;min-width:44px;max-width:120px;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end}
+.stackwrap .stack{width:100%;max-width:66px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:7px 7px 0 0;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.12)}
+.stackwrap .stack .seg{cursor:pointer;transition:filter .15s;min-height:5px;display:flex;align-items:center;justify-content:center}
+.stackwrap .stack .seg:hover{filter:brightness(1.12)}
+.stackwrap .stack .seg .sv{font-size:11px;font-weight:700;color:#fff;font-family:var(--mono)}
+.stackwrap .stack .seg.hd{background:linear-gradient(180deg,#2AA79A,#0F766E)}
+.stackwrap .stack .seg.engg{background:linear-gradient(180deg,#8B87F0,#5B57D8)}
+.stackwrap .tot{font-size:11px;font-weight:700;font-family:var(--mono);color:var(--ink)}
+.stackwrap .wx{font-size:9.5px;color:var(--muted);font-weight:600;white-space:nowrap;text-align:center;line-height:1.35}
+.dchip{font-family:var(--mono);font-weight:700;font-size:11px;padding:2px 7px;border-radius:6px;display:inline-block}
+.dchip.up{color:var(--hd);background:var(--hd-bg)} .dchip.down{color:var(--rose);background:var(--rose-bg)} .dchip.flat{color:var(--muted);background:var(--paper)}
+
+/* OBSERVATIONS (rule-based, computed from the numbers) */
+.insight{margin-top:9px;background:var(--paper);border:1px solid var(--line);border-left:3px solid var(--hd);border-radius:10px;padding:9px 13px 10px;font-size:12px;color:var(--ink2);line-height:1.55}
+.insight .ih{font-weight:700;color:var(--ink);font-family:var(--disp);font-size:10px;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.insight ul{margin:0;padding-left:16px}
+.insight li{margin:3px 0}
+.insight b{color:var(--ink)}
+.insight b.hd{color:var(--hd)} .insight b.eg{color:var(--engg)} .insight b.up{color:var(--hd)} .insight b.dn{color:var(--rose)}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(17,26,43,.42);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center;padding:22px;animation:up .2s}
+.modal{background:#fff;border-radius:20px;box-shadow:var(--sh3);width:100%;max-width:1120px;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;animation:pop .28s cubic-bezier(.22,1,.36,1)}
+.modal .mh{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:13px}
+.modal .mh .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.modal .mh .mt{font-family:var(--disp);font-weight:700;font-size:15px}
+.modal .mh .mc{font-size:11.5px;color:var(--muted);margin-top:2px}
+.modal .mh .x{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--paper);color:var(--muted);font-size:15px}
+.modal .mb{flex:1;overflow:auto}
+.modal .mfoot{padding:9px 22px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
+.empty{padding:48px;text-align:center;color:var(--faint);font-size:13px}
+
+.footer{margin-top:16px;text-align:center;color:var(--faint);font-size:11px;line-height:1.9}
+.footer b{color:var(--muted);font-weight:600}
+@media(max-width:820px){
+  header.top{padding-left:14px;padding-right:14px}
+  main{padding:18px 14px 60px}
+  .tabs button span.lbl{display:none}
+}
+.tmode-btn{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+.tmode-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tmode-btn:hover:not(.on){background:var(--paper);border-color:var(--line2)}
+/* Global search inline */
+.sarr{font-size:10px;color:var(--faint);margin-left:3px}
+.pivsort:hover{background:var(--line)!important}
+.gs-row{display:flex;padding:10px 18px;border-bottom:1px solid var(--line);align-items:center}
+.gs-label{width:180px;font-size:11px;font-weight:600;color:var(--faint);flex-shrink:0}
+.gs-val{flex:1;font-size:13px;font-weight:600;word-break:break-word}
+
+/* ── MULTI-SELECT DROPDOWN ── */
+.msel{position:relative;min-width:0}
+.msel-btn{display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:500;color:var(--ink);cursor:pointer;transition:border-color .15s;width:100%;min-width:0;text-align:left;white-space:nowrap;overflow:hidden}
+.msel-btn:hover{border-color:var(--line2)}
+.msel-btn.open{border-color:var(--hd);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+.msel-btn .msel-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-btn .msel-cnt{background:var(--hd);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;flex-shrink:0}
+.msel-btn .msel-arrow{color:var(--faint);font-size:10px;flex-shrink:0;transition:transform .15s}
+.msel-btn.open .msel-arrow{transform:rotate(180deg)}
+.msel-dd{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:340px;max-height:360px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh2);z-index:200;display:none;flex-direction:column;overflow:hidden}
+.msel-dd.open{display:flex}
+.msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:9px 12px;font-size:12px;color:var(--ink);font-family:var(--sans);outline:none;width:100%;background:var(--paper)}
+.msel-dd .msel-actions{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+.msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--muted);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:var(--sans)}
+.msel-dd .msel-actions button:hover{color:var(--ink);border-color:var(--line2)}
+.msel-dd .msel-list{overflow-y:auto;flex:1;padding:4px 0}
+.msel-dd .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--ink);transition:background .1s}
+.msel-dd .msel-opt:hover{background:var(--paper)}
+.msel-dd .msel-opt .msel-chk{width:15px;height:15px;border:1.5px solid var(--line2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;background:#fff;transition:all .12s}
+.msel-dd .msel-opt.on .msel-chk{background:var(--hd);border-color:var(--hd)}
+.msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-dd .msel-opt .msel-n{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.msel-empty{padding:16px;text-align:center;color:var(--faint);font-size:11px}
+
+/* ═══ RESPONSIVE SCALING — auto-adjust for large desktop monitors ═══ */
+@media (min-width: 1921px) and (min-height: 900px) { body { zoom: 1.18; } }
+@media (min-width: 2200px) and (min-height: 1000px) { body { zoom: 1.3; } }
+@media (min-width: 2560px) { body { zoom: 1.42; } }
+@media (min-width: 3200px) { body { zoom: 1.65; } }
+@media (min-width: 3840px) { body { zoom: 1.9; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+
+/* ═══ MULTI-SELECT DROPDOWN COMPONENT ═══ */
+var _mselInstances = {};
+var _mselIdSeq = 0;
+function mselCreate(containerId, allLabel, options, selected, onChange) {
+  var id = 'msel-' + (++_mselIdSeq);
+  _mselInstances[id] = { sel: selected.slice(), opts: options, onChange: onChange, search: '', allLabel: allLabel };
+  return id;
+}
+function mselHTML(id, label) {
+  var inst = _mselInstances[id]; if (!inst) return '';
+  var sel = inst.sel, opts = inst.opts, allLabel = inst.allLabel;
+  var text = sel.length === 0 ? allLabel : sel.length <= 2 ? sel.join(', ') : sel.length + ' selected';
+  return '<div class="msel" id="' + id + '">' +
+    '<button type="button" class="msel-btn" data-msel="' + id + '">' +
+      '<span class="msel-text">' + esc(text) + '</span>' +
+      (sel.length > 0 ? '<span class="msel-cnt">' + sel.length + '</span>' : '') +
+      '<span class="msel-arrow">▾</span>' +
+    '</button>' +
+    '<div class="msel-dd" id="' + id + '-dd">' +
+      '<input class="msel-search" placeholder="Search…" data-msel-search="' + id + '" autocomplete="off"/>' +
+      '<div class="msel-actions">' +
+        '<button data-msel-all="' + id + '">Select all</button>' +
+        '<button data-msel-none="' + id + '">Clear</button>' +
+      '</div>' +
+      '<div class="msel-list" id="' + id + '-list"></div>' +
+    '</div>' +
+  '</div>';
+}
+function mselRenderList(id) {
+  var inst = _mselInstances[id]; if (!inst) return;
+  var listEl = document.getElementById(id + '-list'); if (!listEl) return;
+  var q = inst.search.toLowerCase();
+  var filtered = inst.opts.filter(function(o) { return !q || o.toLowerCase().indexOf(q) > -1; });
+  if (!filtered.length) { listEl.innerHTML = '<div class="msel-empty">No matches</div>'; return; }
+  listEl.innerHTML = filtered.map(function(o) {
+    var on = inst.sel.indexOf(o) > -1;
+    return '<div class="msel-opt' + (on ? ' on' : '') + '" data-msel-val="' + esc(o) + '" data-msel-id="' + id + '">' +
+      '<span class="msel-chk">' + (on ? '✓' : '') + '</span>' +
+      '<span class="msel-lbl">' + esc(o) + '</span>' +
+    '</div>';
+  }).join('');
+}
+function mselBind() {
+  // Toggle dropdown open/close
+  document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn) {
+    btn.onclick = function(e) {
+      e.stopPropagation();
+      var id = btn.dataset.msel;
+      var dd = document.getElementById(id + '-dd');
+      var isOpen = dd.classList.contains('open');
+      // Close all others
+      document.querySelectorAll('.msel-dd.open').forEach(function(d) { d.classList.remove('open'); });
+      document.querySelectorAll('.msel-btn.open').forEach(function(b) { b.classList.remove('open'); });
+      if (!isOpen) {
+        dd.classList.add('open'); btn.classList.add('open');
+        mselRenderList(id);
+        var searchInp = dd.querySelector('.msel-search'); if (searchInp) { searchInp.value = ''; _mselInstances[id].search = ''; setTimeout(function() { searchInp.focus(); }, 30); }
+      }
+    };
+  });
+  // Search
+  document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp) {
+    inp.onclick = function(e) { e.stopPropagation(); };
+    inp.oninput = function() {
+      var id = inp.dataset.mselSearch;
+      _mselInstances[id].search = inp.value;
+      mselRenderList(id);
+    };
+  });
+  // Select all / Clear
+  document.querySelectorAll('[data-msel-all]').forEach(function(btn) {
+    btn.onclick = function(e) {
+      e.stopPropagation();
+      var id = btn.dataset.mselAll, inst = _mselInstances[id];
+      inst.sel = inst.opts.slice();
+      mselRenderList(id);
+      inst.onChange(inst.sel.slice());
+    };
+  });
+  document.querySelectorAll('[data-msel-none]').forEach(function(btn) {
+    btn.onclick = function(e) {
+      e.stopPropagation();
+      var id = btn.dataset.mselNone, inst = _mselInstances[id];
+      inst.sel = [];
+      mselRenderList(id);
+      inst.onChange([]);
+    };
+  });
+  // Option click (delegated to .msel-list)
+  document.querySelectorAll('.msel-list').forEach(function(list) {
+    list.onclick = function(e) {
+      e.stopPropagation();
+      var opt = e.target.closest('.msel-opt'); if (!opt) return;
+      var id = opt.dataset.mselId, val = opt.dataset.mselVal;
+      var inst = _mselInstances[id]; if (!inst) return;
+      var idx = inst.sel.indexOf(val);
+      if (idx > -1) inst.sel.splice(idx, 1); else inst.sel.push(val);
+      mselRenderList(id);
+      inst.onChange(inst.sel.slice());
+    };
+  });
+}
+// Close all dropdowns on outside click
+document.addEventListener('click', function() {
+  document.querySelectorAll('.msel-dd.open').forEach(function(d) { d.classList.remove('open'); });
+  document.querySelectorAll('.msel-btn.open').forEach(function(b) { b.classList.remove('open'); });
+});
+
+/* ═══════════════════════════════ CONFIG ═══════════════════════════════ */
+var JIRA = "https://svmhelpdesk.atlassian.net/browse/";
+
+/* SVM In Charge / Current Worker → Group. The directory now lives in hd-store.js
+   (window.HDGroups) so the Master Data module can edit it and all dashboards
+   share one source. Thin aliases keep the rest of this file unchanged; groupOf()
+   is override-aware. */
+var GROUP_MAP = window.HDGroups.defaults;
+var GROUP_MEMBERS = window.HDGroups.MEMBERS;
+var GROUP_ORDER = window.HDGroups.ORDER;
+function normName(s){ return window.HDGroups.normName(s); }
+function groupOf(svm){ return window.HDGroups.groupOf(svm); }
+var MONTHS_ORDER = []; // filled from data
+var RAW = [];          // normalized tickets
+var RAW_ROWS = [];     // raw rows (original Excel column names) — the editable truth
+var BLOB = null;       // original uploaded file, kept for "revert to upload"
+var FILENAME = "";
+/* Edit Data tab working state */
+var ED = { work:[], filters:{}, blankFilters:{}, search:"", sortCol:null, sortDir:"asc", page:0, dirty:false, seq:0 };
+
+/* global filter + view state */
+var S = {
+  tab:"perf",
+  svm:[], cw:[], rc:[], issue:[], proj:[],     // global filters (multi-select arrays)
+  pendAction:"",                               // pending tab: ""=all | svm | client | engg
+  from:"", to:"", dlabel:"All time",
+  sortCol:"total", sortDir:"desc",
+  // trend tab local controls
+  tRc:"__CLAR__", tStatus:"Closed", tMode:"month",
+  pivot:"hdworker",
+  pIssue:"", pRc:"", pStatus:"", _pivFor:null,   // adjustable pivot filters
+  weekA:"", weekB:"",
+  dType:""  // daily flow type filter: "" = all, "Incident", "Service Request"
+};
+
+/* ═══════════════════════════════ HELPERS ═══════════════════════════════ */
+function blank(v){ return v===null||v===undefined||String(v).trim()===""||String(v).trim().toLowerCase()==="nan"; }
+function toDate(v){
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(blank(v)) return null;
+  var d=new Date(v); return isNaN(d)?null:d;
+}
+function mKey(d){ return d? d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0") : null; }
+function mLabel(k){ if(!k) return "—"; var p=k.split("-"); var d=new Date(+p[0],+p[1]-1,1); return d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}); }
+function fdate(d){ return d? d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"}) : "—"; }
+function pct(n,d){ return d>0? Math.round(n/d*100) : 0; }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function el(id){ return document.getElementById(id); }
+
+/* month bucket for a ticket = resolved month if present else created month */
+function bucketMonth(t){ return mKey(t.resolved) || mKey(t.created); }
+
+/* ── ISO week helpers ── */
+function isoWeek(d){
+  var date=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  var day=date.getUTCDay()||7; date.setUTCDate(date.getUTCDate()+4-day);
+  var ys=new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  var wk=Math.ceil((((date-ys)/86400000)+1)/7);
+  return {year:date.getUTCFullYear(), week:wk};
+}
+function isoWeekStart(year,week){
+  var s=new Date(Date.UTC(year,0,1+(week-1)*7)); var dow=s.getUTCDay();
+  if(dow<=4) s.setUTCDate(s.getUTCDate()-s.getUTCDay()+1); else s.setUTCDate(s.getUTCDate()+8-s.getUTCDay());
+  return s;
+}
+function weekLabel(key){ return "W"+key.slice(6); }
+function weekKeyLabel(d){ var iw=isoWeek(d); return "W"+String(iw.week).padStart(2,"0"); }
+function weekDates(year,week){
+  var s=isoWeekStart(year,week), e=new Date(s); e.setUTCDate(s.getUTCDate()+6);
+  var day=function(d){return d.getUTCDate();}, mon=function(d){return d.toLocaleDateString("en-GB",{month:"short",timeZone:"UTC"});};
+  return s.getUTCMonth()===e.getUTCMonth() ? day(s)+"–"+day(e)+" "+mon(s) : day(s)+" "+mon(s)+"–"+day(e)+" "+mon(e);
+}
+
+/* ── Data currency (resolved-date span of the whole export) ──
+   Set from ALL of RAW (not the filtered pool), because whether an ISO week is
+   "complete" is a calendar fact about the export's currency, independent of any
+   SVM/worker filter. Used to detect partial weeks in the Week-on-Week tab so a
+   still-in-progress week (e.g. an export taken mid-week) isn't compared head-to
+   -head with a full 7-day week. */
+var DATA_RES_MIN=null, DATA_RES_MAX=null;
+function computeResolvedSpan(){
+  DATA_RES_MIN=null; DATA_RES_MAX=null;
+  RAW.forEach(function(t){ var d=t.resolved; if(!d) return;
+    if(!DATA_RES_MIN||d<DATA_RES_MIN) DATA_RES_MIN=d;
+    if(!DATA_RES_MAX||d>DATA_RES_MAX) DATA_RES_MAX=d; });
+}
+/* How many of an ISO week's 7 days are actually covered by the export's
+   resolved-date span. Returns 1..7 (7 = complete). A week clipped by the start
+   OR the end of the data reads <7. days<7 ⇒ the week is partial and its raw
+   totals under-count relative to a full week. */
+function weekCoverageDays(year,week){
+  if(!DATA_RES_MAX) return 7;
+  function dayOnly(d){ return Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()); }
+  var mon=isoWeekStart(year,week);                       // Monday 00:00 UTC
+  var sun=new Date(mon); sun.setUTCDate(mon.getUTCDate()+6);
+  var lo=Math.max(dayOnly(mon), DATA_RES_MIN?dayOnly(DATA_RES_MIN):dayOnly(mon));
+  var hi=Math.min(dayOnly(sun), dayOnly(DATA_RES_MAX));
+  if(hi<lo) return 0;
+  return Math.round((hi-lo)/86400000)+1;                 // inclusive day count
+}
+/* Whole ISO weeks between two week keys ("2026-W34"→"2026-W35" = 1). Used to
+   warn when the two compared weeks aren't calendar-adjacent (a week with zero
+   resolved tickets in scope is skipped by the selector, which can otherwise
+   make "Last 2 weeks" silently compare non-consecutive weeks). */
+function weeksBetweenKeys(ka,kb){
+  function parse(k){ var p=k.split("-W"); return isoWeekStart(+p[0],+p[1]); }
+  return Math.round((parse(kb)-parse(ka))/(7*86400000));
+}
+/* resolved-date pool for week analysis: dimension filters + date range on resolved */
+function weekPool(){
+  return RAW.filter(function(t){
+    if(!t.resolved) return false;
+    if(S.from && t.resolved < new Date(S.from+"T00:00:00")) return false;
+    if(S.to && t.resolved > new Date(S.to+"T23:59:59")) return false;
+    if(S.svm.length && S.svm.indexOf(t.svm)<0) return false;
+    if(S.cw.length && S.cw.indexOf(t.currentWorker)<0) return false;
+    if(S.rc.length && S.rc.indexOf(t.rc)<0) return false;
+    if(S.issue.length && S.issue.indexOf(t.issue)<0) return false;
+    if(S.proj.length && S.proj.indexOf(t.project)<0) return false;
+    return true;
+  });
+}
+
+/* ═══════════════════════════════ PARSE ═══════════════════════════════ */
+function readFile(file){
+  return new Promise(function(res,rej){
+    var r=new FileReader();
+    r.onload=function(e){
+      try{
+        var wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+        var sn=wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("jira issues")>-1;})
+          || wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1;})
+          || wb.SheetNames[1] || wb.SheetNames[0];
+        var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:""});
+        res(rows);
+      }catch(err){ rej(err); }
+    };
+    r.onerror=rej;
+    r.readAsArrayBuffer(file);
+  });
+}
+function normalize(rows){
+  if(!rows.length) return [];
+  // case-insensitive header resolver
+  var keymap={};
+  Object.keys(rows[0]).forEach(function(k){ keymap[k.trim().toLowerCase()]=k; });
+  function pick(row){ for(var i=1;i<arguments.length;i++){ var kk=keymap[arguments[i]]; if(kk!==undefined) return row[kk]; } return ""; }
+  return rows.map(function(row){
+    var solved=String(pick(row,"solved by")||"").trim().toUpperCase();
+    var linked=pick(row,"linked issues");
+    var isHD;
+    if(solved==="HD") isHD=true;
+    else if(solved==="ENGG"||solved==="ENG"||solved==="ENGINEERING") isHD=false;
+    else isHD=blank(linked); // fallback: no linked ticket => HD
+    var svmv=String(pick(row,"svm in charge")||"").trim();
+    return {
+      key:String(pick(row,"key")||"").trim(),
+      summary:String(pick(row,"summary")||""),
+      svm:svmv,
+      group:groupOf(svmv),
+      issue:String(pick(row,"issue type")||"").trim(),
+      rc:String(pick(row,"root cause")||"").trim(),
+      status:String(pick(row,"status")||"").trim(),
+      components:String(pick(row,"components")||"").trim(),
+      linked:blank(linked)?"":String(linked).trim(),
+      solvedRaw:solved,
+      isHD:isHD,
+      created:toDate(pick(row,"created")),
+      resolved:toDate(pick(row,"resolved")),
+      project:String(pick(row,"project")||"").trim(),
+      priority:String(pick(row,"priority")||"").trim(),
+      currentWorker:String(pick(row,"current worker")||"").trim(),
+      nextActionRaw:String(pick(row,"next action")||"").trim(),
+      typeOfFix:String(pick(row,"type of fix")||"").trim(),
+      screenName:String(pick(row,"screen name")||"").trim(),
+      menuHead:String(pick(row,"menu head")||"").trim(),
+      _raw:row
+    };
+  });
+}
+
+/* ═══════════════════════════════ FILTERING ═══════════════════════════════ */
+function inRange(t){
+  if(!S.from && !S.to) return true;
+  var d=t.created; if(!d) return false;
+  if(S.from && d < new Date(S.from+"T00:00:00")) return false;
+  if(S.to && d > new Date(S.to+"T23:59:59")) return false;
+  return true;
+}
+function filtered(){
+  return RAW.filter(function(t){
+    if(!inRange(t)) return false;
+    if(S.svm.length && S.svm.indexOf(t.svm)<0) return false;
+    if(S.cw.length && S.cw.indexOf(t.currentWorker)<0) return false;
+    if(S.rc.length && S.rc.indexOf(t.rc)<0) return false;
+    if(S.issue.length && S.issue.indexOf(t.issue)<0) return false;
+    if(S.proj.length && S.proj.indexOf(t.project)<0) return false;
+    return true;
+  });
+}
+function isClar(rc){ return String(rc).toLowerCase().indexOf("clarification")>-1; }
+
+/* ── NEXT-ACTION (who acts next: SVM vs Client) ──
+   The Jira "Next Action" column isn't reliably updated, so owner is decided by
+   STATUS. The map is now shared across all dashboards via hd-store.js
+   (window.HDClass) so it can't drift. Only statuses HDClass doesn't recognise
+   fall back to the Next Action column, then to "unset". */
+function naKey(t){
+  var o = t && window.HDClass.owner(t.status);
+  if(o) return o;
+  var v=String(t&&t.nextActionRaw||"").trim().toUpperCase();
+  if(v==="SVM") return "svm";
+  if(v==="CLIENT") return "client";
+  return "unset";
+}
+var NA_META = {
+  svm:   {label:"SVM",    css:"var(--hd)",    hex:"#0F766E", icon:"🎯"},
+  client:{label:"Client", css:"var(--amber)", hex:"#B45309", icon:"💬"},
+  unset: {label:"Unset",  css:"var(--faint)", hex:"#9AA7B8", icon:"❔"}
+};
+/* Every ticket that isn't Closed, respecting the top filters (SVM / worker /
+   type / project / date). Matches how the Follow-up Tracker defines "open". */
+function pendingPool(){ return filtered().filter(function(t){ return t.status && t.status!=="Closed"; }); }
+
+/* ── rule-based observations (no AI) ── */
+function note(items){
+  items=(items||[]).filter(Boolean);
+  if(!items.length) return "";
+  return '<div class="insight"><div class="ih">📝 Observations</div>'+
+    (items.length===1?'<div>'+items[0]+'</div>':'<ul>'+items.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>')+'</div>';
+}
+function cnt(tickets,keyFn){ var m={}; tickets.forEach(function(t){ var k=keyFn(t); if(k==null)return; m[k]=(m[k]||0)+1; }); return m; }
+function topKey(m,skipBlank){ var best=null; Object.keys(m).forEach(function(k){ if(skipBlank&&k==="(blank)")return; if(best===null||m[k]>m[best])best=k; }); return best; }
+function arrow(d){ return d>0?"▲":(d<0?"▼":"→"); }
+function hdSentence(tix){ var hd=tix.filter(function(t){return t.isHD;}).length; var eg=tix.length-hd;
+  return 'Of <b>'+tix.length.toLocaleString()+'</b> tickets, HD resolved <b class="hd">'+hd.toLocaleString()+' ('+pct(hd,tix.length)+'%)</b> and Engg <b class="eg">'+eg.toLocaleString()+' ('+pct(eg,tix.length)+'%)</b>.'; }
+function bestWorstHD(tix,minN){ // returns {best,worst} worker HD share among those with >=minN, skipping blank
+  // "best" = most HD tickets resolved (volume wins — someone resolving 18 HD tickets
+  //          matters more than someone resolving 5 at a higher %).
+  // "worst" = lowest HD % (leans on engineering the most, by proportion).
+  var s={}; tix.forEach(function(t){var w=t.currentWorker||"(blank)"; if(w==="(blank)")return; if(!s[w])s[w]={t:0,hd:0}; s[w].t++; if(t.isHD)s[w].hd++;});
+  var best=null,worst=null; Object.keys(s).forEach(function(w){ if(s[w].t<minN)return; s[w].p=Math.round(s[w].hd/s[w].t*100);
+    if(best===null||s[w].hd>s[best].hd||(s[w].hd===s[best].hd&&s[w].p>s[best].p))best=w;
+    if(worst===null||s[w].p<s[worst].p)worst=w; });
+  return {s:s,best:best,worst:worst};
+}
+
+/* ═══════════════════════════════ MODAL ═══════════════════════════════ */
+function openModal(title,icon,color,tickets,dateMode){
+  /* dateMode: "created" | "resolved" | undefined (default = resolved||created) */
+  var dateHead = dateMode==="created"?"Created":dateMode==="resolved"?"Resolved":"Date";
+  function dateVal(t){
+    if(dateMode==="created") return fdate(t.created);
+    if(dateMode==="resolved") return fdate(t.resolved);
+    return fdate(t.resolved||t.created);
+  }
+  var rows=tickets.slice().sort(function(a,b){
+    var da,db;
+    if(dateMode==="created"){ da=(a.created||0); db=(b.created||0); }
+    else { da=(a.resolved||a.created||0); db=(b.resolved||b.created||0); }
+    return db-da;
+  });
+  var body=rows.map(function(t){
+    return '<tr>'+
+      '<td style="white-space:nowrap"><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
+      '<td class="trunc" title="'+esc(t.summary)+'" style="color:var(--ink2)">'+esc(t.summary)+'</td>'+
+      '<td><span class="badge '+(t.isHD?'hd':'engg')+'">'+(t.isHD?'HD':'ENGG')+'</span></td>'+
+      '<td style="color:var(--ink2);white-space:nowrap">'+esc(t.svm||"—")+'</td>'+
+      '<td style="color:var(--ink2);white-space:nowrap">'+esc(t.currentWorker||"—")+'</td>'+
+      '<td><span class="pill">'+esc(t.rc||"—")+'</span></td>'+
+      '<td style="color:var(--muted);font-size:11px;white-space:nowrap">'+esc(t.issue||"—")+'</td>'+
+      '<td style="white-space:nowrap">'+(t.linked?'<a class="jkey" style="color:var(--engg)" href="'+JIRA+encodeURIComponent(t.linked.split(";")[0])+'" target="_blank" rel="noreferrer">'+esc(t.linked.split(";")[0])+'</a>':'<span style="color:var(--faint)">—</span>')+'</td>'+
+      '<td style="color:var(--muted);font-size:11px;white-space:nowrap">'+esc(t.status||"—")+'</td>'+
+      '<td class="mono" style="color:var(--muted);font-size:11px;white-space:nowrap">'+dateVal(t)+'</td>'+
+    '</tr>';
+  }).join("");
+  var html=''+
+  '<div class="overlay" id="ov">'+
+    '<div class="modal">'+
+      '<div class="mh">'+
+        '<div class="ic" style="background:'+color+'1a;color:'+color+'">'+icon+'</div>'+
+        '<div><div class="mt">'+esc(title)+'</div><div class="mc">'+rows.length+' ticket'+(rows.length!==1?'s':'')+' · click a key to open in Jira</div></div>'+
+        '<button class="x" id="mx">✕</button>'+
+      '</div>'+
+      '<div class="mb">'+
+        (rows.length? '<table><thead><tr>'+
+          '<th class="static">Key</th><th class="static">Summary</th><th class="static">Solved</th><th class="static">SVM In Charge</th><th class="static">Current Worker</th><th class="static">Root Cause</th><th class="static">Type</th><th class="static">Linked</th><th class="static">Status</th><th class="static">'+dateHead+'</th>'+
+          '</tr></thead><tbody>'+body+'</tbody></table>' : '<div class="empty">No tickets match this selection.</div>')+
+      '</div>'+
+      '<div class="mfoot"><span>Showing all '+rows.length+' tickets</span>'+
+        '<button class="ghost" style="margin-left:auto" id="mcsv">\u2B07 Export Full Data</button></div>'+
+    '</div>'+
+  '</div>';
+  var d=document.createElement("div"); d.innerHTML=html; document.body.appendChild(d.firstChild);
+  var ov=el("ov");
+  ov.addEventListener("click",function(e){ if(e.target===ov) closeModal(); });
+  el("mx").onclick=closeModal;
+  el("mcsv").onclick=function(){ exportCSV(rows,(title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()); };
+}
+function closeModal(){ var ov=el("ov"); if(ov) ov.remove(); }
+document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
+
+function escCSV(v){var s=String(v==null?"":v instanceof Date&&!isNaN(v)?v.toISOString().slice(0,19).replace("T"," "):v);if(s.indexOf(",")>-1||s.indexOf('"')>-1||s.indexOf("\n")>-1)return'"'+s.replace(/"/g,'""')+'"';return s;}
+function exportFullCSV(rows,name){
+  if(!rows||!rows.length)return;
+  /* Collect ALL original columns from _raw, preserving order from the first row */
+  var sample=rows[0]._raw||rows[0]; var colOrder=[]; var colSet={};
+  Object.keys(sample).forEach(function(k){if(!colSet[k]){colSet[k]=1;colOrder.push(k);}});
+  rows.forEach(function(t){ var raw=t._raw||t; Object.keys(raw).forEach(function(k){if(!colSet[k]){colSet[k]=1;colOrder.push(k);}});});
+  /* Append computed columns */
+  colOrder.push("__Solved_By__","__Group__","__HD_or_Engg__");
+  var header=colOrder.map(function(c){return escCSV(c==="__Solved_By__"?"Solved By (computed)":c==="__Group__"?"Group (computed)":c==="__HD_or_Engg__"?"HD / Engg (computed)":c);}).join(",");
+  var lines=[header];
+  rows.forEach(function(t){
+    var raw=t._raw||t;
+    lines.push(colOrder.map(function(c){
+      if(c==="__Solved_By__")return escCSV(t.isHD?"HD":"ENGG");
+      if(c==="__Group__")return escCSV(t.group||"");
+      if(c==="__HD_or_Engg__")return escCSV(t.isHD?"HD":"Engineering");
+      return escCSV(raw[c]);
+    }).join(","));
+  });
+  var blob=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  var url=URL.createObjectURL(blob); var a=document.createElement("a");
+  a.href=url; a.download=(name||"tickets-full")+".csv"; a.click(); URL.revokeObjectURL(url);
+}
+function exportCSV(rows,name){ exportFullCSV(rows,name); }
+
+/* ═══════════════════════════════ SVG RING ═══════════════════════════════ */
+function ring(pctVal,size,sw,color,inner){
+  var r=(size-sw)/2, c=2*Math.PI*r, off=c-(Math.min(pctVal,100)/100)*c;
+  return '<div class="ring-wrap" style="width:'+size+'px;height:'+size+'px">'+
+    '<svg width="'+size+'" height="'+size+'" style="transform:rotate(-90deg)">'+
+      '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="var(--line)" stroke-width="'+sw+'"/>'+
+      '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" style="transition:stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)"/>'+
+    '</svg><div class="ctr">'+inner+'</div></div>';
+}
+
+/* ═══════════════════════════════ RENDER: shell ═══════════════════════════════ */
+function bars(cols){ // small logo bars markup
+  return '<span class="bar">'+cols+'</span>';
+}
+/* ─── Global Ticket Search (Inline) ─── */
+function wireSearch(){
+  var inp=el("gs-input"), dd=el("gs-dropdown");
+  if(!inp||!dd) return;
+
+  var _gsNavClick=false;
+
+  function closeDD(){ if(_gsNavClick){_gsNavClick=false;return;} dd.style.display="none"; dd.innerHTML=""; }
+
+  function doSearch(){
+    var q=inp.value.trim();
+    if(!q||q.length<2){ dd.style.display="none"; dd.innerHTML=""; return; }
+    var s=q.toUpperCase();
+    // 1. exact key match
+    var exact=RAW.filter(function(t){ return t.key.toUpperCase()===s; });
+    // 2. key prefix match
+    var prefix=exact.length?[]:RAW.filter(function(t){ return t.key.toUpperCase().indexOf(s)===0; });
+    // 3. key contains
+    var contains=(exact.length||prefix.length)?[]:RAW.filter(function(t){ return t.key.toUpperCase().indexOf(s)>0; });
+    // 4. summary match (only if no key matches)
+    var summary=(exact.length||prefix.length||contains.length)?[]:RAW.filter(function(t){ return t.summary.toUpperCase().indexOf(s)>-1; });
+    var results=[].concat(exact,prefix,contains,summary).slice(0,25);
+    if(!results.length){ dd.style.display="block"; dd.innerHTML='<div style="padding:24px;text-align:center;color:var(--faint);font-size:12px">No tickets matching "'+esc(q)+'"</div>'; return; }
+    dd.style.display="block";
+    dd.innerHTML='<div style="padding:8px 12px;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line)">'+results.length+(results.length===25?'+':'')+' match'+(results.length!==1?'es':'')+'</div>'+
+      results.map(function(t){
+        var age=Math.max(0,Math.floor((Date.now()-(t.resolved||t.created||new Date()).getTime())/864e5));
+        return '<div class="gs-item" data-gsk="'+esc(t.key)+'" style="padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s">'+
+          '<div style="display:flex;align-items:center;gap:8px">'+
+            '<span class="mono" style="font-size:12px;font-weight:700;color:var(--hd)">'+esc(t.key)+'</span>'+
+            '<span class="badge '+(t.isHD?'hd':'engg')+'" style="font-size:9px;padding:2px 7px">'+(t.isHD?'HD':'ENGG')+'</span>'+
+            '<span class="badge" style="font-size:9px;padding:2px 7px;background:var(--paper);color:var(--muted);border:1px solid var(--line)">'+esc(t.status)+'</span>'+
+            '<span style="margin-left:auto;font-size:10px;color:var(--faint);font-family:var(--mono)">'+age+'d</span>'+
+          '</div>'+
+          '<div style="font-size:11px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(t.summary)+'</div>'+
+          '<div style="font-size:10px;color:var(--faint);margin-top:3px">'+esc(t.currentWorker||"—")+' · '+esc(t.project||"—")+' · '+esc(t.rc||"—")+'</div>'+
+        '</div>';
+      }).join("");
+    // wire clicks
+    dd.querySelectorAll(".gs-item").forEach(function(item){
+      item.onmouseenter=function(){item.style.background="var(--paper)";};
+      item.onmouseleave=function(){item.style.background="";};
+      item.onclick=function(){ _gsNavClick=true; showTicketDetail(item.dataset.gsk); };
+    });
+  }
+
+  function showTicketDetail(key){
+    var t=RAW.find(function(r){return r.key===key;});
+    if(!t){ closeDD(); return; }
+    var age=Math.max(0,Math.floor((Date.now()-(t.resolved||t.created||new Date()).getTime())/864e5));
+    dd.style.display="block";
+    dd.innerHTML='<div style="padding:14px 16px">'+
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
+        '<button id="gs-back" style="border:none;background:var(--paper);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer">← Back</button>'+
+        '<span style="margin-left:auto;font-size:10px;color:var(--faint)">Ticket Detail</span>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:10px;margin:12px 0 10px">'+
+        '<div style="width:42px;height:42px;border-radius:10px;background:'+(t.isHD?'var(--hd-bg)':'var(--engg-bg)')+';border:1px solid '+(t.isHD?'var(--hd-line)':'var(--engg-line)')+';display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">'+(t.isHD?'🎯':'🔧')+'</div>'+
+        '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><a href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer" class="mono" style="font-size:16px;font-weight:800;color:var(--hd)">'+esc(t.key)+'</a><span class="badge '+(t.isHD?'hd':'engg')+'">'+t.status+'</span></div>'+
+        '<div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.4">'+esc(t.summary)+'</div></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:8px">'+
+        '<div style="flex:1;padding:10px;border-radius:10px;background:'+(t.isHD?'var(--hd-bg)':'var(--engg-bg)')+';border:1px solid '+(t.isHD?'var(--hd-line)':'var(--engg-line)')+';text-align:center"><div style="font-size:12px;font-weight:800;color:'+(t.isHD?'var(--hd)':'var(--engg)')+'">'+(t.isHD?'HD (Help Desk)':'Engineering')+'</div><div style="font-size:10px;color:var(--muted);margin-top:2px">Resolved by</div></div>'+
+        '<div style="flex:1;padding:10px;border-radius:10px;background:var(--paper);border:1px solid var(--line);text-align:center"><div style="font-size:12px;font-weight:800;color:var(--ink)">'+esc(t.issue||"—")+'</div><div style="font-size:10px;color:var(--muted);margin-top:2px">Issue Type</div></div>'+
+      '</div>'+
+      '<div style="background:var(--paper);border-radius:10px;border:1px solid var(--line);overflow:hidden">'+
+        [["Current Worker",t.currentWorker,"var(--hd)"],["Priority",t.priority,"var(--ink)"],["Project",t.project,"var(--ink)"],["Root Cause",t.rc,"var(--muted)"],["Components",t.components,"var(--ink)"],["SVM In Charge",t.svm,"var(--ink)"],["Created",fdate(t.created),"var(--muted)"],["Resolved",fdate(t.resolved),"var(--hd)"],["Age",age+"d","var(--ink)"],["Linked Issues",t.linked||"— (none)","var(--engg)"],["Type of Fix",t.typeOfFix,"var(--muted)"]].map(function(row){
+          var v=row[1];if(blank(v))v="—";
+          return '<div style="display:flex;padding:8px 14px;border-bottom:1px solid var(--line);align-items:center"><div style="width:130px;font-size:10px;font-weight:600;color:var(--faint);flex-shrink:0">'+row[0]+'</div><div style="flex:1;font-size:12px;font-weight:600;color:'+row[2]+'">'+esc(String(v))+'</div></div>';
+        }).join("")+
+      '</div>'+
+      '<div style="margin-top:12px;text-align:center"><a href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;gap:6px;padding:8px 20px;background:var(--ink);color:#fff;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none">Open in Jira →</a></div>'+
+    '</div>';
+    el("gs-back").onclick=function(){ _gsNavClick=true; doSearch(); };
+  }
+
+  inp.addEventListener("input", doSearch);
+  inp.addEventListener("focus", function(){ if(inp.value.trim().length>=2) doSearch(); });
+  // Close dropdown on outside click
+  document.addEventListener("click",function(e){
+    if(!el("gs-wrap")) return;
+    if(!el("gs-wrap").contains(e.target)) closeDD();
+  });
+}
+document.addEventListener("keydown",function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();var inp=el("gs-input");if(inp){inp.focus();inp.select();}}
+});
+
+function renderShell(){
+  var f=filtered();
+  var svmList=[...new Set(RAW.map(function(t){return t.svm;}).filter(Boolean))].sort();
+  var cwList=[...new Set(RAW.map(function(t){return t.currentWorker;}).filter(Boolean))].sort();
+  var rcList=[...new Set(RAW.map(function(t){return t.rc;}).filter(Boolean))].sort();
+  var issueList=[...new Set(RAW.map(function(t){return t.issue;}).filter(Boolean))].sort();
+  var projList=[...new Set(RAW.map(function(t){return t.project;}).filter(Boolean))].sort();
+  var exCount=RAW.filter(function(t){return (!t.components||!t.svm||!t.rc||!t.currentWorker) && (!S.proj.length || S.proj.indexOf(t.project)>-1);}).length;
+  var pendCount=f.filter(function(t){return t.status && t.status!=="Closed";}).length;
+
+  var app=el("app");
+  var _mselIds = {};
+  function fcell(label,id,allLabel,list,cur){
+    var mid = mselCreate(id, allLabel, list, cur, function(sel){
+      if(id==='fsvm') S.svm=sel;
+      else if(id==='fcw') S.cw=sel;
+      else if(id==='frc') S.rc=sel;
+      else if(id==='fissue') S.issue=sel;
+      else if(id==='fproj') S.proj=sel;
+      render();
+    });
+    _mselIds[id] = mid;
+    return '<div class="fcell"><span class="flabel">'+label+'</span>'+mselHTML(mid, allLabel)+'</div>';
+  }
+  app.innerHTML=''+
+  '<header class="top">'+
+    /* row 1 — brand · tabs · actions */
+    '<div class="hrow hrow1">'+
+      '<div class="logo"><span class="bar" style="display:flex;gap:3px;align-items:flex-end;height:22px">'+
+        '<i style="height:14px;background:var(--hd)"></i><i style="height:22px;background:var(--hd2)"></i><i style="height:11px;background:var(--engg2)"></i><i style="height:18px;background:var(--engg)"></i>'+
+      '</span><b>HD Trend Tracker</b></div>'+
+      '<nav class="tabs">'+
+        tabBtn("perf","📊","HD Performance",f.length)+
+        tabBtn("daily","📆","Daily Flow","")+
+        tabBtn("trend","📈","Trend Analysis","")+
+        tabBtn("pending","📋","Pending",pendCount)+
+        tabBtn("wow","🗓️","Week on Week","")+
+        tabBtn("pivots","🧮","Pivots","")+
+        tabBtn("exc","⚠️","Exceptions",exCount)+
+        tabBtn("data","✏️","Edit Data",RAW_ROWS.length)+
+      '</nav>'+
+      '<div class="hactions">'+
+        '<div id="gs-wrap" style="position:relative">'+
+          '<div style="display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:0 10px;height:34px">'+
+            '<span style="font-size:13px;color:var(--faint)">🔍</span>'+
+            '<input type="text" id="gs-input" placeholder="Search ticket key…" autocomplete="off" style="border:none;outline:none;background:transparent;font-size:12px;font-weight:500;color:var(--ink);width:130px;font-family:var(--sans)"/>'+
+            '<kbd style="background:var(--line);padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;color:var(--faint)">Ctrl+K</kbd>'+
+          '</div>'+
+          '<div id="gs-dropdown" style="display:none;position:absolute;top:40px;right:0;width:460px;max-height:480px;overflow-y:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(16,24,40,.18);z-index:300"></div>'+
+        '</div>'+
+        '<button class="ghost" id="newfile">← Launcher</button>'+
+        '<input type="file" id="fileinput" accept=".xlsx,.xls">'+
+      '</div>'+
+    '</div>'+
+    /* row 2 — five filters, evenly aligned */
+    '<div class="hrow filters">'+
+      fcell("SVM","fsvm","All SVM In Charge",svmList,S.svm)+
+      fcell("Worker","fcw","All current workers",cwList,S.cw)+
+      fcell("Root cause","frc","All root causes",rcList,S.rc)+
+      fcell("Type","fissue","All types",issueList,S.issue)+
+      fcell("Project","fproj","All projects",projList,S.proj)+
+    '</div>'+
+    /* row 3 — date range */
+    dateBar()+
+  '</header>'+
+  '<main id="main"></main>';
+
+  mselBind(); // wire multi-select dropdowns
+  el("newfile").onclick=function(){ window.location.href="index.html"; };
+  wireSearch();
+  el("fileinput").onchange=handleUpload;
+  document.querySelectorAll(".tabs button").forEach(function(b){ b.onclick=function(){ S.tab=b.dataset.tab; render(); }; });
+  bindDateBar();
+  renderMain();
+}
+function tabBtn(id,ic,label,cnt){
+  return '<button data-tab="'+id+'" class="'+(S.tab===id?'on':'')+'">'+ic+' <span class="lbl">'+label+'</span>'+(cnt!==""?'<span class="cnt">'+cnt+'</span>':'')+'</button>';
+}
+function dateBar(){
+  var presets=["All time","This month","Last month","Last 3M","Last 6M","This year"];
+  // Compute data's resolved date range
+  var minD=null, maxD=null;
+  RAW.forEach(function(t){
+    var d=t.resolved||t.created;
+    if(!d) return;
+    if(!minD||d<minD) minD=d;
+    if(!maxD||d>maxD) maxD=d;
+  });
+  var rangeLabel="";
+  if(minD&&maxD) rangeLabel='<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:11px;color:var(--muted);background:var(--paper);border:1px solid var(--line);padding:4px 12px;border-radius:7px;white-space:nowrap">📊 Data range: <b style="color:var(--ink)">'+fdate(minD)+'</b> → <b style="color:var(--ink)">'+fdate(maxD)+'</b> <span style="color:var(--faint)">· '+RAW.length+' records (resolved date)</span></span>';
+  return '<div class="datebar">'+
+    '<span class="flabel" style="margin-right:2px">📅 Range</span>'+
+    presets.map(function(p){return '<button class="chip '+(S.dlabel===p?'on':'')+'" data-preset="'+p+'">'+p+'</button>';}).join("")+
+    '<span style="width:1px;height:22px;background:var(--line);margin:0 4px"></span>'+
+    '<span class="sub">Custom</span>'+
+    '<input type="date" class="dinput" id="dfrom" value="'+S.from+'">'+
+    '<span class="sub">→</span>'+
+    '<input type="date" class="dinput" id="dto" value="'+S.to+'">'+
+    (S.from||S.to? '<span id="rangenote" style="margin-left:8px;display:inline-flex;align-items:center;gap:7px;background:var(--hd-bg);border:1px solid var(--hd-soft);padding:5px 13px;border-radius:8px;font-size:11.5px;font-weight:700;color:var(--hd);white-space:nowrap">'+(S.from?fdate(new Date(S.from+"T00:00:00")):"start")+' → '+(S.to?fdate(new Date(S.to+"T00:00:00")):"now")+'<span style="color:var(--ink2);font-weight:600"> · <span id="rangecount"></span></span></span>' : '<span id="rangenote" style="margin-left:6px"></span>')+
+    rangeLabel+
+  '</div>';
+}
+function bindDateBar(){
+  document.querySelectorAll(".chip[data-preset]").forEach(function(b){
+    b.onclick=function(){ applyPreset(b.dataset.preset); };
+  });
+  el("dfrom").onchange=function(e){ S.from=e.target.value; S.dlabel="Custom"; render(); };
+  el("dto").onchange=function(e){ S.to=e.target.value; S.dlabel="Custom"; render(); };
+  var cnt=el("rangecount");
+  if(cnt && (S.from||S.to)){ cnt.textContent=filtered().length+" tickets in range"; }
+}
+function applyPreset(label){
+  var now=new Date(), y=now.getFullYear(), m=now.getMonth();
+  function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+  S.dlabel=label; S.from=""; S.to="";
+  if(label==="This month"){ S.from=iso(new Date(y,m,1)); }
+  else if(label==="Last month"){ S.from=iso(new Date(y,m-1,1)); S.to=iso(new Date(y,m,0)); }
+  else if(label==="Last 3M"){ S.from=iso(new Date(y,m-2,1)); }
+  else if(label==="Last 6M"){ S.from=iso(new Date(y,m-5,1)); }
+  else if(label==="This year"){ S.from=iso(new Date(y,0,1)); }
+  render();
+}
+function render(){ renderShell(); }
+
+/* ═══ ON-RENDER ANIMATIONS — animate the actual data as it appears ═══
+   Runs once each time a tab is (re)rendered, so it also reads as a
+   "recomputed" pulse when filters change. No looping, motion-safe. */
+function animateMain(){
+  if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var main=el("main"); if(!main) return;
+  var raf=window.requestAnimationFrame;
+
+  /* 1 ── count up every KPI / big number */
+  main.querySelectorAll(".kv").forEach(function(node){
+    var raw=(node.textContent||"").trim();
+    var m=raw.match(/^(-?)([\d,]+(?:\.\d+)?)(.*)$/);
+    if(!m) return;
+    var sign=m[1], numStr=m[2], suffix=m[3];
+    var hasComma=numStr.indexOf(",")>-1;
+    var decimals=(numStr.split(".")[1]||"").length;
+    var target=parseFloat(numStr.replace(/,/g,""));
+    if(isNaN(target)) return;
+    if(target>2000000) return;
+    function fmt(v){
+      var s=decimals?v.toFixed(decimals):String(Math.round(v));
+      if(hasComma) s=Number(s).toLocaleString(undefined,{minimumFractionDigits:decimals,maximumFractionDigits:decimals});
+      return sign+s+suffix;
+    }
+    var dur=Math.max(420,Math.min(760,220+Math.log10(Math.max(target,1))*230)), t0=null;
+    node.style.willChange="contents";
+    function step(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/dur,1); var e=1-Math.pow(1-p,3);
+      node.textContent=fmt(target*e); if(p<1) raf(step); else { node.textContent=raw; node.style.willChange=""; } }
+    node.textContent=fmt(0); raf(step);
+  });
+
+  /* 2 ── trend line-chart: draw the solid HD line, fade the dashed ENGG line, pop the dots */
+  main.querySelectorAll(".linechart svg polyline").forEach(function(pl){
+    try{
+      if(pl.getAttribute("stroke-dasharray")){            // dashed = ENGG → fade in (keep its dash)
+        pl.style.opacity="0"; pl.getBoundingClientRect();
+        pl.style.transition="opacity .6s ease .45s"; raf(function(){ pl.style.opacity="1"; });
+      }else{                                              // solid = HD → draw itself in
+        var len=pl.getTotalLength();
+        pl.style.strokeDasharray=len+" "+len; pl.style.strokeDashoffset=len; pl.getBoundingClientRect();
+        pl.style.transition="stroke-dashoffset 1.05s cubic-bezier(.22,1,.36,1)";
+        raf(function(){ pl.style.strokeDashoffset="0"; });
+      }
+    }catch(e){}
+  });
+  main.querySelectorAll(".linechart svg circle.lc-dot").forEach(function(c,i){
+    c.style.opacity="0"; c.getBoundingClientRect();
+    c.style.transition="opacity .3s ease "+(0.75+i*0.03).toFixed(2)+"s"; raf(function(){ c.style.opacity="1"; });
+  });
+
+  /* 3 ── ring gauges: sweep from empty to value (inline transition already present) */
+  main.querySelectorAll(".ring-wrap svg").forEach(function(svg){
+    var circ=svg.querySelectorAll("circle"); if(circ.length<2) return;
+    var prog=circ[circ.length-1];
+    var da=prog.getAttribute("stroke-dasharray"), to=prog.getAttribute("stroke-dashoffset");
+    if(da==null||to==null) return;
+    prog.style.strokeDashoffset=da; prog.getBoundingClientRect();
+    raf(function(){ prog.style.strokeDashoffset=to; });
+  });
+
+  /* 4 ── big HD/ENGG split bars: left-to-right wipe */
+  main.querySelectorAll(".track:not(.mini)").forEach(function(t,i){
+    t.style.animationDelay=(0.08+i*0.08).toFixed(2)+"s"; t.classList.add("wipe");
+  });
+
+  /* 5 ── week-on-week stacks: grow up from the axis, staggered */
+  main.querySelectorAll(".stackwrap .stack").forEach(function(s,i){
+    s.style.animationDelay=(i*0.045).toFixed(3)+"s"; s.classList.add("growb");
+  });
+}
+
+function renderMain(){
+  var main=el("main");
+  if(S.tab==="perf") main.innerHTML=viewPerf();
+  else if(S.tab==="daily") main.innerHTML=viewDaily();
+  else if(S.tab==="trend") main.innerHTML=viewTrend();
+  else if(S.tab==="pending") main.innerHTML=viewPending();
+  else if(S.tab==="wow") main.innerHTML=viewWoW();
+  else if(S.tab==="pivots") main.innerHTML=viewPivots();
+  else if(S.tab==="data"){ main.innerHTML=viewData(); bindData(); return; }
+  else main.innerHTML=viewExc();
+  bindMain();
+  animateMain();
+}
+
+/* ═══════════════════════════════ VIEW: HD PERFORMANCE ═══════════════════════════════ */
+function viewPerf(){
+  var f=filtered();
+  var total=f.length;
+  var hd=f.filter(function(t){return t.isHD;});
+  var eg=f.filter(function(t){return !t.isHD;});
+  var hdN=hd.length, egN=eg.length;
+  var hdPct=pct(hdN,total), egPct=100-hdPct;
+  var closed=f.filter(function(t){return t.status==="Closed";}).length;
+  var inc=f.filter(function(t){return t.issue==="Incident";}).length;
+  var srq=f.filter(function(t){return t.issue==="Service Request";}).length;
+
+  var scopeTxt=[(S.svm.length?S.svm.join(", "):"all SVM staff"), (S.rc.length?("root cause \""+S.rc.join(", ")+"\""):"all root causes"), (S.issue.length?S.issue.join(", "):"all types"), (S.proj.length?S.proj.join(", "):"all projects")].join(" · ");
+
+  // per-SVM leaderboard
+  var bySvm={};
+  f.forEach(function(t){
+    var k=t.svm||"(unassigned)";
+    if(!bySvm[k]) bySvm[k]={total:0,hd:0,eg:0,closed:0};
+    bySvm[k].total++; if(t.isHD)bySvm[k].hd++; else bySvm[k].eg++;
+    if(t.status==="Closed")bySvm[k].closed++;
+  });
+  var svmRows=Object.keys(bySvm).map(function(k){var v=bySvm[k];return {name:k,total:v.total,hd:v.hd,eg:v.eg,closed:v.closed,hdp:pct(v.hd,v.total)};});
+  var sc=S.sortCol, dir=S.sortDir==="asc"?1:-1;
+  svmRows.sort(function(a,b){
+    if(sc==="name") return dir*a.name.localeCompare(b.name);
+    if(sc==="hdp") return dir*(a.hdp-b.hdp);
+    if(sc==="hd") return dir*(a.hd-b.hd);
+    if(sc==="eg") return dir*(a.eg-b.eg);
+    if(sc==="closed") return dir*(a.closed-b.closed);
+    return dir*(a.total-b.total);
+  });
+
+  // root cause breakdown (top 12)
+  var byRc={};
+  f.forEach(function(t){ var k=t.rc||"(blank)"; if(!byRc[k])byRc[k]={hd:0,eg:0}; if(t.isHD)byRc[k].hd++; else byRc[k].eg++; });
+  var rcRows=Object.keys(byRc).map(function(k){var v=byRc[k];return {name:k,hd:v.hd,eg:v.eg,total:v.hd+v.eg};}).sort(function(a,b){return b.total-a.total;}).slice(0,12);
+  var rcMax=rcRows.length?rcRows[0].total:1;
+
+  // monthly HD vs Engg (by resolved||created)
+  var byM={};
+  f.forEach(function(t){ var k=bucketMonth(t); if(!k)return; if(!byM[k])byM[k]={hd:0,eg:0}; if(t.isHD)byM[k].hd++; else byM[k].eg++; });
+  var mKeys=Object.keys(byM).sort();
+  var mMax=1; mKeys.forEach(function(k){ mMax=Math.max(mMax,byM[k].hd,byM[k].eg); });
+
+  var out='';
+  // hero
+  out+='<div class="up" style="margin-bottom:9px"><div class="eyebrow">HD Performance</div>'+
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">Who resolved the work?</h1>'+
+    '<div class="sub" style="margin-top:3px">Scope: '+esc(scopeTxt)+'. <b style="color:var(--hd)">HD</b> = closed by Help Desk (no linked ticket) · <b style="color:var(--engg)">ENGG</b> = escalated to Engineering (has linked ticket).</div>'+
+    '<button class="ghost" id="perfExport" style="margin-top:8px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data ('+total.toLocaleString()+' tickets)</button></div>';
+
+  // hero card
+  out+='<div class="card up d1 pad" style="margin-bottom:9px;display:flex;gap:28px;align-items:center;flex-wrap:wrap">'+
+    ring(hdPct,120,11,"var(--hd)",'<div class="mono" style="font-size:28px;font-weight:700;color:var(--hd)">'+hdPct+'%</div><div style="font-size:9.5px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.5px">HD share</div>')+
+    '<div style="flex:1;min-width:280px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:7px">'+
+        '<span style="color:var(--hd);font-weight:700">HD resolved · '+hdN.toLocaleString()+'</span>'+
+        '<span style="color:var(--engg);font-weight:700">'+egN.toLocaleString()+' · Engg resolved</span>'+
+      '</div>'+
+      '<div class="track" id="heroTrack">'+
+        '<div class="seg hd" data-side="hd" style="width:'+Math.max(hdPct,6)+'%">'+hdPct+'%</div>'+
+        '<div class="seg engg" data-side="eg" style="width:'+Math.max(egPct,6)+'%">'+egPct+'%</div>'+
+      '</div>'+
+      '<div class="sub" style="margin-top:10px">Out of <b>'+total.toLocaleString()+'</b> tickets in scope, the Help Desk closed <b style="color:var(--hd)">'+hdN.toLocaleString()+'</b> on its own and escalated <b style="color:var(--engg)">'+egN.toLocaleString()+'</b> to Engineering.</div>'+
+    '</div>'+
+  '</div>';
+
+  // KPIs
+  out+='<div class="grid up d2" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:9px">'+
+    kpi("📦","Total tickets",total.toLocaleString(),"var(--ink)","all",'In scope')+
+    kpi("🟢","HD resolved",hdN.toLocaleString(),"var(--hd)","hd",hdPct+"% of scope")+
+    kpi("🟣","Engg resolved",egN.toLocaleString(),"var(--engg)","eg",egPct+"% of scope")+
+    kpi("✅","Closed",closed.toLocaleString(),"var(--slate)","closed",pct(closed,total)+"% of scope")+
+    kpi("🔺","Incidents",inc.toLocaleString(),"var(--amber)","inc","")+
+    kpi("📨","Service Req.",srq.toLocaleString(),"var(--slate)","srq","")+
+  '</div>';
+  out+=note([
+    'HD resolved <b class="hd">'+hdN.toLocaleString()+' ('+hdPct+'%)</b> vs Engg <b class="eg">'+egN.toLocaleString()+' ('+egPct+'%)</b> — HD handled the <b>'+(hdPct>=50?'majority':'minority')+'</b> of this scope.',
+    'Closed <b>'+closed.toLocaleString()+'</b> ('+pct(closed,total)+'% of scope) · Incidents <b>'+inc.toLocaleString()+'</b> vs Service Requests <b>'+srq.toLocaleString()+'</b>.'
+  ]);
+
+  // charts row: root cause + monthly
+  out+='<div class="grid up d3" style="grid-template-columns:1fr 1fr;margin-bottom:9px">';
+  // root cause
+  out+='<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><span class="sec-title">By root cause</span><span class="click">HD / Engg · click a bar</span></div>';
+  rcRows.forEach(function(r){
+    var w=Math.round(r.total/rcMax*100);
+    var hw=r.total?Math.round(r.hd/r.total*100):0;
+    out+='<div class="barrow" data-rc="'+esc(r.name)+'">'+
+      '<span class="lbl" title="'+esc(r.name)+'">'+esc(r.name)+'</span>'+
+      '<div class="track2" style="max-width:'+w+'%;min-width:60px"><div class="fillhd" style="width:'+hw+'%"></div><div class="fillengg" style="width:'+(100-hw)+'%"></div></div>'+
+      '<span class="num">'+r.hd+' / '+r.eg+'</span>'+
+    '</div>';
+  });
+  out+='</div>';
+  // monthly grouped
+  out+='<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><span class="sec-title">HD vs Engg by month</span><span class="click">click a bar</span></div>';
+  if(mKeys.length){
+    out+='<div class="mbars">';
+    mKeys.forEach(function(k,i){
+      var v=byM[k];
+      out+='<div class="col">'+
+        '<div class="pair">'+
+          '<div class="bar hd" data-month="'+k+'" data-side="hd" style="height:'+Math.max(v.hd/mMax*100,3)+'%;animation-delay:'+(i*0.04)+'s"><span class="v">'+v.hd+'</span></div>'+
+          '<div class="bar engg" data-month="'+k+'" data-side="eg" style="height:'+Math.max(v.eg/mMax*100,3)+'%;animation-delay:'+(i*0.04+0.02)+'s"><span class="v">'+v.eg+'</span></div>'+
+        '</div>'+
+        '<span class="mx">'+mLabel(k)+'</span>'+
+      '</div>';
+    });
+    out+='</div><div class="legend" style="margin-top:9px"><span class="li"><span class="sw" style="background:var(--hd)"></span>HD resolved</span><span class="li"><span class="sw" style="background:var(--engg)"></span>Engg resolved</span></div>';
+  } else out+='<div class="empty">No dated tickets in scope.</div>';
+  out+='</div></div>';
+  out+=(function(){ var topRc=rcRows[0], reli=null;
+    rcRows.forEach(function(r){ if(r.total>=10){ var e=Math.round(r.eg/r.total*100); if(reli===null||e>reli.e) reli={name:r.name,e:e}; } });
+    var mTot={}; mKeys.forEach(function(k){ mTot[k]=byM[k].hd+byM[k].eg; });
+    var peak=mKeys.length?mKeys.reduce(function(a,b){return mTot[b]>mTot[a]?b:a;},mKeys[0]):null;
+    var f0=mKeys[0], l0=mKeys[mKeys.length-1];
+    var hpF=f0?pct(byM[f0].hd,mTot[f0]):0, hpL=l0?pct(byM[l0].hd,mTot[l0]):0;
+    return note([
+      topRc?('Largest driver: <b>'+esc(topRc.name)+'</b> — '+topRc.total.toLocaleString()+' tickets ('+pct(topRc.total,total)+'% of scope), '+topRc.hd+' HD / '+topRc.eg+' Engg.'):null,
+      reli?('Highest Engg reliance: <b>'+esc(reli.name)+'</b> — '+reli.e+'% escalated (among root causes with ≥10).'):null,
+      peak?('Peak month: <b>'+mLabel(peak)+'</b> with '+mTot[peak].toLocaleString()+' tickets.'):null,
+      mKeys.length>1?('HD share '+(hpL>=hpF?'rose':'fell')+' from <b>'+hpF+'%</b> ('+mLabel(f0)+') to <b>'+hpL+'%</b> ('+mLabel(l0)+').'):null
+    ]); })();
+
+  // SVM leaderboard
+  out+='<div class="card up d4" style="overflow:hidden;margin-bottom:9px">'+
+    '<div class="pad" style="border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline"><span class="sec-title">SVM In Charge — resolution scorecard</span><span class="click">click a row to open that person\'s tickets</span></div>'+
+    '<div style="overflow:auto;max-height:460px"><table><thead><tr>'+
+      th("name","SVM In Charge")+th("total","Total")+th("hd","HD")+th("eg","Engg")+th("hdp","HD share")+
+      '<th class="static" style="min-width:150px">Split</th>'+th("closed","Closed")+
+    '</tr></thead><tbody>';
+  svmRows.forEach(function(r){
+    out+='<tr class="rowlink" data-svm="'+esc(r.name)+'">'+
+      '<td style="font-weight:600">'+esc(r.name)+'</td>'+
+      '<td class="mono" style="font-weight:700">'+r.total+'</td>'+
+      '<td class="mono" style="color:var(--hd);font-weight:700">'+r.hd+'</td>'+
+      '<td class="mono" style="color:var(--engg);font-weight:700">'+r.eg+'</td>'+
+      '<td class="mono" style="font-weight:700">'+r.hdp+'%</td>'+
+      '<td><div class="track mini"><div class="seg hd" style="width:'+r.hdp+'%"></div><div class="seg engg" style="width:'+(100-r.hdp)+'%"></div></div></td>'+
+      '<td class="mono" style="color:var(--muted)">'+r.closed+'</td>'+
+    '</tr>';
+  });
+  out+='</tbody></table></div>'+
+    (function(){ if(!svmRows.length) return "";
+      var byVol=svmRows.slice().sort(function(a,b){return b.total-a.total;})[0];
+      var elig=svmRows.filter(function(r){return r.total>=20 && r.name!=="(unassigned)";});
+      var best=elig.slice().sort(function(a,b){return b.hd-a.hd||(b.hdp-a.hdp);})[0];
+      var worst=elig.slice().sort(function(a,b){return a.hdp-b.hdp;})[0];
+      return note([
+        'Highest backlog owner: <b>'+esc(byVol.name)+'</b> with <b>'+byVol.total.toLocaleString()+'</b> tickets ('+byVol.hdp+'% HD).',
+        (best&&worst&&best.name!==worst.name)?('Most HD self-resolved: <b class="hd">'+esc(best.name)+' ('+best.hd+' tickets, '+best.hdp+'%)</b>; leans on Engg most: <b class="dn">'+esc(worst.name)+' ('+worst.hdp+'%)</b> — among ≥20 tickets.'):null
+      ]); })()+
+  '</div>';
+  return out;
+}
+
+/* ═══════════════════════════════ VIEW: TREND ANALYSIS ═══════════════════════════════ */
+/* ═══════════════════════════════ VIEW: DAILY FLOW ═══════════════════════════════ */
+function dKey(d){ return d? d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0") : null; }
+function dLabel(k){ if(!k) return "—"; var p=k.split("-"); var d=new Date(+p[0],+p[1]-1,+p[2]); return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"}); }
+function dLabelFull(k){ if(!k) return "—"; var p=k.split("-"); var d=new Date(+p[0],+p[1]-1,+p[2]); return d.toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short",year:"numeric"}); }
+function dWeekday(k){ var p=k.split("-"); return new Date(+p[0],+p[1]-1,+p[2]).getDay(); }
+var WDAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function viewDaily(){
+  window.__piv={};
+  var pool=RAW.filter(function(t){ return inRange(t) && (!S.svm.length||S.svm.indexOf(t.svm)>-1) && (!S.cw.length||S.cw.indexOf(t.currentWorker)>-1) && (!S.issue.length||S.issue.indexOf(t.issue)>-1) && (!S.rc.length||S.rc.indexOf(t.rc)>-1) && (!S.proj.length||S.proj.indexOf(t.project)>-1); });
+  var resolvedPool=RAW.filter(function(t){
+    if(!t.resolved) return false;
+    if(S.svm.length && S.svm.indexOf(t.svm)<0) return false;
+    if(S.cw.length && S.cw.indexOf(t.currentWorker)<0) return false;
+    if(S.issue.length && S.issue.indexOf(t.issue)<0) return false;
+    if(S.rc.length && S.rc.indexOf(t.rc)<0) return false;
+    if(S.proj.length && S.proj.indexOf(t.project)<0) return false;
+    /* date range for resolved uses the same S.from / S.to window */
+    if(S.from && t.resolved < new Date(S.from+"T00:00:00")) return false;
+    if(S.to && t.resolved > new Date(S.to+"T23:59:59")) return false;
+    return true;
+  });
+
+  /* type sub-filter */
+  var typeList=[...new Set(pool.concat(resolvedPool).map(function(t){return t.issue;}).filter(Boolean))].sort();
+  var tp=S.dType;
+  var created=tp? pool.filter(function(t){return t.issue===tp;}) : pool;
+  var resolved=tp? resolvedPool.filter(function(t){return t.issue===tp;}) : resolvedPool;
+
+  /* Bucket by day */
+  var byDay={};
+  function ensure(k){ if(!byDay[k]) byDay[k]={created:[],resolved:[],inc:0,sr:0,other:0,closedInc:0,closedSr:0,closedOther:0}; }
+  created.forEach(function(t){ var k=dKey(t.created); if(!k) return; ensure(k); byDay[k].created.push(t);
+    if(t.issue==="Incident") byDay[k].inc++; else if(t.issue==="Service Request") byDay[k].sr++; else byDay[k].other++;
+  });
+  resolved.forEach(function(t){ var k=dKey(t.resolved); if(!k) return; ensure(k); byDay[k].resolved.push(t);
+    if(t.issue==="Incident") byDay[k].closedInc++; else if(t.issue==="Service Request") byDay[k].closedSr++; else byDay[k].closedOther++;
+  });
+  var days=Object.keys(byDay).sort();
+
+  /* ── Scope note ── */
+  var scopeParts=[];
+  if(S.from||S.to) scopeParts.push("date range");
+  if(S.svm.length) scopeParts.push("SVM: "+S.svm.join(", ")); if(S.cw.length) scopeParts.push("worker: "+S.cw.join(", "));
+  if(S.proj.length) scopeParts.push("project: "+S.proj.join(", ")); if(tp) scopeParts.push("type: "+tp);
+  var scopeTxt=scopeParts.length? scopeParts.join(" · ") : "all data";
+
+  var out='<div class="up" style="margin-bottom:9px"><div class="eyebrow">Daily Flow</div>'+
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">Day-by-day ticket movement</h1>'+
+    '<div class="sub" style="margin-top:3px">How many tickets were <b style="color:var(--hd)">created</b> and <b style="color:var(--engg)">closed (resolved)</b> each day. Scope: <b>'+esc(scopeTxt)+'</b>.</div></div>';
+
+  /* Type sub-filter bar */
+  out+='<div class="card up d1 pad" style="margin-bottom:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+    '<span class="flabel">Issue Type</span>'+
+    '<button class="chip'+(tp?'':' on')+'" data-dtype="">All types · '+(created.length+resolved.length)+'</button>'+
+    typeList.map(function(t){ var cn=created.filter(function(x){return x.issue===t;}).length; return '<button class="chip'+(tp===t?' on':'')+'" data-dtype="'+esc(t)+'">'+esc(t)+' · '+cn+' created</button>'; }).join("")+
+    '<span class="sub" style="margin-left:auto">SVM, Worker, Root Cause &amp; date use the top filters</span>'+
+    '<button class="ghost" id="dailyExport" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data</button>'+
+  '</div>';
+
+  if(!days.length){ return out+'<div class="card pad"><div class="empty">No tickets in this date range. Adjust the top-level date range or filters.</div></div>'; }
+
+  /* ── KPI computation ── */
+  var totCreated=created.length, totResolved=resolved.length;
+  var netChange=totCreated-totResolved;
+  var incCreated=created.filter(function(t){return t.issue==="Incident";}).length;
+  var srCreated=created.filter(function(t){return t.issue==="Service Request";}).length;
+  var avgCreate=days.length? Math.round(totCreated/days.length*10)/10 : 0;
+  var avgResolve=days.length? Math.round(totResolved/days.length*10)/10 : 0;
+  var peakCreateDay=days.reduce(function(a,b){return byDay[b].created.length>byDay[a].created.length?b:a;});
+  var peakResolveDay=days.reduce(function(a,b){return byDay[b].resolved.length>byDay[a].resolved.length?b:a;});
+
+  /* ── KPI cards ── */
+  out+='<div class="grid up d1" style="grid-template-columns:repeat(6,1fr);margin-bottom:9px">'+
+    '<div class="card kpi clickable" data-dkpi="created"><div class="kv" style="color:var(--hd)">'+totCreated+'</div><div class="kl">CREATED</div><div class="ks">in scope</div></div>'+
+    '<div class="card kpi clickable" data-dkpi="incident"><div class="kv" style="color:#D97706">'+incCreated+'</div><div class="kl">INCIDENTS</div><div class="ks">'+pct(incCreated,totCreated)+'% of created</div></div>'+
+    '<div class="card kpi clickable" data-dkpi="sr"><div class="kv" style="color:#7C3AED">'+srCreated+'</div><div class="kl">SERVICE REQ.</div><div class="ks">'+pct(srCreated,totCreated)+'% of created</div></div>'+
+    '<div class="card kpi clickable" data-dkpi="resolved"><div class="kv" style="color:var(--engg)">'+totResolved+'</div><div class="kl">CLOSED</div><div class="ks">in scope</div></div>'+
+    '<div class="card kpi"><div class="kv" style="color:'+(netChange>0?'var(--rose)':'var(--hd)')+'">'+((netChange>0?'+':'')+netChange)+'</div><div class="kl">NET CHANGE</div><div class="ks">created \u2212 closed</div></div>'+
+    '<div class="card kpi"><div class="kv">'+avgCreate+'</div><div class="kl">AVG / DAY</div><div class="ks">create '+avgCreate+' · close '+avgResolve+'</div></div>'+
+  '</div>';
+
+  /* ── Big area chart: Created vs Closed day-wise ── */
+  var CHART_W=1100, CHART_H=260, PAD_L=44, PAD_R=20, PAD_T=20, PAD_B=50;
+  var plotW=CHART_W-PAD_L-PAD_R, plotH=CHART_H-PAD_T-PAD_B;
+  var maxVal=1;
+  days.forEach(function(k){ maxVal=Math.max(maxVal,byDay[k].created.length,byDay[k].resolved.length); });
+  /* round max up for nice grid lines */
+  var gridStep=maxVal<=5?1:maxVal<=15?2:maxVal<=30?5:maxVal<=80?10:maxVal<=200?20:50;
+  var gridMax=Math.ceil(maxVal/gridStep)*gridStep;
+  function cx(i){ return PAD_L + (i/(days.length-1||1))*plotW; }
+  function cy(v){ return PAD_T + plotH - (v/gridMax)*plotH; }
+
+  var createdPts=days.map(function(k,i){ return cx(i)+","+cy(byDay[k].created.length); });
+  var resolvedPts=days.map(function(k,i){ return cx(i)+","+cy(byDay[k].resolved.length); });
+  /* area fill paths */
+  var baseline=PAD_T+plotH;
+  var createArea="M"+PAD_L+","+baseline+" L"+createdPts.join(" L")+" L"+cx(days.length-1)+","+baseline+" Z";
+  var resolveArea="M"+PAD_L+","+baseline+" L"+resolvedPts.join(" L")+" L"+cx(days.length-1)+","+baseline+" Z";
+
+  out+='<div class="card up d2 pad" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="sec-title">Created vs Closed — day by day</span><span class="click">hover for details · click a dot to open tickets</span></div>';
+  out+='<div style="position:relative;width:100%;overflow-x:auto"><svg viewBox="0 0 '+CHART_W+' '+CHART_H+'" style="width:100%;height:auto;display:block;font-family:var(--mono)" xmlns="http://www.w3.org/2000/svg">';
+  /* grid lines */
+  for(var g=0;g<=gridMax;g+=gridStep){
+    var yy=cy(g);
+    out+='<line x1="'+PAD_L+'" y1="'+yy+'" x2="'+(CHART_W-PAD_R)+'" y2="'+yy+'" stroke="var(--line)" stroke-width="0.5"/>';
+    out+='<text x="'+(PAD_L-6)+'" y="'+(yy+3)+'" text-anchor="end" fill="var(--muted)" font-size="9">'+g+'</text>';
+  }
+  /* area fills */
+  out+='<path d="'+createArea+'" fill="var(--hd)" opacity="0.12"/>';
+  out+='<path d="'+resolveArea+'" fill="var(--engg)" opacity="0.10"/>';
+  /* lines */
+  if(days.length>1){
+    out+='<polyline points="'+createdPts.join(" ")+'" fill="none" stroke="var(--hd)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    out+='<polyline points="'+resolvedPts.join(" ")+'" fill="none" stroke="var(--engg)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 3"/>';
+  }
+  /* dots + invisible hover targets */
+  days.forEach(function(k,i){
+    var crN=byDay[k].created.length, rsN=byDay[k].resolved.length;
+    out+='<circle cx="'+cx(i)+'" cy="'+cy(crN)+'" r="4" fill="var(--hd)" class="ddot" data-dk="'+k+'" data-ds="created" style="cursor:pointer"><title>'+dLabelFull(k)+' — '+crN+' created</title></circle>';
+    out+='<circle cx="'+cx(i)+'" cy="'+cy(rsN)+'" r="4" fill="var(--engg)" class="ddot" data-dk="'+k+'" data-ds="resolved" style="cursor:pointer"><title>'+dLabelFull(k)+' — '+rsN+' closed</title></circle>';
+  });
+  /* x-axis labels — show a label every Nth day to avoid overlap */
+  var labelEvery=days.length<=15?1:days.length<=31?2:days.length<=90?7:14;
+  days.forEach(function(k,i){ if(i%labelEvery===0||i===days.length-1){
+    var wd=dWeekday(k); var isWknd=wd===0||wd===6;
+    out+='<text x="'+cx(i)+'" y="'+(baseline+14)+'" text-anchor="middle" fill="'+(isWknd?"var(--rose)":"var(--muted)")+'" font-size="8" font-weight="'+(isWknd?'700':'400')+'">'+dLabel(k)+'</text>';
+    out+='<text x="'+cx(i)+'" y="'+(baseline+24)+'" text-anchor="middle" fill="'+(isWknd?"var(--rose)":"var(--faint)")+'" font-size="7">'+WDAYS[wd]+'</text>';
+  }});
+  out+='</svg></div>';
+  out+='<div class="legend" style="margin-top:6px"><span class="li"><span class="sw" style="background:var(--hd)"></span>Created (solid)</span><span class="li"><span class="sw" style="background:var(--engg)"></span>Closed (dashed)</span></div>';
+  out+=note([
+    'Peak creation: <b>'+dLabelFull(peakCreateDay)+'</b> with <b>'+byDay[peakCreateDay].created.length+'</b> tickets.',
+    'Peak closure: <b>'+dLabelFull(peakResolveDay)+'</b> with <b>'+byDay[peakResolveDay].resolved.length+'</b> tickets.',
+    netChange>0? 'Backlog <b class="dn">grew</b> by <b>'+netChange+'</b> tickets (more created than closed).' : netChange<0? 'Backlog <b class="up">shrank</b> by <b>'+Math.abs(netChange)+'</b> tickets (more closed than created).' : 'Inflow and outflow are exactly balanced.'
+  ]);
+  out+='</div>';
+
+  /* ── Stacked bar chart: Created by type per day ── */
+  var barMax=1; days.forEach(function(k){ barMax=Math.max(barMax,byDay[k].created.length); });
+  var BAR_H=140;
+  out+='<div class="card up d3 pad" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span class="sec-title">Created by type — daily breakdown</span><span class="click">click a segment to open tickets</span></div>';
+  out+='<div class="stackwrap" style="align-items:flex-end">';
+  days.forEach(function(k,i){
+    var d=byDay[k], tot=d.created.length; if(!tot) tot=0;
+    var hpx=tot>0? Math.max(Math.round(tot/barMax*BAR_H),6) : 4;
+    var wd=dWeekday(k); var isWknd=wd===0||wd===6;
+    out+='<div class="col" style="min-width:0;flex:1"><div class="tot" style="font-size:9px">'+(tot||""  )+'</div>';
+    out+='<div class="stack" style="height:'+hpx+'px">';
+    if(d.other>0) out+='<div class="seg" data-dbar="'+k+'" data-dbtype="other" style="flex:'+d.other+';background:#94A3B8;cursor:pointer" title="Other '+d.other+'"></div>';
+    if(d.sr>0) out+='<div class="seg" data-dbar="'+k+'" data-dbtype="sr" style="flex:'+d.sr+';background:#7C3AED;cursor:pointer" title="Service Req. '+d.sr+'">'+(d.sr/tot*hpx>=14?'<span class="sv" style="font-size:8px">'+d.sr+'</span>':'')+'</div>';
+    if(d.inc>0) out+='<div class="seg" data-dbar="'+k+'" data-dbtype="inc" style="flex:'+d.inc+';background:#D97706;cursor:pointer" title="Incident '+d.inc+'">'+(d.inc/tot*hpx>=14?'<span class="sv" style="font-size:8px">'+d.inc+'</span>':'')+'</div>';
+    out+='</div>';
+    if(i%labelEvery===0||i===days.length-1) out+='<div class="wx" style="font-size:7px;'+(isWknd?'color:var(--rose);font-weight:700':'')+'">'+dLabel(k)+'</div>';
+    else out+='<div class="wx"></div>';
+    out+='</div>';
+  });
+  out+='</div><div class="legend" style="margin-top:6px"><span class="li"><span class="sw" style="background:#D97706"></span>Incident</span><span class="li"><span class="sw" style="background:#7C3AED"></span>Service Request</span><span class="li"><span class="sw" style="background:#94A3B8"></span>Other</span></div></div>';
+
+  /* ── Weekday heatmap ── */
+  var wdCreate=Array(7).fill(0), wdResolve=Array(7).fill(0), wdCount=Array(7).fill(0);
+  days.forEach(function(k){ var wd=dWeekday(k); wdCreate[wd]+=byDay[k].created.length; wdResolve[wd]+=byDay[k].resolved.length; wdCount[wd]++; });
+  var wdMax=Math.max.apply(null,wdCreate.concat([1]));
+  out+='<div class="card up d4 pad" style="margin-bottom:9px"><span class="sec-title">Weekday pattern</span><div class="sub" style="margin-bottom:10px">Average tickets created and closed by day of week.</div>';
+  out+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;text-align:center">';
+  [1,2,3,4,5,6,0].forEach(function(wd){
+    var isWknd=wd===0||wd===6;
+    var avgC=wdCount[wd]?Math.round(wdCreate[wd]/wdCount[wd]*10)/10:0;
+    var avgR=wdCount[wd]?Math.round(wdResolve[wd]/wdCount[wd]*10)/10:0;
+    var pctFill=wdMax>0? Math.round(wdCreate[wd]/wdMax*100) : 0;
+    out+='<div style="padding:10px 6px;border-radius:10px;background:linear-gradient(to top,'+(isWknd?'var(--rose-bg)':'var(--hd-bg)')+' '+pctFill+'%, var(--paper) '+pctFill+'%);border:1px solid var(--line)">'+
+      '<div style="font-weight:800;font-size:13px;'+(isWknd?'color:var(--rose)':'')+'">'+WDAYS[wd]+'</div>'+
+      '<div style="font-size:20px;font-weight:800;color:var(--hd);margin:4px 0">'+avgC+'</div>'+
+      '<div style="font-size:9px;color:var(--muted);font-weight:600">avg created</div>'+
+      '<div style="font-size:14px;font-weight:700;color:var(--engg);margin-top:4px">'+avgR+'</div>'+
+      '<div style="font-size:9px;color:var(--muted);font-weight:600">avg closed</div>'+
+      '<div style="font-size:9px;color:var(--faint);margin-top:3px">'+wdCount[wd]+' day'+(wdCount[wd]!==1?'s':'')+'</div>'+
+    '</div>';
+  });
+  out+='</div>'+note([
+    (function(){ var best=1,bv=0; [1,2,3,4,5,6,0].forEach(function(w){if(wdCreate[w]>bv){bv=wdCreate[w];best=w;}}); return 'Busiest creation day: <b>'+WDAYS[best]+'</b> with <b>'+bv+'</b> total created ('+wdCount[best]+' '+WDAYS[best]+'s in range).'; })(),
+    (function(){ var best=1,bv=0; [1,2,3,4,5,6,0].forEach(function(w){if(wdResolve[w]>bv){bv=wdResolve[w];best=w;}}); return 'Busiest closure day: <b>'+WDAYS[best]+'</b> with <b>'+bv+'</b> total closed.'; })()
+  ])+'</div>';
+
+  /* ── Daily detail table ── */
+  out+='<div class="card up d5" style="overflow:hidden;margin-bottom:9px"><div class="pad" style="border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center"><span class="sec-title">Daily detail</span><span class="click">click any row or number to open tickets</span></div>';
+  out+='<div style="overflow:auto;max-height:520px"><table class="ptable"><thead><tr>'+
+    '<th class="rh">Date</th><th class="rh">Day</th>'+
+    '<th style="color:var(--hd)">Created</th><th style="color:#D97706">Incidents</th><th style="color:#7C3AED">Svc Req</th>'+
+    '<th style="color:var(--engg)">Closed</th><th>Net</th><th>Cumulative</th>'+
+  '</tr></thead><tbody>';
+  var cumul=0;
+  days.forEach(function(k){
+    var d=byDay[k], crN=d.created.length, rsN=d.resolved.length;
+    var net=crN-rsN; cumul+=net;
+    var wd=dWeekday(k); var isWknd=wd===0||wd===6;
+    out+='<tr class="rowlink drow" data-drow="'+k+'" style="'+(isWknd?"background:var(--paper)":"")+'">'+
+      '<td class="rl">'+dLabel(k)+'</td>'+
+      '<td class="rl" style="font-weight:'+(isWknd?'700':'400')+';color:'+(isWknd?'var(--rose)':'var(--muted)')+'">'+WDAYS[wd]+'</td>'+
+      '<td class="val dcell" data-dk="'+k+'" data-ds="created" style="color:var(--hd);font-weight:700">'+crN+'</td>'+
+      '<td class="val dcell" data-dk="'+k+'" data-ds="incident" style="color:#D97706;font-weight:600">'+d.inc+'</td>'+
+      '<td class="val dcell" data-dk="'+k+'" data-ds="sr" style="color:#7C3AED;font-weight:600">'+d.sr+'</td>'+
+      '<td class="val dcell" data-dk="'+k+'" data-ds="resolved" style="color:var(--engg);font-weight:700">'+rsN+'</td>'+
+      '<td style="font-weight:700;color:'+(net>0?'var(--rose)':net<0?'var(--hd)':'var(--muted)')+'">'+((net>0?'+':'')+net)+'</td>'+
+      '<td class="mono" style="font-weight:600;color:'+(cumul>0?'var(--rose)':cumul<0?'var(--hd)':'var(--muted)')+'">'+((cumul>0?'+':'')+cumul)+'</td>'+
+    '</tr>';
+  });
+  /* totals row */
+  out+='</tbody><tfoot><tr style="font-weight:800;border-top:2px solid var(--line)">'+
+    '<td colspan="2" style="text-align:right;padding-right:12px">TOTAL</td>'+
+    '<td style="color:var(--hd)">'+totCreated+'</td>'+
+    '<td style="color:#D97706">'+incCreated+'</td>'+
+    '<td style="color:#7C3AED">'+srCreated+'</td>'+
+    '<td style="color:var(--engg)">'+totResolved+'</td>'+
+    '<td style="color:'+(netChange>0?'var(--rose)':netChange<0?'var(--hd)':'var(--muted)')+'">'+((netChange>0?'+':'')+netChange)+'</td>'+
+    '<td></td></tr></tfoot></table></div></div>';
+
+  /* ── Observations ── */
+  var obs=[];
+  if(totCreated>0 && totResolved>0){
+    var ratio=Math.round(totResolved/totCreated*100);
+    if(ratio>=100) obs.push('Closure rate <b class="up">'+ratio+'%</b> — the team is closing tickets faster than they\'re coming in.');
+    else if(ratio>=80) obs.push('Closure rate <b>'+ratio+'%</b> — team is nearly keeping pace with inflow.');
+    else obs.push('Closure rate <b class="dn">'+ratio+'%</b> — inflow is outpacing closures; backlog is growing.');
+  }
+  if(incCreated>0 && srCreated>0){
+    var incPct=pct(incCreated,totCreated);
+    obs.push('Incident-to-Service-Request ratio: <b>'+incCreated+'</b> incidents ('+incPct+'%) vs <b>'+srCreated+'</b> service requests ('+(100-incPct)+'%).');
+  }
+  /* find zero-creation days (weekdays only) */
+  var zeroDays=days.filter(function(k){ var wd=dWeekday(k); return wd!==0 && wd!==6 && byDay[k].created.length===0; });
+  if(zeroDays.length>0 && zeroDays.length<=5) obs.push(zeroDays.length+' weekday'+(zeroDays.length>1?'s':'')+' with zero tickets created: '+zeroDays.map(function(k){return '<b>'+dLabelFull(k)+'</b>';}).join(", ")+'.');
+  else if(zeroDays.length>5) obs.push('<b>'+zeroDays.length+' weekdays</b> had zero tickets created in this range.');
+  /* weekend traffic */
+  var wkndCreated=days.filter(function(k){var w=dWeekday(k);return w===0||w===6;}).reduce(function(a,k){return a+byDay[k].created.length;},0);
+  if(wkndCreated>0) obs.push('<b>'+wkndCreated+'</b> tickets created on weekends ('+pct(wkndCreated,totCreated)+'% of total).');
+  if(obs.length) out+='<div class="card up d6 pad" style="margin-bottom:9px"><div style="font-weight:800;font-size:12px;margin-bottom:6px">\uD83D\uDCA1 OBSERVATIONS</div>'+obs.map(function(o){return '<div class="sub" style="margin-bottom:4px">\u2022 '+o+'</div>';}).join("")+'</div>';
+
+  window.__dailyByDay=byDay;
+  window.__dailyCreated=created;
+  window.__dailyResolved=resolved;
+  return out;
+}
+
+function viewTrend(){
+  var f=filtered(); // respects global svm/issue/date (and rc if set, but trend has own rc scope)
+  // trend scope: apply local root-cause + status on top of global (ignore global rc to avoid double-limiting; use tRc instead)
+  var base=RAW.filter(function(t){
+    if(!inRange(t)) return false;
+    if(S.svm.length && S.svm.indexOf(t.svm)<0) return false;
+    if(S.cw.length && S.cw.indexOf(t.currentWorker)<0) return false;
+    if(S.issue.length && S.issue.indexOf(t.issue)<0) return false;
+    if(S.proj.length && S.proj.indexOf(t.project)<0) return false;
+    return true;
+  });
+  var scope=base.filter(function(t){
+    // root cause scope
+    if(S.tRc==="__CLAR__"){ if(!isClar(t.rc)) return false; }
+    else if(S.tRc==="__ALL__"){ /* all */ }
+    else { if(t.rc!==S.tRc) return false; }
+    // status scope
+    if(S.tStatus==="Closed"){ if(t.status!=="Closed") return false; }
+    else if(S.tStatus==="__ALL__"){ /* all */ }
+    else { if(t.status!==S.tStatus) return false; }
+    return true;
+  });
+
+  // month aggregation
+  var byM={};
+  scope.forEach(function(t){ var k=bucketMonth(t); if(!k)return; if(!byM[k])byM[k]={hd:[],eg:[]}; (t.isHD?byM[k].hd:byM[k].eg).push(t); });
+  var mKeys=Object.keys(byM).sort();
+
+  // worker aggregation
+  var byW={};
+  scope.forEach(function(t){ var k=t.currentWorker||"(unassigned)"; if(!byW[k])byW[k]={hd:[],eg:[]}; (t.isHD?byW[k].hd:byW[k].eg).push(t); });
+  var wKeys=Object.keys(byW).sort(function(a,b){ return (byW[b].hd.length+byW[b].eg.length)-(byW[a].hd.length+byW[a].eg.length); });
+
+  var rcList=[...new Set(RAW.map(function(t){return t.rc;}).filter(Boolean))].sort();
+  var stList=[...new Set(RAW.map(function(t){return t.status;}).filter(Boolean))].sort();
+
+  /* Count tickets per dropdown option so users can see which choices yield data */
+  var rcBasePool=base; // base already has date+global filters
+  var stBasePool=base.filter(function(t){ // tickets matching root cause (to count per-status)
+    if(S.tRc==="__CLAR__") return isClar(t.rc);
+    if(S.tRc==="__ALL__") return true;
+    return t.rc===S.tRc;
+  });
+  var rcCountAll=rcBasePool.length;
+  var rcCountClar=rcBasePool.filter(function(t){return isClar(t.rc);}).length;
+  var rcCounts={}; rcList.forEach(function(s){ rcCounts[s]=rcBasePool.filter(function(t){return t.rc===s;}).length; });
+  var stCountAll=stBasePool.length;
+  var stCountClosed=stBasePool.filter(function(t){return t.status==="Closed";}).length;
+  var stCounts={}; stList.forEach(function(s){ stCounts[s]=stBasePool.filter(function(t){return t.status===s;}).length; });
+
+  var rcName = S.tRc==="__CLAR__"?"Clarification": (S.tRc==="__ALL__"?"all root causes": S.tRc);
+  var stName = S.tStatus==="__ALL__"?"any status":S.tStatus;
+  var svmName = S.svm.length?S.svm.join(", "):"all SVM staff";
+  var workerNote = S.cw.length? (" · worker "+S.cw.join(", ")) : "";
+  var projNote = S.proj.length? (" · project "+S.proj.join(", ")) : "";
+
+  var out='';
+  out+='<div class="up" style="margin-bottom:9px"><div class="eyebrow">Trend Analysis</div>'+
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">Clarification: solved by HD or escalated?</h1>'+
+    '<div class="sub" style="margin-top:3px">For each <b>'+(S.tMode==="month"?"month (by resolved date)":"current worker")+'</b>, how many <b>'+esc(rcName)+'</b> tickets (<b>'+esc(stName)+'</b>, <b>'+esc(svmName)+esc(workerNote)+esc(projNote)+'</b>) the Help Desk closed alone vs. sent to Engineering.</div></div>';
+
+  // local controls
+  out+='<div class="card up d1 pad" style="margin-bottom:9px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">'+
+    '<span class="flabel">Root cause</span>'+
+    '<select class="fsel" id="tRc"><option value="__CLAR__" '+(S.tRc==="__CLAR__"?"selected":"")+'>Clarification (default) · '+rcCountClar+'</option><option value="__ALL__" '+(S.tRc==="__ALL__"?"selected":"")+'>All root causes · '+rcCountAll+'</option>'+rcList.map(function(s){return '<option value="'+esc(s)+'" '+(S.tRc===s?"selected":"")+'>'+esc(s)+' · '+rcCounts[s]+'</option>';}).join("")+'</select>'+
+    '<span class="flabel">Status</span>'+
+    '<select class="fsel" id="tStatus"><option value="Closed" '+(S.tStatus==="Closed"?"selected":"")+'>Closed (default) · '+stCountClosed+'</option><option value="__ALL__" '+(S.tStatus==="__ALL__"?"selected":"")+'>Any status · '+stCountAll+'</option>'+stList.map(function(s){return '<option value="'+esc(s)+'" '+(S.tStatus===s?"selected":"")+'>'+esc(s)+(stCounts[s]?' · '+stCounts[s]:' · 0')+'</option>';}).join("")+'</select>'+
+    '<span class="sub" style="margin-left:auto">SVM, Current Worker &amp; date use the top filters</span>'+
+    '<button class="ghost" id="trendExport" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data ('+scope.length+')</button>'+
+  '</div>';
+
+  // View toggle: By Month / By Worker
+  out+='<div style="display:flex;gap:6px;margin-bottom:9px">'+
+    '<button class="tmode-btn'+(S.tMode==="month"?" on":"")+'" data-tmode="month">📅 By Month</button>'+
+    '<button class="tmode-btn'+(S.tMode==="worker"?" on":"")+'" data-tmode="worker">👤 By Current Worker</button>'+
+  '</div>';
+
+  var activeMap = S.tMode==="month" ? byM : byW;
+  var activeKeys = S.tMode==="month" ? mKeys : wKeys;
+
+  if(!activeKeys.length){
+    var baseN=base.length;
+    var afterRcN=base.filter(function(t){ if(S.tRc==="__CLAR__") return isClar(t.rc); if(S.tRc==="__ALL__") return true; return t.rc===S.tRc; }).length;
+    out+='<div class="card pad"><div class="empty">No tickets match this scope.</div>'+
+      '<div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.8;text-align:center">'+
+        '<b>'+baseN+'</b> tickets in date range'+
+        ' → <b>'+afterRcN+'</b> match root cause <b>'+esc(rcName)+'</b>'+
+        ' → <b>'+scope.length+'</b> match status <b>'+esc(stName)+'</b>'+
+      '</div>'+
+      '<div style="margin-top:8px;text-align:center;font-size:12px;color:var(--muted)">Try choosing <b>"Any status"</b> or <b>"All root causes"</b> to widen the scope, or adjust the date range.</div>'+
+    '</div>';
+    return out;
+  }
+
+  // per-card rendering (month or worker)
+  out+='<div class="grid up d2" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr));margin-bottom:9px">';
+  activeKeys.forEach(function(k){
+    var v=activeMap[k]; var hdN=v.hd.length, egN=v.eg.length, tot=hdN+egN;
+    var hp=pct(hdN,tot), ep=100-hp;
+    var labelText = S.tMode==="month" ? mLabel(k) : k;
+    out+='<div class="mcard">'+
+      '<div class="mtop"><span class="mmon">'+esc(labelText)+'</span><span class="mono sub">'+tot+' tickets</span></div>'+
+      '<div class="msent">HD closed <b class="hd">'+hdN+'</b> '+esc(rcName.toLowerCase())+' ticket'+(hdN!==1?'s':'')+' without Engineering, and <b class="eg">'+egN+'</b> went to Engineering. <b class="hd">HD '+hp+'%</b> · <b class="eg">Engg '+ep+'%</b>.</div>'+
+      '<div class="track" data-mk="'+esc(k)+'">'+
+        '<div class="seg hd" data-mk="'+esc(k)+'" data-side="hd" style="width:'+Math.max(hp,7)+'%">HD '+hdN+'</div>'+
+        '<div class="seg engg" data-mk="'+esc(k)+'" data-side="eg" style="width:'+Math.max(ep,7)+'%">Engg '+egN+'</div>'+
+      '</div>'+
+    '</div>';
+  });
+  out+='</div>';
+  out+=(function(){ var tHd=0,tEg=0; activeKeys.forEach(function(k){tHd+=activeMap[k].hd.length;tEg+=activeMap[k].eg.length;}); var tot=tHd+tEg;
+    return note([
+      'HD closed <b class="hd">'+tHd+' ('+pct(tHd,tot)+'%)</b> of '+tot+' '+esc(rcName.toLowerCase())+' tickets alone; Engg handled <b class="eg">'+tEg+' ('+pct(tEg,tot)+'%)</b>.',
+    ]); })();
+
+  // line chart only in month mode
+  if(S.tMode==="month" && mKeys.length>1){
+  out+='<div class="card up d3 pad"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span class="sec-title">HD % vs Engg % — month on month</span><span class="click">click a point to open those tickets</span></div>'+
+    lineChart(mKeys,byM)+
+    '<div class="legend" style="margin-top:10px"><span class="li"><span class="sw" style="background:var(--hd)"></span>HD %</span><span class="li"><span class="sw" style="background:var(--engg)"></span>Engg %</span></div>'+
+    (function(){ if(mKeys.length<2) return ""; var f=mKeys[0], l=mKeys[mKeys.length-1];
+      var pf=pct(byM[f].hd.length,byM[f].hd.length+byM[f].eg.length), pl=pct(byM[l].hd.length,byM[l].hd.length+byM[l].eg.length);
+      return note(['From <b>'+mLabel(f)+'</b> to <b>'+mLabel(l)+'</b>, HD share moved <b class="'+((pl-pf)>=0?'up':'dn')+'">'+arrow(pl-pf)+' '+Math.abs(pl-pf)+' pts</b> ('+pf+'% → '+pl+'%).']); })()+
+  '</div>';
+  }
+
+  // HD contribution ranking table in worker mode
+  if(S.tMode==="worker" && wKeys.length>0){
+  var totalHdAll=0, totalEgAll=0;
+  wKeys.forEach(function(k){ totalHdAll+=byW[k].hd.length; totalEgAll+=byW[k].eg.length; });
+  // Build ranking rows sorted by HD count (who contributes the most HD self-resolution)
+  var rankRows=wKeys.map(function(k){
+    var v=byW[k]; var hdN=v.hd.length, egN=v.eg.length, tot=hdN+egN;
+    return {name:k, hd:hdN, eg:egN, total:tot, hdp:pct(hdN,tot), share:pct(hdN,totalHdAll||1)};
+  }).sort(function(a,b){ return b.hd-a.hd || b.hdp-a.hdp; });
+  out+='<div class="card up d3 pad"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"><span class="sec-title">HD Self-Resolution Ranking</span><span class="click">who carries HD independence — ranked by volume</span></div>';
+  out+='<div style="overflow-x:auto"><table><thead><tr>'+
+    '<th style="text-align:center;width:32px" class="static">#</th>'+
+    '<th class="static">Worker</th>'+
+    '<th style="text-align:right" class="static">HD Resolved</th>'+
+    '<th style="text-align:right" class="static">Engg</th>'+
+    '<th style="text-align:right" class="static">Total</th>'+
+    '<th style="text-align:right" class="static">HD %</th>'+
+    '<th class="static" style="min-width:110px">HD %</th>'+
+    '<th style="text-align:right" class="static">Share of HD</th>'+
+  '</tr></thead><tbody>';
+  var cumShare=0;
+  rankRows.forEach(function(r,i){
+    cumShare+=r.share;
+    var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':String(i+1);
+    out+='<tr class="rowlink" data-rk="'+esc(r.name)+'">'+
+      '<td style="text-align:center;font-size:13px">'+medal+'</td>'+
+      '<td style="font-weight:700;color:var(--ink)">'+esc(r.name)+'</td>'+
+      '<td class="mono" style="text-align:right;color:var(--hd);font-weight:700">'+r.hd+'</td>'+
+      '<td class="mono" style="text-align:right;color:var(--engg);font-weight:700">'+r.eg+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:600">'+r.total+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+(r.hdp>=70?'var(--hd)':r.hdp<=30?'var(--engg)':'var(--ink)')+'">'+r.hdp+'%</td>'+
+      '<td><div class="track mini"><div class="seg hd" style="width:'+r.hdp+'%"></div><div class="seg engg" style="width:'+(100-r.hdp)+'%"></div></div></td>'+
+      '<td class="mono" style="text-align:right;color:var(--muted)">'+r.share+'%</td>'+
+    '</tr>';
+  });
+  out+='</tbody></table></div>';
+  out+='<div class="legend" style="margin-top:10px"><span class="li"><span class="sw" style="background:var(--hd)"></span>HD (self-resolved)</span><span class="li"><span class="sw" style="background:var(--engg)"></span>Engg (escalated)</span><span class="li" style="margin-left:auto;font-size:10px;color:var(--faint)">Share of HD = what % of all '+totalHdAll+' HD-resolved tickets this person contributed</span></div>';
+  // Find best (most HD resolved) and worst (lowest HD%, min 3 tickets)
+  var bestW=null,worstW=null;
+  rankRows.forEach(function(r){ if(r.total<3)return;
+    if(bestW===null||r.hd>bestW.hd)bestW=r;
+    if(worstW===null||r.hdp<worstW.hdp)worstW=r;
+  });
+  if(bestW&&worstW&&bestW.name!==worstW.name){
+    out+=note(['Most HD self-resolved: <b class="hd">'+esc(bestW.name)+' ('+bestW.hd+' tickets, '+bestW.hdp+'%)</b>; leans on Engg most: <b class="dn">'+esc(worstW.name)+' ('+worstW.hdp+'% of '+worstW.total+')</b>.']);
+  }
+  out+='</div>';
+  }
+
+  return out;
+}
+
+/* ═══════════════════════════════ VIEW: PENDING TICKETS ═══════════════════════════════
+   Same shape as Trend Analysis, but for everything that isn't Closed. Grouped by
+   current worker, each card split by the ticket's Next Action (SVM / Client).
+   The "Next action" control filters the whole view to one of those buckets. */
+function naBtn(val,label,cnt){
+  return '<button class="tmode-btn na-btn'+(S.pendAction===val?" on":"")+'" data-na="'+val+'">'+label+' <span style="opacity:.65;font-weight:600">'+cnt+'</span></button>';
+}
+function viewPending(){
+  var pend=pendingPool();
+  var cSvm=pend.filter(function(t){return naKey(t)==="svm";}).length;
+  var cCl =pend.filter(function(t){return naKey(t)==="client";}).length;
+  var cUn =pend.filter(function(t){return naKey(t)==="unset";}).length;
+
+  var na=S.pendAction; // "" | svm | client | unset
+  var scope = na? pend.filter(function(t){return naKey(t)===na;}) : pend;
+
+  // group by current worker
+  var byW={};
+  scope.forEach(function(t){
+    var k=t.currentWorker||"(unassigned)";
+    if(!byW[k]) byW[k]={svm:[],client:[],unset:[],all:[]};
+    byW[k][naKey(t)].push(t);
+    byW[k].all.push(t);
+  });
+  var wKeys=Object.keys(byW).sort(function(a,b){ return byW[b].all.length-byW[a].all.length; });
+
+  var svmName=S.svm.length?S.svm.join(", "):"all SVM staff";
+  var workerNote=S.cw.length?(" · worker "+S.cw.join(", ")):"";
+  var projNote=S.proj.length?(" · project "+S.proj.join(", ")):"";
+
+  var out='';
+  out+='<div class="up" style="margin-bottom:9px"><div class="eyebrow">Pending Tickets</div>'+
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">What\u2019s still open \u2014 and who acts next?</h1>'+
+    '<div class="sub" style="margin-top:3px">Every ticket <b>except Closed</b>, by <b>current worker</b>, split by the <b>Next Action</b> on each ticket: <b class="hd">SVM</b> (Help Desk) or <b style="color:var(--amber)">Client</b>'+(cUn?', with anything unset shown separately':'')+'. Scope: <b>'+esc(svmName)+esc(workerNote)+esc(projNote)+'</b>.</div></div>';
+
+  // next-action filter (Unset only offered when present)
+  out+='<div class="card up d1 pad" style="margin-bottom:9px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+    '<span class="flabel" style="margin-right:4px">Next action</span>'+
+    naBtn("","All",pend.length)+
+    naBtn("svm","\uD83C\uDFAF SVM",cSvm)+
+    naBtn("client","\uD83D\uDCAC Client",cCl)+
+    (cUn?naBtn("unset","\u2754 Unset",cUn):"")+
+    '<span class="sub" style="margin-left:auto">SVM, Current Worker, Type &amp; date use the top filters</span>'+
+    '<button class="ghost" id="pendExport" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data ('+scope.length+')</button>'+
+  '</div>';
+
+  if(!wKeys.length){ out+='<div class="card pad"><div class="empty">No pending tickets in this scope. \uD83C\uDF89</div></div>'; return out; }
+
+  // per-worker cards
+  out+='<div class="grid up d2" style="grid-template-columns:repeat(auto-fit,minmax(330px,1fr));margin-bottom:9px">';
+  wKeys.forEach(function(k){
+    var v=byW[k]; var s=v.svm.length, c=v.client.length, u=v.unset.length, tot=v.all.length;
+    function seg(side,n){ if(!n) return ""; var w=Math.max(pct(n,tot),9);
+      return '<div class="seg" data-wk="'+esc(k)+'" data-na="'+side+'" style="width:'+w+'%;background:'+NA_META[side].css+'">'+NA_META[side].label+' '+n+'</div>'; }
+    var parts=[];
+    if(s) parts.push('<b class="hd">'+s+'</b> awaiting SVM');
+    if(c) parts.push('<b style="color:var(--amber)">'+c+'</b> on client');
+    if(u) parts.push('<b style="color:var(--muted)">'+u+'</b> unset');
+    out+='<div class="mcard">'+
+      '<div class="mtop"><span class="mmon">'+esc(k)+'</span><span class="mono sub">'+tot+' pending</span></div>'+
+      '<div class="msent">'+parts.join(' \u00b7 ')+'.</div>'+
+      '<div class="track">'+seg("svm",s)+seg("client",c)+seg("unset",u)+'</div>'+
+    '</div>';
+  });
+  out+='</div>';
+
+  var totAll=scope.length, tS=0,tC=0,tU=0;
+  scope.forEach(function(t){ var a=naKey(t); if(a==="svm")tS++; else if(a==="unset")tU++; else tC++; });
+  var top=wKeys[0];
+  out+=note([
+    'Across <b>'+wKeys.length+'</b> worker'+(wKeys.length!==1?'s':'')+', <b>'+totAll.toLocaleString()+'</b> ticket'+(totAll!==1?'s':'')+' pending: <b class="hd">'+tS+' SVM</b> \u00b7 <b style="color:var(--amber)">'+tC+' client</b>'+(tU?' \u00b7 <b style="color:var(--muted)">'+tU+' unset</b>':'')+'.',
+    top?('Most pending: <b>'+esc(top)+'</b> with '+byW[top].all.length+' open ticket'+(byW[top].all.length!==1?'s':'')+'.'):null
+  ]);
+  return out;
+}
+
+function lineChart(mKeys,byM){
+  var W=Math.max(mKeys.length*120,480), H=200, padL=38, padR=18, padT=18, padB=30;
+  var iw=W-padL-padR, ih=H-padT-padB;
+  var n=mKeys.length;
+  function x(i){ return n===1? padL+iw/2 : padL + iw*(i/(n-1)); }
+  function y(p){ return padT + ih*(1-p/100); }
+  var hdPts=[], egPts=[];
+  mKeys.forEach(function(k,i){ var v=byM[k]; var tot=v.hd.length+v.eg.length; var hp=pct(v.hd.length,tot); hdPts.push([x(i),y(hp),hp]); egPts.push([x(i),y(100-hp),100-hp]); });
+  function poly(pts){ return pts.map(function(p){return p[0]+","+p[1];}).join(" "); }
+  function area(pts){ return "M"+padL+","+(padT+ih)+" L"+pts.map(function(p){return p[0]+","+p[1];}).join(" L")+" L"+(padL+iw)+","+(padT+ih)+" Z"; }
+  var grid="";
+  [0,25,50,75,100].forEach(function(g){ var yy=y(g); grid+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(padL+iw)+'" y2="'+yy+'" stroke="var(--line)" stroke-width="1"/><text x="'+(padL-8)+'" y="'+(yy+3)+'" font-size="9" fill="var(--faint)" text-anchor="end" font-family="var(--mono)">'+g+'</text>'; });
+  var xlab=""; mKeys.forEach(function(k,i){ xlab+='<text x="'+x(i)+'" y="'+(H-10)+'" font-size="9.5" fill="var(--muted)" text-anchor="middle" font-weight="600">'+mLabel(k)+'</text>'; });
+  var dots="";
+  hdPts.forEach(function(p,i){ dots+='<circle class="lc-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="5" fill="#fff" stroke="var(--hd)" stroke-width="2.5" data-lc="hd" data-mk="'+mKeys[i]+'" data-p="'+p[2]+'"/>'; });
+  egPts.forEach(function(p,i){ dots+='<circle class="lc-dot" cx="'+p[0]+'" cy="'+p[1]+'" r="5" fill="#fff" stroke="var(--engg)" stroke-width="2.5" data-lc="eg" data-mk="'+mKeys[i]+'" data-p="'+p[2]+'"/>'; });
+  var labels="";
+  hdPts.forEach(function(p){ var ly=Math.max(p[1]-12,11); labels+='<text x="'+p[0]+'" y="'+ly+'" font-size="11" font-weight="700" fill="var(--hd)" text-anchor="middle" font-family="var(--mono)" stroke="#fff" stroke-width="3" style="paint-order:stroke">'+p[2]+'%</text>'; });
+  egPts.forEach(function(p){ var ly=Math.min(p[1]+20,H-padB-2); labels+='<text x="'+p[0]+'" y="'+ly+'" font-size="11" font-weight="700" fill="var(--engg)" text-anchor="middle" font-family="var(--mono)" stroke="#fff" stroke-width="3" style="paint-order:stroke">'+p[2]+'%</text>'; });
+  return '<div class="linechart" style="overflow-x:auto"><div class="lc-tip" id="lctip"></div><svg viewBox="0 0 '+W+' '+H+'" width="100%" height="230" preserveAspectRatio="xMidYMid meet" style="min-width:'+W+'px">'+
+    grid+
+    '<path d="'+area(hdPts)+'" fill="var(--hd)" opacity="0.06"/>'+
+    '<polyline points="'+poly(hdPts)+'" fill="none" stroke="var(--hd)" stroke-width="2.5" stroke-linejoin="round"/>'+
+    '<polyline points="'+poly(egPts)+'" fill="none" stroke="var(--engg)" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="4 3"/>'+
+    dots+labels+xlab+
+  '</svg></div>';
+}
+
+/* ═══════════════════════════════ VIEW: EXCEPTIONS ═══════════════════════════════ */
+function viewExc(){
+  // exceptions respect the date range and project filter so you can inspect one project at a time.
+  var pool=RAW.filter(function(t){ return inRange(t) && (!S.proj.length || S.proj.indexOf(t.project)>-1); });
+  var noComp=pool.filter(function(t){return !t.components;});
+  var noSvm=pool.filter(function(t){return !t.svm;});
+  var noRc=pool.filter(function(t){return !t.rc;});
+  var noCw=pool.filter(function(t){return !t.currentWorker;});
+  var bothMissing=pool.filter(function(t){return !t.svm && !t.rc;});
+  var flagged=pool.filter(function(t){return !t.components||!t.svm||!t.rc||!t.currentWorker;});
+
+  var active=S._excFilter||null; // 'comp' | 'svm' | 'rc' | 'cw' | 'both'
+  var list=flagged;
+  if(active==="comp")list=noComp; else if(active==="svm")list=noSvm; else if(active==="rc")list=noRc; else if(active==="cw")list=noCw; else if(active==="both")list=bothMissing;
+  list=list.slice().sort(function(a,b){return (b.created||0)-(a.created||0);});
+
+  var out='';
+  out+='<div class="card up pad" style="margin-bottom:9px;display:flex;gap:14px;align-items:center;border-color:var(--amber-soft);background:var(--amber-bg)">'+
+    '<div class="ic" style="width:40px;height:40px;border-radius:11px;background:#fff;border:1px solid var(--amber-soft);display:flex;align-items:center;justify-content:center;font-size:19px">⚠️</div>'+
+    '<div><div style="font-family:var(--disp);font-weight:700;font-size:15px;color:var(--amber)">Data quality exceptions</div>'+
+    '<div class="sub" style="margin-top:2px"><b>'+flagged.length.toLocaleString()+'</b> tickets are missing Components, SVM In Charge, Root Cause, or Current Worker'+((S.from||S.to)?' in the selected range':'')+'.</div></div></div>';
+
+  out+='<div class="grid up d1" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:9px">'+
+    excCard("comp","🧩","Missing Components",noComp.length,active==="comp")+
+    excCard("svm","👤","Missing SVM In Charge",noSvm.length,active==="svm")+
+    excCard("rc","🏷️","Missing Root Cause",noRc.length,active==="rc")+
+    excCard("cw","🧑‍💼","Missing Current Worker",noCw.length,active==="cw")+
+    excCard("both","🔻","Missing SVM & Root Cause",bothMissing.length,active==="both")+
+  '</div>';
+  out+=(function(){ var gaps=[["Components",noComp.length],["SVM In Charge",noSvm.length],["Root Cause",noRc.length],["Current Worker",noCw.length]].sort(function(a,b){return b[1]-a[1];});
+    return note([
+      '<b>'+flagged.length.toLocaleString()+'</b> tickets need attention'+((S.from||S.to)?' in the selected range':'')+' — '+pct(flagged.length,pool.length)+'% of loaded data.',
+      'Most common gap: <b class="dn">'+gaps[0][0]+'</b> ('+gaps[0][1].toLocaleString()+' missing).',
+      bothMissing.length?('<b>'+bothMissing.length+'</b> tickets are missing <b>both</b> SVM In Charge and Root Cause.'):null
+    ]); })();
+
+  if(active){
+    out+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:8px 14px;background:var(--rose-bg);border:1px solid var(--rose-soft);border-radius:9px">'+
+      '<span style="color:var(--rose);font-size:12px;font-weight:600">Filtered: '+({comp:"Missing Components",svm:"Missing SVM In Charge",rc:"Missing Root Cause",cw:"Missing Current Worker",both:"Missing SVM & Root Cause"}[active])+'</span>'+
+      '<span class="mono" style="color:var(--rose);font-weight:700">→ '+list.length.toLocaleString()+'</span>'+
+      '<button class="ghost" id="excClear" style="margin-left:auto">✕ Clear</button></div>';
+  }
+
+  out+='<div class="card up d2" style="overflow:hidden">'+
+    '<div class="pad" style="border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center"><span class="sec-title">Tickets needing attention</span><button class="ghost" id="excCsv">\u2B07 Export Full Data</button></div>'+
+    '<div style="overflow:auto;max-height:520px"><table><thead><tr>'+
+      '<th class="static">Key</th><th class="static">Summary</th><th class="static">SVM In Charge</th><th class="static">Current Worker</th><th class="static">Root Cause</th><th class="static">Components</th><th class="static">Status</th><th class="static">Missing</th>'+
+    '</tr></thead><tbody>';
+  list.slice(0,3000).forEach(function(t){
+    var miss=[]; if(!t.components)miss.push("Components"); if(!t.svm)miss.push("SVM In Charge"); if(!t.rc)miss.push("Root Cause"); if(!t.currentWorker)miss.push("Current Worker");
+    out+='<tr>'+
+      '<td style="white-space:nowrap"><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
+      '<td class="trunc" title="'+esc(t.summary)+'" style="color:var(--ink2)">'+esc(t.summary)+'</td>'+
+      '<td style="white-space:nowrap">'+(t.svm?esc(t.svm):'<span style="color:var(--rose);font-weight:600">—</span>')+'</td>'+
+      '<td style="white-space:nowrap;color:var(--ink2)">'+(t.currentWorker?esc(t.currentWorker):'<span style="color:var(--rose);font-weight:600">—</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+(t.rc?'<span class="pill">'+esc(t.rc)+'</span>':'<span style="color:var(--rose);font-weight:600">—</span>')+'</td>'+
+      '<td style="white-space:nowrap">'+(t.components?esc(t.components):'<span style="color:var(--rose);font-weight:600">—</span>')+'</td>'+
+      '<td style="color:var(--muted);font-size:11px;white-space:nowrap">'+esc(t.status)+'</td>'+
+      '<td><div style="display:flex;gap:4px;flex-wrap:wrap">'+miss.map(function(m){return '<span class="tag-miss">'+m+'</span>';}).join("")+'</div></td>'+
+    '</tr>';
+  });
+  out+='</tbody></table>'+(list.length>3000?'<div class="empty" style="padding:14px">Showing first 3000 of '+list.length.toLocaleString()+' — use the date range or a card filter to narrow down, or export the full set.</div>':'')+'</div></div>';
+  window.__excList=list;
+  return out;
+}
+function excCard(id,ic,label,n,on){
+  var col=n>300?"var(--rose)":n>0?"var(--amber)":"var(--hd)";
+  return '<div class="kpi card clk" data-exc="'+id+'" style="'+(on?'border-color:var(--amber);background:var(--amber-bg)':'')+'">'+
+    '<div class="tag">'+ic+'</div>'+
+    '<div class="kv" style="color:'+col+'">'+n.toLocaleString()+'</div>'+
+    '<div class="kl">'+label+'</div></div>';
+}
+
+/* ═══════════════════════════════ VIEW: PIVOTS ═══════════════════════════════ */
+function chip(k,v){ return '<span class="filtchip">'+esc(k)+': <b>'+esc(v)+'</b></span>'; }
+function pivHeader(title,chips,desc){
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:9px;flex-wrap:wrap">'+
+    '<div><div class="sec-title">'+esc(title)+'</div><div class="sub" style="margin-top:3px;max-width:660px">'+esc(desc)+'</div></div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+chips.join("")+'</div></div>';
+}
+/* ── Adjustable per-pivot filters (Issue Type · Root Cause · Status) ── */
+function pivField(t,f){ return f==="issue"?(t.issue||""):f==="rc"?(t.rc||""):(t.status||""); }
+function pivIsBlank(v){ return v===""||String(v).toLowerCase()==="nan"; }
+function pivDistinct(pool,f){
+  var s={}; pool.forEach(function(t){ var v=pivField(t,f); if(!pivIsBlank(v)) s[v]=1; });
+  var arr=Object.keys(s);
+  if(f==="issue") arr.sort(function(a,b){ function r(x){return x==="Incident"?0:x==="Service Request"?1:5;} return (r(a)-r(b))||a.localeCompare(b); });
+  else arr.sort(function(a,b){ return a.localeCompare(b); });
+  return arr;
+}
+function pivHasBlank(pool,f){ return pool.some(function(t){ return pivIsBlank(pivField(t,f)); }); }
+function pivDefaults(pivot){
+  if(pivot==="hdworker") return {issue:"Incident",rc:"Client Clarification",status:""};
+  if(pivot==="overall")  return {issue:"Incident",rc:"",status:""};
+  if(pivot==="groupclar")return {issue:"",rc:"Client Clarification",status:""};
+  return {issue:"",rc:"",status:""};
+}
+function applyPivFilters(pool){
+  return pool.filter(function(t){
+    function ok(val,f){ if(!val) return true; var v=pivField(t,f); return val==="__BLANK__"?pivIsBlank(v):v===val; }
+    return ok(S.pIssue,"issue") && ok(S.pRc,"rc") && ok(S.pStatus,"status");
+  });
+}
+function pivControls(pool){
+  function sel(id,label,f,val){
+    var allCount=pool.length;
+    var blankCount=pool.filter(function(t){return !t[f]||String(t[f]).trim()==="";}).length;
+    var opts='<option value="">All '+esc(label)+' \u00b7 '+allCount+'</option>';
+    if(pivHasBlank(pool,f)) opts+='<option value="__BLANK__" '+(val==="__BLANK__"?"selected":"")+'>(blank) \u00b7 '+blankCount+'</option>';
+    pivDistinct(pool,f).forEach(function(v){ var c=pool.filter(function(t){return t[f]===v;}).length; opts+='<option value="'+esc(v)+'" '+(val===v?"selected":"")+'>'+esc(v)+' \u00b7 '+c+'</option>'; });
+    return '<span class="flabel">'+esc(label)+'</span><select class="fsel piv-f" id="'+id+'">'+opts+'</select>';
+  }
+  var active=(S.pIssue||S.pRc||S.pStatus);
+  return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:11px 14px;background:var(--paper);border:1px solid var(--line);border-radius:12px">'+
+    '<span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:2px">🔎 Filters</span>'+
+    sel("pIssue","Issue Type","issue",S.pIssue||"")+
+    sel("pRc","Root Cause","rc",S.pRc||"")+
+    sel("pStatus","Status","status",S.pStatus||"")+
+    (active?'<button class="ghost" id="pivReset" style="margin-left:2px">↺ Reset to default</button>':'')+
+    '</div>';
+}
+function groupLegend(){
+  return '<div class="pivnote"><b>Groups (mapped by SVM In Charge):</b>'+
+    GROUP_ORDER.map(function(g){return '<br>· <b>'+g+'</b> — '+esc(GROUP_MEMBERS[g]);}).join("")+'</div>';
+}
+function issueColDefs(pool){
+  var present=[...new Set(pool.map(function(t){return t.issue||"(blank)";}))];
+  present.sort(function(a,b){
+    function rank(x){ if(x==="Incident")return 0; if(x==="Service Request")return 1; if(x==="(blank)")return 9; return 5; }
+    return (rank(a)-rank(b))||a.localeCompare(b);
+  });
+  return present.map(function(k){return {key:k,label:k};});
+}
+/* sort that always pushes "(blank)" to the bottom */
+function blankLast(a,b){
+  var ab=(a==="(blank)"), bb=(b==="(blank)");
+  if(ab&&!bb) return 1; if(bb&&!ab) return -1;
+  return a.localeCompare(b);
+}
+function pivot2D(id,title,color,tickets,rowKeyFn,rowTitle,colDefs,colKeyFn){
+  var map={}, order=[], colTot={}, grand=0;
+  colDefs.forEach(function(c){colTot[c.key]=0;});
+  tickets.forEach(function(t){
+    var rk=rowKeyFn(t), ck=colKeyFn(t), ok=false;
+    for(var i=0;i<colDefs.length;i++){ if(colDefs[i].key===ck){ok=true;break;} }
+    if(!ok) return;
+    if(!map[rk]){ map[rk]={_t:0}; colDefs.forEach(function(c){map[rk][c.key]=0;}); order.push(rk); }
+    map[rk][ck]++; map[rk]._t++; colTot[ck]++; grand++;
+  });
+  // Sort: use state if set for this pivot, else by name
+  var sortKey=S._pivSort&&S._pivSort[id]?S._pivSort[id].col:null;
+  var sortDir=S._pivSort&&S._pivSort[id]?S._pivSort[id].dir:"desc";
+  if(sortKey){
+    order.sort(function(a,b){
+      var va,vb;
+      if(sortKey==="_name"){va=a.toLowerCase();vb=b.toLowerCase();return sortDir==="asc"?va.localeCompare(vb):vb.localeCompare(va);}
+      if(sortKey==="_total"){va=map[a]._t;vb=map[b]._t;}
+      else{va=map[a][sortKey]||0;vb=map[b][sortKey]||0;}
+      return sortDir==="asc"?va-vb:vb-va;
+    });
+  } else { order.sort(blankLast); }
+  window.__piv[id]={tickets:tickets,rowKeyFn:rowKeyFn,colKeyFn:colKeyFn,title:title,color:color};
+  function sArr(col){var act=sortKey===col;return act?(sortDir==="asc"?" ↑":" ↓"):" ↕";}
+  var h='<div class="pivscroll"><table class="ptable"><thead><tr><th class="rh pivsort" data-pivsort-id="'+id+'" data-pivsort-col="_name" style="cursor:pointer">'+esc(rowTitle)+'<span class="sarr">'+sArr("_name")+'</span></th>';
+  colDefs.forEach(function(c){ h+='<th class="pivsort" data-pivsort-id="'+id+'" data-pivsort-col="'+esc(c.key)+'" style="cursor:pointer">'+esc(c.label)+'<span class="sarr">'+sArr(c.key)+'</span></th>'; });
+  h+='<th class="pivsort" data-pivsort-id="'+id+'" data-pivsort-col="_total" style="cursor:pointer">Grand Total<span class="sarr">'+sArr("_total")+'</span></th></tr></thead><tbody>';
+  order.forEach(function(rk){
+    h+='<tr><td class="rl">'+esc(rk)+'</td>';
+    colDefs.forEach(function(c){ var v=map[rk][c.key];
+      h+='<td class="val'+(v===0?' zero':'')+'" data-piv="'+id+'" data-r="'+esc(rk)+'" data-c="'+esc(c.key)+'">'+(v||"")+'</td>'; });
+    h+='<td class="tot val" data-piv="'+id+'" data-r="'+esc(rk)+'" data-c="__all__">'+map[rk]._t+'</td></tr>';
+  });
+  h+='<tr class="grand"><td class="rl">Grand Total</td>';
+  colDefs.forEach(function(c){ h+='<td class="val" data-piv="'+id+'" data-r="__all__" data-c="'+esc(c.key)+'">'+(colTot[c.key]||"")+'</td>'; });
+  h+='<td class="val" data-piv="'+id+'" data-r="__all__" data-c="__all__">'+grand+'</td></tr>';
+  return h+'</tbody></table></div>';
+}
+function nestedGroupPivot(tix){
+  window.__pivNested={tickets:tix};
+  var workers=[...new Set(tix.map(function(t){return t.currentWorker||"(blank)";}))].sort(blankLast);
+  function counts(sub){ var m={}; workers.forEach(function(w){m[w]=0;}); var tot=0; sub.forEach(function(t){var w=t.currentWorker||"(blank)"; if(m[w]===undefined)m[w]=0; m[w]++; tot++;}); return {m:m,tot:tot}; }
+  function cells(sub,attrs){ var c=counts(sub), h="";
+    workers.forEach(function(w){ var v=c.m[w]; h+='<td class="val'+(v===0?' zero':'')+'" data-nested="1" data-worker="'+esc(w)+'" '+attrs+'>'+(v||"")+'</td>'; });
+    h+='<td class="tot val" data-nested="1" data-worker="__all__" '+attrs+'>'+c.tot+'</td>'; return h;
+  }
+  var h='<div class="pivscroll"><table class="ptable"><thead><tr><th class="rh">Group / Solved / SVM In Charge</th>';
+  workers.forEach(function(w){ h+='<th>'+esc(w)+'</th>'; });
+  h+='<th>Grand Total</th></tr></thead><tbody>';
+  GROUP_ORDER.forEach(function(g){
+    var gt=tix.filter(function(t){return t.group===g;}); if(!gt.length) return;
+    h+='<tr class="grouphdr"><td class="rl">'+g+'</td>'+cells(gt,'data-group="'+esc(g)+'" data-solved="__all__" data-svm="__all__"')+'</tr>';
+    ["ENGG","HD"].forEach(function(sv){
+      var st=gt.filter(function(t){return (t.isHD?"HD":"ENGG")===sv;}); if(!st.length) return;
+      h+='<tr class="solvedhdr"><td class="rl"><span class="'+(sv==="HD"?"bhd":"beg")+'">'+sv+'</span></td>'+cells(st,'data-group="'+esc(g)+'" data-solved="'+sv+'" data-svm="__all__"')+'</tr>';
+      var svms=[...new Set(st.map(function(t){return t.svm||"(blank)";}))].sort(blankLast);
+      svms.forEach(function(sm){
+        var smt=st.filter(function(t){return (t.svm||"(blank)")===sm;});
+        h+='<tr class="svmrow"><td class="rl">'+esc(sm)+'</td>'+cells(smt,'data-group="'+esc(g)+'" data-solved="'+sv+'" data-svm="'+esc(sm)+'"')+'</tr>';
+      });
+    });
+  });
+  var allc=counts(tix);
+  h+='<tr class="grand"><td class="rl">Grand Total</td>';
+  workers.forEach(function(w){ h+='<td class="val" data-nested="1" data-worker="'+esc(w)+'" data-group="__all__" data-solved="__all__" data-svm="__all__">'+(allc.m[w]||"")+'</td>'; });
+  h+='<td class="val" data-nested="1" data-worker="__all__" data-group="__all__" data-solved="__all__" data-svm="__all__">'+allc.tot+'</td></tr>';
+  return h+'</tbody></table></div>';
+}
+function viewPivots(){
+  window.__piv={};
+  var pool=RAW.filter(function(t){ return inRange(t) && (!S.proj.length || S.proj.indexOf(t.project)>-1); });
+  var nav=[["hdworker","HD Worker Performance"],["overall","Overall Incidents"],["groupclar","Group-wise Clarifications"],["rootcause","Root Cause"],["component","Component Wise"],["svm","SVM In Charge Wise"],["custom","Custom Pivot"]];
+  var out='';
+  var pivScopeNotes=['date range'];
+  if(S.proj.length) pivScopeNotes.push('project <b>'+esc(S.proj.join(', '))+'</b>');
+  out+='<div class="up" style="margin-bottom:9px"><div class="eyebrow">Pivots</div>'+
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">Pivot tables</h1>'+
+    '<div class="sub" style="margin-top:3px">Excel-style cross-tabs. Every cell is clickable and opens those exact tickets, each linking to Jira. These pivots use the <b>'+pivScopeNotes.join(' + ')+'</b>'+((S.from||S.to||S.proj.length)?' — '+pool.length.toLocaleString()+' tickets in scope':'')+', then the <b>Issue Type · Root Cause · Status</b> filters below (each pivot opens with its own sensible defaults — change or reset them anytime).'+
+    '<button class="ghost" id="pivExport" style="margin-left:12px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Current Pivot Data</button></div></div>';
+  out+='<div class="pivnav">'+nav.map(function(x){return '<button data-piv-nav="'+x[0]+'" class="'+(S.pivot===x[0]?"on":"")+'">'+esc(x[1])+'</button>';}).join("")+'</div>';
+  // (re)apply this pivot's default filters when the pivot changes; then let the user override
+  if(S._pivFor!==S.pivot){ var _pd=pivDefaults(S.pivot); S.pIssue=_pd.issue; S.pRc=_pd.rc; S.pStatus=_pd.status; S._pivFor=S.pivot; }
+  out+=pivControls(pool);
+  var ppool=applyPivFilters(pool);
+  out+='<div class="card up d1 pad">';
+  if(S.pivot==="hdworker"){
+    var t1=ppool;
+    out+=pivHeader("HD Worker Performance",[],"Each current worker's load for the current filters, split by who finally resolved it — HD (Help Desk alone) or ENGG (escalated to Engineering).");
+    out+=pivot2D("hdworker","HD Worker Performance","#0F766E",t1,function(t){return t.currentWorker||"(blank)";},"Current Worker",[{key:"HD",label:"HD"},{key:"ENGG",label:"ENGG"}],function(t){return t.isHD?"HD":"ENGG";});
+    var w1=cnt(t1,function(t){return t.currentWorker||"(blank)";}), tw1=topKey(w1,true), bw=bestWorstHD(t1,10);
+    out+=note([
+      hdSentence(t1),
+      tw1?('Busiest worker: <b>'+esc(tw1)+'</b> with <b>'+w1[tw1]+'</b> clarification-incidents.'):null,
+      (bw.best&&bw.worst&&bw.best!==bw.worst)?('Most HD self-resolved: <b class="hd">'+esc(bw.best)+' ('+bw.s[bw.best].hd+' tickets, '+bw.s[bw.best].p+'%)</b>; leans on Engg most: <b class="dn">'+esc(bw.worst)+' ('+bw.s[bw.worst].p+'% of '+bw.s[bw.worst].t+')</b> — among workers with ≥10.'):null
+    ]);
+  } else if(S.pivot==="overall"){
+    var t2=ppool;
+    out+=pivHeader("Overall Incidents · Worker × Group",[],"Volume per current worker across Group 1, Group 2 and Others, for the current filters.");
+    out+=pivot2D("overall","Overall Incidents","#5B57D8",t2,function(t){return t.currentWorker||"(blank)";},"Current Worker",GROUP_ORDER.map(function(g){return {key:g,label:g};}),function(t){return t.group;});
+    var g2=cnt(t2,function(t){return t.group;}), w2=cnt(t2,function(t){return t.currentWorker||"(blank)";}), tg=topKey(g2), tw2=topKey(w2,true);
+    out+=note([
+      'Incident split — <b>Group 1</b> '+(g2["Group 1"]||0)+' ('+pct(g2["Group 1"]||0,t2.length)+'%), <b>Group 2</b> '+(g2["Group 2"]||0)+' ('+pct(g2["Group 2"]||0,t2.length)+'%), <b>Others</b> '+(g2["Others"]||0)+' ('+pct(g2["Others"]||0,t2.length)+'%).',
+      tg?('Largest group: <b>'+esc(tg)+'</b> with <b>'+g2[tg]+'</b> incidents.'):null,
+      tw2?('Busiest worker: <b>'+esc(tw2)+'</b> ('+w2[tw2]+' incidents).'):null
+    ]);
+    out+=groupLegend();
+  } else if(S.pivot==="groupclar"){
+    var t3=ppool;
+    out+=pivHeader("Group-wise Clarifications",[],"Tickets (current filters) broken down by Group → HD/ENGG → SVM In Charge (rows), columned by the current worker who handled them.");
+    out+=nestedGroupPivot(t3);
+    var gnotes=GROUP_ORDER.map(function(gp){ var sub=t3.filter(function(t){return t.group===gp;}); if(!sub.length)return null;
+      var hd=sub.filter(function(t){return t.isHD;}).length; return '<b>'+gp+'</b>: '+sub.length+' tickets — <b class="hd">'+hd+' HD</b> / <b class="eg">'+(sub.length-hd)+' Engg</b> ('+pct(hd,sub.length)+'% HD).'; }).filter(Boolean);
+    out+=note([hdSentence(t3)].concat(gnotes));
+    out+=groupLegend();
+  } else if(S.pivot==="rootcause"){
+    out+=pivHeader("Root Cause × Issue Type",[],"Ticket count by root cause, split by issue type.");
+    out+=pivot2D("rootcause","Root Cause","#B45309",ppool,function(t){return t.rc||"(blank)";},"Root Cause",issueColDefs(ppool),function(t){return t.issue||"(blank)";});
+    var rcM=cnt(ppool,function(t){return t.rc||"(blank)";}), trc=topKey(rcM,true);
+    var incN=ppool.filter(function(t){return t.issue==="Incident";}).length, srN=ppool.filter(function(t){return t.issue==="Service Request";}).length;
+    out+=note([
+      trc?('Top root cause: <b>'+esc(trc)+'</b> with <b>'+rcM[trc].toLocaleString()+'</b> tickets ('+pct(rcM[trc],ppool.length)+'% of all).'):null,
+      'Incidents <b>'+incN.toLocaleString()+'</b> vs Service Requests <b>'+srN.toLocaleString()+'</b> ('+pct(incN,ppool.length)+'% / '+pct(srN,ppool.length)+'%).',
+      (rcM["(blank)"]?('<b class="dn">'+rcM["(blank)"]+'</b> tickets have no root cause — see the Exceptions tab.'):null)
+    ]);
+  } else if(S.pivot==="component"){
+    out+=pivHeader("Component × Issue Type",[],"Ticket count by component, split by issue type.");
+    out+=pivot2D("component","Component","#0F766E",ppool,function(t){return t.components||"(blank)";},"Components",issueColDefs(ppool),function(t){return t.issue||"(blank)";});
+    var cM=cnt(ppool,function(t){return t.components||"(blank)";}), tc=topKey(cM,true);
+    out+=note([
+      tc?('Top component: <b>'+esc(tc)+'</b> with <b>'+cM[tc].toLocaleString()+'</b> tickets.'):null,
+      (cM["(blank)"]?('<b class="dn">'+cM["(blank)"]+'</b> tickets have no component — see the Exceptions tab.'):'Every ticket has a component assigned.')
+    ]);
+  } else if(S.pivot==="svm"){
+    out+=pivHeader("SVM In Charge × Issue Type",[],"Ticket count by SVM In Charge, split by issue type.");
+    out+=pivot2D("svm","SVM In Charge","#5B57D8",ppool,function(t){return t.svm||"(blank)";},"SVM In Charge",issueColDefs(ppool),function(t){return t.issue||"(blank)";});
+    var sM=cnt(ppool,function(t){return t.svm||"(blank)";}), ts=topKey(sM,true);
+    out+=note([
+      ts?('Highest volume: <b>'+esc(ts)+'</b> owns <b>'+sM[ts].toLocaleString()+'</b> tickets ('+pct(sM[ts],ppool.length)+'%).'):null,
+      (sM["(blank)"]?('<b class="dn">'+sM["(blank)"]+'</b> tickets have no SVM In Charge — see the Exceptions tab.'):null)
+    ]);
+  } else if(S.pivot==="custom"){
+    var CROW_FIELDS=["Current Worker","Project","Priority","Issue Type","Root Cause","Components","SVM In Charge","Type of Fix","Screen Name","Menu Head","Status"];
+    var CCOL_FIELDS=["HD/Engg Split","Status","Priority","Issue Type","Root Cause","Type of Fix","Components"];
+    if(!S.cpRow) S.cpRow="Current Worker";
+    if(!S.cpCol) S.cpCol="Root Cause";
+    var cpRowFn=function(t){
+      var f=S.cpRow;
+      if(f==="Current Worker")return t.currentWorker||"(blank)";if(f==="Project")return t.project||"(blank)";if(f==="Priority")return t.priority||"(blank)";if(f==="Issue Type")return t.issue||"(blank)";if(f==="Root Cause")return t.rc||"(blank)";if(f==="SVM In Charge")return t.svm||"(blank)";if(f==="Status")return t.status||"(blank)";if(f==="Components")return t.components||"(blank)";if(f==="Type of Fix")return t.typeOfFix||"(blank)";if(f==="Screen Name")return t.screenName||"(blank)";if(f==="Menu Head")return t.menuHead||"(blank)";
+      return "(blank)";
+    };
+    var cpColVals=new Set();var cpColFn;
+    if(S.cpCol==="HD/Engg Split"){cpColFn=function(t){return t.isHD?"HD":"ENGG";};cpColVals.add("HD");cpColVals.add("ENGG");}
+    else{cpColFn=function(t){var f=S.cpCol;if(f==="Status")return t.status||"(blank)";if(f==="Priority")return t.priority||"(blank)";if(f==="Issue Type")return t.issue||"(blank)";if(f==="Root Cause")return t.rc||"(blank)";if(f==="Type of Fix")return t.typeOfFix||"(blank)";if(f==="Components")return t.components||"(blank)";return"(blank)";};ppool.forEach(function(t){cpColVals.add(cpColFn(t));});}
+    var cpCols=[...cpColVals].sort().map(function(c){return{key:c,label:c};});
+    out+=pivHeader("Custom Pivot",[chip("Rows",S.cpRow),chip("Columns",S.cpCol)],"Build your own cross-tab by choosing row and column fields.");
+    out+='<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:9px">'+
+      '<span class="flabel">Rows</span><select class="fsel" id="cpRow">'+CROW_FIELDS.map(function(f){return '<option value="'+esc(f)+'" '+(S.cpRow===f?"selected":"")+'>'+esc(f)+'</option>';}).join("")+'</select>'+
+      '<span class="flabel">Columns</span><select class="fsel" id="cpCol">'+CCOL_FIELDS.map(function(f){return '<option value="'+esc(f)+'" '+(S.cpCol===f?"selected":"")+'>'+esc(f)+'</option>';}).join("")+'</select>'+
+    '</div>';
+    out+=pivot2D("custom","Custom Pivot","#2563EB",ppool,cpRowFn,S.cpRow,cpCols,cpColFn);
+  }
+  out+='</div>';
+  return out;
+}
+
+/* ═══════════════════════════════ VIEW: WEEK ON WEEK ═══════════════════════════════ */
+/* badge (optional): a small chip shown under the delta, e.g. a partial-week note. */
+function wowCard(label,a,b,isPct,color,metric,badge){
+  var d=b-a, arrow=d>0?"▲":(d<0?"▼":"→"), cls=d>0?"up":(d<0?"down":"flat");
+  return '<div class="card kpi clk" data-wcard="'+metric+'" style="text-align:center;padding:16px 14px">'+
+    '<div class="kl">'+label+'</div>'+
+    '<div class="kv" style="color:'+color+';font-size:25px;margin-top:8px">'+b+(isPct?"%":"")+'</div>'+
+    '<div style="margin-top:9px"><span class="dchip '+cls+'">'+arrow+' '+Math.abs(d)+(isPct?" pts":"")+'</span> <span class="sub">vs '+a+(isPct?"%":"")+'</span></div>'+
+    (badge?'<div style="margin-top:6px"><span class="dchip flat" style="background:#FEF3E2;color:#B45309;border-color:#F5D9A8">'+badge+'</span></div>':'')+
+  '</div>';
+}
+function deltaCell(d,isPct,neg){
+  if(d===null||d===undefined) return '<span class="sub">—</span>';
+  var good=neg?-d:d, cls=good>0?"up":(good<0?"down":"flat"), sym=d>0?"▲":(d<0?"▼":"→");
+  return '<span class="dchip '+cls+'">'+sym+' '+Math.abs(d)+(isPct?" pts":"")+'</span>';
+}
+function viewWoW(){
+  window.__piv={};
+  if(!DATA_RES_MAX) computeResolvedSpan();   // ensure data-currency span is ready for partial-week checks
+  var pool=weekPool();
+  var scopeNote=(S.svm.length||S.cw.length||S.rc.length||S.issue.length||S.proj.length)?" (filters applied)":"";
+  var out='<div class="up" style="margin-bottom:9px"><div class="eyebrow">Week on Week</div>'+
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">Week-on-week resolution</h1>'+
+    '<div class="sub" style="margin-top:3px">ISO week numbers built from each ticket\'s <b>Resolved date</b>. Pick two weeks below — that window drives every chart, table and pivot on this tab'+esc(scopeNote)+'.</div></div>';
+  if(!pool.length){ return out+'<div class="card pad"><div class="empty">No resolved tickets in scope. Week-on-week uses the Resolved date — try clearing filters or the date range.</div></div>'; }
+
+  function fk(d){ var iw=isoWeek(d); return iw.year+"-W"+String(iw.week).padStart(2,"0"); }
+  var wk={};
+  pool.forEach(function(t){ var key=fk(t.resolved);
+    if(!wk[key]) wk[key]={key:key,year:isoWeek(t.resolved).year,week:isoWeek(t.resolved).week,tix:[],hd:0,eg:0};
+    wk[key].tix.push(t); if(t.isHD)wk[key].hd++; else wk[key].eg++; });
+  var keys=Object.keys(wk).sort();
+  window.__wk=wk;
+  if(!S.weekB||!wk[S.weekB]) S.weekB=keys[keys.length-1];
+  if(!S.weekA||!wk[S.weekA]) S.weekA=keys.length>1?keys[keys.length-2]:keys[keys.length-1];
+
+  // the two selectors define an inclusive window
+  var lo=S.weekA<=S.weekB?S.weekA:S.weekB, hi=S.weekA<=S.weekB?S.weekB:S.weekA;
+  var vis=keys.filter(function(k){ return k>=lo && k<=hi; });
+  var poolR=pool.filter(function(t){ var k=fk(t.resolved); return k>=lo && k<=hi; });
+  var allSelected=(vis.length===keys.length);
+
+  function m(k){ var w=wk[k]; return {t:w.tix.length,hd:w.hd,eg:w.eg,hp:pct(w.hd,w.tix.length)}; }
+  var A=m(S.weekA), B=m(S.weekB);
+
+  /* ── PARTIAL-WEEK & RUN-RATE (fixes the "apples-to-apples" problem) ──
+     A week whose 7 calendar days aren't all inside the export's resolved-date
+     span (typically the newest week, when the export is taken mid-week) will
+     naturally show fewer resolved tickets — so a raw "W35 vs W34" delta over-
+     states any drop. We compute each compared week's day-coverage and, when a
+     week is partial, expose a fair per-day run-rate and a full-week projection
+     instead of relying on the raw totals alone. */
+  var covA=weekCoverageDays(wk[S.weekA].year, wk[S.weekA].week);
+  var covB=weekCoverageDays(wk[S.weekB].year, wk[S.weekB].week);
+  var partialA=covA>0&&covA<7, partialB=covB>0&&covB<7;
+  var perDayA=covA>0?A.t/covA:0, perDayB=covB>0?B.t/covB:0;
+  var projB=Math.round(perDayB*7);                       // B's total at current pace over a full week
+  var perDayDeltaPct=perDayA>0?Math.round((perDayB-perDayA)/perDayA*100):0;
+  var bBadge=partialB?("◐ "+covB+"/7 days"):"";         // small chip on the Resolved card
+
+  /* ── ADJACENCY CHECK ──
+     The week selectors only list weeks that actually have resolved tickets in
+     scope, so a week with zero resolutions (e.g. a quiet week for one worker)
+     is skipped — which can make "Last 2 weeks" silently compare two NON-
+     consecutive weeks. Detect the gap so we can say so plainly. */
+  var gap=weeksBetweenKeys(lo,hi);                        // 1 = consecutive ISO weeks
+  var nonAdjacent=(vis.length>=2 && gap>1);
+
+  var latest=keys[keys.length-1];
+  var windowTxt = vis.length===1 ? ('Showing <b>'+weekLabel(vis[0])+'</b>') : ('Showing <b>'+weekLabel(lo)+'</b>–<b>'+weekLabel(hi)+'</b> · '+vis.length+' weeks');
+  out+='<div class="card up d1 pad" style="margin-bottom:9px">'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">'+
+      '<span class="sec-title">Compare weeks</span>'+
+      '<select class="fsel" id="weekA">'+keys.map(function(k){return '<option value="'+k+'" '+(S.weekA===k?"selected":"")+'>'+weekLabel(k)+' · '+weekDates(wk[k].year,wk[k].week)+'</option>';}).join("")+'</select>'+
+      '<span class="sub">→</span>'+
+      '<select class="fsel" id="weekB">'+keys.map(function(k){return '<option value="'+k+'" '+(S.weekB===k?"selected":"")+'>'+weekLabel(k)+' · '+weekDates(wk[k].year,wk[k].week)+'</option>';}).join("")+'</select>'+
+      '<button class="chip'+(vis.length===2&&hi===latest?' on':'')+'" data-wowset="last2">Last 2 weeks</button>'+
+      '<button class="chip'+(allSelected?' on':'')+'" data-wowset="all">All weeks</button>'+
+      /* loud, unmissable flags right in the control bar */
+      (partialB?'<span class="dchip flat" style="background:#FEF3E2;color:#B45309;border-color:#F5D9A8">⚠ '+weekLabel(S.weekB)+' in progress · '+covB+'/7 days</span>':'')+
+      (nonAdjacent?'<span class="dchip flat" style="background:#FEF3E2;color:#B45309;border-color:#F5D9A8">⚠ not consecutive · '+(gap-1)+' week'+((gap-1)!==1?'s':'')+' skipped</span>':'')+
+      '<span class="click" style="margin-left:auto">'+windowTxt+' \u00b7 click a metric to open tickets</span>'+
+      '<button class="ghost" id="wowExport" style="margin-left:8px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data ('+poolR.length+')</button>'+
+    '</div>'+
+    '<div class="grid" style="grid-template-columns:repeat(4,1fr)">'+
+      wowCard("Resolved",A.t,B.t,false,"var(--ink)","all",bBadge)+
+      wowCard("HD resolved",A.hd,B.hd,false,"var(--hd)","hd")+
+      wowCard("Engg resolved",A.eg,B.eg,false,"var(--engg)","eg")+
+      wowCard("HD share",A.hp,B.hp,true,"var(--hd)","hp")+
+    '</div>'+
+    note([
+      /* When B is partial, lead with the fair per-day/run-rate read; otherwise
+         the plain raw delta is already apples-to-apples. */
+      partialB
+        ? '<b>'+weekLabel(S.weekB)+' is only '+covB+' of 7 days in</b> (export data runs to '+fdate(DATA_RES_MAX)+'), so its <b>'+B.t+'</b> vs '+weekLabel(S.weekA)+"'s <b>"+A.t+'</b> isn\'t like-for-like. Per day: <b>'+(Math.round(perDayB*10)/10)+'/day</b> vs <b>'+(Math.round(perDayA*10)/10)+'/day</b> ('+(perDayDeltaPct>=0?'+':'')+perDayDeltaPct+'%). At this pace '+weekLabel(S.weekB)+' projects to <b>~'+projB+'</b> for the full week.'
+        : 'From <b>'+weekLabel(S.weekA)+'</b> to <b>'+weekLabel(S.weekB)+'</b>, resolved '+((B.t-A.t)>=0?'rose':'fell')+' by <b>'+Math.abs(B.t-A.t)+'</b> ('+(A.t?Math.round((B.t-A.t)/A.t*100):0)+'%).',
+      partialA?'Note: <b>'+weekLabel(S.weekA)+'</b> is also partial ('+covA+'/7 days) — it sits at the edge of the data window.':null,
+      nonAdjacent?'These two weeks aren\'t consecutive — <b>'+(gap-1)+'</b> week'+((gap-1)!==1?'s':'')+' with no resolved tickets in scope '+((gap-1)!==1?'were':'was')+' skipped between them.':null,
+      'HD share moved <b class="'+((B.hp-A.hp)>=0?'up':'dn')+'">'+arrow(B.hp-A.hp)+' '+Math.abs(B.hp-A.hp)+' pts</b> ('+A.hp+'% → '+B.hp+'%)'+((B.t<10||A.t<10)?' — note the small ticket counts make this share sensitive to a single ticket.':'.')
+    ])+
+  '</div>';
+
+  // trend bars — visible window only
+  var maxT=1; vis.forEach(function(k){ maxT=Math.max(maxT,wk[k].tix.length); });
+  var BAR=200;
+  out+='<div class="card up d2 pad" style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px"><span class="sec-title">Resolved per week — HD vs Engg</span><span class="click">'+(allSelected?"all weeks":weekLabel(lo)+"–"+weekLabel(hi))+' · click a segment</span></div><div class="stackwrap">';
+  vis.forEach(function(k){ var w=wk[k]; var tot=w.tix.length; var hpx=Math.max(Math.round(tot/maxT*BAR),10);
+    out+='<div class="col"><div class="tot">'+tot+'</div><div class="stack" style="height:'+hpx+'px">'+
+      (w.eg>0?'<div class="seg engg" data-wk="'+k+'" data-side="eg" style="flex:'+w.eg+' '+w.eg+' 0" title="Engg '+w.eg+'">'+(w.eg/tot*hpx>=16?'<span class="sv">'+w.eg+'</span>':'')+'</div>':'')+
+      (w.hd>0?'<div class="seg hd" data-wk="'+k+'" data-side="hd" style="flex:'+w.hd+' '+w.hd+' 0" title="HD '+w.hd+'">'+(w.hd/tot*hpx>=16?'<span class="sv">'+w.hd+'</span>':'')+'</div>':'')+
+    '</div><div class="wx">'+weekLabel(k)+'<br>'+weekDates(w.year,w.week)+'</div></div>';
+  });
+  out+='</div><div class="legend" style="margin-top:9px"><span class="li"><span class="sw" style="background:var(--hd)"></span>HD resolved</span><span class="li"><span class="sw" style="background:var(--engg)"></span>Engg resolved</span></div>'+
+    (function(){ var sum=vis.reduce(function(a,k){return a+wk[k].tix.length;},0);
+      var busiest=vis.reduce(function(a,b){return wk[b].tix.length>wk[a].tix.length?b:a;});
+      var lat=wk[vis[vis.length-1]];
+      var latCov=weekCoverageDays(lat.year,lat.week);          // partial-week marker for the newest bar
+      var latPartial=latCov>0&&latCov<7;
+      return note([
+        'Window of <b>'+vis.length+'</b> week'+(vis.length!==1?'s':'')+' — <b>'+sum.toLocaleString()+'</b> resolved, averaging <b>'+Math.round(sum/vis.length)+'</b>/week.',
+        'Busiest in window: <b>'+weekLabel(busiest)+'</b> ('+weekDates(wk[busiest].year,wk[busiest].week)+') with <b>'+wk[busiest].tix.length+'</b> resolved.',
+        'Newest week <b>'+weekLabel(lat.key)+'</b>'+(latPartial?' <span class="dchip flat" style="background:#FEF3E2;color:#B45309;border-color:#F5D9A8">◐ partial '+latCov+'/7 days</span>':'')+' — HD share <b class="hd">'+pct(lat.hd,lat.tix.length)+'%</b> ('+lat.hd+' HD / '+lat.eg+' Engg)'+(latPartial?'. The shorter bar partly reflects the incomplete week, not only lower output.':'.')
+      ]); })()+
+  '</div>';
+
+  // detail table with deltas — visible window
+  out+='<div class="card up d3" style="overflow:hidden;margin-bottom:9px"><div class="pad" style="border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center"><span class="sec-title">Week detail &amp; change vs previous week</span><span class="click">click a row, or an HD / Engg cell</span></div>'+
+    '<div style="overflow:auto;max-height:460px"><table class="ptable"><thead><tr><th class="rh">Week</th><th class="rh">Dates</th><th>Resolved</th><th>HD</th><th>Engg</th><th>HD %</th><th>Engg %</th><th>Δ Resolved</th><th>Δ HD %</th><th>Δ Engg %</th></tr></thead><tbody>';
+  vis.forEach(function(k,i){ var w=wk[k]; var tot=w.tix.length; var hp=pct(w.hd,tot);
+    var prev=i>0?wk[vis[i-1]]:null; var dTot=prev?tot-prev.tix.length:null; var dHp=prev?hp-pct(prev.hd,prev.tix.length):null;
+    var covRow=weekCoverageDays(w.year,w.week); var partRow=covRow>0&&covRow<7;   // flag partial rows
+    out+='<tr class="rowlink" data-wk-row="'+k+'"><td class="rl">'+weekLabel(k)+(partRow?' <span title="Partial week — only '+covRow+' of 7 days are within the data" style="color:#B45309;font-weight:700">◐</span>':'')+'</td>'+
+      '<td class="rl" style="font-weight:400;color:var(--muted)">'+weekDates(w.year,w.week)+'</td>'+
+      '<td class="tot val" data-wkc="'+k+'" data-side="all">'+tot+'</td>'+
+      '<td class="val" data-wkc="'+k+'" data-side="hd" style="color:var(--hd);font-weight:700">'+w.hd+'</td>'+
+      '<td class="val" data-wkc="'+k+'" data-side="eg" style="color:var(--engg);font-weight:700">'+w.eg+'</td>'+
+      '<td class="mono">'+hp+'%</td>'+
+      '<td class="mono" style="color:var(--engg)">'+(100-hp)+'%</td>'+
+      '<td>'+deltaCell(dTot,false)+'</td><td>'+deltaCell(dHp,true)+'</td>'+
+      '<td>'+deltaCell(dHp===null?null:-dHp,true,true)+'</td></tr>';
+  });
+  out+='</tbody></table></div>'+
+    (function(){ if(vis.length<2) return ""; var jumps=[]; for(var i=1;i<vis.length;i++){ jumps.push({k:vis[i],d:wk[vis[i]].tix.length-wk[vis[i-1]].tix.length}); }
+      var up=jumps.reduce(function(a,b){return b.d>a.d?b:a;}), dn=jumps.reduce(function(a,b){return b.d<a.d?b:a;});
+      return note([
+        'Biggest week-over-week rise: <b class="up">'+weekLabel(up.k)+' (+'+up.d+')</b> vs the prior week.',
+        'Biggest drop: <b class="dn">'+weekLabel(dn.k)+' ('+dn.d+')</b> vs the prior week.'
+      ]); })()+
+  '</div>';
+
+  // pivots — visible window
+  out+='<div class="card up d4 pad" style="margin-bottom:9px">'+pivHeader("Week × Solved",[chip("Window",allSelected?"all weeks":weekLabel(lo)+"–"+weekLabel(hi))],"Resolved tickets per ISO week, split HD vs Engg.")+
+    pivot2D("wkhd","Week × Solved","#0F766E",poolR,function(t){return weekKeyLabel(t.resolved);},"Week",[{key:"HD",label:"HD"},{key:"ENGG",label:"ENGG"}],function(t){return t.isHD?"HD":"ENGG";})+
+    (function(){ var bh=null,bl=null; vis.forEach(function(k){ var p=pct(wk[k].hd,wk[k].tix.length); if(bh===null||p>pct(wk[bh].hd,wk[bh].tix.length))bh=k; if(bl===null||p<pct(wk[bl].hd,wk[bl].tix.length))bl=k; });
+      return note([ hdSentence(poolR),
+        (bh&&bl&&bh!==bl)?('Highest HD-share week: <b class="hd">'+weekLabel(bh)+' ('+pct(wk[bh].hd,wk[bh].tix.length)+'%)</b>; lowest: <b class="dn">'+weekLabel(bl)+' ('+pct(wk[bl].hd,wk[bl].tix.length)+'%)</b>.'):null ]); })()+
+  '</div>';
+  var gAll=cnt(poolR,function(t){return t.group;}), tgAll=topKey(gAll);
+  out+='<div class="card up d4 pad">'+pivHeader("Week × Group",[chip("Window",allSelected?"all weeks":weekLabel(lo)+"–"+weekLabel(hi))],"Resolved tickets per ISO week across Group 1 / Group 2 / Others.")+
+    pivot2D("wkgroup","Week × Group","#5B57D8",poolR,function(t){return weekKeyLabel(t.resolved);},"Week",GROUP_ORDER.map(function(g){return {key:g,label:g};}),function(t){return t.group;})+
+    note([ 'Resolved by group — <b>Group 1</b> '+(gAll["Group 1"]||0)+' ('+pct(gAll["Group 1"]||0,poolR.length)+'%), <b>Group 2</b> '+(gAll["Group 2"]||0)+' ('+pct(gAll["Group 2"]||0,poolR.length)+'%), <b>Others</b> '+(gAll["Others"]||0)+' ('+pct(gAll["Others"]||0,poolR.length)+'%).', tgAll?('Most resolved: <b>'+esc(tgAll)+'</b>.'):null ])+
+    groupLegend()+'</div>';
+  return out;
+}
+
+/* ═══════════════════════════════ small builders ═══════════════════════════════ */
+function kpi(ic,label,val,color,click,sub){
+  return '<div class="kpi card clk" data-kpi="'+click+'"><div class="tag">'+ic+'</div>'+
+    '<div class="kv" style="color:'+color+'">'+val+'</div>'+
+    '<div class="kl">'+label+'</div>'+(sub?'<div class="ks">'+sub+'</div>':'')+'</div>';
+}
+function th(col,label){
+  var arrow=S.sortCol===col?(S.sortDir==="asc"?" ↑":" ↓"):"";
+  return '<th data-sort="'+col+'">'+label+'<span style="color:var(--hd)">'+arrow+'</span></th>';
+}
+
+/* ═══════════════════════════════ BIND events per tab ═══════════════════════════════ */
+function bindPivotCells(){
+  // generic 2-D pivot cells (used by Pivots tab and Week-on-Week pivots)
+  document.querySelectorAll('.ptable td.val[data-piv]').forEach(function(td){
+    if(td.classList.contains("zero")) return;
+    td.onclick=function(){
+      var reg=window.__piv[td.dataset.piv]; if(!reg) return;
+      var r=td.dataset.r, c=td.dataset.c;
+      var sub=reg.tickets.filter(function(t){ return (r==="__all__"||reg.rowKeyFn(t)===r) && (c==="__all__"||reg.colKeyFn(t)===c); });
+      var title=reg.title+" — "+(r==="__all__"?"All rows":r)+(c==="__all__"?"":" · "+c);
+      openModal(title,"🧮",reg.color,sub);
+    };
+  });
+  // nested group pivot cells
+  document.querySelectorAll('.ptable td.val[data-nested]').forEach(function(td){
+    if(td.classList.contains("zero")) return;
+    td.onclick=function(){
+      var reg=window.__pivNested; if(!reg) return;
+      var g=td.dataset.group, sv=td.dataset.solved, sm=td.dataset.svm, w=td.dataset.worker;
+      var sub=reg.tickets.filter(function(t){
+        if(g!=="__all__"&&t.group!==g) return false;
+        if(sv!=="__all__"&&(t.isHD?"HD":"ENGG")!==sv) return false;
+        if(sm!=="__all__"&&(t.svm||"(blank)")!==sm) return false;
+        if(w!=="__all__"&&(t.currentWorker||"(blank)")!==w) return false;
+        return true;
+      });
+      var parts=[]; if(g!=="__all__")parts.push(g); if(sv!=="__all__")parts.push(sv); if(sm!=="__all__")parts.push(sm); if(w!=="__all__")parts.push("worker "+w);
+      openModal(parts.join(" · ")||"All clarification tickets","🧮","#0F766E",sub);
+    };
+  });
+}
+function bindMain(){
+  // sort headers
+  document.querySelectorAll("th[data-sort]").forEach(function(h){
+    h.onclick=function(){
+      var c=h.dataset.sort;
+      if(S.sortCol===c) S.sortDir=S.sortDir==="asc"?"desc":"asc";
+      else { S.sortCol=c; S.sortDir="desc"; }
+      renderMain();
+    };
+  });
+  bindPivotCells();
+
+  if(S.tab==="daily"){
+    var byDay=window.__dailyByDay||{};
+    var dCreated=window.__dailyCreated||[];
+    var dResolved=window.__dailyResolved||[];
+    /* type sub-filter chips */
+    document.querySelectorAll("[data-dtype]").forEach(function(b){
+      b.onclick=function(){ S.dType=b.dataset.dtype; renderMain(); };
+    });
+    /* KPI card clicks */
+    document.querySelectorAll("[data-dkpi]").forEach(function(c){
+      c.onclick=function(){
+        var kpi=c.dataset.dkpi;
+        if(kpi==="created") openModal("All created tickets","📆","#0F766E",dCreated,"created");
+        else if(kpi==="incident") openModal("Incidents created","🔶","#D97706",dCreated.filter(function(t){return t.issue==="Incident";}),"created");
+        else if(kpi==="sr") openModal("Service Requests created","🟣","#7C3AED",dCreated.filter(function(t){return t.issue==="Service Request";}),"created");
+        else if(kpi==="resolved") openModal("All closed tickets","✅","#5B57D8",dResolved,"resolved");
+      };
+    });
+    /* chart dot clicks */
+    document.querySelectorAll(".ddot").forEach(function(d){
+      d.onclick=function(){
+        var k=d.dataset.dk, side=d.dataset.ds, day=byDay[k];
+        if(!day) return;
+        if(side==="created") openModal(dLabelFull(k)+" — created ("+day.created.length+")","📆","#0F766E",day.created,"created");
+        else openModal(dLabelFull(k)+" — closed ("+day.resolved.length+")","✅","#5B57D8",day.resolved,"resolved");
+      };
+    });
+    /* stacked bar segment clicks */
+    document.querySelectorAll("[data-dbar]").forEach(function(s){
+      s.onclick=function(){
+        var k=s.dataset.dbar, tp=s.dataset.dbtype, day=byDay[k];
+        if(!day) return;
+        var tix,title;
+        if(tp==="inc"){ tix=day.created.filter(function(t){return t.issue==="Incident";}); title=dLabelFull(k)+" — Incidents created"; }
+        else if(tp==="sr"){ tix=day.created.filter(function(t){return t.issue==="Service Request";}); title=dLabelFull(k)+" — Service Requests created"; }
+        else { tix=day.created.filter(function(t){return t.issue!=="Incident"&&t.issue!=="Service Request";}); title=dLabelFull(k)+" — Other created"; }
+        openModal(title,"📆",tp==="inc"?"#D97706":tp==="sr"?"#7C3AED":"#94A3B8",tix,"created");
+      };
+    });
+    /* table row + cell clicks */
+    document.querySelectorAll(".drow").forEach(function(r){
+      r.onclick=function(ev){
+        if(ev.target.closest(".dcell")) return;
+        var k=r.dataset.drow, day=byDay[k]; if(!day) return;
+        var all=day.created.concat(day.resolved.filter(function(t){ return day.created.indexOf(t)===-1; }));
+        openModal(dLabelFull(k)+" — all activity ("+all.length+")","📆","#0F766E",all);
+      };
+    });
+    document.querySelectorAll(".dcell").forEach(function(td){
+      td.onclick=function(ev){
+        ev.stopPropagation();
+        var k=td.dataset.dk, side=td.dataset.ds, day=byDay[k]; if(!day) return;
+        var tix,title,dm;
+        if(side==="created"){ tix=day.created; title=dLabelFull(k)+" — created"; dm="created"; }
+        else if(side==="incident"){ tix=day.created.filter(function(t){return t.issue==="Incident";}); title=dLabelFull(k)+" — incidents"; dm="created"; }
+        else if(side==="sr"){ tix=day.created.filter(function(t){return t.issue==="Service Request";}); title=dLabelFull(k)+" — service requests"; dm="created"; }
+        else { tix=day.resolved; title=dLabelFull(k)+" — closed"; dm="resolved"; }
+        openModal(title,"📆",side==="resolved"?"#5B57D8":side==="incident"?"#D97706":side==="sr"?"#7C3AED":"#0F766E",tix,dm);
+      };
+    });
+    /* export button */
+    var de=el("dailyExport"); if(de) de.onclick=function(){ exportFullCSV(dCreated.concat(dResolved.filter(function(t){return dCreated.indexOf(t)===-1;})),"daily-flow-full"); };
+  }
+
+  if(S.tab==="perf"){
+    var f=filtered();
+    var hd=f.filter(function(t){return t.isHD;});
+    var eg=f.filter(function(t){return !t.isHD;});
+    // hero track
+    var ht=el("heroTrack");
+    if(ht){ ht.querySelectorAll(".seg").forEach(function(s){ s.onclick=function(){ s.dataset.side==="hd"?openModal("HD resolved","🟢","#0F766E",hd,"resolved"):openModal("Engg resolved","🟣","#5B57D8",eg,"resolved"); }; }); }
+    // KPIs
+    document.querySelectorAll("[data-kpi]").forEach(function(c){
+      c.onclick=function(){
+        var k=c.dataset.kpi;
+        if(k==="all")openModal("All tickets in scope","📦","#111A2B",f,"resolved");
+        else if(k==="hd")openModal("HD resolved","🟢","#0F766E",hd,"resolved");
+        else if(k==="eg")openModal("Engg resolved","🟣","#5B57D8",eg,"resolved");
+        else if(k==="closed")openModal("Closed tickets","✅","#334155",f.filter(function(t){return t.status==="Closed";}),"resolved");
+        else if(k==="inc")openModal("Incidents","🔺","#B45309",f.filter(function(t){return t.issue==="Incident";}));
+        else if(k==="srq")openModal("Service Requests","📨","#334155",f.filter(function(t){return t.issue==="Service Request";}));
+      };
+    });
+    // root cause bars
+    document.querySelectorAll(".barrow[data-rc]").forEach(function(b){
+      b.onclick=function(){ var rc=b.dataset.rc; openModal('Root cause: '+rc,"🏷️","#0F766E",f.filter(function(t){return (t.rc||"(blank)")===rc;})); };
+    });
+    // monthly bars
+    document.querySelectorAll(".mbars .bar[data-month]").forEach(function(b){
+      b.onclick=function(){
+        var k=b.dataset.month, side=b.dataset.side;
+        var tix=f.filter(function(t){return bucketMonth(t)===k && (side==="hd"?t.isHD:!t.isHD);});
+        openModal(mLabel(k)+" · "+(side==="hd"?"HD":"Engg")+" resolved","📈",side==="hd"?"#0F766E":"#5B57D8",tix);
+      };
+    });
+    // svm rows
+    document.querySelectorAll("tr.rowlink[data-svm]").forEach(function(r){
+      r.onclick=function(){ var s=r.dataset.svm; openModal(s+" — all tickets in scope","👤","#0F766E",f.filter(function(t){return (t.svm||"(unassigned)")===s;})); };
+    });
+    var pe=el("perfExport"); if(pe) pe.onclick=function(){ exportFullCSV(f,"hd-performance-full"); };
+  }
+
+  if(S.tab==="trend"){
+    el("tRc").onchange=function(e){ S.tRc=e.target.value; renderMain(); };
+    el("tStatus").onchange=function(e){ S.tStatus=e.target.value; renderMain(); };
+    // toggle mode buttons
+    document.querySelectorAll(".tmode-btn").forEach(function(b){
+      b.onclick=function(){ S.tMode=b.dataset.tmode; renderMain(); };
+    });
+    // rebuild scope to resolve clicks
+    var base=RAW.filter(function(t){ if(!inRange(t))return false; if(S.svm.length&&S.svm.indexOf(t.svm)<0)return false; if(S.cw.length&&S.cw.indexOf(t.currentWorker)<0)return false; if(S.issue.length&&S.issue.indexOf(t.issue)<0)return false; if(S.proj.length&&S.proj.indexOf(t.project)<0)return false; return true; });
+    function scopeFn(t){
+      if(S.tRc==="__CLAR__"){ if(!isClar(t.rc))return false; } else if(S.tRc!=="__ALL__"){ if(t.rc!==S.tRc)return false; }
+      if(S.tStatus==="Closed"){ if(t.status!=="Closed")return false; } else if(S.tStatus!=="__ALL__"){ if(t.status!==S.tStatus)return false; }
+      return true;
+    }
+    var scope=base.filter(scopeFn);
+    // card segment clicks — support both month and worker modes
+    document.querySelectorAll(".mcard .seg[data-mk]").forEach(function(s){
+      s.onclick=function(){
+        var k=s.dataset.mk, side=s.dataset.side;
+        var tix;
+        if(S.tMode==="month"){
+          tix=scope.filter(function(t){return bucketMonth(t)===k && (side==="hd"?t.isHD:!t.isHD);});
+          openModal(mLabel(k)+" · "+(side==="hd"?"HD closed":"Engg")+" clarification","📈",side==="hd"?"#0F766E":"#5B57D8",tix);
+        }else{
+          tix=scope.filter(function(t){return (t.currentWorker||"(unassigned)")===k && (side==="hd"?t.isHD:!t.isHD);});
+          openModal(k+" · "+(side==="hd"?"HD closed":"Engg"),"👤",side==="hd"?"#0F766E":"#5B57D8",tix);
+        }
+      };
+    });
+    // line chart dots + tooltip (only present in month mode)
+    var tip=el("lctip");
+    document.querySelectorAll(".lc-dot").forEach(function(d){
+      d.addEventListener("mousemove",function(ev){
+        if(!tip)return; var box=d.closest(".linechart").getBoundingClientRect();
+        tip.style.left=(ev.clientX-box.left)+"px"; tip.style.top=(ev.clientY-box.top)+"px";
+        tip.innerHTML=(d.dataset.lc==="hd"?"HD":"Engg")+" <span class='mono'>"+d.dataset.p+"%</span> · "+mLabel(d.dataset.mk);
+        tip.style.opacity="1";
+      });
+      d.addEventListener("mouseleave",function(){ if(tip)tip.style.opacity="0"; });
+      d.onclick=function(){
+        var k=d.dataset.mk, side=d.dataset.lc;
+        var tix=scope.filter(function(t){return bucketMonth(t)===k && (side==="hd"?t.isHD:!t.isHD);});
+        openModal(mLabel(k)+" · "+(side==="hd"?"HD":"Engg")+" ("+d.dataset.p+"%)","📈",side==="hd"?"#0F766E":"#5B57D8",tix);
+      };
+    });
+    // HD ranking table row clicks — open all tickets for that worker
+    document.querySelectorAll("tr.rowlink[data-rk]").forEach(function(row){
+      row.onclick=function(){
+        var k=row.dataset.rk;
+        var tix=scope.filter(function(t){return (t.currentWorker||"(unassigned)")===k;});
+        openModal(k+" · all tickets","👤","#0F766E",tix);
+      };
+    });
+    var te=el("trendExport"); if(te) te.onclick=function(){ exportFullCSV(scope,"trend-analysis-full"); };
+  }
+
+  if(S.tab==="pending"){
+    document.querySelectorAll(".na-btn").forEach(function(b){
+      b.onclick=function(){ S.pendAction=b.dataset.na; renderMain(); };
+    });
+    var pend=pendingPool();
+    document.querySelectorAll(".mcard .seg[data-wk][data-na]").forEach(function(s){
+      s.onclick=function(){
+        var k=s.dataset.wk, na=s.dataset.na, m=NA_META[na];
+        var tix=pend.filter(function(t){ return (t.currentWorker||"(unassigned)")===k && naKey(t)===na; });
+        openModal(k+" \u00b7 "+m.label+" next action ("+tix.length+")", m.icon, m.hex, tix);
+      };
+    });
+    var pendExp=el("pendExport"); if(pendExp) pendExp.onclick=function(){
+      var na=S.pendAction; var scope=na? pend.filter(function(t){return naKey(t)===na;}):pend;
+      exportFullCSV(scope,"pending-tickets-full");
+    };
+  }
+
+  if(S.tab==="pivots"){
+    document.querySelectorAll("[data-piv-nav]").forEach(function(b){ b.onclick=function(){ S.pivot=b.dataset.pivNav; renderMain(); }; });
+    // adjustable Issue Type · Root Cause · Status filters
+    var pI=el("pIssue"); if(pI) pI.onchange=function(e){ S.pIssue=e.target.value; renderMain(); };
+    var pR=el("pRc");    if(pR) pR.onchange=function(e){ S.pRc=e.target.value; renderMain(); };
+    var pS=el("pStatus");if(pS) pS.onchange=function(e){ S.pStatus=e.target.value; renderMain(); };
+    var pRst=el("pivReset"); if(pRst) pRst.onclick=function(){ var d=pivDefaults(S.pivot); S.pIssue=d.issue; S.pRc=d.rc; S.pStatus=d.status; renderMain(); };
+    var cpR=el("cpRow"); if(cpR) cpR.onchange=function(e){ S.cpRow=e.target.value; renderMain(); };
+    var cpC=el("cpCol"); if(cpC) cpC.onchange=function(e){ S.cpCol=e.target.value; renderMain(); };
+    // Pivot sort headers
+    if(!S._pivSort) S._pivSort={};
+    document.querySelectorAll(".pivsort").forEach(function(th){
+      th.onclick=function(){
+        var pid=th.dataset.pivsortId, col=th.dataset.pivsortCol;
+        if(!S._pivSort[pid]) S._pivSort[pid]={col:col,dir:"desc"};
+        else if(S._pivSort[pid].col===col) S._pivSort[pid].dir=S._pivSort[pid].dir==="desc"?"asc":"desc";
+        else S._pivSort[pid]={col:col,dir:"desc"};
+        renderMain();
+      };
+    });
+    var pivExp=el("pivExport"); if(pivExp) pivExp.onclick=function(){
+      var pool=RAW.filter(function(t){ return inRange(t) && (!S.proj.length || S.proj.indexOf(t.project)>-1); });
+      var ppool=applyPivFilters(pool);
+      exportFullCSV(ppool,"pivot-"+S.pivot+"-full");
+    };
+  }
+
+  if(S.tab==="wow"){
+    var wk=window.__wk||{};
+    var sa=el("weekA"); if(sa) sa.onchange=function(e){ S.weekA=e.target.value; renderMain(); };
+    var sb=el("weekB"); if(sb) sb.onchange=function(e){ S.weekB=e.target.value; renderMain(); };
+    // window presets
+    document.querySelectorAll("[data-wowset]").forEach(function(b){
+      b.onclick=function(){ var ks=Object.keys(window.__wk||{}).sort(); if(!ks.length) return;
+        if(b.dataset.wowset==="all"){ S.weekA=ks[0]; S.weekB=ks[ks.length-1]; }
+        else { S.weekA=ks.length>1?ks[ks.length-2]:ks[ks.length-1]; S.weekB=ks[ks.length-1]; }
+        renderMain();
+      };
+    });
+    // compare cards → week B tickets
+    document.querySelectorAll("[data-wcard]").forEach(function(c){
+      c.onclick=function(){
+        var w=wk[S.weekB]; if(!w) return; var side=c.dataset.wcard;
+        var tix = side==="hd"?w.tix.filter(function(t){return t.isHD;}) : side==="eg"?w.tix.filter(function(t){return !t.isHD;}) : w.tix;
+        var sfx = side==="hd"?" · HD":side==="eg"?" · Engg":"";
+        openModal(weekLabel(S.weekB)+" ("+weekDates(w.year,w.week)+") resolved"+sfx,"🗓️", side==="eg"?"#5B57D8":"#0F766E", tix);
+      };
+    });
+    // trend bar segments
+    document.querySelectorAll(".stackwrap .seg[data-wk]").forEach(function(s){
+      s.onclick=function(){ var w=wk[s.dataset.wk]; if(!w) return; var side=s.dataset.side;
+        var tix=side==="hd"?w.tix.filter(function(t){return t.isHD;}):w.tix.filter(function(t){return !t.isHD;});
+        openModal(weekLabel(w.key)+" · "+(side==="hd"?"HD":"Engg")+" resolved","🗓️",side==="hd"?"#0F766E":"#5B57D8",tix);
+      };
+    });
+    // detail table HD/Engg/total cells
+    document.querySelectorAll("td.val[data-wkc]").forEach(function(td){
+      td.onclick=function(ev){ ev.stopPropagation(); var w=wk[td.dataset.wkc]; if(!w) return; var side=td.dataset.side;
+        var tix=side==="hd"?w.tix.filter(function(t){return t.isHD;}):side==="eg"?w.tix.filter(function(t){return !t.isHD;}):w.tix;
+        var sfx=side==="hd"?" · HD":side==="eg"?" · Engg":"";
+        openModal(weekLabel(w.key)+" resolved"+sfx,"🗓️",side==="eg"?"#5B57D8":"#0F766E",tix);
+      };
+    });
+    // whole-row → week tickets
+    document.querySelectorAll("tr.rowlink[data-wk-row]").forEach(function(r){
+      r.onclick=function(){ var w=wk[r.dataset.wkRow]; if(!w) return; openModal(weekLabel(w.key)+" ("+weekDates(w.year,w.week)+") · all resolved","🗓️","#0F766E",w.tix); };
+    });
+    // Export all tickets in the selected week window
+    var we=el("wowExport"); if(we) we.onclick=function(){
+      var ks=Object.keys(wk).sort();
+      var lo=S.weekA<=S.weekB?S.weekA:S.weekB, hi=S.weekA<=S.weekB?S.weekB:S.weekA;
+      var tix=[]; ks.forEach(function(k){ if(k>=lo&&k<=hi&&wk[k]) tix=tix.concat(wk[k].tix); });
+      exportFullCSV(tix,"week-on-week-"+lo+"-to-"+hi+"-full");
+    };
+  }
+
+  if(S.tab==="exc"){
+    document.querySelectorAll("[data-exc]").forEach(function(c){
+      c.onclick=function(){ S._excFilter = (S._excFilter===c.dataset.exc)? null : c.dataset.exc; renderMain(); };
+    });
+    var clr=el("excClear"); if(clr) clr.onclick=function(){ S._excFilter=null; renderMain(); };
+    var csv=el("excCsv"); if(csv) csv.onclick=function(){ exportCSV(window.__excList||[],"exceptions"); };
+  }
+}
+
+/* ═══════════════════════════════ UPLOAD FLOW ═══════════════════════════════ */
+/* ═══════════════════════════════ VIEW: EDIT DATA ═══════════════════════════════
+   Spreadsheet-style editor over the raw rows: per-column filters, global search,
+   click-to-sort, pagination, add/delete row. "Apply & Recalculate" writes edits
+   back to the shared store and re-normalizes, so every tab (and the Follow-up
+   Tracker) recomputes — without re-uploading the Excel. */
+var ED_PAGE=50;
+function edFmt(v){ if(v===null||v===undefined) return ""; if(v instanceof Date) return isNaN(v)?"":v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0"); return String(v); }
+function edInit(){
+  ED.seq=0;
+  ED.work=RAW_ROWS.map(function(r){ var o={__id:ED.seq++}; for(var k in r){ if(Object.prototype.hasOwnProperty.call(r,k)) o[k]=r[k]; } return o; });
+  ED._init=true;
+}
+function edCols(){
+  var seen={}, out=[];
+  ED.work.forEach(function(r){ for(var k in r){ if(k!=="__id" && Object.prototype.hasOwnProperty.call(r,k) && !seen[k]){ seen[k]=1; out.push(k); } } });
+  return out;
+}
+function edCmp(a,b,col,dir){
+  var av=a[col],bv=b[col];
+  if(av instanceof Date && bv instanceof Date) return dir==="asc"?av-bv:bv-av;
+  var as=edFmt(av),bs=edFmt(bv), an=parseFloat(as),bn=parseFloat(bs);
+  if(!isNaN(an)&&!isNaN(bn)&&as.trim()!==""&&bs.trim()!=="") return dir==="asc"?an-bn:bn-an;
+  return dir==="asc"?as.localeCompare(bs):bs.localeCompare(as);
+}
+function edIsBlank(v){ var s=edFmt(v).trim().toLowerCase(); return s===""||s==="nan"; }
+function edView(cols){
+  var l=ED.work;
+  var active=Object.keys(ED.filters).filter(function(k){return ED.filters[k];});
+  if(active.length) l=l.filter(function(r){ return active.every(function(k){ return edFmt(r[k]).toLowerCase().indexOf(ED.filters[k].toLowerCase())>-1; }); });
+  var blanks=Object.keys(ED.blankFilters||{}).filter(function(k){return ED.blankFilters[k];});
+  if(blanks.length) l=l.filter(function(r){ return blanks.every(function(k){ return edIsBlank(r[k]); }); });
+  if(ED.search){ var q=ED.search.toLowerCase(); l=l.filter(function(r){ return cols.some(function(k){ return edFmt(r[k]).toLowerCase().indexOf(q)>-1; }); }); }
+  if(ED.sortCol) l=l.slice().sort(function(a,b){ return edCmp(a,b,ED.sortCol,ED.sortDir); });
+  return l;
+}
+function viewData(){
+  if(!ED._init) edInit();
+  var cols=edCols();
+  var view=edView(cols);
+  var pageCount=Math.max(1,Math.ceil(view.length/ED_PAGE));
+  if(ED.page>pageCount-1) ED.page=pageCount-1; if(ED.page<0) ED.page=0;
+  var pageRows=view.slice(ED.page*ED_PAGE, ED.page*ED_PAGE+ED_PAGE);
+  var hasFilter=Object.keys(ED.filters).some(function(k){return ED.filters[k];})||ED.search||Object.keys(ED.blankFilters||{}).some(function(k){return ED.blankFilters[k];});
+
+  var h='<div style="padding:16px 22px 40px">';
+  // toolbar
+  h+='<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 18px;margin-bottom:9px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+       '<div style="width:42px;height:42px;border-radius:10px;background:var(--hd-bg);border:1px solid var(--hd-soft);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✏️</div>'+
+       '<div style="min-width:0">'+
+         '<div style="font-family:var(--disp);font-weight:700;font-size:15px;color:var(--ink)">Edit Data <span id="ed-dirty" style="color:var(--amber);font-size:11px;font-weight:700;margin-left:6px;'+(ED.dirty?'':'display:none')+'">● unsaved edits</span></div>'+
+         '<div style="font-size:12px;color:var(--ink2);margin-top:2px">'+ED.work.length.toLocaleString()+' rows · '+cols.length+' columns · correct any field, then Recalculate. Edits are shared with the Follow-up Tracker too.</div>'+
+       '</div>'+
+       '<div style="flex:1"></div>'+
+       '<input id="ed-search" type="text" value="'+esc(ED.search)+'" placeholder="🔍 Search all columns…" style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--ink);background:var(--card);font-family:var(--sans);min-width:200px"/>'+
+       '<button id="ed-add" class="ghost">＋ Row</button>'+
+       '<button id="ed-revert" class="ghost">↺ Revert to upload</button>'+
+       '<button id="ed-apply" style="background:'+(ED.dirty?'var(--hd)':'var(--line)')+';border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:800;cursor:'+(ED.dirty?'pointer':'default')+'">⟳ Apply &amp; Recalculate</button>'+
+     '</div>';
+  if(hasFilter) h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:9px 16px;background:var(--hd-bg);border-radius:8px;border:1px solid var(--hd-soft)">'+
+       '<span style="color:var(--hd);font-size:12px;font-weight:600">Showing '+view.length.toLocaleString()+' of '+ED.work.length.toLocaleString()+' rows</span>'+
+       '<button id="ed-clear" class="ghost" style="margin-left:auto">✕ Clear filters</button></div>';
+  // table
+  h+='<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden">';
+  h+='<div style="overflow:auto;max-height:62vh"><table style="border-collapse:collapse;font-size:12px;min-width:100%">';
+  var hdr='padding:8px 10px;text-align:left;font-size:10px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--line2);background:var(--paper);position:sticky;top:0;z-index:3;white-space:nowrap;cursor:pointer;user-select:none';
+  h+='<thead><tr>';
+  h+='<th style="'+hdr+';left:0;z-index:4;min-width:34px;text-align:center;cursor:default">#</th>';
+  cols.forEach(function(c){ var ar=ED.sortCol===c?(ED.sortDir==="asc"?" ↑":" ↓"):""; h+='<th class="ed-sort" data-col="'+esc(c)+'" style="'+hdr+'" title="Click to sort">'+esc(c)+'<span style="color:var(--hd);font-size:9px">'+ar+'</span></th>'; });
+  h+='</tr><tr>';
+  h+='<th style="position:sticky;top:31px;left:0;z-index:4;background:var(--paper);border-bottom:1px solid var(--line)"></th>';
+  cols.forEach(function(c){
+    var bon=!!(ED.blankFilters&&ED.blankFilters[c]);
+    h+='<th style="position:sticky;top:31px;z-index:3;background:var(--paper);border-bottom:1px solid var(--line);padding:4px 6px">'+
+         '<div style="display:flex;align-items:center;gap:4px">'+
+           '<input class="ed-filter" data-col="'+esc(c)+'" value="'+esc(ED.filters[c]||"")+'" placeholder="'+(bon?'blanks only':'filter\u2026')+'" '+(bon?'disabled ':'')+'style="flex:1;min-width:64px;border:1px solid var(--line2);border-radius:5px;padding:3px 6px;font-size:11px;color:var(--ink2);background:'+(bon?'var(--paper)':'var(--card)')+';font-family:var(--sans)"/>'+
+           '<button class="ed-blank" data-col="'+esc(c)+'" title="'+(bon?'Showing only blank '+esc(c)+' \u2014 click to clear':'Show only rows where '+esc(c)+' is blank')+'" style="flex-shrink:0;border:1px solid '+(bon?'var(--hd)':'var(--line2)')+';background:'+(bon?'var(--hd)':'var(--card)')+';color:'+(bon?'#fff':'var(--muted)')+';border-radius:5px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;line-height:1.3">\u2205</button>'+
+         '</div>'+
+       '</th>';
+  });
+  h+='</tr></thead><tbody>';
+  if(!pageRows.length) h+='<tr><td colspan="'+(cols.length+1)+'" style="padding:24px;text-align:center;color:var(--faint);font-size:12px">No rows match the current filters.</td></tr>';
+  pageRows.forEach(function(r){
+    h+='<tr style="border-bottom:1px solid var(--line)">';
+    h+='<td style="position:sticky;left:0;z-index:1;background:var(--card);padding:2px 4px;text-align:center"><button class="ed-del" data-id="'+r.__id+'" title="Delete row" style="background:transparent;border:none;color:var(--faint);font-size:13px;cursor:pointer;padding:2px">🗑</button></td>';
+    cols.forEach(function(c){ h+='<td style="padding:0;border-right:1px solid var(--paper)"><input class="ed-cell" data-id="'+r.__id+'" data-col="'+esc(c)+'" value="'+esc(edFmt(r[c]))+'" style="width:100%;min-width:110px;border:1px solid transparent;border-radius:6px;padding:5px 7px;font-size:12px;color:var(--ink);background:transparent;font-family:var(--sans)"/></td>'; });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  // pager
+  h+='<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--line);background:var(--paper)">'+
+       '<span style="font-size:11px;color:var(--ink2)">Rows '+(view.length?ED.page*ED_PAGE+1:0)+'–'+Math.min(ED.page*ED_PAGE+ED_PAGE,view.length)+' of '+view.length.toLocaleString()+'</span>'+
+       '<div style="flex:1"></div>'+
+       '<button class="ghost ed-pg" data-pg="first" '+(ED.page===0?'disabled':'')+'>« First</button>'+
+       '<button class="ghost ed-pg" data-pg="prev" '+(ED.page===0?'disabled':'')+'>‹ Prev</button>'+
+       '<span style="font-size:11px;color:var(--ink2);font-weight:700">Page '+(ED.page+1)+' / '+pageCount+'</span>'+
+       '<button class="ghost ed-pg" data-pg="next" '+(ED.page>=pageCount-1?'disabled':'')+'>Next ›</button>'+
+       '<button class="ghost ed-pg" data-pg="last" '+(ED.page>=pageCount-1?'disabled':'')+'>Last »</button>'+
+     '</div>';
+  h+='</div></div>';
+  return h;
+}
+function reData(){ var m=el("main"); if(!m)return; m.innerHTML=viewData(); bindData(); }
+function edRestoreFocus(){
+  if(!ED._focus) return;
+  var sel = ED._focus.type==="search" ? "#ed-search" : '.ed-filter[data-col="'+(window.CSS&&CSS.escape?CSS.escape(ED._focus.col):ED._focus.col)+'"]';
+  var node=document.querySelector(sel);
+  if(node){ node.focus(); try{ var v=node.value; node.setSelectionRange(v.length,v.length); }catch(e){} }
+  ED._focus=null;
+}
+function bindData(){
+  var main=el("main"); if(!main) return;
+  // cell edits — update in place, no re-render (keeps focus/caret)
+  main.querySelectorAll(".ed-cell").forEach(function(inp){
+    inp.oninput=function(){
+      var id=+inp.dataset.id, col=inp.dataset.col;
+      for(var i=0;i<ED.work.length;i++){ if(ED.work[i].__id===id){ ED.work[i][col]=inp.value; break; } }
+      if(!ED.dirty){ ED.dirty=true; var d=el("ed-dirty"); if(d) d.style.display=""; var a=el("ed-apply"); if(a){ a.style.background="var(--hd)"; a.style.cursor="pointer"; } }
+    };
+  });
+  main.querySelectorAll(".ed-del").forEach(function(b){ b.onclick=function(){ var id=+b.dataset.id; ED.work=ED.work.filter(function(r){return r.__id!==id;}); ED.dirty=true; reData(); }; });
+  main.querySelectorAll(".ed-sort").forEach(function(th){ th.onclick=function(){ var c=th.dataset.col; if(ED.sortCol===c){ ED.sortDir=ED.sortDir==="asc"?"desc":"asc"; } else { ED.sortCol=c; ED.sortDir="asc"; } reData(); }; });
+  main.querySelectorAll(".ed-filter").forEach(function(inp){ inp.oninput=function(){ var c=inp.dataset.col; if(inp.value) ED.filters[c]=inp.value; else delete ED.filters[c]; ED.page=0; ED._focus={type:"filter",col:c}; reData(); edRestoreFocus(); }; });
+  main.querySelectorAll(".ed-blank").forEach(function(b){ b.onclick=function(){ var c=b.dataset.col; if(!ED.blankFilters) ED.blankFilters={}; if(ED.blankFilters[c]){ delete ED.blankFilters[c]; } else { ED.blankFilters[c]=true; delete ED.filters[c]; } ED.page=0; reData(); }; });
+  var s=el("ed-search"); if(s) s.oninput=function(){ ED.search=s.value; ED.page=0; ED._focus={type:"search"}; reData(); edRestoreFocus(); };
+  main.querySelectorAll(".ed-pg").forEach(function(b){ b.onclick=function(){ var p=b.dataset.pg; var cols=edCols(); var pc=Math.max(1,Math.ceil(edView(cols).length/ED_PAGE)); if(p==="first")ED.page=0; else if(p==="prev")ED.page=Math.max(0,ED.page-1); else if(p==="next")ED.page=Math.min(pc-1,ED.page+1); else ED.page=pc-1; reData(); }; });
+  var add=el("ed-add"); if(add) add.onclick=function(){ var cols=edCols(); var blank={__id:ED.seq++}; cols.forEach(function(c){blank[c]="";}); ED.work.unshift(blank); ED.dirty=true; ED.page=0; reData(); };
+  var cl=el("ed-clear"); if(cl) cl.onclick=function(){ ED.filters={}; ED.blankFilters={}; ED.search=""; ED.page=0; reData(); };
+  var rv=el("ed-revert"); if(rv) rv.onclick=function(){
+    if(!BLOB) return;
+    if(!confirm("Discard all in-app edits and reload the originally uploaded file?")) return;
+    if(window.HDStore) HDStore.clearRows();
+    readFile(BLOB).then(function(rows){ rebuildFromRows(rows); if(window.HDStore) HDStore.saveRows(rows); ED._init=false; ED.filters={}; ED.blankFilters={}; ED.search=""; ED.sortCol=null; ED.page=0; ED.dirty=false; reData(); });
+  };
+  var ap=el("ed-apply"); if(ap) ap.onclick=function(){
+    if(!ED.dirty) return;
+    var cols=edCols();
+    var clean=ED.work.map(function(r){ var o={}; cols.forEach(function(c){ o[c]=r[c]; }); return o; });
+    rebuildFromRows(clean);
+    if(window.HDStore) HDStore.saveRows(clean);
+    ED.dirty=false;
+    // re-init working copy from the applied rows and refresh tab (counts recompute on visit)
+    ED._init=false;
+    render();
+  };
+}
+
+function handleUpload(e){
+  var file=e.target.files&&e.target.files[0]; if(!file) return;
+  FILENAME=file.name;
+  var btn=el("uploadBtn"); if(btn){ btn.textContent="Reading…"; btn.disabled=true; }
+  readFile(file).then(function(rows){
+    rebuildFromRows(rows);
+    if(window.HDStore){ HDStore.clearRows(); HDStore.saveRows(rows); }
+    ED={ work:[], filters:{}, blankFilters:{}, search:"", sortCol:null, sortDir:"asc", page:0, dirty:false, seq:0 };
+    // reset view state on new upload
+    S.svm=[]; S.cw=[]; S.rc=[]; S.issue=[]; S.proj=[]; S.from=""; S.to=""; S.dlabel="All time"; S._excFilter=null; S.pendAction="";
+    S.tab="perf"; S.tRc="__CLAR__"; S.tStatus="Closed"; S.pivot="hdworker"; S.pIssue=""; S.pRc=""; S.pStatus=""; S._pivFor=null; S.weekA=""; S.weekB=""; S.sortCol="total"; S.sortDir="desc"; S.dType="";
+    render();
+    // footer
+  }).catch(function(err){ alert("Could not read file: "+err.message); if(btn){btn.textContent="Upload Jira Excel";btn.disabled=false;} });
+  e.target.value="";
+}
+
+function renderLanding(){
+  el("app").innerHTML=''+
+  '<div class="landing">'+
+    '<div class="deco b1"></div><div class="deco b2"></div>'+
+    '<div class="deco ring r1"></div><div class="deco ring r2"></div>'+
+    '<div class="landing-card up">'+
+      '<div class="brand-mark">'+
+        '<span class="bar"><i style="height:16px;background:var(--hd)"></i><i style="height:32px;background:var(--hd2)"></i><i style="height:12px;background:var(--engg2)"></i><i style="height:26px;background:var(--engg)"></i></span>'+
+        '<span style="font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:-.4px">HD Ticket Trend Tracker</span>'+
+      '</div>'+
+      '<p style="color:var(--ink2);font-size:13px;margin:-6px 0 22px;line-height:1.6">Upload your Jira export to see, month by month and person by person, how much the Help Desk resolved on its own versus escalating to Engineering.</p>'+
+      '<div class="upload-panel">'+
+        '<div class="dz" id="dz">'+
+          '<div style="font-size:34px;margin-bottom:8px">📊</div>'+
+          '<div style="font-family:var(--disp);font-weight:600;font-size:15px;margin-bottom:4px">Drop your Jira Excel here</div>'+
+          '<div class="sub" style="margin-bottom:9px">.xlsx exported from Jira · any size · the whole file is read in your browser</div>'+
+          '<button class="btn-primary" id="uploadBtn">Choose Excel file</button>'+
+        '</div>'+
+        '<div style="margin-top:18px;text-align:left">'+
+          '<div class="eyebrow" style="margin-bottom:8px">Columns the dashboard reads</div>'+
+          '<div class="hint-cols">'+
+            ["Issue Type","Key","Summary","SVM In Charge","Root Cause","Status","Components","Linked Issues","Solved BY","Created","Resolved"].map(function(c){return '<span>'+c+'</span>';}).join("")+
+          '</div>'+
+          '<div class="sub" style="margin-top:12px;line-height:1.6"><b style="color:var(--hd)">HD</b> vs <b style="color:var(--engg)">ENGG</b> is read from <b>Solved BY</b>; a value in <b>Linked Issues</b> confirms an Engineering escalation. Next month, upload the same-format file — everything recalculates automatically.</div>'+
+        '</div>'+
+      '</div>'+
+      '<input type="file" id="fileinput" accept=".xlsx,.xls">'+
+    '</div>'+
+  '</div>';
+  var fi=el("fileinput");
+  el("uploadBtn").onclick=function(){ fi.click(); };
+  el("dz").onclick=function(){ fi.click(); };
+  fi.onchange=handleUpload;
+  var dz=el("dz");
+  ["dragenter","dragover"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over");}); });
+  ["dragleave","drop"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.remove("over");}); });
+  dz.addEventListener("drop",function(e){
+    var file=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(file){ FILENAME=file.name; readFile(file).then(function(rows){ RAW=normalize(rows).filter(function(t){return t.key;}); computeResolvedSpan(); S.tab="perf"; render(); }).catch(function(err){alert("Could not read file: "+err.message);}); }
+  });
+}
+
+/* footer appended after each render */
+var _origRenderMain=renderMain;
+renderMain=function(){
+  _origRenderMain();
+  var main=el("main"); if(!main)return;
+  var fdiv=document.createElement("div"); fdiv.className="footer";
+  var inScopeCount=RAW.filter(function(t){ return inRange(t) && (!S.proj.length || S.proj.indexOf(t.project)>-1); }).length;
+  fdiv.innerHTML='<b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' tickets loaded'+((S.from||S.to||S.proj.length)?' · '+inScopeCount.toLocaleString()+' in scope':'')+' · HD Ticket Trend Tracker';
+  main.appendChild(fdiv);
+};
+
+/* Rebuild the normalized model from the current raw rows. */
+function rebuildFromRows(rawRows){
+  RAW_ROWS = rawRows;
+  RAW = normalize(rawRows).filter(function(t){return t.key;});
+  computeResolvedSpan();   // refresh data-currency span for partial-week detection
+}
+
+/* boot — prefer in-app edits; otherwise read the shared Excel and seed the store */
+function boot(){
+  if(!window.HDStore){ renderLanding(); return; }
+  // Load Master Data overrides FIRST — group is baked in at normalize() time, so
+  // the status/group maps must be applied before rebuildFromRows() runs.
+  HDStore.loadConfig().then(function(cfg){
+    window.HDClass.setOverrides(cfg.statusOverrides);
+    window.HDGroups.setOverrides(cfg.groupOverrides);
+    HDStore.loadFile().then(function(rec){
+      if(!rec){ window.location.replace("index.html"); return; }
+      FILENAME=rec.name; BLOB=rec.blob;
+      HDStore.loadRows().then(function(edited){
+        if(edited && edited.length){ rebuildFromRows(edited); render(); return; }
+        readFile(rec.blob).then(function(rows){
+          rebuildFromRows(rows);
+          HDStore.saveRows(rows);
+          render();
+        }).catch(function(err){ alert("Could not read stored file: "+err.message); window.location.replace("index.html"); });
+      });
+    });
+  });
+}
+boot();
+</script>
+</body>
+</html>
