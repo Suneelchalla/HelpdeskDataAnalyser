@@ -208,6 +208,9 @@ tbody tr.detail-row{background:var(--paper)}
 .notes{display:flex;flex-direction:column;gap:8px}
 .note{display:flex;gap:10px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--ink2);line-height:1.5}
 .note .i{font-size:15px;line-height:1;margin-top:1px}
+.note .dot{width:7px;height:7px;border-radius:50%;background:#94A3B8;margin-top:4px;flex:none}
+.note.warn .dot{background:#D97706}
+.note.good .dot{background:#059669}
 .note b{color:var(--ink)}
 .note.warn{background:var(--wa-bg);border-color:var(--wa-soft)}
 .note.good{background:var(--green-bg);border-color:#A7F3D0}
@@ -445,8 +448,8 @@ function kpiCard(id,label,val,sub,icon,style){
 
 /* ── AUTO INSIGHTS (rule-based, no AI tokens) ── */
 function noteHTML(arr){
-  if(!arr.length)arr=[{i:"✅",c:"good",h:"Nothing notable in the current scope."}];
-  return '<div class="notes">'+arr.map(function(x){return '<div class="note '+(x.c||"")+'"><span class="i">'+x.i+'</span><span>'+x.h+'</span></div>';}).join('')+'</div>';
+  if(!arr.length)arr=[{c:"good",h:"No material risks in the current view."}];
+  return '<div class="notes">'+arr.map(function(x){return '<div class="note '+(x.c||"")+'"><span class="dot" aria-hidden="true"></span><span>'+x.h+'</span></div>';}).join('')+'</div>';
 }
 function insightsCard(title,sub,arr){
   return '<div class="card up" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">'+title+'</span><span class="sec-sub">'+sub+'</span></div>'+noteHTML(arr)+'</div>';
@@ -456,23 +459,23 @@ function monthLbl(k){return k.split("-")[1]+"/"+k.split("-")[0].slice(2);}
 function releaseInsights(F){
   var n=[], total=F.length; if(!total)return n;
   var cl=F.filter(function(t){return t.closed;}).length, op=total-cl;
-  n.push({i:"📊",c:"",h:"Closure rate is <b>"+pct(cl,total)+"</b> — <b>"+cl+"</b> of <b>"+total+"</b> releases closed, <b>"+op+"</b> still outstanding."});
+  n.push({c:"",h:"Closure rate <b>"+pct(cl,total)+"</b> — <b>"+cl+"</b> of <b>"+total+"</b> closed, <b>"+op+"</b> outstanding."});
   var df=F.filter(function(t){return t.fixType==="Data Fix";}).length;
   var bf=F.filter(function(t){return t.fixType==="Bug Fix";}).length;
   var wa=F.filter(function(t){return t.fixType==="Workaround";}).length;
   var mix=[{l:"Data Fix",v:df},{l:"Bug Fix",v:bf},{l:"Workaround",v:wa}].sort(function(a,b){return b.v-a.v;});
-  n.push({i:"🧩",c:"",h:"<b>"+esc(mix[0].l)+"</b> dominates the mix at <b>"+mix[0].v+"</b> ("+pct(mix[0].v,total)+")."});
-  if(wa)n.push({i:"⚡",c:wa>total*0.2?"warn":"",h:"Workarounds are <b>"+pct(wa,total)+"</b> of releases ("+wa+") — a higher share points to more temporary fixes than permanent ones."});
+  n.push({c:"",h:"<b>"+esc(mix[0].l)+"</b> leads the fix mix — <b>"+mix[0].v+"</b> ("+pct(mix[0].v,total)+")."});
+  if(wa)n.push({c:wa>total*0.2?"warn":"",h:"Workarounds at <b>"+pct(wa,total)+"</b> of releases ("+wa+")."});
   var pm={}; F.forEach(function(t){var k=t.project||"(blank)";pm[k]=(pm[k]||0)+1;});
   var pk=Object.keys(pm).sort(function(a,b){return pm[b]-pm[a];});
-  if(pk.length)n.push({i:"🏢",c:"",h:"<b>"+esc(pk[0])+"</b> is the busiest project at <b>"+pm[pk[0]]+"</b> releases ("+pct(pm[pk[0]],total)+")."});
+  if(pk.length)n.push({c:"",h:"Busiest project: <b>"+esc(pk[0])+"</b> — <b>"+pm[pk[0]]+"</b> ("+pct(pm[pk[0]],total)+")."});
   var sm={}; F.forEach(function(t){if(t.svm)sm[t.svm]=(sm[t.svm]||0)+1;});
   var sk=Object.keys(sm).sort(function(a,b){return sm[b]-sm[a];});
-  if(sk.length)n.push({i:"👤",c:"",h:"<b>"+esc(sk[0])+"</b> handled the most releases (<b>"+sm[sk[0]]+"</b>)."});
+  if(sk.length)n.push({c:"",h:"Highest load: <b>"+esc(sk[0])+"</b> — <b>"+sm[sk[0]]+"</b> releases."});
   var mc={},mcl={}; F.forEach(function(t){if(t.created){var mk=monthKeyD(t.created);mc[mk]=(mc[mk]||0)+1;}if(t.resolved&&t.closed){var rk=monthKeyD(t.resolved);mcl[rk]=(mcl[rk]||0)+1;}});
   var mks=Object.keys(mc).sort();
   if(mks.length){var last=mks[mks.length-1],cr=mc[last]||0,cx=mcl[last]||0,net=cr-cx;
-    n.push({i:net>0?"📈":"📉",c:net>0?"warn":"good",h:"In <b>"+monthLbl(last)+"</b>, <b>"+cr+"</b> releases were logged and <b>"+cx+"</b> closed — outstanding "+(net>0?"grew by <b>"+net+"</b>":net<0?"fell by <b>"+(-net)+"</b>":"held steady")+"."});}
+    n.push({c:net>0?"warn":"good",h:"<b>"+monthLbl(last)+"</b>: <b>"+cr+"</b> logged, <b>"+cx+"</b> closed — outstanding "+(net>0?"grew by <b>"+net+"</b>":net<0?"fell by <b>"+(-net)+"</b>":"held steady")+"."});}
   return n;
 }
 
@@ -659,11 +662,11 @@ function renderTrend(){
   var tn=[];
   if(mkeys.length){
     var peak=mkeys.slice().sort(function(a,b){return months[b].total-months[a].total;})[0];
-    tn.push({i:"🔝",c:"",h:"Peak release month is <b>"+peak.split("-")[1]+"/"+peak.split("-")[0].slice(2)+"</b> with <b>"+months[peak].total+"</b> releases."});
+    tn.push({c:"",h:"Peak month: <b>"+peak.split("-")[1]+"/"+peak.split("-")[0].slice(2)+"</b> — <b>"+months[peak].total+"</b> releases."});
     var last=mkeys[mkeys.length-1];
-    tn.push({i:"🗓️",c:"",h:"Latest month (<b>"+last.split("-")[1]+"/"+last.split("-")[0].slice(2)+"</b>): <b>"+months[last].df+"</b> data fixes, <b>"+months[last].bf+"</b> bug fixes, <b>"+months[last].wa+"</b> workarounds."});
+    tn.push({c:"",h:"Latest (<b>"+last.split("-")[1]+"/"+last.split("-")[0].slice(2)+"</b>): <b>"+months[last].df+"</b> data fixes, <b>"+months[last].bf+"</b> bug fixes, <b>"+months[last].wa+"</b> workarounds."});
     var totWa=0,tot=0; mkeys.forEach(function(k){totWa+=months[k].wa;tot+=months[k].total;});
-    if(tot)tn.push({i:"⚡",c:totWa>tot*0.2?"warn":"",h:"Workarounds run at <b>"+pct(totWa,tot)+"</b> of releases across the window in view."});
+    if(tot)tn.push({c:totWa>tot*0.2?"warn":"",h:"Workarounds at <b>"+pct(totWa,tot)+"</b> of releases across the window."});
   }
   var h=insightsCard("Auto insights","how the release trend is moving · updates with your filters",tn);
   h+='<div class="trend-grid up d1">';
