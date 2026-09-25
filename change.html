@@ -222,6 +222,9 @@ tbody tr:hover{background:var(--vi-bg)}
 .notes{display:flex;flex-direction:column;gap:8px}
 .note{display:flex;gap:10px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--ink2);line-height:1.5}
 .note .i{font-size:15px;line-height:1;margin-top:1px}
+.note .dot{width:7px;height:7px;border-radius:50%;background:#94A3B8;margin-top:4px;flex:none}
+.note.warn .dot{background:#D97706}
+.note.good .dot{background:#059669}
 .note b{color:var(--ink)}
 .note.warn{background:var(--medium-bg);border-color:var(--medium-soft)}
 .note.good{background:var(--green-bg);border-color:#A7F3D0}
@@ -554,43 +557,42 @@ function legRow(c,label,val,total,dim,dval){
 function observations(F){
   var n=[], total=F.length, open=F.filter(function(t){return t.open;});
   var closed=F.filter(function(t){return t.closed;}).length;
-  if(total)n.push({i:"📊",c:"",h:"Closure rate is <b>"+pct(closed,total)+"</b> — <b>"+closed+"</b> of <b>"+total+"</b> changes closed, <b>"+open.length+"</b> still open."});
+  if(total)n.push({c:"",h:"Closure rate <b>"+pct(closed,total)+"</b> — <b>"+closed+"</b> of <b>"+total+"</b> closed, <b>"+open.length+"</b> open."});
   var stale=open.filter(function(t){return t.age!=null&&t.age>90;}).length;
-  if(stale)n.push({i:"🔴",c:"warn",h:"<b>"+stale+"</b> open changes are older than <b>90 days</b> — long-runners worth a review."});
+  if(stale)n.push({c:"warn",h:"<b>"+stale+"</b> open changes exceed <b>90 days</b>."});
   var est=F.filter(function(t){return t.stage==="Estimation";}).length;
-  if(est)n.push({i:"📐",c:"",h:"<b>"+est+"</b> changes are in <b>estimation</b> — scoping/approval is the current gate to watch."});
+  if(est)n.push({c:"",h:"<b>"+est+"</b> in estimation (scoping/approval gate)."});
   var iad=F.filter(function(t){return t.stage==="IAD Approval";}).length;
-  if(iad)n.push({i:"📋",c:"",h:"<b>"+iad+"</b> are moving through <b>IAD approval</b> steps."});
+  if(iad)n.push({c:"",h:"<b>"+iad+"</b> in IAD approval."});
   var cl=open.filter(function(t){return t.owner==="client";}).length;
-  if(cl)n.push({i:"💬",c:"warn",h:"<b>"+cl+"</b> open changes are waiting on the <b>client</b> (UAT, PROD approval or clarification)."});
+  if(cl)n.push({c:"warn",h:"<b>"+cl+"</b> open changes awaiting client (UAT / PROD approval / clarification)."});
   var hold=F.filter(function(t){return t.stage==="On-Hold";}).length;
-  if(hold)n.push({i:"⏸️",c:"",h:"<b>"+hold+"</b> changes are <b>On-Hold</b>."});
+  if(hold)n.push({c:"",h:"<b>"+hold+"</b> on hold."});
   var uns=open.filter(function(t){return !t.size;}).length;
-  if(uns)n.push({i:"👕",c:"",h:"<b>"+uns+"</b> open changes have no <b>T-Shirt size</b> — add sizing for planning."});
+  if(uns)n.push({c:"warn",h:"<b>"+uns+"</b> open changes are unsized."});
   // client concentration
   var pm={}; F.forEach(function(t){var k=t.project||"(blank)";pm[k]=(pm[k]||0)+1;});
   var pk=Object.keys(pm).sort(function(a,b){return pm[b]-pm[a];});
-  if(pk.length&&total)n.push({i:"🏢",c:"",h:"<b>"+esc(pk[0])+"</b> is the largest client in view at <b>"+pm[pk[0]]+"</b> ("+pct(pm[pk[0]],total)+" of scope)."});
+  if(pk.length&&total)n.push({c:"",h:"Largest client: <b>"+esc(pk[0])+"</b> — <b>"+pm[pk[0]]+"</b> ("+pct(pm[pk[0]],total)+" of scope)."});
   // busiest SVM
   var sm={}; F.forEach(function(t){if(t.svm)sm[t.svm]=(sm[t.svm]||0)+1;});
   var sk=Object.keys(sm).sort(function(a,b){return sm[b]-sm[a];});
-  if(sk.length)n.push({i:"👤",c:"",h:"<b>"+esc(sk[0])+"</b> carries the most changes (<b>"+sm[sk[0]]+"</b>)."});
+  if(sk.length)n.push({c:"",h:"Highest load: <b>"+esc(sk[0])+"</b> — <b>"+sm[sk[0]]+"</b> changes."});
   // month-over-month inflow
   var mc={}; F.forEach(function(t){if(t.created){var mk=monthKey(t.created);mc[mk]=(mc[mk]||0)+1;}});
   var mks=Object.keys(mc).sort();
   if(mks.length>=2){var cur=mc[mks[mks.length-1]],prev=mc[mks[mks.length-2]],diff=cur-prev;
-    n.push({i:diff>0?"📈":"📉",c:"",h:"Inflow in <b>"+mLabel(mks[mks.length-1])+"</b> is <b>"+cur+"</b> vs <b>"+prev+"</b> the month before ("+(diff>=0?"+":"")+diff+")."});}
+    n.push({c:"",h:"Inflow <b>"+mLabel(mks[mks.length-1])+"</b>: <b>"+cur+"</b> vs <b>"+prev+"</b> prior month ("+(diff>=0?"+":"")+diff+")."});}
   var now=new Date();
   var dv=F.filter(function(t){return t.delivered&&t.delivered.getMonth()===now.getMonth()&&t.delivered.getFullYear()===now.getFullYear();}).length;
-  if(dv)n.push({i:"🚀",c:"good",h:"<b>"+dv+"</b> changes delivered this month so far."});
-  if(!n.length)n.push({i:"✅",c:"good",h:"No standout risks in the current scope."});
-  return '<div class="notes">'+n.map(function(x){return '<div class="note '+x.c+'"><span class="i">'+x.i+'</span><span>'+x.h+'</span></div>';}).join('')+'</div>';
+  if(dv)n.push({c:"good",h:"<b>"+dv+"</b> delivered month-to-date."});
+  return noteHTML(n);
 }
 
 /* ── shared insight-card helpers (rule-based, no AI tokens) ── */
 function noteHTML(arr){
-  if(!arr.length)arr=[{i:"✅",c:"good",h:"Nothing notable in the current scope."}];
-  return '<div class="notes">'+arr.map(function(x){return '<div class="note '+(x.c||"")+'"><span class="i">'+x.i+'</span><span>'+x.h+'</span></div>';}).join('')+'</div>';
+  if(!arr.length)arr=[{c:"good",h:"No material risks in the current view."}];
+  return '<div class="notes">'+arr.map(function(x){return '<div class="note '+(x.c||"")+'"><span class="dot" aria-hidden="true"></span><span>'+x.h+'</span></div>';}).join('')+'</div>';
 }
 function insightsCard(title,sub,arr){
   return '<div class="card up" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">'+esc(title)+'</span><span class="sec-sub">'+esc(sub)+'</span></div>'+noteHTML(arr)+'</div>';
@@ -600,38 +602,38 @@ function pipelineInsights(F){
   var byStage={}; STAGE_ORDER.forEach(function(k){byStage[k]=F.filter(function(t){return t.stage===k;}).length;});
   var openStages=STAGE_ORDER.filter(function(k){return k!=="Closed";});
   var bigOpen=openStages.slice().sort(function(a,b){return byStage[b]-byStage[a];})[0];
-  if(bigOpen&&byStage[bigOpen])n.push({i:STAGE_ICON[bigOpen],c:"",h:"The busiest active stage is <b>"+esc(bigOpen)+"</b> with <b>"+byStage[bigOpen]+"</b> changes ("+pct(byStage[bigOpen],total)+" of scope)."});
+  if(bigOpen&&byStage[bigOpen])n.push({c:"",h:"Busiest active stage: <b>"+esc(bigOpen)+"</b> — <b>"+byStage[bigOpen]+"</b> ("+pct(byStage[bigOpen],total)+" of scope)."});
   var gate=(byStage["Estimation"]||0)+(byStage["IAD Approval"]||0)+(byStage["Work Order"]||0);
-  if(gate)n.push({i:"⛲",c:gate>total*0.25?"warn":"",h:"<b>"+gate+"</b> changes ("+pct(gate,total)+") sit in <b>approval gates</b> (Estimation, IAD, Work Order) before development can start."});
+  if(gate)n.push({c:gate>total*0.25?"warn":"",h:"<b>"+gate+"</b> ("+pct(gate,total)+") in approval gates (Estimation, IAD, Work Order) before development."});
   var cl=F.filter(function(t){return t.open&&t.owner==="client";}).length;
-  if(cl)n.push({i:"💬",c:"warn",h:"<b>"+cl+"</b> open changes are parked with the <b>client</b> — SVM can't progress these until they respond."});
+  if(cl)n.push({c:"warn",h:"<b>"+cl+"</b> open changes parked with client — blocked until they respond."});
   var opens=F.filter(function(t){return t.open&&t.age!=null;});
   if(opens.length){var old=opens.slice().sort(function(a,b){return b.age-a.age;})[0];
-    n.push({i:"⏳",c:old.age>120?"warn":"",h:"Oldest open change is <b>"+esc(old.key)+"</b> at <b>"+old.age+" days</b> in <b>"+esc(old.stage)+"</b>."});}
+    n.push({c:old.age>120?"warn":"",h:"Oldest open change: <b>"+esc(old.key)+"</b> — <b>"+old.age+" days</b> in <b>"+esc(old.stage)+"</b>."});}
   return n;
 }
 function trendInsights(F,months,closedBy,delivBy,mkeys){
   var n=[]; if(!mkeys.length)return n;
   var last=mkeys[mkeys.length-1];
   var crLast=months[last]?months[last].total:0, clLast=closedBy[last]||0, net=crLast-clLast;
-  n.push({i:net>0?"📈":"📉",c:net>0?"warn":"good",h:"In <b>"+mLabel(last)+"</b>, <b>"+crLast+"</b> changes were created and <b>"+clLast+"</b> closed — backlog "+(net>0?"grew by <b>"+net+"</b>":net<0?"shrank by <b>"+(-net)+"</b>":"held steady")+"."});
+  n.push({c:net>0?"warn":"good",h:"<b>"+mLabel(last)+"</b>: <b>"+crLast+"</b> created, <b>"+clLast+"</b> closed — backlog "+(net>0?"grew by <b>"+net+"</b>":net<0?"shrank by <b>"+(-net)+"</b>":"held steady")+"."});
   var peak=mkeys.slice().sort(function(a,b){return (months[b]?months[b].total:0)-(months[a]?months[a].total:0);})[0];
-  if(peak)n.push({i:"🔝",c:"",h:"Peak inflow month is <b>"+mLabel(peak)+"</b> with <b>"+(months[peak]?months[peak].total:0)+"</b> new changes."});
+  if(peak)n.push({c:"",h:"Peak inflow: <b>"+mLabel(peak)+"</b> — <b>"+(months[peak]?months[peak].total:0)+"</b> new changes."});
   var totDeliv=0,totClosed=0; mkeys.forEach(function(k){totDeliv+=delivBy[k]||0;totClosed+=closedBy[k]||0;});
-  n.push({i:"🚀",c:"",h:"Across the window in view, <b>"+totDeliv+"</b> changes were delivered and <b>"+totClosed+"</b> reached closed."});
+  n.push({c:"",h:"Window totals: <b>"+totDeliv+"</b> delivered, <b>"+totClosed+"</b> closed."});
   return n;
 }
 function pivotInsights(rowD,colD,rKeys,cKeys,cell,total,rowTot,colTot,maxInfo){
   if(!total)return '';
   var n=[];
-  if(maxInfo)n.push({i:"🔥",c:"",h:"Busiest cell: <b>"+esc(pvLabel(rowD,maxInfo.r))+"</b> × <b>"+esc(pvLabel(colD,maxInfo.c))+"</b> — <b>"+maxInfo.v+"</b> changes ("+pct(maxInfo.v,total)+" of scope)."});
+  if(maxInfo)n.push({c:"",h:"Busiest cell: <b>"+esc(pvLabel(rowD,maxInfo.r))+"</b> × <b>"+esc(pvLabel(colD,maxInfo.c))+"</b> — <b>"+maxInfo.v+"</b> ("+pct(maxInfo.v,total)+" of scope)."});
   var rk=rKeys.slice().sort(function(a,b){return rowTot[b]-rowTot[a];});
-  if(rk.length)n.push({i:"⬅️",c:"",h:"Largest "+esc(rowD.l)+": <b>"+esc(pvLabel(rowD,rk[0]))+"</b> with <b>"+rowTot[rk[0]]+"</b> ("+pct(rowTot[rk[0]],total)+")."});
+  if(rk.length)n.push({c:"",h:"Largest "+esc(rowD.l)+": <b>"+esc(pvLabel(rowD,rk[0]))+"</b> — <b>"+rowTot[rk[0]]+"</b> ("+pct(rowTot[rk[0]],total)+")."});
   var ck=cKeys.slice().sort(function(a,b){return colTot[b]-colTot[a];});
-  if(ck.length)n.push({i:"⬆️",c:"",h:"Most common "+esc(colD.l)+": <b>"+esc(pvLabel(colD,ck[0]))+"</b> with <b>"+colTot[ck[0]]+"</b> ("+pct(colTot[ck[0]],total)+")."});
-  if(rk.length>3){var t3=rowTot[rk[0]]+rowTot[rk[1]]+rowTot[rk[2]];n.push({i:"🎯",c:"",h:"The top 3 "+esc(rowD.l)+" values cover <b>"+pct(t3,total)+"</b> of changes ("+t3+" of "+total+")."});}
+  if(ck.length)n.push({c:"",h:"Most common "+esc(colD.l)+": <b>"+esc(pvLabel(colD,ck[0]))+"</b> — <b>"+colTot[ck[0]]+"</b> ("+pct(colTot[ck[0]],total)+")."});
+  if(rk.length>3){var t3=rowTot[rk[0]]+rowTot[rk[1]]+rowTot[rk[2]];n.push({c:"",h:"Top 3 "+esc(rowD.l)+" values cover <b>"+pct(t3,total)+"</b> ("+t3+" of "+total+")."});}
   var cells=rKeys.length*cKeys.length, filled=0; rKeys.forEach(function(r){cKeys.forEach(function(c){if(cell[r+"\u0001"+c])filled++;});});
-  if(cells)n.push({i:"🕸️",c:"",h:"<b>"+(cells-filled)+"</b> of "+cells+" cells are empty — activity is concentrated in a few "+esc(rowD.l)+" / "+esc(colD.l)+" combinations."});
+  if(cells)n.push({c:"",h:"<b>"+(cells-filled)+"</b> of "+cells+" cells empty — activity concentrated in a few combinations."});
   return '<div style="margin-top:16px"><div class="sec-head"><span class="sec-title" style="font-size:13px">Reading this pivot</span><span class="sec-sub">auto-generated · updates with rows, columns &amp; filters</span></div>'+noteHTML(n)+'</div>';
 }
 
