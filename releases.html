@@ -365,7 +365,7 @@ function sortTickets(arr,col,dir){
 function render(){
   applyFilters();
   var app=el("app");
-  if(!RAW.length){renderLanding();return;}
+  if(!RAW.length){renderLanding(BLOB?"loaded-no-releases":"");return;}
 
   var projs=distinctSorted(RAW,"project");
   var svms=distinctSorted(RAW,"svm");
@@ -793,12 +793,20 @@ function openModal(title,tickets){
 function closeModal(){el("modalOv").classList.remove("open");}
 
 /* ── LANDING ── */
-function renderLanding(){
+function renderLanding(note){
+  var banner = (note==="loaded-no-releases")
+    ? '<div style="background:#FEF2F2;border:1px solid #FBD0DA;color:#9F1239;border-radius:12px;padding:13px 15px;margin-bottom:18px;text-align:left;font-size:12.5px;line-height:1.6">'+
+        '<b>Loaded '+esc(FILENAME)+', but no releases were found.</b><br>'+
+        'No ticket has a value in <b>Release Number</b>, <b>Release Number (Data Fix)</b> or <b>Parent Release No</b>. '+
+        'If you fetched from Jira, open the launcher, click the <b>⚙ Jira settings</b>, hit <b>Test connection &amp; discover fields</b> to map those release fields, <b>Save</b>, then fetch again.'+
+      '</div>'
+    : '';
   el("app").innerHTML=''+
   '<div class="landing">'+
     '<div class="deco b1"></div><div class="deco b2"></div>'+
     '<div class="deco ring r1"></div><div class="deco ring r2"></div>'+
     '<div class="landing-card up">'+
+      banner+
       '<div style="display:inline-flex;align-items:center;gap:11px;margin-bottom:20px">'+
         '<span class="bar" style="display:flex;gap:5px;align-items:flex-end;height:38px">'+
           '<i style="display:block;width:11px;height:16px;border-radius:4px;background:var(--vi)"></i>'+
