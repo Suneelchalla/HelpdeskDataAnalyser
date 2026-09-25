@@ -562,6 +562,9 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
         <div class="js-row"><label class="js-lbl">Type of Fix</label><select id="jsFldTof"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Screen Name</label><select id="jsFldSn"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Menu Head</label><select id="jsFldMh"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Release Number</label><select id="jsFldRel"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Release Number (Data Fix)</label><select id="jsFldRelDf"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Parent Release No</label><select id="jsFldPrn"><option value="">— not mapped —</option></select></div>
         <div></div>
       </div>
     </div>
@@ -612,7 +615,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   el("jiraSetupBtn2").onclick=openSetup;
 
   function fillSelects(fields, fm){
-    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh"};
+    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh",releaseNumber:"jsFldRel",releaseDataFix:"jsFldRelDf",parentRelease:"jsFldPrn"};
     Object.keys(ids).forEach(function(k){
       var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
       fields.forEach(function(f){
@@ -660,7 +663,9 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
         nextAction: el("jsFldNa").value, timeToFirstResponse: el("jsFldFr").value,
         timeToResolution: el("jsFldRes").value,
         rootCause: el("jsFldRc").value, typeOfFix: el("jsFldTof").value,
-        screenName: el("jsFldSn").value, menuHead: el("jsFldMh").value
+        screenName: el("jsFldSn").value, menuHead: el("jsFldMh").value,
+        releaseNumber: el("jsFldRel").value, releaseDataFix: el("jsFldRelDf").value,
+        parentRelease: el("jsFldPrn").value
       },
       _fields: _fields||[]
     });
