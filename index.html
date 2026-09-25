@@ -431,6 +431,8 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
                 <span id="fdaterange" style="display:none">created <span class="rng" id="fcmin">—</span> → <span class="rng" id="fcmax">—</span> <span class="sep">·</span> resolved <span class="rng" id="frmin">—</span> → <span class="rng" id="frmax">—</span></span>
               </div>
             </div>
+            <button class="ghost" id="refreshBtn" style="display:none">⟳ Refresh</button>
+            <button class="ghost" id="fullBtn" style="display:none" title="Re-pull the entire history from Jira">Full</button>
             <button class="ghost" id="changeBtn">Change file</button>
           </div>
         </div>
@@ -683,35 +685,44 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
     closeSetup();
   };
 
-  /* ── FETCH button ── */
-  el("jiraFetchBtn").onclick=function(){
+  /* ── FETCH (shared by first-fetch, Refresh and Full) ── */
+  function runFetch(opts){
+    opts = opts || {};
     if(!HJ.isBridgeAvailable()){ openSetup(); return; }
     var cfg=HJ.loadConfig();
     var jql=cfg.jql||QUERY;
+    var wasLoaded = !el("loaded").classList.contains("hidden");
 
     el("empty").classList.add("hidden");
     el("loaded").classList.add("hidden");
     el("fetching").classList.remove("hidden");
     el("fetchPct").textContent="0 %"; el("fetchFill").style.width="0%";
-    el("fetchMsg").textContent="Connecting to Jira…";
+    el("fetchMsg").textContent = opts.full ? "Full refresh — connecting to Jira…"
+      : opts.refresh ? "Checking Jira for updates…" : "Connecting to Jira…";
     el("cards").classList.add("locked"); el("stage").classList.remove("live");
 
     HJ.fetchAll(jql, function(fetched, total){
       var p=total>0?Math.round(fetched/total*100):0;
       el("fetchPct").textContent=p+" %"; el("fetchFill").style.width=p+"%";
-      el("fetchMsg").textContent="Fetched "+fetched.toLocaleString()+" of "+total.toLocaleString()+" tickets…";
-    }).then(function(info){
+      var verb = opts.refresh && !opts.full ? "Updated" : "Fetched";
+      el("fetchMsg").textContent=verb+" "+fetched.toLocaleString()+" of "+total.toLocaleString()+" tickets…";
+    }, { full: !!opts.full }).then(function(info){
       el("fetching").classList.add("hidden");
       showLoaded(info.fileName, info);
     }).catch(function(err){
       el("fetching").classList.add("hidden");
-      el("empty").classList.remove("hidden");
-      if(err.message==="EXTENSION_NOT_FOUND"){ openSetup(); return; }
+      if(err.message==="EXTENSION_NOT_FOUND"){ el("empty").classList.remove("hidden"); openSetup(); return; }
+      // On a refresh error keep the existing data visible; otherwise fall back to empty.
+      if(wasLoaded && window.__restoreLoaded){ window.__restoreLoaded(); } else { el("empty").classList.remove("hidden"); }
       alert("Fetch failed: "+err.message);
     });
-  };
+  }
+  el("jiraFetchBtn").onclick=function(){ runFetch({}); };
+  var _rb=el("refreshBtn"); if(_rb) _rb.onclick=function(){ runFetch({refresh:true}); };
+  var _fb=el("fullBtn"); if(_fb) _fb.onclick=function(){ runFetch({full:true, refresh:true}); };
   el("fetchCancel").onclick=function(){
-    el("fetching").classList.add("hidden"); el("empty").classList.remove("hidden");
+    el("fetching").classList.add("hidden");
+    if(window.__restoreLoaded){ window.__restoreLoaded(true); } else { el("empty").classList.remove("hidden"); }
   };
 })();
 </script>
@@ -827,9 +838,26 @@ function showLoaded(name,info){
     dr.style.display="inline"; el("fsep").style.display="inline";
   }
   var sp=el("status"); sp.classList.add("live");
-  el("statustext").textContent=(count==null?"Live":("Live · "+(typeof count==="number"?count.toLocaleString():count)+" tickets"));
+  var baseTxt=(count==null?"Live":("Live · "+(typeof count==="number"?count.toLocaleString():count)+" tickets"));
+  if(info&&info.mode==="incremental"&&info.changed!=null){ baseTxt+=" · "+info.changed.toLocaleString()+" updated"; }
+  el("statustext").textContent=baseTxt;
+  // Show Refresh / Full only when a live-fetch cache exists (data came from Jira).
+  if(HS&&HS.loadFetchCache){ HS.loadFetchCache().then(function(c){
+    var has=!!(c&&c.rows&&c.rows.length);
+    var rb=el("refreshBtn"), fb=el("fullBtn");
+    if(rb)rb.style.display=has?"":"none";
+    if(fb)fb.style.display=has?"":"none";
+  }); }
   requestAnimationFrame(function(){requestAnimationFrame(drawWires);});
 }
+// Re-show the stored file (used when a refresh is cancelled or fails).
+window.__restoreLoaded=function(silent){
+  if(!HS){ showEmpty(); return; }
+  HS.loadFile().then(function(rec){
+    if(rec&&rec.blob){ countTickets(rec.blob).then(function(info){ showLoaded(rec.name,info); }); }
+    else { showEmpty(); }
+  }).catch(function(){ if(!silent) showEmpty(); });
+};
 function showEmpty(){
   el("loaded").classList.add("hidden");
   el("empty").classList.remove("hidden");
@@ -845,7 +873,7 @@ function handleFile(file){
   var btn=el("chooseBtn"); if(btn){btn.textContent="Reading…";btn.disabled=true;}
   countTickets(file).then(function(info){
     if(HS){
-      HS.saveFile(file,file.name).then(function(){ HS.clearRows(); showLoaded(file.name,info); })
+      HS.saveFile(file,file.name).then(function(){ HS.clearRows(); if(HS.clearFetchCache)HS.clearFetchCache(); showLoaded(file.name,info); })
       .catch(function(err){ alert("Couldn't store the file on this device: "+err.message); if(btn){btn.textContent="Choose Excel file";btn.disabled=false;} });
     } else {
       showLoaded(file.name,info);  // preview fallback (no persistence)
@@ -857,7 +885,7 @@ function handleFile(file){
 el("chooseBtn").onclick=function(){ el("fileinput").click(); };
 el("dz").onclick=function(){ el("fileinput").click(); };
 el("fileinput").onchange=function(e){ handleFile(e.target.files&&e.target.files[0]); e.target.value=""; };
-el("changeBtn").onclick=function(){ if(HS){HS.clearRows();HS.clearFile().then(showEmpty);}else{showEmpty();} };
+el("changeBtn").onclick=function(){ if(HS){HS.clearRows();if(HS.clearFetchCache)HS.clearFetchCache();HS.clearFile().then(showEmpty);}else{showEmpty();} };
 
 var dz=el("dz");
 ["dragenter","dragover"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over");}); });
