@@ -160,27 +160,64 @@
       { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   }
 
-  function fetchAll(jql, onProgress) {
+  function summarize(rows) {
+    var cMin = null, cMax = null, rMin = null, rMax = null;
+    rows.forEach(function (r) {
+      var c = r["Created"] ? new Date(r["Created"]) : null;
+      var v = r["Resolved"] ? new Date(r["Resolved"]) : null;
+      if (c && !isNaN(c)) { if (!cMin || c < cMin) cMin = c; if (!cMax || c > cMax) cMax = c; }
+      if (v && !isNaN(v)) { if (!rMin || v < rMin) rMin = v; if (!rMax || v > rMax) rMax = v; }
+    });
+    return { cMin: cMin, cMax: cMax, rMin: rMin, rMax: rMax };
+  }
+
+  /* opts.full === true forces a full re-pull. Otherwise, if a cached fetch exists
+     for the same JQL + host, only tickets updated since the last fetch are pulled
+     and merged by Key (incremental). Returns {..., mode, changed}. */
+  function fetchAll(jql, onProgress, opts) {
+    opts = opts || {};
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter"];
     ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
-    return search(host, jql, fields, onProgress).then(function (issues) {
-      var rows = transform(issues, fm), blob = toBlob(rows);
+
+    var loadCache = (window.HDStore && window.HDStore.loadFetchCache) ? window.HDStore.loadFetchCache() : Promise.resolve(null);
+    return loadCache.then(function (cache) {
+      var fetchStart = Date.now();
+      var canDelta = !opts.full && cache && cache.rows && cache.rows.length && cache.jql === jql && cache.host === host && cache.lastFetch;
+      if (canDelta) {
+        /* relative minutes are evaluated against Jira's own clock, so this is safe
+           regardless of the browser's timezone; +5 min guards against clock skew. */
+        var mins = Math.ceil((fetchStart - cache.lastFetch) / 60000) + 5;
+        var deltaJql = "(" + jql + ") AND updated >= \"-" + mins + "m\"";
+        return search(host, deltaJql, fields, onProgress).then(function (issues) {
+          var deltaRows = transform(issues, fm), map = {};
+          cache.rows.forEach(function (r) { if (r["Key"]) map[r["Key"]] = r; });
+          deltaRows.forEach(function (r) { if (r["Key"]) map[r["Key"]] = r; });
+          var rows = Object.keys(map).map(function (k) { return map[k]; });
+          return finalize(rows, fetchStart, deltaRows.length, "incremental");
+        });
+      }
+      return search(host, jql, fields, onProgress).then(function (issues) {
+        var rows = transform(issues, fm);
+        return finalize(rows, fetchStart, rows.length, "full");
+      });
+    });
+
+    function finalize(rows, fetchStart, changed, mode) {
+      var blob = toBlob(rows);
       var name = "Jira Live \u00B7 " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + ".xlsx";
-      return window.HDStore.saveFile(blob, name)
+      var saveCache = (window.HDStore && window.HDStore.saveFetchCache)
+        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart })
+        : Promise.resolve();
+      return saveCache
+        .then(function () { return window.HDStore.saveFile(blob, name); })
         .then(function () { return window.HDStore.clearRows(); })
         .then(function () {
-          var cMin = null, cMax = null, rMin = null, rMax = null;
-          rows.forEach(function (r) {
-            var c = r["Created"] ? new Date(r["Created"]) : null;
-            var v = r["Resolved"] ? new Date(r["Resolved"]) : null;
-            if (c && !isNaN(c)) { if (!cMin || c < cMin) cMin = c; if (!cMax || c > cMax) cMax = c; }
-            if (v && !isNaN(v)) { if (!rMin || v < rMin) rMin = v; if (!rMax || v > rMax) rMax = v; }
-          });
-          return { count: rows.length, cMin: cMin, cMax: cMax, rMin: rMin, rMax: rMax, fileName: name };
+          var r = summarize(rows);
+          return { count: rows.length, changed: changed, mode: mode, cMin: r.cMin, cMax: r.cMax, rMin: r.rMin, rMax: r.rMax, fileName: name };
         });
-    });
+    }
   }
 
   window.HDJira = {
