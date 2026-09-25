@@ -51,7 +51,14 @@
       menuHead: [/menu\s*head/i],
       releaseDataFix: [/release\s*number\s*\(?\s*data\s*fix/i, /data\s*fix\s*release/i],
       releaseNumber: [/^\s*release\s*number\s*$/i, /^\s*release\s*no\.?\s*$/i],
-      parentRelease: [/parent\s*release/i]
+      parentRelease: [/parent\s*release/i],
+      tshirtSizing: [/t.?shirt\s*siz/i, /^\s*t.?shirt\s*$/i, /^\s*sizing\s*$/i],
+      severity: [/^\s*severity\s*$/i, /severity/i],
+      assignedDate: [/assigned\s*date/i, /^\s*assigned\s*on\s*$/i],
+      deliveredDate: [/delivered\s*date/i, /^\s*delivered\s*on\s*$/i],
+      clientReference: [/client\s*reference/i, /client\s*ref\b/i],
+      analysis: [/^\s*analysis\s*$/i],
+      solutionSummary: [/solution\s*summary/i, /^\s*solution\s*$/i]
     };
     Object.keys(patterns).forEach(function (key) {
       for (var i = 0; i < customFields.length; i++) {
@@ -115,6 +122,15 @@
       row["Release Number"] = txt(f[fm.releaseNumber]);
       row["Release Number (Data Fix)"] = txt(f[fm.releaseDataFix]);
       row["Parent Release No"] = txt(f[fm.parentRelease]);
+      row["Assignee"] = person(f.assignee);
+      row["Reporter"] = person(f.reporter);
+      row["T-Shirt Sizing"] = choice(f[fm.tshirtSizing]);
+      row["Severity"] = choice(f[fm.severity]);
+      row["Assigned Date"] = txt(f[fm.assignedDate]);
+      row["Delivered Date"] = txt(f[fm.deliveredDate]);
+      row["Client Reference"] = txt(f[fm.clientReference]);
+      row["Analysis"] = rich(f[fm.analysis]);
+      row["Solution Summary"] = rich(f[fm.solutionSummary]);
       if (f.issuelinks && f.issuelinks.length) {
         var lk = [], ls = [];
         f.issuelinks.forEach(function (l) {
@@ -129,6 +145,9 @@
   function person(v) { if (!v) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.map(function (x) { return x.displayName || x.name || ""; }).join(", "); return v.displayName || v.name || v.value || ""; }
   function choice(v) { if (!v) return ""; if (typeof v === "string") return v; return v.value || v.name || ""; }
   function txt(v) { if (v == null) return ""; if (typeof v === "object") return v.value || v.name || v.displayName || (Array.isArray(v) ? v.map(function (x) { return x.value || x.name || x; }).join(", ") : ""); return String(v); }
+  function rich(v) { if (v == null) return ""; if (typeof v === "string") return v;
+    if (typeof v === "object") { if (Array.isArray(v.content)) { var out = ""; (function walk(n) { if (!n) return; if (n.text) out += n.text; if (Array.isArray(n.content)) n.content.forEach(walk); if (n.type === "paragraph") out += "\n"; })(v); return out.trim(); } return v.value || v.name || ""; }
+    return String(v); }
   function sla(s) { if (!s) return ""; if (typeof s === "string") return s;
     if (s.completedCycles && s.completedCycles.length) { var l = s.completedCycles[s.completedCycles.length - 1]; if (l.elapsedTime) return (l.breached ? "-" : "") + (l.elapsedTime.friendly || ""); }
     if (s.ongoingCycle) { var o = s.ongoingCycle; if (o.breached && o.elapsedTime) return "-" + (o.elapsedTime.friendly || ""); if (o.remainingTime) return o.remainingTime.friendly || ""; }
@@ -143,8 +162,8 @@
 
   function fetchAll(jql, onProgress) {
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
-    var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks"];
-    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease"]
+    var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter"];
+    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
     return search(host, jql, fields, onProgress).then(function (issues) {
       var rows = transform(issues, fm), blob = toBlob(rows);
