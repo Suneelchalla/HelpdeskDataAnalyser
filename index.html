@@ -565,6 +565,13 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
         <div class="js-row"><label class="js-lbl">Release Number</label><select id="jsFldRel"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Release Number (Data Fix)</label><select id="jsFldRelDf"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Parent Release No</label><select id="jsFldPrn"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">T-Shirt Sizing</label><select id="jsFldTsz"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Severity</label><select id="jsFldSev"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Assigned Date</label><select id="jsFldAsd"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Delivered Date</label><select id="jsFldDvd"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Client Reference</label><select id="jsFldCrf"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Analysis</label><select id="jsFldAna"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Solution Summary</label><select id="jsFldSol"><option value="">— not mapped —</option></select></div>
         <div></div>
       </div>
     </div>
@@ -615,7 +622,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   el("jiraSetupBtn2").onclick=openSetup;
 
   function fillSelects(fields, fm){
-    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh",releaseNumber:"jsFldRel",releaseDataFix:"jsFldRelDf",parentRelease:"jsFldPrn"};
+    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh",releaseNumber:"jsFldRel",releaseDataFix:"jsFldRelDf",parentRelease:"jsFldPrn",tshirtSizing:"jsFldTsz",severity:"jsFldSev",assignedDate:"jsFldAsd",deliveredDate:"jsFldDvd",clientReference:"jsFldCrf",analysis:"jsFldAna",solutionSummary:"jsFldSol"};
     Object.keys(ids).forEach(function(k){
       var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
       fields.forEach(function(f){
@@ -665,7 +672,11 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
         rootCause: el("jsFldRc").value, typeOfFix: el("jsFldTof").value,
         screenName: el("jsFldSn").value, menuHead: el("jsFldMh").value,
         releaseNumber: el("jsFldRel").value, releaseDataFix: el("jsFldRelDf").value,
-        parentRelease: el("jsFldPrn").value
+        parentRelease: el("jsFldPrn").value,
+        tshirtSizing: el("jsFldTsz").value, severity: el("jsFldSev").value,
+        assignedDate: el("jsFldAsd").value, deliveredDate: el("jsFldDvd").value,
+        clientReference: el("jsFldCrf").value, analysis: el("jsFldAna").value,
+        solutionSummary: el("jsFldSol").value
       },
       _fields: _fields||[]
     });
