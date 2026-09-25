@@ -3,12 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="hd-dashboard" content="launcher">
 <title>HD Dashboards</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101828'/%3E%3Crect x='7' y='9' width='7' height='14' rx='2' fill='%232563EB'/%3E%3Crect x='18' y='9' width='7' height='14' rx='2' fill='%230F766E'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
-<script src="jira-fetch.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -18,6 +16,8 @@
   --blue:#2563EB; --blue-soft:#EFF4FF; --blue-line:#CFE0FF; --blue-glow:rgba(37,99,235,.35);
   --teal:#0F766E; --teal-soft:#E9F9F4; --teal-line:#BCEBE2; --teal-glow:rgba(15,118,110,.32);
   --amber:#B45309;
+  --violet:#7C3AED; --violet-soft:#EDE9FE; --violet-line:#C4B5FD; --violet-glow:rgba(124,58,237,.3);
+  --indigo:#4F46E5; --indigo-soft:#EEF2FF; --indigo-line:#C7D2FE; --indigo-glow:rgba(79,70,229,.32);
   --disp:'Space Grotesk',sans-serif;
   --sans:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
   --mono:'JetBrains Mono',monospace;
@@ -65,7 +65,7 @@ input[type=file]{display:none}
 @keyframes ping{0%{transform:scale(1);opacity:.5}100%{transform:scale(6.5);opacity:0}}
 
 /* ══════ shell (single viewport, no scroll) ══════ */
-.shell{position:relative;z-index:1;height:100vh;max-width:1240px;margin:0 auto;padding:22px 30px 18px;display:flex;flex-direction:column}
+.shell{position:relative;z-index:1;height:100vh;max-width:1240px;margin:0 auto;padding:16px 28px 10px;display:flex;flex-direction:column}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .rise{animation:rise .55s cubic-bezier(.22,1,.36,1) both}
 .d1{animation-delay:.07s}.d2{animation-delay:.14s}.d3{animation-delay:.21s}
@@ -77,20 +77,20 @@ input[type=file]{display:none}
 .mk i{display:block;width:7px;border-radius:2px}
 .brand{font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:-.2px}
 .rail .spacer{flex:1}
-.statuspill{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.4px;color:var(--muted);background:var(--card);border:1px solid var(--line);padding:7px 13px;border-radius:999px;text-transform:uppercase;box-shadow:var(--sh);transition:all .3s}
+.statuspill{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--muted);background:var(--card);border:1px solid var(--line);padding:6px 12px;border-radius:999px;text-transform:uppercase;box-shadow:var(--sh);transition:all .3s}
 .statuspill .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:all .3s}
 .statuspill.live{color:var(--teal);border-color:var(--teal-line);background:var(--teal-soft)}
 .statuspill.live .dot{background:var(--teal);box-shadow:0 0 10px var(--teal-glow);animation:beat 1.8s ease-in-out infinite}
 @keyframes beat{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* main split */
-.main{flex:1;min-height:0;display:grid;grid-template-columns:0.72fr 1.6fr;gap:34px;align-items:center}
+.main{flex:1;min-height:0;display:grid;grid-template-columns:0.72fr 1.6fr;gap:24px;align-items:center}
 
 /* left — hero */
 .eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:2.4px}
-h1{font-family:var(--disp);font-weight:700;font-size:clamp(32px,3.6vw,50px);line-height:.98;letter-spacing:-1.6px;margin:14px 0 0;color:var(--ink)}
+h1{font-family:var(--disp);font-weight:700;font-size:clamp(30px,3.4vw,46px);line-height:.98;letter-spacing:-1.6px;margin:10px 0 0;color:var(--ink)}
 h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.lead{color:var(--ink2);font-size:13.5px;line-height:1.6;margin-top:16px;max-width:400px}
+.lead{color:var(--ink2);font-size:12.5px;line-height:1.55;margin-top:12px;max-width:400px}
 .lead b.b{color:var(--blue);font-weight:600} .lead b.t{color:var(--teal);font-weight:600}
 
 /* right — stage: source + wires + two lenses */
@@ -104,47 +104,49 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 .flow.fu{stroke:var(--blue);filter:drop-shadow(0 0 4px var(--blue-glow))}
 .flow.tr{stroke:var(--teal);filter:drop-shadow(0 0 4px var(--teal-glow))}
 .flow.wr{stroke:var(--amber);filter:drop-shadow(0 0 4px rgba(180,83,9,.35))}
+.flow.rl{stroke:var(--violet);filter:drop-shadow(0 0 4px var(--violet-glow))}
+.flow.ch{stroke:var(--indigo);filter:drop-shadow(0 0 4px var(--indigo-glow))}
 @keyframes march{to{stroke-dashoffset:-42}}
 
-.source{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh);overflow:hidden}
-.srclabel{display:flex;align-items:center;gap:9px;padding:11px 18px;border-bottom:1px solid var(--line)}
+.source{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh);overflow:hidden}
+.srclabel{display:flex;align-items:center;gap:9px;padding:8px 14px;border-bottom:1px solid var(--line)}
 .srclabel .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1.3px;color:var(--faint);text-transform:uppercase}
 .srclabel .line{flex:1;height:1px;background:var(--line)}
 
-.dz{margin:10px;border:1.5px dashed var(--line2);border-radius:13px;padding:14px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:radial-gradient(360px 130px at 50% 0%,rgba(37,99,235,.05),transparent 70%)}
+.dz{margin:12px;border:1.5px dashed var(--line2);border-radius:12px;padding:18px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:radial-gradient(360px 130px at 50% 0%,rgba(37,99,235,.05),transparent 70%)}
 .dz:hover,.dz.over{border-color:var(--blue);background:radial-gradient(360px 160px at 50% 0%,rgba(37,99,235,.1),transparent 70%)}
-.dz .ic{width:36px;height:36px;margin:0 auto 6px;border-radius:10px;background:var(--blue-soft);border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center}
-.dz .ic svg{width:18px;height:18px}
-.dz .t{font-family:var(--disp);font-weight:600;font-size:13.5px;color:var(--ink)}
-.dz .s{font-size:10.5px;color:var(--muted);margin-top:2px}
-.dz .btn{margin-top:10px;background:var(--ink);color:#fff;border:none;padding:9px 20px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:12px}
+.dz .ic{width:40px;height:40px;margin:0 auto 8px;border-radius:11px;background:var(--blue-soft);border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center}
+.dz .ic svg{width:20px;height:20px}
+.dz .t{font-family:var(--disp);font-weight:600;font-size:14px;color:var(--ink)}
+.dz .s{font-size:11px;color:var(--muted);margin-top:3px}
+.dz .btn{margin-top:12px;background:var(--ink);color:#fff;border:none;padding:9px 22px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:12.5px}
 .dz .btn:hover{background:#1c2740}
 .dz .btn:disabled{opacity:.6;cursor:default}
 
-.filerow{display:flex;align-items:center;gap:13px;padding:15px 18px}
-.filerow .fic{width:44px;height:44px;border-radius:12px;background:var(--teal-soft);border:1px solid var(--teal-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.filerow .fic svg{width:21px;height:21px}
-.filerow .fname{font-weight:600;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.filerow .fmeta{font-size:11.5px;color:var(--ink2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.filerow{display:flex;align-items:center;gap:10px;padding:10px 14px}
+.filerow .fic{width:36px;height:36px;border-radius:10px;background:var(--teal-soft);border:1px solid var(--teal-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.filerow .fic svg{width:18px;height:18px}
+.filerow .fname{font-weight:600;font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filerow .fmeta{font-size:10.5px;color:var(--ink2);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .filerow .fmeta .num{font-family:var(--mono);color:var(--teal);font-weight:700}
 .filerow .fmeta .sep{color:var(--faint)} .filerow .fmeta .rng{font-family:var(--mono);color:var(--ink)}
-.ghost{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:8px 14px;border-radius:9px;font-size:12px;font-weight:600;white-space:nowrap}
+.ghost{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:6px 12px;border-radius:8px;font-size:11.5px;font-weight:600;white-space:nowrap}
 .ghost:hover{border-color:var(--muted);color:var(--ink)}
 
-.fork{height:36px}
+.fork{height:24px}
 
-.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;position:relative;z-index:2}
-.card{position:relative;display:block;border-radius:18px;padding:16px 18px 14px;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);transition:transform .2s,box-shadow .25s,border-color .2s,opacity .35s,filter .35s}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;position:relative;z-index:2}
+.card{position:relative;display:block;border-radius:14px;padding:13px 15px 11px;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);transition:transform .2s,box-shadow .25s,border-color .2s,opacity .35s,filter .35s}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .35s,box-shadow .35s}
-.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
-.card .badge{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid var(--line);background:var(--paper)}
-.card .go{font-family:var(--disp);font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--faint)}
+.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.card .badge{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;border:1px solid var(--line);background:var(--paper)}
+.card .go{font-family:var(--disp);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--faint)}
 .card .go .ar{transition:transform .2s}
-.card h2{font-family:var(--disp);font-size:16px;font-weight:700;letter-spacing:-.3px;color:var(--ink)}
-.card p{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:6px}
-.card .feat{display:flex;flex-wrap:wrap;gap:5px;margin-top:14px}
-.card .feat span{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--ink2);background:var(--paper);border:1px solid var(--line);padding:4px 9px;border-radius:6px;letter-spacing:.2px}
-.card .lock{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;margin-top:12px}
+.card h2{font-family:var(--disp);font-size:15px;font-weight:700;letter-spacing:-.3px;color:var(--ink)}
+.card p{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .feat{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.card .feat span{font-family:var(--mono);font-size:9.5px;font-weight:500;color:var(--ink2);background:var(--paper);border:1px solid var(--line);padding:3px 7px;border-radius:5px;letter-spacing:.2px}
+.card .lock{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;margin-top:8px}
 
 .cards.locked .card{opacity:.5;filter:grayscale(.55) brightness(1.01);pointer-events:none}
 .cards.locked .card .go,.cards.locked .card .feat{display:none}
@@ -162,14 +164,23 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 .cards:not(.locked) .card.wr::after{background:var(--amber);box-shadow:0 0 14px rgba(180,83,9,.3)}
 .cards:not(.locked) .card.wr .badge{background:#FEF3E2;border-color:#F5D9A8}
 .cards:not(.locked) .card.wr .go{color:var(--amber)}
+.cards:not(.locked) .card.rl{border-color:var(--violet-line)}
+.cards:not(.locked) .card.rl::after{background:var(--violet);box-shadow:0 0 14px var(--violet-glow)}
+.cards:not(.locked) .card.rl .badge{background:var(--violet-soft);border-color:var(--violet-line)}
+.cards:not(.locked) .card.rl .go{color:var(--violet)}
+.card.ch{grid-column:1 / -1}
+.cards:not(.locked) .card.ch{border-color:var(--indigo-line)}
+.cards:not(.locked) .card.ch::after{background:var(--indigo);box-shadow:0 0 14px var(--indigo-glow)}
+.cards:not(.locked) .card.ch .badge{background:var(--indigo-soft);border-color:var(--indigo-line)}
+.cards:not(.locked) .card.ch .go{color:var(--indigo)}
 .cards:not(.locked) .card:hover{transform:translateY(-4px);box-shadow:var(--sh2)}
 .cards:not(.locked) .card:hover .go .ar{transform:translateX(4px)}
 
 /* bottom strip */
-.strip{flex-shrink:0;display:flex;align-items:center;gap:14px;margin-top:6px;position:relative}
-.strip .note{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.3px}
+.strip{flex-shrink:0;display:flex;align-items:center;gap:12px;margin-top:4px;position:relative}
+.strip .note{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.3px}
 .strip .spacer{flex:1}
-.qbtn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line2);color:var(--ink2);padding:8px 13px;border-radius:9px;font-size:11.5px;font-weight:600;box-shadow:var(--sh)}
+.qbtn{display:inline-flex;align-items:center;gap:5px;background:var(--card);border:1px solid var(--line2);color:var(--ink2);padding:6px 11px;border-radius:8px;font-size:11px;font-weight:600;box-shadow:var(--sh)}
 .qbtn:hover{border-color:var(--muted);color:var(--ink)}
 .qbtn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
 .qbtn.primary:hover{background:#1c2740}
@@ -184,68 +195,19 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 @media (max-width:900px){
   body{overflow:auto}
   .shell{height:auto;min-height:100vh}
-  .main{grid-template-columns:1fr;gap:26px}
-  .fork{height:40px}
+  .main{grid-template-columns:1fr;gap:20px}
+  .fork{height:20px}
 }
-@media (max-height:660px) and (min-width:901px){
+@media (max-height:700px) and (min-width:901px){
   body{overflow:auto}.shell{height:auto;min-height:100vh}
 }
-@media (max-width:560px){ .cards{grid-template-columns:1fr} .filerow{flex-wrap:wrap} }
+@media (max-width:680px){ .cards{grid-template-columns:1fr} .filerow{flex-wrap:wrap} }
 @media (prefers-reduced-motion:reduce){
   .rise{animation:none}
   .wave-g,.wave2-g,.bars i,.ping::before,.ping::after{animation:none}
   .stage.live .flow{animation:none;stroke-dasharray:none}
   .statuspill.live .dot{animation:none}
 }
-
-/* ══════ Jira Live Fetch ══════ */
-.dz-or{display:flex;align-items:center;gap:12px;margin:8px 14px 0;color:var(--faint);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:1.6px}
-.dz-or::before,.dz-or::after{content:"";flex:1;height:1px;background:var(--line)}
-.jira-row{margin:6px 10px 0;display:flex;gap:7px;align-items:center}
-.jira-btn{flex:1;background:linear-gradient(135deg,#0F766E,#12897E);color:#fff;border:none;padding:10px 16px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 4px 14px rgba(15,118,110,.28)}
-.jira-btn:hover{box-shadow:0 6px 18px rgba(15,118,110,.38)}
-.jira-btn:disabled{opacity:.55;cursor:default;transform:none}
-.jira-setup{width:38px;height:38px;border-radius:9px;background:var(--paper);border:1px solid var(--line2);color:var(--ink2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;box-shadow:var(--sh)}
-.jira-setup:hover{border-color:var(--muted);color:var(--ink)}
-.jira-hint{text-align:center;font-size:9.5px;color:var(--faint);margin:4px 14px 10px;line-height:1.4}
-.jira-hint a{color:var(--teal);font-weight:600;cursor:pointer}
-.jira-hint a:hover{text-decoration:underline}
-.jira-connected{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--teal);letter-spacing:.3px}
-.jira-connected i{width:6px;height:6px;border-radius:50%;background:var(--teal)}
-.jira-progress{margin:10px;text-align:center}
-.jira-progress .pbar{height:5px;background:var(--line);border-radius:9px;overflow:hidden;margin:8px 0}
-.jira-progress .pfill{height:100%;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:9px;width:0%;transition:width .3s}
-.jira-progress .ptxt{font-family:var(--mono);font-size:10.5px;color:var(--teal);font-weight:600}
-.jira-progress .pmsg{font-size:11px;color:var(--ink2);margin-top:4px}
-/* Jira setup modal */
-.js-ov{position:fixed;inset:0;z-index:1001;background:rgba(15,23,42,.48);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:24px}
-.js-ov.open{display:flex}
-.js-panel{background:var(--card);border-radius:18px;box-shadow:var(--sh2);width:min(640px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
-.js-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--line)}
-.js-head .t{font-family:var(--disp);font-weight:700;font-size:17px;color:var(--ink)}
-.js-head .s{font-size:11.5px;color:var(--muted);margin-top:2px}
-.js-x{margin-left:auto;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink2);font-size:15px}
-.js-x:hover{color:var(--ink);border-color:var(--muted)}
-.js-body{flex:1;overflow:auto;padding:18px 22px}
-.js-row{margin-bottom:14px}
-.js-lbl{display:block;font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px}
-.js-inp{width:100%;padding:10px 13px;border:1px solid var(--line2);border-radius:9px;font-size:13px;font-family:var(--sans);color:var(--ink);background:var(--paper);outline:none;transition:border-color .15s}
-.js-inp:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
-.js-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
-.js-divider{border:none;border-top:1px dashed var(--line2);margin:16px 0}
-.js-section-title{font-family:var(--disp);font-weight:700;font-size:13px;color:var(--ink);margin-bottom:10px;display:flex;align-items:center;gap:8px}
-.js-field-map{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.js-field-map select{width:100%;padding:9px 12px;border:1px solid var(--line2);border-radius:8px;font-size:12px;font-family:var(--sans);color:var(--ink);background:var(--paper);outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239AA7B8' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
-.js-test{display:inline-flex;align-items:center;gap:7px;background:var(--teal);color:#fff;border:none;padding:10px 20px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:13px}
-.js-test:hover{filter:brightness(1.08)}
-.js-test:disabled{opacity:.5;cursor:default}
-.js-result{margin-top:10px;padding:9px 13px;border-radius:8px;font-size:12px;font-weight:600;display:none}
-.js-result.ok{display:block;background:var(--teal-soft);border:1px solid var(--teal-line);color:var(--teal)}
-.js-result.fail{display:block;background:#FFF1F2;border:1px solid #FECDD3;color:#BE123C}
-.js-foot{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--line)}
-.js-foot .spacer{flex:1}
-.js-jql{width:100%;padding:10px 13px;border:1px solid var(--line2);border-radius:9px;font-size:11px;font-family:var(--mono);color:var(--ink);background:var(--paper);outline:none;resize:vertical;min-height:68px;line-height:1.6;transition:border-color .15s}
-.js-jql:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
 
 /* ══════ Master Data module (settings) ══════ */
 .gearbtn{width:34px;height:34px;border-radius:9px;background:var(--card);border:1px solid var(--line);color:var(--ink2);
@@ -352,8 +314,8 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
     <!-- left hero -->
     <div class="rise d1">
       <div class="eyebrow">SVM Help Desk · analytics</div>
-      <h1>One export.<br><span class="two">Three lenses.</span></h1>
-      <p class="lead">Fetch live from Jira or drop an export — one source powers every dashboard: the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, and the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries. Right-click a card to open it in its own tab.</p>
+      <h1>One export.<br><span class="two">Five lenses.</span></h1>
+      <p class="lead">Drop a single Jira export and it powers every dashboard at once — the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries, the <b style="color:var(--violet);font-weight:600">Release Tracker</b> for data fixes, bug fixes &amp; workarounds, and the <b style="color:var(--indigo);font-weight:600">Change Tracker</b> for enhancements &amp; change requests.</p>
     </div>
 
     <!-- right stage -->
@@ -365,6 +327,10 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
         <path class="flow fu" id="flowFU"></path>
         <path class="flow tr" id="flowTR"></path>
         <path class="flow wr" id="flowWR"></path>
+        <path class="track" id="trackRL"></path>
+        <path class="flow rl" id="flowRL"></path>
+        <path class="track" id="trackCH"></path>
+        <path class="flow ch" id="flowCH"></path>
       </svg>
 
       <div class="source" id="sourceNode">
@@ -381,22 +347,6 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
             <div class="s">Exported from Jira · read in your browser, stored on this device</div>
             <button class="btn" id="chooseBtn">Choose Excel file</button>
           </div>
-          <div class="dz-or">or</div>
-          <div class="jira-row">
-            <button class="jira-btn" id="jiraFetchBtn">⚡ Fetch from Jira</button>
-            <button class="jira-setup" id="jiraSetupBtn2" title="Jira connection settings">⚙</button>
-          </div>
-          <div class="jira-hint" id="jiraHint"></div>
-        </div>
-
-        <div id="fetching" class="hidden">
-          <div class="jira-progress">
-            <div style="font-size:22px;margin-bottom:6px">⚡</div>
-            <div class="ptxt" id="fetchPct">0 %</div>
-            <div class="pbar"><div class="pfill" id="fetchFill"></div></div>
-            <div class="pmsg" id="fetchMsg">Connecting to Jira…</div>
-            <button class="ghost" id="fetchCancel" style="margin-top:12px">Cancel</button>
-          </div>
         </div>
 
         <div id="loaded" class="hidden">
@@ -410,7 +360,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
               <div class="fname" id="fname">—</div>
               <div class="fmeta">
                 <span class="num" id="fcount">0</span> tickets loaded
-                <span class="sep">·</span> feeding all three
+                <span class="sep">·</span> feeding all five
                 <span class="sep" id="fsep" style="display:none">·</span>
                 <span id="fdaterange" style="display:none">created <span class="rng" id="fcmin">—</span> → <span class="rng" id="fcmax">—</span> <span class="sep">·</span> resolved <span class="rng" id="frmin">—</span> → <span class="rng" id="frmax">—</span></span>
               </div>
@@ -442,6 +392,20 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
           <h2>Weekly Report</h2>
           <p>Client-ready weekly report: per-client KPIs, inflow, resolved, SVM vs client, activity stages — print or save as PDF.</p>
           <div class="feat"><span>Per client</span><span>SVM vs Client</span><span>Stages</span><span>Print / PDF</span><span>Weekly</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
+        <a class="card rl" id="cardRL" href="releases.html">
+          <div class="top"><div class="badge">📦</div><span class="go">Open <span class="ar">→</span></span></div>
+          <h2>Release Tracker</h2>
+          <p>Every release in one view: data fixes, bug fixes, and workarounds — with trend charts, project and SVM breakdowns, and full search.</p>
+          <div class="feat"><span>Data Fix</span><span>Bug Fix</span><span>Workaround</span><span>Trend</span><span>Search</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
+        <a class="card ch" id="cardCH" href="change.html">
+          <div class="top"><div class="badge">🧩</div><span class="go">Open <span class="ar">→</span></span></div>
+          <h2>Change Tracker</h2>
+          <p>Enhancements &amp; change requests through their full lifecycle — analysis, estimation, IAD &amp; work-order approval, development, UAT, delivery and invoicing — with a pipeline funnel, effort sizing, pivots, trends and search.</p>
+          <div class="feat"><span>Pipeline</span><span>Estimation</span><span>UAT</span><span>T-Shirt sizing</span><span>Pivots</span><span>Trend</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
       </div>
@@ -494,192 +458,9 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 </div>
 <div class="md-toast" id="mdToast"></div>
 
-<!-- ══════ Jira Setup modal ══════ -->
-<div class="js-ov" id="jsOv">
-  <div class="js-panel" role="dialog" aria-modal="true" aria-label="Jira setup">
-    <div class="js-head">
-      <div><div class="t">⚙ Jira Setup</div><div class="s">Map your custom fields so the dashboards read them correctly.</div></div>
-      <button class="js-x" id="jsClose">✕</button>
-    </div>
-    <div class="js-body">
-      <div class="js-row">
-        <label class="js-lbl" for="jsHost">Jira site</label>
-        <input class="js-inp" id="jsHost" placeholder="svmhelpdesk.atlassian.net">
-      </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <button class="js-test" id="jsTest">Test connection &amp; discover fields</button>
-        <div class="js-result" id="jsResult"></div>
-      </div>
-      <div class="js-note" style="margin-top:6px">Make sure you're <b>logged in to Jira</b> in this browser. The extension uses your active session.</div>
-
-      <hr class="js-divider">
-      <div class="js-section-title">📋 JQL Query</div>
-      <div class="js-row">
-        <textarea class="js-jql" id="jsJql"></textarea>
-        <div class="js-note">The query that runs when you click "Fetch from Jira". Edit freely.</div>
-      </div>
-
-      <hr class="js-divider">
-      <div class="js-section-title" id="jsFieldTitle">🗂 Custom Field Mapping <span style="font-weight:400;color:var(--faint);font-size:11px">(click Test above to discover)</span></div>
-      <div class="js-note" style="margin-bottom:10px">Match your Jira custom fields to the columns the dashboards expect. Auto-detected where possible.</div>
-      <div class="js-field-map" id="jsFieldMap">
-        <div class="js-row"><label class="js-lbl">SVM In Charge</label><select id="jsFldSvm"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Current Worker</label><select id="jsFldCw"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Next Action</label><select id="jsFldNa"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Time to First Response</label><select id="jsFldFr"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Time to Resolution</label><select id="jsFldRes"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Root Cause</label><select id="jsFldRc"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Type of Fix</label><select id="jsFldTof"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Screen Name</label><select id="jsFldSn"><option value="">— not mapped —</option></select></div>
-        <div class="js-row"><label class="js-lbl">Menu Head</label><select id="jsFldMh"><option value="">— not mapped —</option></select></div>
-        <div></div>
-      </div>
-    </div>
-    <div class="js-foot">
-      <span class="spacer"></span>
-      <button class="md-btn" id="jsCancel">Cancel</button>
-      <button class="md-btn primary" id="jsSave">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- ══════ Jira Live Fetch wiring ══════ -->
 <script>
 var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-01" AND created <= "2026-12-31" AND project IN (ALXSVM, BLWS, CSD, ESLGEN, ECCL, FMSC, GWFC, IBEX, HSL, LSC, MILAHA, LSCSAIL, SSL, SWIPHX, TSHG, TKC, TASLI, UGL, VCL, WLS, WLSV, UAFL, NPDL, GSS)';
-(function(){
-  if(!window.HDJira||!window.HDStore) return;
-  var HJ=window.HDJira, HS=window.HDStore;
-  function el(id){ return document.getElementById(id); }
-  function escH(s){ return String(s||"").replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m];}); }
-  var _fields=null;
-
-  /* ── hint below fetch button ── */
-  function updateHint(){
-    var h=el("jiraHint");
-    if(HJ.isBridgeAvailable()){
-      h.innerHTML='<span class="jira-connected"><i></i> Extension active</span> — using your Jira session · <a id="jSetupL">settings</a>';
-    } else {
-      h.innerHTML='Install the <b>HD Jira Bridge</b> Chrome extension to enable this · <a id="jSetupL">setup help</a>';
-    }
-    var a=el("jSetupL"); if(a) a.onclick=function(e){ e.preventDefault(); openSetup(); };
-  }
-  updateHint();
-  window.addEventListener("hd-bridge-ready", updateHint);
-
-  /* ── setup modal ── */
-  function openSetup(){
-    var cfg=HJ.loadConfig();
-    el("jsHost").value = cfg.jiraHost || "svmhelpdesk.atlassian.net";
-    el("jsJql").value  = cfg.jql || QUERY;
-    el("jsResult").className="js-result"; el("jsResult").textContent="";
-    if(cfg._fields && cfg._fields.length){ _fields=cfg._fields; fillSelects(cfg._fields, cfg.fieldMap||{}); }
-    el("jsOv").classList.add("open");
-  }
-  function closeSetup(){ el("jsOv").classList.remove("open"); }
-  el("jsClose").onclick=closeSetup;
-  el("jsCancel").onclick=closeSetup;
-  el("jsOv").addEventListener("click",function(e){ if(e.target===el("jsOv")) closeSetup(); });
-  el("jiraSetupBtn2").onclick=openSetup;
-
-  function fillSelects(fields, fm){
-    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh"};
-    Object.keys(ids).forEach(function(k){
-      var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
-      fields.forEach(function(f){
-        var o=document.createElement("option"); o.value=f.id; o.textContent=f.name+" ("+f.id+")";
-        if(fm[k]===f.id) o.selected=true;
-        sel.appendChild(o);
-      });
-    });
-    el("jsFieldTitle").innerHTML='🗂 Custom Field Mapping <span style="font-weight:400;color:var(--teal);font-size:11px">('+fields.length+' custom fields found)</span>';
-  }
-
-  /* ── test + discover ── */
-  el("jsTest").onclick=function(){
-    if(!HJ.isBridgeAvailable()){
-      var r=el("jsResult"); r.className="js-result fail"; r.textContent="Extension not detected. Install HD Jira Bridge first, then reload this page."; return;
-    }
-    var btn=el("jsTest"), res=el("jsResult");
-    var cfg={ jiraHost: el("jsHost").value.trim() };
-    btn.disabled=true; btn.textContent="Testing…"; res.className="js-result"; res.textContent="";
-    HJ.testConnection(cfg).then(function(user){
-      res.className="js-result ok"; res.textContent="✓ Connected as "+user.displayName;
-      btn.textContent="Discovering fields…";
-      return HJ.discoverFields(cfg);
-    }).then(function(fields){
-      _fields=fields;
-      var fm=HJ.autoDetect(fields), existing=HJ.loadConfig().fieldMap||{};
-      Object.keys(fm).forEach(function(k){ if(!existing[k]) existing[k]=fm[k]; });
-      fillSelects(fields, existing);
-      var n=Object.keys(fm).length;
-      if(n) el("jsResult").textContent+=" · Auto-detected "+n+" field"+(n>1?"s":"");
-      btn.disabled=false; btn.textContent="Test connection & discover fields";
-    }).catch(function(err){
-      res.className="js-result fail"; res.textContent="✕ "+err.message;
-      btn.disabled=false; btn.textContent="Test connection & discover fields";
-    });
-  };
-
-  /* ── save ── */
-  el("jsSave").onclick=function(){
-    HJ.saveConfig({
-      jiraHost: el("jsHost").value.trim() || "svmhelpdesk.atlassian.net",
-      jql: el("jsJql").value.trim() || QUERY,
-      fieldMap:{
-        svmInCharge: el("jsFldSvm").value, currentWorker: el("jsFldCw").value,
-        nextAction: el("jsFldNa").value, timeToFirstResponse: el("jsFldFr").value,
-        timeToResolution: el("jsFldRes").value,
-        rootCause: el("jsFldRc").value, typeOfFix: el("jsFldTof").value,
-        screenName: el("jsFldSn").value, menuHead: el("jsFldMh").value
-      },
-      _fields: _fields||[]
-    });
-    closeSetup();
-  };
-
-  /* ── FETCH button ── */
-  el("jiraFetchBtn").onclick=function(){
-    if(!HJ.isBridgeAvailable()){ openSetup(); return; }
-    var cfg=HJ.loadConfig();
-    var jql=cfg.jql||QUERY;
-
-    el("empty").classList.add("hidden");
-    el("loaded").classList.add("hidden");
-    el("fetching").classList.remove("hidden");
-    el("fetchPct").textContent="0 %"; el("fetchFill").style.width="0%";
-    el("fetchMsg").textContent="Connecting to Jira…";
-    el("cards").classList.add("locked"); el("stage").classList.remove("live");
-
-    HJ.fetchAll(jql, function(fetched, total){
-      var p=total>0?Math.round(fetched/total*100):0;
-      el("fetchPct").textContent=p+" %"; el("fetchFill").style.width=p+"%";
-      el("fetchMsg").textContent="Fetched "+fetched.toLocaleString()+" of "+total.toLocaleString()+" tickets…";
-    }).then(function(info){
-      el("fetching").classList.add("hidden");
-      showLoaded(info.fileName, info);
-    }).catch(function(err){
-      el("fetching").classList.add("hidden");
-      el("empty").classList.remove("hidden");
-      if(err.message==="EXTENSION_NOT_FOUND"){ openSetup(); return; }
-      alert("Fetch failed: "+err.message);
-    });
-  };
-  el("fetchCancel").onclick=function(){
-    el("fetching").classList.add("hidden"); el("empty").classList.remove("hidden");
-  };
-})();
-</script>
-
-<!-- ══════════════════════ Master Data validation module ══════════════════════
-     A settings panel (gear button, top-right) that surfaces the classification
-     "master data" — Status→bucket, Person→group, Status→stage — reading the ACTUAL
-     values in the loaded export, showing how each is currently classified, and
-     flagging anything unmapped as "needs review". Corrections save to IndexedDB
-     (HDStore.saveConfig) and every dashboard applies them on load. Nothing here is
-     required for the dashboards to work; it's purely for keeping the maps correct. -->
-
-<script>
-var HS = window.HDStore || null;
+var HS = window.HDStore || null;   // guard: preview may not load hd-store.js
 function el(id){ return document.getElementById(id); }
 
 /* ── build animated backdrop geometry ── */
@@ -720,7 +501,7 @@ function buildBackdrop(){
 
 /* ── connective wires ── */
 function drawWires(){
-  var stage=el("stage"),src=el("sourceNode"),fu=el("cardFU"),tr=el("cardTR"),wr=el("cardWR"),svg=el("wires");
+  var stage=el("stage"),src=el("sourceNode"),fu=el("cardFU"),tr=el("cardTR"),wr=el("cardWR"),rl=el("cardRL"),ch=el("cardCH"),svg=el("wires");
   if(!stage||!src||!fu||!tr) return;
   var sr=stage.getBoundingClientRect();
   svg.setAttribute("viewBox","0 0 "+sr.width+" "+sr.height);
@@ -732,6 +513,8 @@ function drawWires(){
   el("trackFU").setAttribute("d",pFU); el("flowFU").setAttribute("d",pFU);
   el("trackTR").setAttribute("d",pTR); el("flowTR").setAttribute("d",pTR);
   if(wr){ var pWR=pathTo(wr.getBoundingClientRect()); el("trackWR").setAttribute("d",pWR); el("flowWR").setAttribute("d",pWR); }
+  if(rl){ var pRL=pathTo(rl.getBoundingClientRect()); el("trackRL").setAttribute("d",pRL); el("flowRL").setAttribute("d",pRL); }
+  if(ch){ var pCH=pathTo(ch.getBoundingClientRect()); el("trackCH").setAttribute("d",pCH); el("flowCH").setAttribute("d",pCH); }
 }
 function relayout(){ buildBackdrop(); drawWires(); }
 window.addEventListener("resize", relayout);

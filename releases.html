@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HD Release Tracker</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237C3AED'/%3E%3Cpath d='M10 20l4-8 4 8' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='22' cy='12' r='3.5' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M22 15.5V22' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="hd-store.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F4;--paper:#F6F8FA;--card:#FFFFFF;
+  --ink:#111A2B;--ink2:#3E4C63;--muted:#6B7A90;--faint:#9AA7B8;--line:#E3E8EE;--line2:#D2DAE3;
+  --vi:#7C3AED;--vi2:#A78BFA;--vi-soft:#EDE9FE;--vi-bg:#F5F3FF;--vi-line:#C4B5FD;--vi-glow:rgba(124,58,237,.25);
+  --df:#0D9488;--df-soft:#D6F3EE;--df-bg:#F0FBF9;
+  --bf:#DC2626;--bf-soft:#FEE2E2;--bf-bg:#FEF2F2;
+  --wa:#D97706;--wa-soft:#FCE7C3;--wa-bg:#FEF7EC;
+  --green:#059669;--green-bg:#ECFDF5;
+  --r:12px;--r2:16px;
+  --disp:'Space Grotesk',sans-serif;--sans:'Inter',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;
+  --sh:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
+  --sh2:0 6px 18px rgba(16,24,40,.09),0 2px 6px rgba(16,24,40,.05);
+  --sh3:0 24px 60px rgba(16,24,40,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:14px}
+body{background:var(--bg);font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh}
+::selection{background:var(--vi);color:#fff}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+button{cursor:pointer;font-family:inherit;transition:all .18s}button:active{transform:translateY(1px)}
+a{color:var(--vi);text-decoration:none}a:hover{text-decoration:underline}
+input[type=file]{display:none}
+select{outline:none;font-family:var(--sans);appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;padding-right:30px!important}
+h1,h2,h3,.disp{font-family:var(--disp)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+@keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes float1{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+@keyframes float2{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(14px) rotate(8deg)}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.up{animation:up .5s cubic-bezier(.22,1,.36,1) both}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.16s}.d4{animation-delay:.22s}
+.growb{transform-origin:bottom;animation:grow .55s cubic-bezier(.22,1,.36,1) both}
+@media(prefers-reduced-motion:reduce){.up,.growb{animation:none!important}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh)}
+
+/* ── LANDING ── */
+.landing{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:
+  radial-gradient(1100px 600px at 15% -10%,#EDE9FE 0%,transparent 55%),
+  radial-gradient(1000px 700px at 100% 110%,#FEF7EC 0%,transparent 55%),
+  linear-gradient(160deg,#F6F8FA,#EEF1F4)}
+.deco{position:absolute;pointer-events:none;opacity:.55}
+.deco.b1{width:280px;height:280px;border-radius:60% 40% 55% 45%;background:linear-gradient(135deg,#A78BFA,#7C3AED);filter:blur(8px);top:-70px;left:-60px;animation:float1 9s ease-in-out infinite}
+.deco.b2{width:230px;height:230px;border-radius:50%;background:linear-gradient(135deg,#FCD34D,#D97706);filter:blur(10px);bottom:-60px;right:-40px;animation:float2 11s ease-in-out infinite}
+.deco.ring{border:2px solid rgba(124,58,237,.15);border-radius:50%;background:none;filter:none;opacity:.7}
+.deco.r1{width:120px;height:120px;top:18%;right:16%;animation:float1 8s ease-in-out infinite}
+.deco.r2{width:70px;height:70px;bottom:20%;left:14%;border-color:rgba(217,119,6,.18);animation:float2 10s ease-in-out infinite}
+.landing-card{position:relative;z-index:2;width:100%;max-width:600px;margin:16px;text-align:center}
+.upload-panel{background:rgba(255,255,255,.72);backdrop-filter:blur(16px);border:1px solid #fff;border-radius:22px;padding:38px 34px;box-shadow:0 30px 70px rgba(16,24,40,.14)}
+.dz{border:2px dashed var(--line2);border-radius:16px;padding:30px 20px;transition:all .2s;background:var(--paper);cursor:pointer}
+.dz:hover,.dz.over{border-color:var(--vi);background:var(--vi-bg)}
+.btn-primary{background:linear-gradient(135deg,#7C3AED,#6D28D9);color:#fff;border:none;padding:13px 34px;border-radius:11px;font-size:14px;font-weight:600;font-family:var(--disp);box-shadow:0 8px 22px var(--vi-glow)}
+.btn-primary:hover{box-shadow:0 10px 26px rgba(124,58,237,.4)}
+.hint-cols{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:16px}
+.hint-cols span{font-size:10.5px;color:var(--ink2);background:#fff;border:1px solid var(--line);padding:4px 9px;border-radius:20px;font-weight:500}
+
+/* ── HEADER ── */
+header.top{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:90;padding:9px 24px;display:flex;flex-direction:column;gap:8px}
+.hrow{display:flex;align-items:center;gap:12px}
+.hrow1{justify-content:space-between;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.logo .bar{display:flex;gap:3px;align-items:flex-end;height:22px}
+.logo .bar i{display:block;width:6px;border-radius:2px}
+.logo b{font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:-.3px}
+.back{font-size:12px;font-weight:600;color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.back:hover{color:var(--vi);text-decoration:none}
+.divider{width:1px;height:28px;background:var(--line);margin:0 2px}
+.tabs{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:3px;gap:2px;min-width:0;flex-shrink:1;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+.tabs button{background:none;border:none;padding:6px 12px;border-radius:8px;font-size:11.5px;font-weight:600;color:var(--muted);font-family:var(--disp);display:flex;align-items:center;gap:6px;white-space:nowrap;flex-shrink:0}
+.tabs button.on{background:var(--ink);color:#fff}
+.tabs button .cnt{background:rgba(0,0,0,.07);padding:1px 7px;border-radius:10px;font-size:10px;font-family:var(--mono)}
+.tabs button.on .cnt{background:rgba(255,255,255,.18)}
+.hspace{flex:1}
+.hactions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ghost{background:var(--paper);border:1px solid var(--line);color:var(--ink2);padding:7px 13px;border-radius:9px;font-size:11.5px;font-weight:600}
+.ghost:hover{border-color:var(--line2);color:var(--ink)}
+/* filters row */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:8px}
+.fcell{display:flex;flex-direction:column;gap:3px}
+.flabel{font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.7px}
+.fsel{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:500;color:var(--ink);cursor:pointer}
+.fsel:hover{border-color:var(--line2)}.fsel:focus{border-color:var(--vi);box-shadow:0 0 0 3px rgba(124,58,237,.12);outline:none}
+.dinput{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:11.5px;color:var(--ink);background:#fff;outline:none;font-family:var(--sans)}
+.dinput:focus{border-color:var(--vi);box-shadow:0 0 0 3px rgba(124,58,237,.12)}
+/* search */
+.gsearch{flex:1;min-width:200px;position:relative}
+.gsearch input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;background:var(--paper);color:var(--ink);font-family:var(--sans);outline:none}
+.gsearch input:focus{border-color:var(--vi);box-shadow:0 0 0 3px rgba(124,58,237,.12);background:#fff}
+.gsearch .ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--faint);font-size:13px;pointer-events:none}
+
+main{max-width:1800px;margin:0 auto;padding:14px 24px 34px}
+
+/* ── KPIs ── */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{padding:14px 16px;cursor:pointer;transition:box-shadow .2s,transform .15s;position:relative;overflow:hidden;border-left:3px solid transparent}
+.kpi:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
+.kpi.active{border-left-color:var(--vi);background:var(--vi-bg)}
+.kpi .kv{font-size:26px;font-weight:700;font-family:var(--mono);letter-spacing:-1.5px;line-height:1}
+.kpi .kl{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-top:5px}
+.kpi .ks{font-size:11px;color:var(--muted);margin-top:3px}
+.kpi .tag{position:absolute;top:12px;right:14px;font-size:15px}
+
+/* ── OVERVIEW GRID ── */
+.ogrid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-bottom:16px}
+@media(max-width:900px){.ogrid{grid-template-columns:1fr}}
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sec-title{font-size:14px;font-weight:600;font-family:var(--disp);letter-spacing:-.2px}
+.sec-sub{font-size:10.5px;color:var(--faint);font-weight:500}
+.ring-wrap{position:relative;display:flex;align-items:center;justify-content:center}
+.ring-wrap .ctr{position:absolute;text-align:center}
+.legend{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.leg-row{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .15s}
+.leg-row:hover{background:var(--paper)}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.leg-label{color:var(--ink2);flex:1}
+.leg-val{font-family:var(--mono);font-weight:700;color:var(--ink)}
+.leg-pct{font-family:var(--mono);font-size:10.5px;color:var(--faint);min-width:38px;text-align:right}
+
+/* bar rows */
+.barrow{display:flex;align-items:center;gap:10px;margin-bottom:5px;cursor:pointer;padding:3px 0}
+.barrow:hover .blbl{color:var(--ink)}
+.blbl{font-size:11px;color:var(--ink2);min-width:120px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s}
+.btrack{flex:1;height:22px;border-radius:6px;background:var(--paper);overflow:hidden;display:flex}
+.bfill{height:100%;transition:width .5s cubic-bezier(.22,1,.36,1);display:flex;align-items:center;justify-content:center;overflow:hidden;min-width:0}
+.bfill.df{background:linear-gradient(90deg,#0D9488,#2DD4BF)}
+.bfill.bf{background:linear-gradient(90deg,#DC2626,#F87171)}
+.bfill.wa{background:linear-gradient(90deg,#D97706,#FBBF24)}
+.bfill-n{font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.3);white-space:nowrap;padding:0 4px}
+.bnum{font-size:11px;color:var(--muted);font-family:var(--mono);min-width:60px;text-align:right}
+
+/* ── TABLES ── */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r2);background:#fff}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;border-bottom:2px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:2;white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{color:var(--ink2)}
+thead th .arr{display:inline;margin-left:3px;font-size:9px}
+tbody td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:var(--vi-bg)}
+tbody tr.detail-row{background:var(--paper)}
+.dcell{cursor:pointer;transition:background .12s;border-radius:4px}
+.dcell:hover{background:var(--vi-soft)!important}
+.jkey{font-family:var(--mono);font-weight:700;font-size:11.5px;color:var(--vi)}
+.badge{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;display:inline-block}
+.badge.df{background:var(--df-soft);color:var(--df)}
+.badge.bf{background:var(--bf-soft);color:var(--bf)}
+.badge.wa{background:var(--wa-soft);color:var(--wa)}
+.badge.closed{background:var(--green-bg);color:var(--green)}
+.badge.open{background:var(--vi-soft);color:var(--vi)}
+.trunc{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:600;background:var(--paper);color:var(--ink2);border:1px solid var(--line)}
+/* paging */
+.paging{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.paging button{background:var(--paper);border:1px solid var(--line);color:var(--ink2);padding:5px 11px;border-radius:7px;font-size:11px;font-weight:600}
+.paging button:hover{border-color:var(--line2);color:var(--ink)}
+.paging button:disabled{opacity:.4;cursor:default;transform:none}
+
+/* ── TREND ── */
+.trend-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:900px){.trend-grid{grid-template-columns:1fr}}
+.chart-area{padding:18px 18px 14px;position:relative}
+.chart-area svg{width:100%;overflow:visible}
+.chart-area .sec-head{margin-bottom:14px}
+.mbar-wrap{display:flex;align-items:flex-end;gap:4px;padding-top:22px;position:relative}
+.mbar-group{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.mbar-stack{width:100%;display:flex;flex-direction:column-reverse;gap:1px;align-items:stretch}
+.mbar{border-radius:4px 4px 0 0;min-height:0;transition:height .5s cubic-bezier(.22,1,.36,1)}
+.mbar.df{background:var(--df)}
+.mbar.bf{background:var(--bf)}
+.mbar.wa{background:var(--wa)}
+.mbar-label{font-size:9px;color:var(--faint);font-weight:600;writing-mode:horizontal-tb;margin-top:4px;white-space:nowrap}
+.mbar-total{font-size:9px;font-family:var(--mono);font-weight:700;color:var(--ink2);white-space:nowrap;line-height:1}
+.chart-leg{display:flex;gap:14px;justify-content:center;margin-top:12px}
+.chart-leg span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink2);font-weight:500}
+.chart-leg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+/* ── DETAIL MODAL ── */
+.modal-ov{position:fixed;inset:0;z-index:200;background:rgba(15,23,42,.44);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.modal-ov.open{display:flex}
+.modal-panel{background:var(--card);border-radius:var(--r2);box-shadow:var(--sh3);width:100%;max-width:1400px;height:88vh;display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;animation:pop .3s ease both}
+.modal-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal-head .t{font-family:var(--disp);font-weight:700;font-size:16px}
+.modal-head .s{font-size:11.5px;color:var(--muted)}
+.modal-x{margin-left:auto;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink2);font-size:15px;display:flex;align-items:center;justify-content:center}
+.modal-x:hover{color:var(--ink);border-color:var(--muted)}
+.modal-body{overflow:auto;padding:0;min-height:0}
+.modal-body table{font-size:11.5px}
+.modal-foot{padding:10px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);text-align:center}
+
+/* auto insights */
+.notes{display:flex;flex-direction:column;gap:8px}
+.note{display:flex;gap:10px;align-items:flex-start;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:12px;color:var(--ink2);line-height:1.5}
+.note .i{font-size:15px;line-height:1;margin-top:1px}
+.note b{color:var(--ink)}
+.note.warn{background:var(--wa-bg);border-color:var(--wa-soft)}
+.note.good{background:var(--green-bg);border-color:#A7F3D0}
+
+/* footer */
+.footer{text-align:center;color:var(--faint);font-size:11px;padding:24px 0 8px;margin-top:12px;border-top:1px solid var(--line)}
+
+/* responsive scaling */
+@media(min-width:1921px)and(min-height:900px){body{zoom:1.18}}
+@media(min-width:2200px)and(min-height:1000px){body{zoom:1.3}}
+@media(min-width:2560px){body{zoom:1.42}}
+@media(min-width:3200px){body{zoom:1.65}}
+@media(min-width:3840px){body{zoom:1.9}}
+@media(max-width:1200px){.hrow1{flex-wrap:wrap}.filters{flex-wrap:wrap}}
+@media(max-width:680px){.ogrid{grid-template-columns:1fr}.blbl{min-width:80px;max-width:100px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<input type="file" id="fileinput" accept=".xlsx,.xls">
+
+<!-- Detail modal -->
+<div class="modal-ov" id="modalOv">
+  <div class="modal-panel">
+    <div class="modal-head">
+      <div><div class="t" id="modalTitle">Tickets</div><div class="s" id="modalSub"></div></div>
+      <button class="modal-x" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════ HD Release Tracker ═══════════════════════ */
+var FILENAME="", BLOB=null, RAW=[], FILTERED=[];
+var PAGE_SIZE=50;
+var JIRA="https://svmhelpdesk.atlassian.net/browse/";
+
+var S={
+  tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", from:"", to:"",
+  sortCol:"created", sortDir:"desc", page:0,
+  kpiFilter:""  // active KPI highlight
+};
+
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m];});}
+function fmtD(d){if(!d)return"—";return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"});}
+function fmtN(n){return(n==null?"—":n.toLocaleString());}
+function pct(n,t){return t?Math.round(n/t*100)+"%":"0%";}
+function toD(v){if(!v)return null;if(v instanceof Date)return isNaN(v)?null:v;if(typeof v==="number"){var d=new Date(Math.round((v-25569)*86400000));return isNaN(d)?null:d;}var p=new Date(v);return isNaN(p)?null:p;}
+
+/* ── classification ── */
+var WA_RC=["workaround - datafix","work around","past data correction","temporary fix"];
+var WA_TF=["workaround - datafix","work around","past data correction"];
+
+function classifyFix(row){
+  var r1=String(row["Release Number"]||"").trim();
+  var r2=String(row["Release Number (Data Fix)"]||"").trim();
+  var r3=String(row["Parent Release No"]||"").trim();
+  if(!r1&&!r2&&!r3) return null;
+  var it=String(row["Issue Type"]||"").trim();
+  var rc=String(row["Root Cause"]||"").trim().toLowerCase();
+  var tf=String(row["Type of Fix"]||"").trim().toLowerCase();
+  if(it==="Incident"){
+    if(WA_RC.indexOf(rc)>-1||WA_TF.indexOf(tf)>-1) return "Workaround";
+    return "Bug Fix";
+  }
+  return "Data Fix";
+}
+
+function releaseStr(row){
+  return String(row["Release Number"]||row["Release Number (Data Fix)"]||row["Parent Release No"]||"").trim();
+}
+
+function isClosed(status){return status==="Closed"||status==="Completed";}
+
+/* ── normalize rows ── */
+function normalize(rows){
+  return rows.map(function(r,i){
+    var ft=classifyFix(r);
+    if(!ft) return null;
+    var created=toD(r["Created"]);
+    var resolved=toD(r["Resolved"]);
+    return{
+      __i:i, key:String(r["Key"]||"").trim(), summary:String(r["Summary"]||"").trim(),
+      issueType:String(r["Issue Type"]||"").trim(), status:String(r["Status"]||"").trim(),
+      project:String(r["Project"]||"").trim(), svm:String(r["SVM In Charge"]||"").trim(),
+      worker:String(r["Current Worker"]||"").trim(), rootCause:String(r["Root Cause"]||"").trim(),
+      typeOfFix:String(r["Type of Fix"]||"").trim(), priority:String(r["Priority"]||"").trim(),
+      relNum:String(r["Release Number"]||"").trim(), relDataFix:String(r["Release Number (Data Fix)"]||"").trim(),
+      parentRel:String(r["Parent Release No"]||"").trim(), releaseStr:releaseStr(r),
+      components:String(r["Components"]||"").trim(), reporter:String(r["Reporter"]||"").trim(),
+      assignee:String(r["Assignee"]||"").trim(), ttr:String(r["Time to resolution"]||"").trim(),
+      ttfr:String(r["Time to first response"]||"").trim(), severity:String(r["Severity"]||"").trim(),
+      linked:String(r["Linked Issues"]||"").trim(), linkedStatus:String(r["Linked Ticket status"]||"").trim(),
+      analysis:String(r["Analysis"]||"").trim(), solution:String(r["Solution Summary"]||"").trim(),
+      screenName:String(r["Screen Name"]||"").trim(), nextAction:String(r["Next Action"]||"").trim(),
+      created:created, resolved:resolved, fixType:ft,
+      closed:isClosed(String(r["Status"]||"").trim()),
+      _raw:r
+    };
+  }).filter(Boolean);
+}
+
+/* ── filtering ── */
+function applyFilters(){
+  FILTERED=RAW.filter(function(t){
+    if(S.proj&&t.project!==S.proj) return false;
+    if(S.svm&&t.svm!==S.svm) return false;
+    if(S.fixType&&t.fixType!==S.fixType) return false;
+    if(S.status==="closed"&&!t.closed) return false;
+    if(S.status==="open"&&t.closed) return false;
+    if(S.from){var fd=new Date(S.from);if(t.created&&t.created<fd)return false;}
+    if(S.to){var td=new Date(S.to);td.setHours(23,59,59);if(t.created&&t.created>td)return false;}
+    if(S.search){
+      var q=S.search.toLowerCase();
+      if(t.key.toLowerCase().indexOf(q)<0&&t.summary.toLowerCase().indexOf(q)<0&&
+         t.project.toLowerCase().indexOf(q)<0&&t.svm.toLowerCase().indexOf(q)<0&&
+         t.rootCause.toLowerCase().indexOf(q)<0&&t.status.toLowerCase().indexOf(q)<0&&
+         t.releaseStr.toLowerCase().indexOf(q)<0&&t.typeOfFix.toLowerCase().indexOf(q)<0&&
+         t.components.toLowerCase().indexOf(q)<0&&t.worker.toLowerCase().indexOf(q)<0) return false;
+    }
+    if(S.kpiFilter){
+      if(S.kpiFilter==="df"&&t.fixType!=="Data Fix") return false;
+      if(S.kpiFilter==="bf"&&t.fixType!=="Bug Fix") return false;
+      if(S.kpiFilter==="wa"&&t.fixType!=="Workaround") return false;
+      if(S.kpiFilter==="closed"&&!t.closed) return false;
+      if(S.kpiFilter==="open"&&t.closed) return false;
+    }
+    return true;
+  });
+}
+
+/* ── distinct values for filters ── */
+function distinctSorted(arr,key){
+  var m={};arr.forEach(function(t){var v=t[key];if(v)m[v]=(m[v]||0)+1;});
+  return Object.keys(m).sort(function(a,b){return m[b]-m[a];});
+}
+
+/* ── sort helper ── */
+function sortTickets(arr,col,dir){
+  var mul=dir==="asc"?1:-1;
+  return arr.slice().sort(function(a,b){
+    var va=a[col],vb=b[col];
+    if(va instanceof Date&&vb instanceof Date) return (va-vb)*mul;
+    if(va instanceof Date) return -1*mul;
+    if(vb instanceof Date) return 1*mul;
+    if(typeof va==="string"&&typeof vb==="string") return va.localeCompare(vb)*mul;
+    return 0;
+  });
+}
+
+/* ══════════════ RENDERING ══════════════ */
+function render(){
+  applyFilters();
+  var app=el("app");
+  if(!RAW.length){renderLanding();return;}
+
+  var projs=distinctSorted(RAW,"project");
+  var svms=distinctSorted(RAW,"svm");
+
+  var h='<header class="top">'+
+    '<div class="hrow hrow1">'+
+      '<div class="logo"><span class="bar">'+
+        '<i style="height:14px;background:var(--vi)"></i><i style="height:22px;background:var(--vi2)"></i>'+
+        '<i style="height:10px;background:var(--wa)"></i><i style="height:18px;background:var(--df)"></i>'+
+      '</span><b>HD Release Tracker</b></div>'+
+      '<a href="index.html" class="back">← Back to launcher</a>'+
+      '<div class="divider"></div>'+
+      '<div class="tabs" id="tabs">'+
+        '<button class="'+(S.tab==="overview"?"on":"")+'" data-tab="overview">Overview</button>'+
+        '<button class="'+(S.tab==="tickets"?"on":"")+'" data-tab="tickets">Tickets <span class="cnt">'+FILTERED.length+'</span></button>'+
+        '<button class="'+(S.tab==="trend"?"on":"")+'" data-tab="trend">Trend</button>'+
+      '</div>'+
+      '<div class="hspace"></div>'+
+      '<div class="hactions">'+
+        '<button class="ghost" id="resetBtn">↺ Reset filters</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="filters">'+
+      '<div class="gsearch"><span class="ico">🔍</span><input type="text" id="gsearch" placeholder="Search tickets by key, summary, project, release…" value="'+esc(S.search)+'"></div>'+
+      '<div class="fcell"><span class="flabel">Project</span><select class="fsel" id="fProj"><option value="">All projects</option>'+
+        projs.map(function(p){return'<option value="'+esc(p)+'"'+(S.proj===p?' selected':'')+'>'+esc(p)+'</option>';}).join('')+'</select></div>'+
+      '<div class="fcell"><span class="flabel">SVM In Charge</span><select class="fsel" id="fSvm"><option value="">All SVM</option>'+
+        svms.map(function(s){return'<option value="'+esc(s)+'"'+(S.svm===s?' selected':'')+'>'+esc(s)+'</option>';}).join('')+'</select></div>'+
+      '<div class="fcell"><span class="flabel">Fix Type</span><select class="fsel" id="fFix"><option value="">All types</option>'+
+        '<option value="Data Fix"'+(S.fixType==="Data Fix"?' selected':'')+'>Data Fix</option>'+
+        '<option value="Bug Fix"'+(S.fixType==="Bug Fix"?' selected':'')+'>Bug Fix</option>'+
+        '<option value="Workaround"'+(S.fixType==="Workaround"?' selected':'')+'>Workaround</option></select></div>'+
+      '<div class="fcell"><span class="flabel">Status</span><select class="fsel" id="fStatus"><option value="">All</option>'+
+        '<option value="closed"'+(S.status==="closed"?' selected':'')+'>Closed</option>'+
+        '<option value="open"'+(S.status==="open"?' selected':'')+'>Outstanding</option></select></div>'+
+      '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
+      '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+
+    '</div>'+
+  '</header><main>';
+
+  // KPIs
+  var total=FILTERED.length;
+  var df=FILTERED.filter(function(t){return t.fixType==="Data Fix";}).length;
+  var bf=FILTERED.filter(function(t){return t.fixType==="Bug Fix";}).length;
+  var wa=FILTERED.filter(function(t){return t.fixType==="Workaround";}).length;
+  var cl=FILTERED.filter(function(t){return t.closed;}).length;
+  var op=total-cl;
+
+  h+='<div class="kpis up">';
+  h+=kpiCard("total","Total Releases",total,"","📦","");
+  h+=kpiCard("df","Data Fixes",df,pct(df,total),"🛠️","border-left-color:var(--df)");
+  h+=kpiCard("bf","Bug Fixes",bf,pct(bf,total),"🐛","border-left-color:var(--bf)");
+  h+=kpiCard("wa","Workarounds",wa,pct(wa,total),"⚡","border-left-color:var(--wa)");
+  h+=kpiCard("closed","Closed",cl,pct(cl,total),"✅","border-left-color:var(--green)");
+  h+=kpiCard("open","Outstanding",op,pct(op,total),"🔵","border-left-color:var(--vi)");
+  h+='</div>';
+
+  if(S.tab==="overview") h+=renderOverview();
+  else if(S.tab==="tickets") h+=renderTickets();
+  else if(S.tab==="trend") h+=renderTrend();
+
+  h+='<div class="footer"><b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' release tickets loaded · '+FILTERED.length.toLocaleString()+' in scope · HD Release Tracker</div>';
+  h+='</main>';
+
+  app.innerHTML=h;
+  bindAll();
+}
+
+function kpiCard(id,label,val,sub,icon,style){
+  return '<div class="card kpi" data-kpi="'+id+'" style="'+style+'">'+
+    '<span class="tag">'+icon+'</span>'+
+    '<div class="kv mono">'+fmtN(val)+'</div>'+
+    '<div class="kl">'+esc(label)+'</div>'+
+    (sub?'<div class="ks">'+esc(sub)+' of filtered</div>':'')+
+  '</div>';
+}
+
+/* ── AUTO INSIGHTS (rule-based, no AI tokens) ── */
+function noteHTML(arr){
+  if(!arr.length)arr=[{i:"✅",c:"good",h:"Nothing notable in the current scope."}];
+  return '<div class="notes">'+arr.map(function(x){return '<div class="note '+(x.c||"")+'"><span class="i">'+x.i+'</span><span>'+x.h+'</span></div>';}).join('')+'</div>';
+}
+function insightsCard(title,sub,arr){
+  return '<div class="card up" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">'+title+'</span><span class="sec-sub">'+sub+'</span></div>'+noteHTML(arr)+'</div>';
+}
+function monthKeyD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function monthLbl(k){return k.split("-")[1]+"/"+k.split("-")[0].slice(2);}
+function releaseInsights(F){
+  var n=[], total=F.length; if(!total)return n;
+  var cl=F.filter(function(t){return t.closed;}).length, op=total-cl;
+  n.push({i:"📊",c:"",h:"Closure rate is <b>"+pct(cl,total)+"</b> — <b>"+cl+"</b> of <b>"+total+"</b> releases closed, <b>"+op+"</b> still outstanding."});
+  var df=F.filter(function(t){return t.fixType==="Data Fix";}).length;
+  var bf=F.filter(function(t){return t.fixType==="Bug Fix";}).length;
+  var wa=F.filter(function(t){return t.fixType==="Workaround";}).length;
+  var mix=[{l:"Data Fix",v:df},{l:"Bug Fix",v:bf},{l:"Workaround",v:wa}].sort(function(a,b){return b.v-a.v;});
+  n.push({i:"🧩",c:"",h:"<b>"+esc(mix[0].l)+"</b> dominates the mix at <b>"+mix[0].v+"</b> ("+pct(mix[0].v,total)+")."});
+  if(wa)n.push({i:"⚡",c:wa>total*0.2?"warn":"",h:"Workarounds are <b>"+pct(wa,total)+"</b> of releases ("+wa+") — a higher share points to more temporary fixes than permanent ones."});
+  var pm={}; F.forEach(function(t){var k=t.project||"(blank)";pm[k]=(pm[k]||0)+1;});
+  var pk=Object.keys(pm).sort(function(a,b){return pm[b]-pm[a];});
+  if(pk.length)n.push({i:"🏢",c:"",h:"<b>"+esc(pk[0])+"</b> is the busiest project at <b>"+pm[pk[0]]+"</b> releases ("+pct(pm[pk[0]],total)+")."});
+  var sm={}; F.forEach(function(t){if(t.svm)sm[t.svm]=(sm[t.svm]||0)+1;});
+  var sk=Object.keys(sm).sort(function(a,b){return sm[b]-sm[a];});
+  if(sk.length)n.push({i:"👤",c:"",h:"<b>"+esc(sk[0])+"</b> handled the most releases (<b>"+sm[sk[0]]+"</b>)."});
+  var mc={},mcl={}; F.forEach(function(t){if(t.created){var mk=monthKeyD(t.created);mc[mk]=(mc[mk]||0)+1;}if(t.resolved&&t.closed){var rk=monthKeyD(t.resolved);mcl[rk]=(mcl[rk]||0)+1;}});
+  var mks=Object.keys(mc).sort();
+  if(mks.length){var last=mks[mks.length-1],cr=mc[last]||0,cx=mcl[last]||0,net=cr-cx;
+    n.push({i:net>0?"📈":"📉",c:net>0?"warn":"good",h:"In <b>"+monthLbl(last)+"</b>, <b>"+cr+"</b> releases were logged and <b>"+cx+"</b> closed — outstanding "+(net>0?"grew by <b>"+net+"</b>":net<0?"fell by <b>"+(-net)+"</b>":"held steady")+"."});}
+  return n;
+}
+
+/* ── OVERVIEW TAB ── */
+function renderOverview(){
+  var h='<div class="ogrid up d1">';
+
+  // Left: donut
+  var df=FILTERED.filter(function(t){return t.fixType==="Data Fix";}).length;
+  var bf=FILTERED.filter(function(t){return t.fixType==="Bug Fix";}).length;
+  var wa=FILTERED.filter(function(t){return t.fixType==="Workaround";}).length;
+  var total=df+bf+wa;
+
+  h+='<div class="card" style="padding:20px"><div class="sec-head"><span class="sec-title">Fix Type Distribution</span></div>';
+  h+='<div style="display:flex;flex-direction:column;align-items:center">';
+  h+=drawDonut([{v:df,c:"#0D9488",l:"Data Fix"},{v:bf,c:"#DC2626",l:"Bug Fix"},{v:wa,c:"#D97706",l:"Workaround"}],total);
+  h+='<div class="legend">';
+  h+=legRow("#0D9488","Data Fix",df,total,"df");
+  h+=legRow("#DC2626","Bug Fix",bf,total,"bf");
+  h+=legRow("#D97706","Workaround",wa,total,"wa");
+  h+='</div></div></div>';
+
+  // Right: project breakdown
+  h+='<div class="card" style="padding:20px"><div class="sec-head"><span class="sec-title">By Project</span><span class="sec-sub">Top 12</span></div>';
+  var pm={};FILTERED.forEach(function(t){
+    if(!pm[t.project])pm[t.project]={df:0,bf:0,wa:0,total:0};
+    pm[t.project].total++;
+    if(t.fixType==="Data Fix")pm[t.project].df++;
+    else if(t.fixType==="Bug Fix")pm[t.project].bf++;
+    else pm[t.project].wa++;
+  });
+  var ps=Object.keys(pm).map(function(k){return{name:k,data:pm[k]};}).sort(function(a,b){return b.data.total-a.data.total;}).slice(0,12);
+  var pmax=ps.length?ps[0].data.total:1;
+  ps.forEach(function(p){
+    var w=p.data.total/pmax*100;
+    var dfw=p.data.df/p.data.total*w, bfw=p.data.bf/p.data.total*w, waw=p.data.wa/p.data.total*w;
+    h+='<div class="barrow" data-projdrill="'+esc(p.name)+'"><span class="blbl" title="'+esc(p.name)+'">'+esc(p.name)+'</span>'+
+      '<div class="btrack">'+
+        (p.data.df?'<div class="bfill df growb" style="width:'+dfw+'%"><span class="bfill-n">'+p.data.df+'</span></div>':'')+
+        (p.data.bf?'<div class="bfill bf growb" style="width:'+bfw+'%"><span class="bfill-n">'+p.data.bf+'</span></div>':'')+
+        (p.data.wa?'<div class="bfill wa growb" style="width:'+waw+'%"><span class="bfill-n">'+p.data.wa+'</span></div>':'')+
+      '</div>'+
+      '<span class="bnum">'+fmtN(p.data.total)+'</span></div>';
+  });
+  h+='</div>';
+  h+='</div>';
+
+  // SVM breakdown table (full width)
+  h+='<div class="card up d2" style="padding:20px;margin-bottom:0"><div class="sec-head"><span class="sec-title">By SVM In Charge</span></div>';
+  var sm={};FILTERED.forEach(function(t){
+    var k=t.svm||"(unassigned)";
+    if(!sm[k])sm[k]={df:0,bf:0,wa:0,total:0,closed:0};
+    sm[k].total++;sm[k][t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa"]++;
+    if(t.closed)sm[k].closed++;
+  });
+  var ss=Object.keys(sm).map(function(k){return{name:k,d:sm[k]};}).sort(function(a,b){return b.d.total-a.d.total;});
+  h+='<div class="tbl-wrap"><table><thead><tr><th>SVM In Charge</th><th>Total</th><th>Data Fix</th><th>Bug Fix</th><th>Workaround</th><th>Closed</th><th>Outstanding</th></tr></thead><tbody>';
+  ss.forEach(function(s){
+    h+='<tr><td style="font-weight:600">'+esc(s.name)+'</td>'+
+      '<td class="mono dcell" data-svmdrill="'+esc(s.name)+'" data-svmtype="total" style="cursor:pointer">'+fmtN(s.d.total)+'</td>'+
+      '<td class="mono dcell" data-svmdrill="'+esc(s.name)+'" data-svmtype="df" style="color:var(--df);cursor:pointer">'+fmtN(s.d.df)+'</td>'+
+      '<td class="mono dcell" data-svmdrill="'+esc(s.name)+'" data-svmtype="bf" style="color:var(--bf);cursor:pointer">'+fmtN(s.d.bf)+'</td>'+
+      '<td class="mono dcell" data-svmdrill="'+esc(s.name)+'" data-svmtype="wa" style="color:var(--wa);cursor:pointer">'+fmtN(s.d.wa)+'</td>'+
+      '<td class="mono dcell" data-svmdrill="'+esc(s.name)+'" data-svmtype="closed" style="color:var(--green);cursor:pointer">'+fmtN(s.d.closed)+'</td>'+
+      '<td class="mono dcell" data-svmdrill="'+esc(s.name)+'" data-svmtype="open" style="color:var(--vi);cursor:pointer">'+fmtN(s.d.total-s.d.closed)+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+
+  // auto insights
+  h+='<div style="margin-top:16px">'+insightsCard("Auto insights","read from the numbers in view · updates with your filters",releaseInsights(FILTERED))+'</div>';
+
+  return h;
+}
+
+function drawDonut(slices,total){
+  var R=80,r=56,cx=100,cy=100;
+  var svg='<svg viewBox="0 0 200 200" width="180" height="180"><circle cx="'+cx+'" cy="'+cy+'" r="'+((R+r)/2)+'" fill="none" stroke="var(--line)" stroke-width="'+(R-r)+'"/>';
+  var circum=2*Math.PI*((R+r)/2);
+  var offset=0;
+  slices.forEach(function(s){
+    if(!s.v)return;
+    var frac=s.v/total;
+    var dash=frac*circum;
+    var gap=circum-dash;
+    svg+='<circle cx="'+cx+'" cy="'+cy+'" r="'+((R+r)/2)+'" fill="none" stroke="'+s.c+'" stroke-width="'+(R-r)+'" '+
+      'stroke-dasharray="'+dash.toFixed(2)+' '+gap.toFixed(2)+'" stroke-dashoffset="'+(-offset).toFixed(2)+'" '+
+      'transform="rotate(-90 '+cx+' '+cy+')" style="transition:stroke-dasharray .6s,stroke-dashoffset .6s"/>';
+    offset+=dash;
+  });
+  svg+='<text x="'+cx+'" y="'+(cy-4)+'" text-anchor="middle" style="font-family:var(--mono);font-size:28px;font-weight:700;fill:var(--ink)">'+fmtN(total)+'</text>';
+  svg+='<text x="'+cx+'" y="'+(cy+14)+'" text-anchor="middle" style="font-size:10px;fill:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:1px">releases</text>';
+  svg+='</svg>';
+  return svg;
+}
+
+function legRow(c,label,val,total,drillId){
+  return '<div class="leg-row" data-drill="'+drillId+'" style="cursor:pointer"><span class="leg-dot" style="background:'+c+'"></span><span class="leg-label">'+label+'</span><span class="leg-val">'+fmtN(val)+'</span><span class="leg-pct">'+pct(val,total)+'</span></div>';
+}
+
+/* ── TICKETS TAB ── */
+function renderTickets(){
+  var sorted=sortTickets(FILTERED,S.sortCol,S.sortDir);
+  var pages=Math.max(1,Math.ceil(sorted.length/PAGE_SIZE));
+  if(S.page>=pages)S.page=pages-1;
+  var start=S.page*PAGE_SIZE;
+  var slice=sorted.slice(start,start+PAGE_SIZE);
+
+  var cols=[
+    {k:"key",l:"Key",w:"100px"},{k:"summary",l:"Summary",w:""},{k:"fixType",l:"Fix Type",w:"100px"},
+    {k:"status",l:"Status",w:"120px"},{k:"project",l:"Project",w:"160px"},{k:"svm",l:"SVM In Charge",w:"140px"},
+    {k:"rootCause",l:"Root Cause",w:"140px"},{k:"typeOfFix",l:"Type of Fix",w:"120px"},
+    {k:"releaseStr",l:"Release No",w:"160px"},{k:"priority",l:"Priority",w:"80px"},
+    {k:"created",l:"Created",w:"90px"},{k:"resolved",l:"Resolved",w:"90px"},{k:"ttr",l:"TTR",w:"80px"}
+  ];
+
+  var h='<div class="card up d1" style="margin-bottom:0"><div class="tbl-wrap"><table><thead><tr>';
+  cols.forEach(function(c){
+    var arr=S.sortCol===c.k?(S.sortDir==="asc"?" ▲":" ▼"):"";
+    h+='<th data-sort="'+c.k+'"'+(c.w?' style="min-width:'+c.w+'"':'')+'>'+c.l+'<span class="arr">'+arr+'</span></th>';
+  });
+  h+='</tr></thead><tbody>';
+
+  if(!slice.length){
+    h+='<tr><td colspan="'+cols.length+'" style="text-align:center;padding:40px;color:var(--muted)">No tickets match the current filters</td></tr>';
+  }
+  slice.forEach(function(t){
+    var ftClass=t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa";
+    var stClass=t.closed?"closed":"open";
+    h+='<tr>'+
+      '<td><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
+      '<td class="trunc" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td>'+
+      '<td><span class="badge '+ftClass+'">'+esc(t.fixType)+'</span></td>'+
+      '<td><span class="badge '+stClass+'">'+esc(t.status)+'</span></td>'+
+      '<td>'+esc(t.project)+'</td>'+
+      '<td>'+esc(t.svm||"—")+'</td>'+
+      '<td>'+esc(t.rootCause||"—")+'</td>'+
+      '<td>'+esc(t.typeOfFix||"—")+'</td>'+
+      '<td class="mono" style="font-size:10px">'+esc(t.releaseStr||"—")+'</td>'+
+      '<td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
+      '<td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td>'+
+      '<td class="mono" style="font-size:11px">'+fmtD(t.resolved)+'</td>'+
+      '<td class="mono" style="font-size:11px">'+esc(t.ttr||"—")+'</td>'+
+    '</tr>';
+  });
+  h+='</tbody></table></div>';
+
+  // paging
+  h+='<div class="paging"><span>Showing '+(start+1)+'–'+Math.min(start+PAGE_SIZE,sorted.length)+' of '+sorted.length+'</span><div style="display:flex;gap:6px">'+
+    '<button data-pg="first" '+(S.page===0?'disabled':'')+'>« First</button>'+
+    '<button data-pg="prev" '+(S.page===0?'disabled':'')+'>‹ Prev</button>'+
+    '<span class="mono" style="padding:5px 8px;font-size:11px">'+(S.page+1)+' / '+pages+'</span>'+
+    '<button data-pg="next" '+(S.page>=pages-1?'disabled':'')+'>Next ›</button>'+
+    '<button data-pg="last" '+(S.page>=pages-1?'disabled':'')+'>Last »</button>'+
+  '</div></div></div>';
+
+  return h;
+}
+
+/* ── TREND TAB ── */
+function renderTrend(){
+  // monthly buckets
+  var months={},weekBuckets={};
+  FILTERED.forEach(function(t){
+    if(!t.created)return;
+    var mk=t.created.getFullYear()+"-"+String(t.created.getMonth()+1).padStart(2,"0");
+    if(!months[mk])months[mk]={df:0,bf:0,wa:0,total:0,closed:0};
+    months[mk].total++;months[mk][t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa"]++;
+    if(t.closed)months[mk].closed++;
+
+    // ISO week
+    var d=new Date(t.created);d.setHours(0,0,0,0);
+    var thu=new Date(d);thu.setDate(d.getDate()+(3-(d.getDay()+6)%7));
+    var yr=thu.getFullYear();
+    var wk=1+Math.floor((thu-new Date(yr,0,4))/604800000);
+    var wkey=yr+"-W"+String(wk).padStart(2,"0");
+    if(!weekBuckets[wkey])weekBuckets[wkey]={df:0,bf:0,wa:0,total:0};
+    weekBuckets[wkey].total++;weekBuckets[wkey][t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa"]++;
+  });
+
+  var mkeys=Object.keys(months).sort();
+  var mmax=1;mkeys.forEach(function(k){if(months[k].total>mmax)mmax=months[k].total;});
+
+  // trend insights
+  var tn=[];
+  if(mkeys.length){
+    var peak=mkeys.slice().sort(function(a,b){return months[b].total-months[a].total;})[0];
+    tn.push({i:"🔝",c:"",h:"Peak release month is <b>"+peak.split("-")[1]+"/"+peak.split("-")[0].slice(2)+"</b> with <b>"+months[peak].total+"</b> releases."});
+    var last=mkeys[mkeys.length-1];
+    tn.push({i:"🗓️",c:"",h:"Latest month (<b>"+last.split("-")[1]+"/"+last.split("-")[0].slice(2)+"</b>): <b>"+months[last].df+"</b> data fixes, <b>"+months[last].bf+"</b> bug fixes, <b>"+months[last].wa+"</b> workarounds."});
+    var totWa=0,tot=0; mkeys.forEach(function(k){totWa+=months[k].wa;tot+=months[k].total;});
+    if(tot)tn.push({i:"⚡",c:totWa>tot*0.2?"warn":"",h:"Workarounds run at <b>"+pct(totWa,tot)+"</b> of releases across the window in view."});
+  }
+  var h=insightsCard("Auto insights","how the release trend is moving · updates with your filters",tn);
+  h+='<div class="trend-grid up d1">';
+
+  // Monthly stacked bar chart
+  h+='<div class="card chart-area"><div class="sec-head"><span class="sec-title">Monthly Releases</span><span class="sec-sub">Stacked by fix type</span></div>';
+  h+='<div class="mbar-wrap" style="height:180px">';
+  mkeys.forEach(function(k){
+    var m=months[k];
+    var H=150;
+    var dfH=m.df/mmax*H, bfH=m.bf/mmax*H, waH=m.wa/mmax*H;
+    var label=k.split("-")[1]+"/"+k.split("-")[0].slice(2);
+    h+='<div class="mbar-group" data-monthdrill="'+k+'" style="cursor:pointer"><div class="mbar-total">'+m.total+'</div><div class="mbar-stack" style="height:'+H+'px">'+
+      '<div class="mbar df growb" style="height:'+dfH+'px" title="Data Fix: '+m.df+'"></div>'+
+      '<div class="mbar bf growb" style="height:'+bfH+'px" title="Bug Fix: '+m.bf+'"></div>'+
+      '<div class="mbar wa growb" style="height:'+waH+'px" title="Workaround: '+m.wa+'"></div>'+
+    '</div><div class="mbar-label">'+label+'</div></div>';
+  });
+  h+='</div>';
+  h+='<div class="chart-leg"><span><i style="background:var(--df)"></i> Data Fix</span><span><i style="background:var(--bf)"></i> Bug Fix</span><span><i style="background:var(--wa)"></i> Workaround</span></div>';
+  h+='</div>';
+
+  // Closed vs Created monthly
+  h+='<div class="card chart-area"><div class="sec-head"><span class="sec-title">Created vs Closed</span><span class="sec-sub">Monthly comparison</span></div>';
+  // Compute closed-per-month by resolved date
+  var closedByMonth={};
+  FILTERED.forEach(function(t){
+    if(!t.resolved||!t.closed)return;
+    var mk=t.resolved.getFullYear()+"-"+String(t.resolved.getMonth()+1).padStart(2,"0");
+    closedByMonth[mk]=(closedByMonth[mk]||0)+1;
+  });
+  var allMk=Object.keys(Object.assign({},months,closedByMonth)).sort();
+  var ccmax=1;allMk.forEach(function(k){var v=Math.max(months[k]?months[k].total:0,closedByMonth[k]||0);if(v>ccmax)ccmax=v;});
+
+  h+='<div class="mbar-wrap" style="height:180px">';
+  allMk.forEach(function(k){
+    var created=months[k]?months[k].total:0;
+    var closed=closedByMonth[k]||0;
+    var H=150;
+    var cH=created/ccmax*H, clH=closed/ccmax*H;
+    var label=k.split("-")[1]+"/"+k.split("-")[0].slice(2);
+    h+='<div class="mbar-group" style="gap:0;cursor:pointer" data-monthdrill="'+k+'">'+
+      '<div class="mbar-total"><span style="color:var(--vi)">'+created+'</span><span style="color:var(--faint)"> / </span><span style="color:var(--green)">'+closed+'</span></div>'+
+      '<div style="display:flex;gap:2px;align-items:flex-end;height:'+H+'px;width:100%">'+
+        '<div style="flex:1;background:var(--vi);border-radius:3px 3px 0 0;height:'+cH+'px" class="growb" title="Created: '+created+'"></div>'+
+        '<div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:'+clH+'px" class="growb" title="Closed: '+closed+'"></div>'+
+      '</div><div class="mbar-label">'+label+'</div></div>';
+  });
+  h+='</div>';
+  h+='<div class="chart-leg"><span><i style="background:var(--vi)"></i> Created</span><span><i style="background:var(--green)"></i> Closed</span></div>';
+  h+='</div>';
+
+  h+='</div>';
+
+  // Weekly trend (last 12 weeks)
+  var wkeys=Object.keys(weekBuckets).sort().slice(-12);
+  if(wkeys.length>1){
+    var wmax=1;wkeys.forEach(function(k){if(weekBuckets[k].total>wmax)wmax=weekBuckets[k].total;});
+    h+='<div class="card up d2" style="padding:18px 18px 14px;margin-top:14px"><div class="sec-head" style="margin-bottom:14px"><span class="sec-title">Weekly Trend</span><span class="sec-sub">Last '+wkeys.length+' weeks</span></div>';
+    h+='<div class="mbar-wrap" style="height:140px">';
+    wkeys.forEach(function(k){
+      var w=weekBuckets[k];
+      var H=110;
+      var dfH=w.df/wmax*H, bfH=w.bf/wmax*H, waH=w.wa/wmax*H;
+      h+='<div class="mbar-group" data-weekdrill="'+k+'" style="cursor:pointer"><div class="mbar-total">'+w.total+'</div><div class="mbar-stack" style="height:'+H+'px">'+
+        '<div class="mbar df growb" style="height:'+dfH+'px"></div>'+
+        '<div class="mbar bf growb" style="height:'+bfH+'px"></div>'+
+        '<div class="mbar wa growb" style="height:'+waH+'px"></div>'+
+      '</div><div class="mbar-label" style="font-size:8.5px">'+k.split("-")[1]+'</div></div>';
+    });
+    h+='</div>';
+    h+='<div class="chart-leg"><span><i style="background:var(--df)"></i> Data Fix</span><span><i style="background:var(--bf)"></i> Bug Fix</span><span><i style="background:var(--wa)"></i> Workaround</span></div>';
+    h+='</div>';
+  }
+
+  return h;
+}
+
+/* ── DETAIL MODAL (on KPI click) ── */
+function openModal(title,tickets){
+  var mv=el("modalOv");
+  el("modalTitle").textContent=title;
+  el("modalSub").textContent=tickets.length+" tickets · click a key to open in Jira";
+
+  var cols=["Key","Summary","Fix Type","Status","Project","SVM In Charge","Root Cause","Type of Fix",
+    "Release Number","Release Number (Data Fix)","Parent Release No","Priority","Created","Resolved",
+    "Time to resolution","Current Worker","Components","Issue Type","Severity","Reporter","Assignee",
+    "Screen Name","Next Action","Linked Issues","Linked Ticket status"];
+
+  var h='<table><thead><tr>'+cols.map(function(c){return'<th class="static">'+c+'</th>';}).join('')+'</tr></thead><tbody>';
+  tickets.forEach(function(t){
+    var ftC=t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa";
+    var stC=t.closed?"closed":"open";
+    h+='<tr>';
+    cols.forEach(function(c){
+      if(c==="Key") h+='<td><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>';
+      else if(c==="Summary") h+='<td class="trunc" style="max-width:300px" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td>';
+      else if(c==="Fix Type") h+='<td><span class="badge '+ftC+'">'+esc(t.fixType)+'</span></td>';
+      else if(c==="Status") h+='<td><span class="badge '+stC+'">'+esc(t.status)+'</span></td>';
+      else if(c==="Project") h+='<td>'+esc(t.project)+'</td>';
+      else if(c==="SVM In Charge") h+='<td>'+esc(t.svm||"—")+'</td>';
+      else if(c==="Root Cause") h+='<td>'+esc(t.rootCause||"—")+'</td>';
+      else if(c==="Type of Fix") h+='<td>'+esc(t.typeOfFix||"—")+'</td>';
+      else if(c==="Release Number") h+='<td class="mono" style="font-size:10px">'+esc(t.relNum||"—")+'</td>';
+      else if(c==="Release Number (Data Fix)") h+='<td class="mono" style="font-size:10px">'+esc(t.relDataFix||"—")+'</td>';
+      else if(c==="Parent Release No") h+='<td class="mono" style="font-size:10px">'+esc(t.parentRel||"—")+'</td>';
+      else if(c==="Priority") h+='<td><span class="pill">'+esc(t.priority||"—")+'</span></td>';
+      else if(c==="Created") h+='<td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td>';
+      else if(c==="Resolved") h+='<td class="mono" style="font-size:11px">'+fmtD(t.resolved)+'</td>';
+      else if(c==="Current Worker") h+='<td>'+esc(t.worker||"—")+'</td>';
+      else if(c==="Components") h+='<td style="font-size:10.5px">'+esc(t.components||"—")+'</td>';
+      else if(c==="Issue Type") h+='<td>'+esc(t.issueType)+'</td>';
+      else if(c==="Linked Issues") h+='<td>'+(t.linked?'<a class="jkey" style="color:var(--bf)" href="'+JIRA+encodeURIComponent(t.linked.split(";")[0].trim())+'" target="_blank" rel="noreferrer">'+esc(t.linked.split(";")[0])+'</a>':'<span style="color:var(--faint)">—</span>')+'</td>';
+      else{
+        var map={severity:"severity",reporter:"reporter",assignee:"assignee","screen name":"screenName","next action":"nextAction","linked ticket status":"linkedStatus",analysis:"analysis","time to resolution":"ttr"};
+        var mk=c.toLowerCase(); var val=t[map[mk]]||"—";
+        h+='<td style="font-size:11px">'+esc(val)+'</td>';
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  el("modalBody").innerHTML=h;
+  el("modalFoot").textContent=tickets.length+" tickets · All columns shown in importance order";
+  mv.classList.add("open");
+}
+function closeModal(){el("modalOv").classList.remove("open");}
+
+/* ── LANDING ── */
+function renderLanding(){
+  el("app").innerHTML=''+
+  '<div class="landing">'+
+    '<div class="deco b1"></div><div class="deco b2"></div>'+
+    '<div class="deco ring r1"></div><div class="deco ring r2"></div>'+
+    '<div class="landing-card up">'+
+      '<div style="display:inline-flex;align-items:center;gap:11px;margin-bottom:20px">'+
+        '<span class="bar" style="display:flex;gap:5px;align-items:flex-end;height:38px">'+
+          '<i style="display:block;width:11px;height:16px;border-radius:4px;background:var(--vi)"></i>'+
+          '<i style="display:block;width:11px;height:32px;border-radius:4px;background:var(--vi2)"></i>'+
+          '<i style="display:block;width:11px;height:12px;border-radius:4px;background:var(--wa)"></i>'+
+          '<i style="display:block;width:11px;height:26px;border-radius:4px;background:var(--df)"></i>'+
+        '</span>'+
+        '<span style="font-family:var(--disp);font-weight:700;font-size:20px;letter-spacing:-.4px">HD Release Tracker</span>'+
+      '</div>'+
+      '<p style="color:var(--ink2);font-size:13px;margin:-6px 0 22px;line-height:1.6">Track every release that went out — data fixes, bug fixes, and workarounds — in one place. See which projects ship the most, who handles what, and how the trend looks over time.</p>'+
+      '<div class="upload-panel">'+
+        '<div class="dz" id="dz">'+
+          '<div style="font-size:34px;margin-bottom:8px">📦</div>'+
+          '<div style="font-family:var(--disp);font-weight:600;font-size:15px;margin-bottom:4px">Drop your Jira Excel here</div>'+
+          '<div style="font-size:12px;color:var(--muted);margin-bottom:9px">.xlsx exported from Jira · processed entirely in your browser</div>'+
+          '<button class="btn-primary" id="uploadBtn">Choose Excel file</button>'+
+        '</div>'+
+        '<div style="margin-top:18px;text-align:left">'+
+          '<div style="font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:1.1px;margin-bottom:8px">Columns used</div>'+
+          '<div class="hint-cols">'+
+            ["Issue Type","Key","Summary","Status","Release Number","Release Number (Data Fix)","Parent Release No","Root Cause","Type of Fix","SVM In Charge","Project","Created","Resolved"].map(function(c){return'<span>'+c+'</span>';}).join("")+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+  var fi=el("fileinput");
+  el("uploadBtn").onclick=function(){fi.click();};
+  el("dz").onclick=function(){fi.click();};
+  fi.onchange=handleUpload;
+  var dz=el("dz");
+  ["dragenter","dragover"].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over");});});
+  ["dragleave","drop"].forEach(function(ev){dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.remove("over");});});
+  dz.addEventListener("drop",function(e){
+    var file=e.dataTransfer.files&&e.dataTransfer.files[0];
+    if(file)processUpload(file);
+  });
+}
+
+/* ── FILE HANDLING ── */
+function pickSheet(wb){
+  return wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("jira issues")>-1;})
+    ||wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1;})
+    ||wb.SheetNames[1]||wb.SheetNames[0];
+}
+function readFile(blob){
+  return new Promise(function(res,rej){
+    var r=new FileReader();
+    r.onload=function(e){
+      try{var wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+        res(XLSX.utils.sheet_to_json(wb.Sheets[pickSheet(wb)],{defval:""}));
+      }catch(err){rej(err);}
+    };
+    r.onerror=function(){rej(new Error("FileReader error"));};
+    r.readAsArrayBuffer(blob);
+  });
+}
+function processUpload(file){
+  FILENAME=file.name; BLOB=file;
+  readFile(file).then(function(rows){
+    RAW=normalize(rows);
+    S={tab:"overview",search:"",proj:"",svm:"",fixType:"",status:"",from:"",to:"",sortCol:"created",sortDir:"desc",page:0,kpiFilter:""};
+    render();
+  }).catch(function(err){alert("Could not read file: "+err.message);});
+}
+function handleUpload(e){
+  var file=e.target.files&&e.target.files[0];if(!file)return;
+  processUpload(file);
+  e.target.value="";
+}
+
+/* ── helper: filter tickets for drill ── */
+function drillTickets(filterFn,title){
+  var tix=FILTERED.filter(filterFn);
+  openModal(title,tix);
+}
+
+/* ── EVENT BINDING ── */
+function bindAll(){
+  // tabs
+  document.querySelectorAll("[data-tab]").forEach(function(b){
+    b.onclick=function(){S.tab=b.dataset.tab;S.page=0;render();};
+  });
+  // filters
+  var gs=el("gsearch");if(gs){
+    gs.oninput=function(){S.search=gs.value;S.page=0;S.kpiFilter="";render();
+      var n=el("gsearch");if(n){n.focus();try{n.setSelectionRange(gs.selectionStart,gs.selectionStart);}catch(e){}}};
+  }
+  var fp=el("fProj");if(fp)fp.onchange=function(){S.proj=fp.value;S.page=0;render();};
+  var fs=el("fSvm");if(fs)fs.onchange=function(){S.svm=fs.value;S.page=0;render();};
+  var ff=el("fFix");if(ff)ff.onchange=function(){S.fixType=ff.value;S.page=0;S.kpiFilter="";render();};
+  var fst=el("fStatus");if(fst)fst.onchange=function(){S.status=fst.value;S.page=0;S.kpiFilter="";render();};
+  var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
+  var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
+  var rb=el("resetBtn");if(rb)rb.onclick=function(){
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
+
+  // KPI clicks → single-click opens drill modal directly
+  document.querySelectorAll("[data-kpi]").forEach(function(k){
+    k.onclick=function(){
+      var id=k.dataset.kpi;
+      var labels={total:"All Release Tickets",df:"Data Fix Tickets",bf:"Bug Fix Tickets",wa:"Workaround Tickets",closed:"Closed Tickets",open:"Outstanding Tickets"};
+      drillTickets(function(t){
+        if(id==="df")return t.fixType==="Data Fix";
+        if(id==="bf")return t.fixType==="Bug Fix";
+        if(id==="wa")return t.fixType==="Workaround";
+        if(id==="closed")return t.closed;
+        if(id==="open")return !t.closed;
+        return true;
+      },labels[id]||"Tickets");
+    };
+  });
+
+  // Donut legend clicks
+  document.querySelectorAll("[data-drill]").forEach(function(r){
+    r.onclick=function(){
+      var id=r.dataset.drill;
+      var labels={df:"Data Fix Tickets",bf:"Bug Fix Tickets",wa:"Workaround Tickets"};
+      var types={df:"Data Fix",bf:"Bug Fix",wa:"Workaround"};
+      drillTickets(function(t){return t.fixType===types[id];},labels[id]||"Tickets");
+    };
+  });
+
+  // Project bar clicks → drill into that project
+  document.querySelectorAll("[data-projdrill]").forEach(function(b){
+    b.onclick=function(){
+      var proj=b.dataset.projdrill;
+      drillTickets(function(t){return t.project===proj;},proj+" — All Releases");
+    };
+  });
+
+  // SVM table cell clicks
+  document.querySelectorAll("[data-svmdrill]").forEach(function(td){
+    td.onclick=function(){
+      var svm=td.dataset.svmdrill, type=td.dataset.svmtype;
+      var labels={total:"All",df:"Data Fix",bf:"Bug Fix",wa:"Workaround",closed:"Closed",open:"Outstanding"};
+      drillTickets(function(t){
+        if(t.svm!==svm&&!(svm==="(unassigned)"&&!t.svm)) return false;
+        if(type==="df")return t.fixType==="Data Fix";
+        if(type==="bf")return t.fixType==="Bug Fix";
+        if(type==="wa")return t.fixType==="Workaround";
+        if(type==="closed")return t.closed;
+        if(type==="open")return !t.closed;
+        return true;
+      },svm+" — "+labels[type]+" Tickets");
+    };
+  });
+
+  // Monthly bar clicks → drill into that month
+  document.querySelectorAll("[data-monthdrill]").forEach(function(b){
+    b.onclick=function(){
+      var mk=b.dataset.monthdrill;
+      var parts=mk.split("-");var yr=parseInt(parts[0]),mo=parseInt(parts[1]);
+      drillTickets(function(t){
+        if(!t.created)return false;
+        return t.created.getFullYear()===yr&&(t.created.getMonth()+1)===mo;
+      },mk+" — Monthly Releases");
+    };
+  });
+
+  // Weekly bar clicks → drill into that week
+  document.querySelectorAll("[data-weekdrill]").forEach(function(b){
+    b.onclick=function(){
+      var wk=b.dataset.weekdrill;
+      // compute ISO week for each ticket and match
+      drillTickets(function(t){
+        if(!t.created)return false;
+        var d=new Date(t.created);d.setHours(0,0,0,0);
+        var thu=new Date(d);thu.setDate(d.getDate()+(3-(d.getDay()+6)%7));
+        var yr=thu.getFullYear();
+        var wn=1+Math.floor((thu-new Date(yr,0,4))/604800000);
+        return wk===yr+"-W"+String(wn).padStart(2,"0");
+      },wk+" — Weekly Releases");
+    };
+  });
+
+  // table sorting
+  document.querySelectorAll("[data-sort]").forEach(function(th){
+    th.onclick=function(){
+      var c=th.dataset.sort;
+      if(S.sortCol===c){S.sortDir=S.sortDir==="asc"?"desc":"asc";}
+      else{S.sortCol=c;S.sortDir="asc";}
+      render();
+    };
+  });
+  // paging
+  document.querySelectorAll("[data-pg]").forEach(function(b){
+    b.onclick=function(){
+      var sorted=sortTickets(FILTERED,S.sortCol,S.sortDir);
+      var pages=Math.max(1,Math.ceil(sorted.length/PAGE_SIZE));
+      if(b.dataset.pg==="first")S.page=0;
+      else if(b.dataset.pg==="prev")S.page=Math.max(0,S.page-1);
+      else if(b.dataset.pg==="next")S.page=Math.min(pages-1,S.page+1);
+      else S.page=pages-1;
+      render();
+    };
+  });
+
+  // modal close
+  el("modalClose").onclick=closeModal;
+  el("modalOv").onclick=function(e){if(e.target===el("modalOv"))closeModal();};
+}
+
+/* ── BOOT ── */
+function boot(){
+  if(!window.HDStore){renderLanding();return;}
+  HDStore.loadConfig().then(function(cfg){
+    window.HDClass.setOverrides(cfg.statusOverrides);
+    window.HDGroups.setOverrides(cfg.groupOverrides);
+    if(window.HDStages) window.HDStages.setOverrides(cfg.stageOverrides);
+    HDStore.loadFile().then(function(rec){
+      if(!rec){renderLanding();return;}
+      FILENAME=rec.name; BLOB=rec.blob;
+      HDStore.loadRows().then(function(edited){
+        var source=(edited&&edited.length)?Promise.resolve(edited):readFile(rec.blob);
+        source.then(function(rows){
+          RAW=normalize(rows);
+          render();
+        }).catch(function(err){alert("Could not read stored file: "+err.message);renderLanding();});
+      });
+    });
+  });
+}
+
+// keyboard shortcut for modal
+document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
+
+boot();
+</script>
+</body>
+</html>
