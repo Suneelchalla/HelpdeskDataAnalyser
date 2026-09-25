@@ -48,7 +48,10 @@
       rootCause: [/^root\s*cause$/i, /root\s*cause\s*category/i],
       typeOfFix: [/type\s*of\s*fix/i],
       screenName: [/screen\s*name/i],
-      menuHead: [/menu\s*head/i]
+      menuHead: [/menu\s*head/i],
+      releaseDataFix: [/release\s*number\s*\(?\s*data\s*fix/i, /data\s*fix\s*release/i],
+      releaseNumber: [/^\s*release\s*number\s*$/i, /^\s*release\s*no\.?\s*$/i],
+      parentRelease: [/parent\s*release/i]
     };
     Object.keys(patterns).forEach(function (key) {
       for (var i = 0; i < customFields.length; i++) {
@@ -109,6 +112,9 @@
       row["Type of Fix"] = choice(f[fm.typeOfFix]);
       row["Screen Name"] = choice(f[fm.screenName]);
       row["Menu Head"] = choice(f[fm.menuHead]);
+      row["Release Number"] = txt(f[fm.releaseNumber]);
+      row["Release Number (Data Fix)"] = txt(f[fm.releaseDataFix]);
+      row["Parent Release No"] = txt(f[fm.parentRelease]);
       if (f.issuelinks && f.issuelinks.length) {
         var lk = [], ls = [];
         f.issuelinks.forEach(function (l) {
@@ -122,6 +128,7 @@
   }
   function person(v) { if (!v) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.map(function (x) { return x.displayName || x.name || ""; }).join(", "); return v.displayName || v.name || v.value || ""; }
   function choice(v) { if (!v) return ""; if (typeof v === "string") return v; return v.value || v.name || ""; }
+  function txt(v) { if (v == null) return ""; if (typeof v === "object") return v.value || v.name || v.displayName || (Array.isArray(v) ? v.map(function (x) { return x.value || x.name || x; }).join(", ") : ""); return String(v); }
   function sla(s) { if (!s) return ""; if (typeof s === "string") return s;
     if (s.completedCycles && s.completedCycles.length) { var l = s.completedCycles[s.completedCycles.length - 1]; if (l.elapsedTime) return (l.breached ? "-" : "") + (l.elapsedTime.friendly || ""); }
     if (s.ongoingCycle) { var o = s.ongoingCycle; if (o.breached && o.elapsedTime) return "-" + (o.elapsedTime.friendly || ""); if (o.remainingTime) return o.remainingTime.friendly || ""; }
@@ -137,7 +144,7 @@
   function fetchAll(jql, onProgress) {
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks"];
-    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead"]
+    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
     return search(host, jql, fields, onProgress).then(function (issues) {
       var rows = transform(issues, fm), blob = toBlob(rows);
