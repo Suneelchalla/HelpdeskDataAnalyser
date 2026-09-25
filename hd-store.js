@@ -6,7 +6,7 @@
    Jira export can exceed localStorage's ~5MB limit. The raw file (Blob) is
    stored as-is, so each dashboard parses it with its own existing XLSX code. */
 (function () {
-  var DB = "hd-tracker", STORE = "files", KEY = "current", ROWS_KEY = "edited-rows", SNAP_KEY = "weekly-snapshots", CFG_KEY = "master-config";
+  var DB = "hd-tracker", STORE = "files", KEY = "current", ROWS_KEY = "edited-rows", SNAP_KEY = "weekly-snapshots", CFG_KEY = "master-config", FCACHE_KEY = "fetch-cache";
 
   function open() {
     return new Promise(function (res, rej) {
@@ -162,6 +162,42 @@
         return new Promise(function (res) {
           var t = db.transaction(STORE, "readwrite");
           t.objectStore(STORE).delete(CFG_KEY);
+          t.oncomplete = function () { res(true); };
+        });
+      }).catch(function () { return false; });
+    },
+
+    /* ── Live-fetch cache (for incremental Jira pulls) ──
+       Stores the full transformed row set from the last Jira fetch plus the JQL,
+       host and the timestamp the fetch STARTED. On the next fetch, if the JQL and
+       host are unchanged, only tickets updated since lastFetch are pulled and
+       merged into these rows by Key — so a daily refresh is a couple of requests
+       instead of the full history. Cleared on "Change file" and on Excel upload
+       (a different source), and replaced on every fetch (full or incremental). */
+    saveFetchCache: function (obj) {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction(STORE, "readwrite");
+          t.objectStore(STORE).put({ cache: obj, savedAt: Date.now() }, FCACHE_KEY);
+          t.oncomplete = function () { res(true); };
+          t.onerror = function () { rej(t.error); };
+        });
+      });
+    },
+    loadFetchCache: function () {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var g = db.transaction(STORE, "readonly").objectStore(STORE).get(FCACHE_KEY);
+          g.onsuccess = function () { res(g.result ? g.result.cache || null : null); };
+          g.onerror = function () { rej(g.error); };
+        });
+      }).catch(function () { return null; });
+    },
+    clearFetchCache: function () {
+      return open().then(function (db) {
+        return new Promise(function (res) {
+          var t = db.transaction(STORE, "readwrite");
+          t.objectStore(STORE).delete(FCACHE_KEY);
           t.oncomplete = function () { res(true); };
         });
       }).catch(function () { return false; });
