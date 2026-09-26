@@ -35,7 +35,7 @@ body{
     radial-gradient(820px 560px at 104% 110%, #DCF5EF 0%, transparent 58%),
     var(--bg);
   font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;
-  overflow:hidden;
+  overflow:auto;
 }
 ::selection{background:var(--ink);color:#fff}
 a{text-decoration:none;color:inherit}
@@ -66,8 +66,8 @@ input[type=file]{display:none}
 .ping::after{animation-delay:1.7s}
 @keyframes ping{0%{transform:scale(1);opacity:.5}100%{transform:scale(6.5);opacity:0}}
 
-/* ══════ shell (single viewport, no scroll) ══════ */
-.shell{position:relative;z-index:1;height:100vh;max-width:1240px;margin:0 auto;padding:22px 30px 18px;display:flex;flex-direction:column}
+/* ══════ shell ══════ */
+.shell{position:relative;z-index:1;min-height:100vh;max-width:1240px;margin:0 auto;padding:22px 30px 18px;display:flex;flex-direction:column}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .rise{animation:rise .55s cubic-bezier(.22,1,.36,1) both}
 .d1{animation-delay:.07s}.d2{animation-delay:.14s}.d3{animation-delay:.21s}
@@ -86,7 +86,7 @@ input[type=file]{display:none}
 @keyframes beat{0%,100%{opacity:1}50%{opacity:.35}}
 
 /* main split */
-.main{flex:1;min-height:0;display:grid;grid-template-columns:0.72fr 1.6fr;gap:34px;align-items:center}
+.main{flex:1;min-height:0;display:grid;grid-template-columns:0.72fr 1.6fr;gap:34px;align-items:start}
 
 /* left — hero */
 .eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:2.4px}
@@ -139,7 +139,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 
 .fork{height:36px}
 
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;position:relative;z-index:2}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative;z-index:2}
 .card{position:relative;display:block;border-radius:18px;padding:16px 18px 14px;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);transition:transform .2s,box-shadow .25s,border-color .2s,opacity .35s,filter .35s}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .35s,box-shadow .35s}
 .card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
@@ -208,7 +208,6 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
   .shell{height:auto;min-height:100vh}
   .main{grid-template-columns:1fr;gap:26px}
   .fork{height:40px}
-  .cards{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-height:660px) and (min-width:901px){
   body{overflow:auto}.shell{height:auto;min-height:100vh}
