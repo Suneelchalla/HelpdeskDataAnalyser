@@ -137,6 +137,12 @@
       row["Fix Versions"] = (f.fixVersions || []).map(function (v) { return v.name || ""; }).join("; ");
       row["Parent Key"] = f.parent ? (f.parent.key || "") : "";
       row["Parent Summary"] = f.parent && f.parent.fields ? (f.parent.fields.summary || "") : "";
+      row["Comment Count"] = f.comment ? (f.comment.total || 0) : 0;
+      row["Last Comment"] = "";
+      if (f.comment && f.comment.comments && f.comment.comments.length) {
+        var lastC = f.comment.comments[f.comment.comments.length - 1];
+        row["Last Comment"] = lastC.updated || lastC.created || "";
+      }
       if (f.issuelinks && f.issuelinks.length) {
         var lk = [], ls = [], lt = [];
         f.issuelinks.forEach(function (l) {
@@ -189,7 +195,7 @@
   function fetchAll(jql, onProgress, opts) {
     opts = opts || {};
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
-    var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent"];
+    var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent","comment"];
     ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
 
