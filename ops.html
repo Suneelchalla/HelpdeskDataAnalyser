@@ -95,7 +95,6 @@ tr:hover td { background: rgba(5,150,105,.02) }
 .badge { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase }
 .badge.crit { background: #F3E8FF; color: #7C3AED } .badge.high { background: #FFF1F2; color: #E11D48 }
 .badge.med { background: #FEF3C7; color: #92400E } .badge.low { background: var(--em-bg); color: var(--em) }
-.badge.breach { background: var(--rose-bg); color: var(--rose); border: 1px solid var(--rose-soft) }
 .badge.safe { background: var(--em-bg); color: var(--em); border: 1px solid var(--em-soft) }
 .badge.warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-soft) }
 .badge.silent { background: var(--violet-bg); color: var(--violet); border: 1px solid var(--violet-soft) }
@@ -127,7 +126,7 @@ tr:hover td { background: rgba(5,150,105,.02) }
   <div class="landing-inner up">
     <div class="ico">📊</div>
     <h1>Operations Intelligence</h1>
-    <p>Client profiles, workload balance, SLA monitoring, and resolution quality — everything a team lead needs to run the desk.</p>
+    <p>Client profiles, workload balance, health monitoring, and resolution quality — everything a team lead needs to run the desk.</p>
     <p style="font-size:12px; color:var(--faint); margin-bottom:18px">
       Load a Jira export on the <a href="index.html">launcher</a> first.
     </p>
@@ -144,6 +143,8 @@ tr:hover td { background: rgba(5,150,105,.02) }
   </div>
 
   <div class="stats up d1" id="statsRow"></div>
+
+  <div id="pulseView" class="up d1" style="margin-bottom:14px"></div>
 
   <div class="tabs up d2" id="tabBar">
     <button class="tab on" data-tab="clients">🏢 Client Intelligence</button>
@@ -230,8 +231,6 @@ tr:hover td { background: rgba(5,150,105,.02) }
         ageDays: isResolved ? null : daysSince(created),
         daysSinceUpdate: daysSince(updated || created),
         daysSinceComment: lastComment ? daysSince(lastComment) : null,
-        slaBreachedFR: (col(row, "time to first response") || "").charAt(0) === "-",
-        slaBreachedRes: (col(row, "time to resolution") || "").charAt(0) === "-",
         isChange: /change/i.test(col(row, "issue type")),
         isIncident: /incident/i.test(col(row, "issue type")),
         isSR: /service request/i.test(col(row, "issue type"))
@@ -239,19 +238,14 @@ tr:hover td { background: rgba(5,150,105,.02) }
     });
   }
 
-  /* ══════════════════════ STATS ══════════════════════ */
+  /* ══════════════════════ STATS + PULSE ══════════════════════ */
 
   function renderStats() {
     var open = TK.filter(function (t) { return !t.isResolved; });
-    var breachCount = open.filter(function (t) { return t.slaBreachedFR || t.slaBreachedRes; }).length;
     var silentCount = open.filter(function (t) { return t.daysSinceUpdate >= 7; }).length;
     var avgAge = 0;
-    if (open.length) {
-      var totalAge = open.reduce(function (s, t) { return s + (t.ageDays || 0); }, 0);
-      avgAge = Math.round(totalAge / open.length);
-    }
+    if (open.length) avgAge = Math.round(open.reduce(function (s, t) { return s + (t.ageDays || 0); }, 0) / open.length);
 
-    // workload imbalance: ratio of busiest to least-busy SVM
     var svmLoad = {};
     open.forEach(function (t) { if (t.svm) svmLoad[t.svm] = (svmLoad[t.svm] || 0) + 1; });
     var loads = Object.values(svmLoad);
@@ -259,33 +253,127 @@ tr:hover td { background: rgba(5,150,105,.02) }
     var minLoad = loads.length ? Math.min.apply(null, loads) : 0;
     var imbalance = minLoad > 0 ? Math.round(maxLoad / minLoad * 10) / 10 : 0;
 
+    var critHigh = open.filter(function (t) {
+      var p = (t.priority || "").toLowerCase();
+      return p.indexOf("critical") > -1 || p.indexOf("high") > -1 || p.indexOf("urgent") > -1;
+    }).length;
+
     el("ticketMeta").textContent = TK.length.toLocaleString() + " tickets loaded";
     el("statsRow").innerHTML =
       '<div class="stat em"><div class="num">' + open.length.toLocaleString() + '</div><div class="lbl">Open tickets</div><div class="sub">Across all statuses</div></div>' +
       '<div class="stat blue"><div class="num">' + avgAge + 'd</div><div class="lbl">Avg age (open)</div><div class="sub">Days since created</div></div>' +
-      '<div class="stat rose"><div class="num">' + breachCount + '</div><div class="lbl">SLA breaches</div><div class="sub">First response or resolution</div></div>' +
+      '<div class="stat rose"><div class="num">' + critHigh + '</div><div class="lbl">Critical / High</div><div class="sub">Open · needs attention</div></div>' +
       '<div class="stat violet"><div class="num">' + silentCount + '</div><div class="lbl">Silent tickets</div><div class="sub">No update in 7+ days</div></div>' +
       '<div class="stat amber"><div class="num">' + imbalance + 'x</div><div class="lbl">Workload ratio</div><div class="sub">Busiest ÷ lightest SVM</div></div>' +
       '<div class="stat" style="border-left:3px solid var(--em)"><div class="num mono" style="color:var(--em)">' + TK.filter(function (t) { return t.isResolved; }).length.toLocaleString() + '</div><div class="lbl">Resolved</div><div class="sub">' + pct(TK.filter(function (t) { return t.isResolved; }).length, TK.length) + '% resolution rate</div></div>';
+
+    /* ── FEATURE 1: Week-over-week pulse ── */
+    var msDay = 86400000, msWeek = 7 * msDay;
+    var thisWS = new Date(NOW.getTime() - (NOW.getDay() || 7) * msDay); thisWS.setHours(0, 0, 0, 0);
+    var lastWS = new Date(thisWS.getTime() - msWeek);
+    var twC = 0, twR = 0, lwC = 0, lwR = 0;
+    TK.forEach(function (t) {
+      if (t.created >= thisWS) twC++; else if (t.created >= lastWS) lwC++;
+      if (t.resolved && t.resolved >= thisWS) twR++; else if (t.resolved && t.resolved >= lastWS) lwR++;
+    });
+    var twNet = twC - twR;
+
+    // Clients getting worse
+    var cwm = {};
+    TK.forEach(function (t) {
+      var p = t.project || "?";
+      if (!cwm[p]) cwm[p] = { tw: 0, lw: 0 };
+      if (!t.isResolved) { if (t.created >= thisWS) cwm[p].tw++; else if (t.created >= lastWS) cwm[p].lw++; }
+    });
+    var worse = Object.keys(cwm).filter(function (c) { return cwm[c].tw > cwm[c].lw && cwm[c].tw >= 3; })
+      .sort(function (a, b) { return (cwm[b].tw - cwm[b].lw) - (cwm[a].tw - cwm[a].lw); }).slice(0, 3);
+
+    /* ── FEATURE 2: Inflow vs outflow — 12 weeks ── */
+    var wBk = [];
+    for (var wi = 11; wi >= 0; wi--) {
+      var wS = new Date(thisWS.getTime() - wi * msWeek), wE = new Date(wS.getTime() + msWeek);
+      var wIn = 0, wOut = 0;
+      TK.forEach(function (t) {
+        if (t.created >= wS && t.created < wE) wIn++;
+        if (t.resolved && t.resolved >= wS && t.resolved < wE) wOut++;
+      });
+      wBk.push({ l: (wS.getMonth() + 1) + "/" + wS.getDate(), i: wIn, o: wOut });
+    }
+    var mxW = 1; wBk.forEach(function (w) { if (w.i > mxW) mxW = w.i; if (w.o > mxW) mxW = w.o; });
+
+    var ph = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+
+    // Pulse card
+    ph += '<div class="card" style="padding:16px"><h3 style="font-size:14px;font-weight:700;margin-bottom:10px">📊 This week vs last week</h3>';
+    ph += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
+    function dlt(tw, lw, lb, gd) {
+      var d = tw - lw, a = d > 0 ? "▲" : d < 0 ? "▼" : "—", ok = gd ? d <= 0 : d >= 0;
+      var c = d === 0 ? "var(--faint)" : ok ? "var(--em)" : "var(--rose)";
+      return '<div style="padding:10px;background:var(--paper);border-radius:8px;border:1px solid var(--line)">' +
+        '<div style="font-size:10px;color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.5px">' + lb + '</div>' +
+        '<div class="mono" style="font-size:20px;font-weight:700;margin-top:2px">' + tw + '</div>' +
+        '<div style="font-size:11px;color:' + c + ';font-weight:700">' + a + ' ' + Math.abs(d) + ' vs last (' + lw + ')</div></div>';
+    }
+    ph += dlt(twC, lwC, "Created", true);
+    ph += dlt(twR, lwR, "Resolved", false);
+    var nC = twNet > 0 ? "var(--rose)" : twNet < 0 ? "var(--em)" : "var(--faint)";
+    ph += '<div style="padding:10px;background:' + (twNet > 0 ? 'var(--rose-bg)' : twNet < 0 ? 'var(--em-bg)' : 'var(--paper)') + ';border-radius:8px;border:1px solid ' + (twNet > 0 ? 'var(--rose-soft)' : twNet < 0 ? 'var(--em-soft)' : 'var(--line)') + '">' +
+      '<div style="font-size:10px;color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Net change</div>' +
+      '<div class="mono" style="font-size:20px;font-weight:700;color:' + nC + ';margin-top:2px">' + (twNet > 0 ? "+" : "") + twNet + '</div>' +
+      '<div style="font-size:11px;color:' + nC + ';font-weight:700">' + (twNet > 0 ? "Backlog growing" : twNet < 0 ? "Backlog shrinking" : "Balanced") + '</div></div>';
+    ph += '</div>';
+    if (worse.length) {
+      ph += '<div style="margin-top:10px;padding:8px 12px;background:var(--amber-bg);border:1px solid var(--amber-soft);border-radius:8px;font-size:12px;color:var(--amber)">';
+      ph += '<span style="font-weight:700">⚠ Clients getting worse:</span> ';
+      ph += worse.map(function (c) { return '<b>' + esc(c) + '</b> (' + cwm[c].lw + '→' + cwm[c].tw + ')'; }).join(", ");
+      ph += '</div>';
+    }
+    ph += '</div>';
+
+    // Inflow/outflow chart
+    ph += '<div class="card" style="padding:16px"><h3 style="font-size:14px;font-weight:700;margin-bottom:10px">📈 Inflow vs outflow — 12 weeks</h3>';
+    ph += '<div style="display:flex;gap:3px;align-items:flex-end;height:120px">';
+    wBk.forEach(function (w) {
+      var iH = Math.round(w.i / mxW * 100), oH = Math.round(w.o / mxW * 100);
+      ph += '<div style="flex:1;display:flex;flex-direction:column;align-items:center">' +
+        '<div style="width:100%;display:flex;gap:1px;align-items:flex-end;height:100px">' +
+        '<div style="flex:1;height:' + iH + '%;background:var(--rose);border-radius:3px 3px 0 0;min-height:' + (w.i ? '2px' : '0') + '" title="In: ' + w.i + '"></div>' +
+        '<div style="flex:1;height:' + oH + '%;background:var(--em);border-radius:3px 3px 0 0;min-height:' + (w.o ? '2px' : '0') + '" title="Out: ' + w.o + '"></div>' +
+        '</div><div style="font-size:8px;color:var(--faint);margin-top:3px;font-family:var(--mono)">' + w.l + '</div></div>';
+    });
+    ph += '</div>';
+    ph += '<div style="display:flex;gap:14px;margin-top:8px;font-size:11px"><span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--rose)"></span> Created</span><span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:var(--em)"></span> Resolved</span></div>';
+    ph += '</div></div>';
+    el("pulseView").innerHTML = ph;
   }
 
   /* ══════════════════════ CLIENT INTELLIGENCE ══════════════════════ */
+  /* FEATURE 7: Client health trend (month-over-month open ticket change) */
 
   function renderClients() {
     var proj = {};
+    // Monthly buckets for trend
+    var moKey = function (d) { return d ? d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") : null; };
+    var thisMo = moKey(NOW);
+    var lastMoD = new Date(NOW.getFullYear(), NOW.getMonth() - 1, 1);
+    var lastMo = moKey(lastMoD);
+
     TK.forEach(function (t) {
       var p = t.project || "(unknown)";
-      if (!proj[p]) proj[p] = { total: 0, open: 0, resolved: 0, critical: 0, breaches: 0, screens: {}, ages: [], resTimes: [] };
+      if (!proj[p]) proj[p] = { total: 0, open: 0, resolved: 0, critical: 0, screens: {}, ages: [], resTimes: [], moCreated: {}, moResolved: {} };
       var d = proj[p];
       d.total++;
+      var cMo = t.created ? moKey(t.created) : null;
+      if (cMo) d.moCreated[cMo] = (d.moCreated[cMo] || 0) + 1;
       if (t.isResolved) {
         d.resolved++;
         if (t.created && t.resolved) d.resTimes.push((t.resolved - t.created) / 86400000);
+        var rMo = t.resolved ? moKey(t.resolved) : null;
+        if (rMo) d.moResolved[rMo] = (d.moResolved[rMo] || 0) + 1;
       } else {
         d.open++;
         if (t.ageDays != null) d.ages.push(t.ageDays);
         if ((t.priority || "").toLowerCase().indexOf("critical") > -1) d.critical++;
-        if (t.slaBreachedFR || t.slaBreachedRes) d.breaches++;
       }
       if (t.screenName) d.screens[t.screenName] = (d.screens[t.screenName] || 0) + 1;
     });
@@ -295,21 +383,45 @@ tr:hover td { background: rgba(5,150,105,.02) }
       d.avgAge = d.ages.length ? Math.round(d.ages.reduce(function (a, b) { return a + b; }, 0) / d.ages.length) : 0;
       d.avgRes = d.resTimes.length ? Math.round(d.resTimes.reduce(function (a, b) { return a + b; }, 0) / d.resTimes.length) : 0;
       d.topScreens = Object.keys(d.screens).sort(function (a, b) { return d.screens[b] - d.screens[a]; }).slice(0, 3);
+      // Trend: this month net vs last month net
+      d.tmNet = (d.moCreated[thisMo] || 0) - (d.moResolved[thisMo] || 0);
+      d.lmNet = (d.moCreated[lastMo] || 0) - (d.moResolved[lastMo] || 0);
+      d.trendDelta = d.tmNet - d.lmNet;
       return { name: name, d: d };
     }).sort(function (a, b) { return b.d.total - a.d.total; });
 
-    var h = '<div class="card"><div class="tbl-wrap"><table>' +
+    // Client health trend cards (top of tab)
+    var h = '<div class="card" style="padding:16px;margin-bottom:14px">';
+    h += '<h3 style="font-size:14px;font-weight:700;margin-bottom:10px">🏥 Client health trend — this month vs last</h3>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">';
+    list.filter(function (c) { return c.d.open >= 3; }).forEach(function (c) {
+      var d = c.d;
+      var arrow = d.trendDelta > 0 ? "▲" : d.trendDelta < 0 ? "▼" : "—";
+      var tColor = d.trendDelta > 2 ? "var(--rose)" : d.trendDelta > 0 ? "var(--amber)" : d.trendDelta < 0 ? "var(--em)" : "var(--faint)";
+      var bg = d.trendDelta > 2 ? "var(--rose-bg)" : d.trendDelta > 0 ? "var(--amber-bg)" : d.trendDelta < 0 ? "var(--em-bg)" : "var(--paper)";
+      h += '<div style="padding:10px 12px;background:' + bg + ';border-radius:8px;border:1px solid var(--line)">' +
+        '<div style="font-weight:700;font-size:12px">' + esc(c.name) + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px">' +
+        '<span class="mono" style="font-size:16px;font-weight:700">' + d.open + ' open</span>' +
+        '<span style="font-size:11px;color:' + tColor + ';font-weight:700">' + arrow + ' ' + Math.abs(d.trendDelta) + '</span></div>' +
+        '<div style="font-size:10px;color:var(--faint);margin-top:2px">Net this mo: ' + d.tmNet + ' · last: ' + d.lmNet + '</div></div>';
+    });
+    h += '</div></div>';
+
+    // Client table
+    h += '<div class="card"><div class="tbl-wrap"><table>' +
       '<thead><tr>' +
       '<th>Client / Project</th><th>Total</th><th>Open</th><th>Resolved</th>' +
-      '<th>Critical (open)</th><th>SLA breaches</th><th>Avg age (open)</th>' +
-      '<th>Avg resolution (days)</th><th>Top screens</th>' +
+      '<th>Critical (open)</th><th>Avg age (open)</th>' +
+      '<th>Avg resolution (days)</th><th>Trend</th><th>Top screens</th>' +
       '</tr></thead><tbody>';
 
     list.forEach(function (item) {
       var d = item.d;
       var critStyle = d.critical > 0 ? 'color:var(--rose);font-weight:700' : '';
-      var breachStyle = d.breaches > 0 ? 'color:var(--rose);font-weight:700' : '';
       var ageStyle = d.avgAge > 14 ? 'color:var(--amber);font-weight:700' : d.avgAge > 30 ? 'color:var(--rose);font-weight:700' : '';
+      var trendColor = d.trendDelta > 0 ? 'var(--rose)' : d.trendDelta < 0 ? 'var(--em)' : 'var(--faint)';
+      var trendArrow = d.trendDelta > 0 ? '▲' : d.trendDelta < 0 ? '▼' : '—';
 
       h += '<tr>' +
         '<td style="font-weight:700">' + esc(item.name) + '</td>' +
@@ -317,26 +429,26 @@ tr:hover td { background: rgba(5,150,105,.02) }
         '<td class="mono" style="color:var(--amber);font-weight:700">' + d.open + '</td>' +
         '<td class="mono" style="color:var(--em)">' + d.resolved + '</td>' +
         '<td class="mono" style="' + critStyle + '">' + d.critical + '</td>' +
-        '<td class="mono" style="' + breachStyle + '">' + d.breaches + '</td>' +
         '<td class="mono" style="' + ageStyle + '">' + d.avgAge + 'd</td>' +
         '<td class="mono">' + d.avgRes + 'd</td>' +
+        '<td class="mono" style="color:' + trendColor + ';font-weight:700">' + trendArrow + Math.abs(d.trendDelta) + '</td>' +
         '<td style="font-size:11px">' + d.topScreens.map(function (s) {
           return '<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:var(--paper);border:1px solid var(--line);font-size:9.5px;font-family:var(--mono);margin:1px">' + esc(s) + ' (' + d.screens[s] + ')</span>';
-        }).join(" ") + '</td>' +
-        '</tr>';
+        }).join(" ") + '</td></tr>';
     });
-
     h += '</tbody></table></div></div>';
     el("clientView").innerHTML = h;
   }
 
   /* ══════════════════════ WORKLOAD BALANCE ══════════════════════ */
+  /* FEATURE 5: Worker throughput — resolved this week + avg resolution days */
 
   function renderWorkload() {
+    var open = TK.filter(function (t) { return !t.isResolved; });
     var people = {};
-    TK.filter(function (t) { return !t.isResolved; }).forEach(function (t) {
+    open.forEach(function (t) {
       var name = t.worker || t.svm || "(unassigned)";
-      if (!people[name]) people[name] = { total: 0, critical: 0, high: 0, medium: 0, low: 0, breaches: 0, maxAge: 0, ages: [] };
+      if (!people[name]) people[name] = { total: 0, critical: 0, high: 0, medium: 0, low: 0, maxAge: 0, ages: [] };
       var d = people[name];
       d.total++;
       var p = (t.priority || "").toLowerCase();
@@ -344,11 +456,7 @@ tr:hover td { background: rgba(5,150,105,.02) }
       else if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) d.high++;
       else if (p.indexOf("medium") > -1) d.medium++;
       else d.low++;
-      if (t.slaBreachedFR || t.slaBreachedRes) d.breaches++;
-      if (t.ageDays != null) {
-        d.ages.push(t.ageDays);
-        if (t.ageDays > d.maxAge) d.maxAge = t.ageDays;
-      }
+      if (t.ageDays != null) { d.ages.push(t.ageDays); if (t.ageDays > d.maxAge) d.maxAge = t.ageDays; }
     });
 
     var list = Object.keys(people).map(function (name) {
@@ -357,48 +465,72 @@ tr:hover td { background: rgba(5,150,105,.02) }
       return { name: name, d: d };
     }).sort(function (a, b) { return b.d.total - a.d.total; });
 
-    var maxTotal = list.length ? list[0].d.total : 1;
+    // Throughput: resolved per person this week
+    var msDay = 86400000, msWeek = 7 * msDay;
+    var thisWS = new Date(NOW.getTime() - (NOW.getDay() || 7) * msDay); thisWS.setHours(0, 0, 0, 0);
+    var throughput = {};
+    TK.filter(function (t) { return t.isResolved; }).forEach(function (t) {
+      var w = t.svm || t.worker || "(unassigned)";
+      if (!throughput[w]) throughput[w] = { weekRes: 0, totalRes: 0, resTimes: [] };
+      throughput[w].totalRes++;
+      if (t.resolved >= thisWS) throughput[w].weekRes++;
+      if (t.created && t.resolved) throughput[w].resTimes.push((t.resolved - t.created) / 86400000);
+    });
 
-    // Heatmap: people × priority
-    var h = '<div class="card" style="padding:18px;margin-bottom:14px">' +
-      '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Workload heatmap — open tickets by assignee and priority</h3>';
+    var h = '';
 
-    h += '<div class="heat-grid" style="grid-template-columns:180px repeat(4, 1fr) 80px 80px 80px">';
-    // Header
+    // Throughput cards
+    h += '<div class="card" style="padding:18px;margin-bottom:14px">';
+    h += '<h3 style="font-size:14px;font-weight:700;margin-bottom:10px">⚡ Worker throughput — this week</h3>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">';
+    var tpList = Object.keys(throughput).map(function (w) {
+      var d = throughput[w];
+      d.avgRes = d.resTimes.length ? Math.round(d.resTimes.reduce(function (a, b) { return a + b; }, 0) / d.resTimes.length) : 0;
+      return { name: w, d: d };
+    }).sort(function (a, b) { return b.d.weekRes - a.d.weekRes; });
+
+    tpList.slice(0, 12).forEach(function (item) {
+      var d = item.d;
+      var openLoad = people[item.name] ? people[item.name].total : 0;
+      h += '<div style="padding:10px 12px;background:var(--paper);border-radius:8px;border:1px solid var(--line)">' +
+        '<div style="font-weight:700;font-size:12px">' + esc(item.name) + '</div>' +
+        '<div style="display:flex;gap:12px;margin-top:4px">' +
+        '<div><span class="mono" style="font-size:18px;font-weight:700;color:var(--em)">' + d.weekRes + '</span><div style="font-size:9px;color:var(--faint)">resolved</div></div>' +
+        '<div><span class="mono" style="font-size:18px;font-weight:700;color:var(--amber)">' + openLoad + '</span><div style="font-size:9px;color:var(--faint)">open</div></div>' +
+        '<div><span class="mono" style="font-size:18px;font-weight:700">' + d.avgRes + 'd</span><div style="font-size:9px;color:var(--faint)">avg res</div></div>' +
+        '</div></div>';
+    });
+    h += '</div></div>';
+
+    // Heatmap
+    h += '<div class="card" style="padding:18px;margin-bottom:14px">' +
+      '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Workload heatmap — open tickets by assignee × priority</h3>';
+    h += '<div class="heat-grid" style="grid-template-columns:180px repeat(4, 1fr) 80px 80px">';
     h += '<div class="heat-lbl" style="font-weight:700;color:var(--faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px">Assignee</div>';
     h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:#7C3AED">Critical</div>';
     h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:#E11D48">High</div>';
     h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:#D97706">Medium</div>';
     h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:#059669">Low</div>';
     h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:var(--faint)">Total</div>';
-    h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:var(--rose)">Breaches</div>';
     h += '<div style="text-align:center;font-size:9.5px;font-weight:700;color:var(--faint)">Avg age</div>';
 
     list.forEach(function (item) {
       var d = item.d;
-      function cellColor(val, maxV) {
-        if (!val) return "background:var(--paper);color:var(--faint)";
-        var intensity = Math.min(1, val / (maxV || 1));
-        return "background:rgba(5,150,105," + (0.08 + intensity * 0.25).toFixed(2) + ");color:var(--ink);font-weight:700";
-      }
       h += '<div class="heat-lbl">' + esc(item.name) + '</div>';
       h += '<div class="heat-cell" style="' + (d.critical ? 'background:rgba(124,58,237,.15);color:#7C3AED;font-weight:700' : 'background:var(--paper);color:var(--faint)') + '">' + d.critical + '</div>';
       h += '<div class="heat-cell" style="' + (d.high ? 'background:rgba(225,29,72,.1);color:#E11D48;font-weight:700' : 'background:var(--paper);color:var(--faint)') + '">' + d.high + '</div>';
       h += '<div class="heat-cell" style="' + (d.medium ? 'background:rgba(217,119,6,.1);color:#D97706;font-weight:700' : 'background:var(--paper);color:var(--faint)') + '">' + d.medium + '</div>';
       h += '<div class="heat-cell" style="' + (d.low ? 'background:rgba(5,150,105,.1);color:#059669;font-weight:700' : 'background:var(--paper);color:var(--faint)') + '">' + d.low + '</div>';
       h += '<div class="heat-cell" style="background:var(--paper);color:var(--ink);font-weight:700">' + d.total + '</div>';
-      h += '<div class="heat-cell" style="' + (d.breaches ? 'background:rgba(225,29,72,.12);color:var(--rose);font-weight:700' : 'background:var(--paper);color:var(--faint)') + '">' + d.breaches + '</div>';
       h += '<div class="heat-cell" style="' + (d.avgAge > 14 ? 'background:rgba(217,119,6,.12);color:var(--amber);font-weight:700' : 'background:var(--paper);color:var(--faint)') + '">' + d.avgAge + 'd</div>';
     });
     h += '</div></div>';
 
-    // Capacity bar chart
-    h += '<div class="card" style="padding:18px">' +
-      '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Load distribution</h3>';
-
+    // Load distribution bars
+    var maxTotal = list.length ? list[0].d.total : 1;
+    h += '<div class="card" style="padding:18px"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Load distribution</h3>';
     list.forEach(function (item) {
-      var d = item.d;
-      var w = (d.total / maxTotal * 100);
+      var d = item.d, w = d.total / maxTotal * 100;
       var cw = d.critical / d.total * 100, hw = d.high / d.total * 100, mw = d.medium / d.total * 100, lw = d.low / d.total * 100;
       h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
         '<span style="min-width:150px;max-width:150px;font-size:11.5px;font-weight:600;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(item.name) + '</span>' +
@@ -407,64 +539,87 @@ tr:hover td { background: rgba(5,150,105,.02) }
         (d.high ? '<div style="width:' + (hw * w / 100) + '%;background:linear-gradient(90deg,#E11D48,#FB7185);height:100%"></div>' : '') +
         (d.medium ? '<div style="width:' + (mw * w / 100) + '%;background:linear-gradient(90deg,#D97706,#FBBF24);height:100%"></div>' : '') +
         (d.low ? '<div style="width:' + (lw * w / 100) + '%;background:linear-gradient(90deg,#059669,#34D399);height:100%"></div>' : '') +
-        '</div>' +
-        '<span class="mono" style="min-width:50px;text-align:right;font-size:11px;font-weight:700">' + d.total + '</span>' +
-        '</div>';
+        '</div><span class="mono" style="min-width:50px;text-align:right;font-size:11px;font-weight:700">' + d.total + '</span></div>';
     });
     h += '</div>';
-
     el("workloadView").innerHTML = h;
   }
 
   /* ══════════════════════ HEALTH MONITOR ══════════════════════ */
+  /* FEATURE 4: Ping-pong tickets (10+ comments, still open) */
+  /* FEATURE 6: Critical aging (critical/high open sorted by age) */
 
   function renderHealth() {
     var open = TK.filter(function (t) { return !t.isResolved; });
+    var JIRA = "https://svmhelpdesk.atlassian.net/browse/";
     var h = '';
 
-    // SLA Breaches
-    var breached = open.filter(function (t) { return t.slaBreachedFR || t.slaBreachedRes; })
-      .sort(function (a, b) { return (b.ageDays || 0) - (a.ageDays || 0); });
+    // FEATURE 6: Critical aging — Critical + High open tickets sorted by age
+    var critAging = open.filter(function (t) {
+      var p = (t.priority || "").toLowerCase();
+      return p.indexOf("critical") > -1 || p.indexOf("high") > -1 || p.indexOf("urgent") > -1;
+    }).sort(function (a, b) { return (b.ageDays || 0) - (a.ageDays || 0); });
 
     h += '<div class="card" style="padding:18px;margin-bottom:14px">' +
-      '<h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--rose)">🚨 SLA breaches <span class="mono" style="font-size:13px">' + breached.length + '</span></h3>' +
-      '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Tickets where first response or resolution SLA has been breached</p>';
-
-    if (breached.length) {
-      h += '<div class="tbl-wrap" style="max-height:400px;overflow-y:auto"><table><thead><tr><th>Key</th><th>Summary</th><th>Priority</th><th>SVM</th><th>Age</th><th>Project</th><th>Status</th></tr></thead><tbody>';
-      breached.slice(0, 50).forEach(function (t) {
-        h += '<tr><td><a class="jkey" href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a></td>' +
+      '<h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--rose)">🔥 Critical & High priority aging <span class="mono" style="font-size:13px">' + critAging.length + '</span></h3>' +
+      '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Open critical/high tickets — oldest first. These need the most attention.</p>';
+    if (critAging.length) {
+      h += '<div class="tbl-wrap" style="max-height:400px;overflow-y:auto"><table><thead><tr><th>Key</th><th>Summary</th><th>Priority</th><th>Worker</th><th>Age</th><th>Screen</th><th>Project</th></tr></thead><tbody>';
+      critAging.slice(0, 50).forEach(function (t) {
+        var ageColor = t.ageDays > 30 ? 'var(--rose)' : t.ageDays > 14 ? 'var(--amber)' : 'var(--ink)';
+        h += '<tr><td><a class="jkey" href="' + JIRA + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a></td>' +
           '<td class="trunc" title="' + esc(t.summary) + '">' + esc(t.summary) + '</td>' +
           '<td>' + priBadge(t.priority) + '</td>' +
-          '<td style="font-size:11px">' + esc(t.svm || t.worker || "—") + '</td>' +
-          '<td class="mono" style="color:var(--rose);font-weight:700">' + (t.ageDays || 0) + 'd</td>' +
-          '<td style="font-size:11px">' + esc(t.project) + '</td>' +
-          '<td style="font-size:11px">' + esc(t.status) + '</td></tr>';
+          '<td style="font-size:11px">' + esc(t.worker || t.svm || "—") + '</td>' +
+          '<td class="mono" style="color:' + ageColor + ';font-weight:700">' + (t.ageDays || 0) + 'd</td>' +
+          '<td style="font-size:11px">' + esc(t.screenName || "—") + '</td>' +
+          '<td style="font-size:11px">' + esc(t.project) + '</td></tr>';
       });
       h += '</tbody></table></div>';
     } else {
-      h += '<div style="text-align:center;padding:20px;color:var(--em)">✓ No SLA breaches in open tickets</div>';
+      h += '<div style="text-align:center;padding:20px;color:var(--em)">✓ No critical/high tickets open</div>';
     }
     h += '</div>';
 
-    // Silent / stuck tickets (no update in 7+ days)
+    // FEATURE 4: Ping-pong tickets (10+ comments, still open)
+    var pingpong = open.filter(function (t) { return t.commentCount >= 10; })
+      .sort(function (a, b) { return b.commentCount - a.commentCount; });
+
+    h += '<div class="card" style="padding:18px;margin-bottom:14px">' +
+      '<h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--amber)">🏓 Ping-pong tickets <span class="mono" style="font-size:13px">' + pingpong.length + '</span></h3>' +
+      '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Open tickets with 10+ comments — likely miscommunication, may need a call</p>';
+    if (pingpong.length) {
+      h += '<div class="tbl-wrap" style="max-height:350px;overflow-y:auto"><table><thead><tr><th>Key</th><th>Summary</th><th>Comments</th><th>Age</th><th>Worker</th><th>Project</th></tr></thead><tbody>';
+      pingpong.slice(0, 30).forEach(function (t) {
+        h += '<tr><td><a class="jkey" href="' + JIRA + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a></td>' +
+          '<td class="trunc" title="' + esc(t.summary) + '">' + esc(t.summary) + '</td>' +
+          '<td class="mono" style="color:var(--amber);font-weight:700">' + t.commentCount + '</td>' +
+          '<td class="mono">' + (t.ageDays || 0) + 'd</td>' +
+          '<td style="font-size:11px">' + esc(t.worker || t.svm || "—") + '</td>' +
+          '<td style="font-size:11px">' + esc(t.project) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    } else {
+      h += '<div style="text-align:center;padding:20px;color:var(--em)">✓ No ping-pong tickets</div>';
+    }
+    h += '</div>';
+
+    // Silent tickets
     var silent = open.filter(function (t) { return t.daysSinceUpdate >= 7; })
       .sort(function (a, b) { return (b.daysSinceUpdate || 0) - (a.daysSinceUpdate || 0); });
 
     h += '<div class="card" style="padding:18px;margin-bottom:14px">' +
       '<h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--violet)">🔕 Silent tickets <span class="mono" style="font-size:13px">' + silent.length + '</span></h3>' +
       '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Open tickets with no update in 7+ days — may be stuck or forgotten</p>';
-
     if (silent.length) {
       h += '<div class="tbl-wrap" style="max-height:400px;overflow-y:auto"><table><thead><tr><th>Key</th><th>Summary</th><th>Priority</th><th>Worker</th><th>Days silent</th><th>Comments</th><th>Project</th></tr></thead><tbody>';
       silent.slice(0, 50).forEach(function (t) {
-        var silentDays = t.daysSinceUpdate || 0;
-        var silentColor = silentDays > 30 ? 'var(--rose)' : silentDays > 14 ? 'var(--amber)' : 'var(--violet)';
-        h += '<tr><td><a class="jkey" href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a></td>' +
+        var sC = t.daysSinceUpdate > 30 ? 'var(--rose)' : t.daysSinceUpdate > 14 ? 'var(--amber)' : 'var(--violet)';
+        h += '<tr><td><a class="jkey" href="' + JIRA + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a></td>' +
           '<td class="trunc" title="' + esc(t.summary) + '">' + esc(t.summary) + '</td>' +
           '<td>' + priBadge(t.priority) + '</td>' +
           '<td style="font-size:11px">' + esc(t.worker || t.svm || "—") + '</td>' +
-          '<td class="mono" style="color:' + silentColor + ';font-weight:700">' + silentDays + 'd</td>' +
+          '<td class="mono" style="color:' + sC + ';font-weight:700">' + (t.daysSinceUpdate || 0) + 'd</td>' +
           '<td class="mono">' + t.commentCount + '</td>' +
           '<td style="font-size:11px">' + esc(t.project) + '</td></tr>';
       });
@@ -478,42 +633,76 @@ tr:hover td { background: rgba(5,150,105,.02) }
     var ageBuckets = { "0–3d": 0, "4–7d": 0, "8–14d": 0, "15–30d": 0, "31–60d": 0, "60d+": 0 };
     open.forEach(function (t) {
       var a = t.ageDays || 0;
-      if (a <= 3) ageBuckets["0–3d"]++;
-      else if (a <= 7) ageBuckets["4–7d"]++;
-      else if (a <= 14) ageBuckets["8–14d"]++;
-      else if (a <= 30) ageBuckets["15–30d"]++;
-      else if (a <= 60) ageBuckets["31–60d"]++;
-      else ageBuckets["60d+"]++;
+      if (a <= 3) ageBuckets["0–3d"]++; else if (a <= 7) ageBuckets["4–7d"]++; else if (a <= 14) ageBuckets["8–14d"]++;
+      else if (a <= 30) ageBuckets["15–30d"]++; else if (a <= 60) ageBuckets["31–60d"]++; else ageBuckets["60d+"]++;
     });
     var maxBucket = Math.max.apply(null, Object.values(ageBuckets)) || 1;
-    var bucketColors = { "0–3d": "var(--em)", "4–7d": "#10B981", "8–14d": "var(--blue)", "15–30d": "var(--amber)", "31–60d": "#EA580C", "60d+": "var(--rose)" };
-
-    h += '<div class="card" style="padding:18px">' +
-      '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px">📅 Aging distribution — open tickets</h3>';
-    Object.keys(ageBuckets).forEach(function (bucket) {
-      var count = ageBuckets[bucket];
-      var w = count / maxBucket * 100;
+    var bColors = { "0–3d": "var(--em)", "4–7d": "#10B981", "8–14d": "var(--blue)", "15–30d": "var(--amber)", "31–60d": "#EA580C", "60d+": "var(--rose)" };
+    h += '<div class="card" style="padding:18px"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px">📅 Aging distribution — open tickets</h3>';
+    Object.keys(ageBuckets).forEach(function (bk) {
+      var c = ageBuckets[bk], w = c / maxBucket * 100;
       h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">' +
-        '<span class="mono" style="min-width:60px;font-size:11px;font-weight:600;color:var(--ink2)">' + bucket + '</span>' +
+        '<span class="mono" style="min-width:60px;font-size:11px;font-weight:600;color:var(--ink2)">' + bk + '</span>' +
         '<div style="flex:1;height:24px;border-radius:6px;background:var(--paper);overflow:hidden">' +
-        '<div style="width:' + w + '%;height:100%;background:' + bucketColors[bucket] + ';border-radius:6px;display:flex;align-items:center;padding-left:8px">' +
-        (w > 10 ? '<span class="mono" style="font-size:10px;font-weight:700;color:#fff">' + count + '</span>' : '') +
-        '</div></div>' +
-        (w <= 10 ? '<span class="mono" style="font-size:11px;font-weight:700;min-width:40px">' + count + '</span>' : '<span style="min-width:40px"></span>') +
-        '</div>';
+        '<div style="width:' + w + '%;height:100%;background:' + bColors[bk] + ';border-radius:6px;display:flex;align-items:center;padding-left:8px">' +
+        (w > 10 ? '<span class="mono" style="font-size:10px;font-weight:700;color:#fff">' + c + '</span>' : '') +
+        '</div></div>' + (w <= 10 ? '<span class="mono" style="font-size:11px;font-weight:700;min-width:40px">' + c + '</span>' : '<span style="min-width:40px"></span>') + '</div>';
     });
     h += '</div>';
-
     el("healthView").innerHTML = h;
   }
 
   /* ══════════════════════ RESOLUTION QUALITY ══════════════════════ */
+  /* FEATURE 3: Repeat screens — recurring issues month after month */
 
   function renderQuality() {
     var resolved = TK.filter(function (t) { return t.isResolved; });
+    var JIRA = "https://svmhelpdesk.atlassian.net/browse/";
     var h = '';
 
-    // Resolution rate by Screen Name
+    // FEATURE 3: Repeat screens — screens with 5+ tickets in 3+ consecutive months
+    var screenMonths = {};
+    TK.forEach(function (t) {
+      if (!t.screenName || !t.created) return;
+      var mk = t.created.getFullYear() + "-" + String(t.created.getMonth() + 1).padStart(2, "0");
+      var k = t.screenName;
+      if (!screenMonths[k]) screenMonths[k] = {};
+      screenMonths[k][mk] = (screenMonths[k][mk] || 0) + 1;
+    });
+
+    var repeatScreens = Object.keys(screenMonths).map(function (scr) {
+      var months = screenMonths[scr];
+      var sortedKeys = Object.keys(months).sort();
+      var streak = 0, maxStreak = 0, totalInStreak = 0;
+      for (var i = 0; i < sortedKeys.length; i++) {
+        if (months[sortedKeys[i]] >= 3) {
+          streak++;
+          if (streak > maxStreak) maxStreak = streak;
+        } else { streak = 0; }
+      }
+      var avgPerMonth = sortedKeys.length ? Math.round(Object.values(months).reduce(function (a, b) { return a + b; }, 0) / sortedKeys.length) : 0;
+      var totalAll = Object.values(months).reduce(function (a, b) { return a + b; }, 0);
+      return { screen: scr, maxStreak: maxStreak, months: sortedKeys.length, avgPerMonth: avgPerMonth, total: totalAll, lastThree: sortedKeys.slice(-3).map(function (k) { return months[k]; }) };
+    }).filter(function (s) { return s.maxStreak >= 3 && s.avgPerMonth >= 3; })
+      .sort(function (a, b) { return b.avgPerMonth - a.avgPerMonth; });
+
+    if (repeatScreens.length) {
+      h += '<div class="card" style="padding:18px;margin-bottom:14px;border-left:3px solid var(--amber)">' +
+        '<h3 style="font-size:14px;font-weight:700;margin-bottom:4px;color:var(--amber)">🔄 Repeat issue screens <span class="mono" style="font-size:13px">' + repeatScreens.length + '</span></h3>' +
+        '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Screens generating 3+ tickets per month for 3+ consecutive months — may need engineering fixes, not more support</p>';
+      h += '<div class="tbl-wrap"><table><thead><tr><th>Screen Name</th><th>Total tickets</th><th>Active months</th><th>Avg/month</th><th>Max streak</th><th>Last 3 months</th></tr></thead><tbody>';
+      repeatScreens.slice(0, 20).forEach(function (s) {
+        h += '<tr><td style="font-weight:700">' + esc(s.screen) + '</td>' +
+          '<td class="mono">' + s.total + '</td>' +
+          '<td class="mono">' + s.months + '</td>' +
+          '<td class="mono" style="color:var(--amber);font-weight:700">' + s.avgPerMonth + '</td>' +
+          '<td class="mono">' + s.maxStreak + ' mo</td>' +
+          '<td class="mono" style="font-size:10px">' + s.lastThree.join(" → ") + '</td></tr>';
+      });
+      h += '</tbody></table></div></div>';
+    }
+
+    // Resolution by screen name
     var screens = {};
     TK.forEach(function (t) {
       var s = t.screenName || "(no screen)";
@@ -526,35 +715,30 @@ tr:hover td { background: rgba(5,150,105,.02) }
       if (t.rootCause) screens[s].rootCauses[t.rootCause] = (screens[s].rootCauses[t.rootCause] || 0) + 1;
     });
 
-    var screenList = Object.keys(screens)
-      .filter(function (s) { return screens[s].total >= 5; })
+    var screenList = Object.keys(screens).filter(function (s) { return screens[s].total >= 5; })
       .map(function (s) {
         var d = screens[s];
         d.rate = pct(d.resolved, d.total);
         d.avgRes = d.resTimes.length ? Math.round(d.resTimes.reduce(function (a, b) { return a + b; }, 0) / d.resTimes.length) : 0;
         d.topCause = Object.keys(d.rootCauses).sort(function (a, b) { return d.rootCauses[b] - d.rootCauses[a]; })[0] || "—";
         return { name: s, d: d };
-      })
-      .sort(function (a, b) { return b.d.total - a.d.total; });
+      }).sort(function (a, b) { return b.d.total - a.d.total; });
 
     h += '<div class="card" style="padding:18px;margin-bottom:14px">' +
       '<h3 style="font-size:14px;font-weight:700;margin-bottom:4px">Resolution by screen name</h3>' +
-      '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Screens with 5+ tickets — resolution rate, avg time, and dominant root cause</p>';
-
+      '<p style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Screens with 5+ tickets</p>';
     h += '<div class="tbl-wrap"><table><thead><tr><th>Screen Name</th><th>Total</th><th>Resolved</th><th>Rate</th><th>Avg days</th><th>Top root cause</th></tr></thead><tbody>';
     screenList.slice(0, 40).forEach(function (item) {
       var d = item.d;
-      var rateColor = d.rate >= 80 ? 'var(--em)' : d.rate >= 50 ? 'var(--amber)' : 'var(--rose)';
+      var rC = d.rate >= 80 ? 'var(--em)' : d.rate >= 50 ? 'var(--amber)' : 'var(--rose)';
       h += '<tr><td style="font-weight:600">' + esc(item.name) + '</td>' +
-        '<td class="mono">' + d.total + '</td>' +
-        '<td class="mono" style="color:var(--em)">' + d.resolved + '</td>' +
-        '<td class="mono" style="color:' + rateColor + ';font-weight:700">' + d.rate + '%</td>' +
-        '<td class="mono">' + d.avgRes + 'd</td>' +
-        '<td style="font-size:11px">' + esc(d.topCause) + '</td></tr>';
+        '<td class="mono">' + d.total + '</td><td class="mono" style="color:var(--em)">' + d.resolved + '</td>' +
+        '<td class="mono" style="color:' + rC + ';font-weight:700">' + d.rate + '%</td>' +
+        '<td class="mono">' + d.avgRes + 'd</td><td style="font-size:11px">' + esc(d.topCause) + '</td></tr>';
     });
     h += '</tbody></table></div></div>';
 
-    // Root cause distribution (for resolved tickets)
+    // Root cause distribution
     var rcMap = {};
     resolved.forEach(function (t) {
       var rc = t.rootCause || "(no root cause)";
@@ -562,29 +746,22 @@ tr:hover td { background: rgba(5,150,105,.02) }
       rcMap[rc].total++;
       if (t.created && t.resolved) rcMap[rc].resTimes.push((t.resolved - t.created) / 86400000);
     });
-
     var rcList = Object.keys(rcMap).map(function (rc) {
-      var d = rcMap[rc];
-      d.avgRes = d.resTimes.length ? Math.round(d.resTimes.reduce(function (a, b) { return a + b; }, 0) / d.resTimes.length) : 0;
+      var d = rcMap[rc]; d.avgRes = d.resTimes.length ? Math.round(d.resTimes.reduce(function (a, b) { return a + b; }, 0) / d.resTimes.length) : 0;
       return { name: rc, d: d };
     }).sort(function (a, b) { return b.d.total - a.d.total; });
-
     var maxRC = rcList.length ? rcList[0].d.total : 1;
 
-    h += '<div class="card" style="padding:18px">' +
-      '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Root cause distribution (resolved tickets)</h3>';
+    h += '<div class="card" style="padding:18px"><h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Root cause distribution (resolved tickets)</h3>';
     rcList.slice(0, 15).forEach(function (item) {
-      var d = item.d;
-      var w = d.total / maxRC * 100;
+      var d = item.d, w = d.total / maxRC * 100;
       h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">' +
         '<span style="min-width:180px;max-width:180px;font-size:11px;font-weight:600;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(item.name) + '">' + esc(item.name) + '</span>' +
         '<div style="flex:1;height:20px;border-radius:5px;background:var(--paper);overflow:hidden">' +
         '<div style="width:' + w + '%;height:100%;background:linear-gradient(90deg,var(--em),#34D399);border-radius:5px"></div></div>' +
-        '<span class="mono" style="min-width:70px;text-align:right;font-size:10.5px">' + d.total + ' · ' + d.avgRes + 'd</span>' +
-        '</div>';
+        '<span class="mono" style="min-width:70px;text-align:right;font-size:10.5px">' + d.total + ' · ' + d.avgRes + 'd</span></div>';
     });
     h += '</div>';
-
     el("qualityView").innerHTML = h;
   }
 
