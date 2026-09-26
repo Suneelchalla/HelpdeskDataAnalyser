@@ -109,6 +109,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 .flow.ch{stroke:var(--violet);filter:drop-shadow(0 0 4px var(--violet-glow))}
 .flow.re{stroke:var(--rose);filter:drop-shadow(0 0 4px var(--rose-glow))}
 .flow.cl{stroke:#0891B2;filter:drop-shadow(0 0 4px rgba(8,145,178,.35))}
+.flow.op{stroke:#059669;filter:drop-shadow(0 0 4px rgba(5,150,105,.35))}
 @keyframes march{to{stroke-dashoffset:-42}}
 
 .source{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh);overflow:hidden}
@@ -138,7 +139,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 
 .fork{height:36px}
 
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative;z-index:2}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;position:relative;z-index:2}
 .card{position:relative;display:block;border-radius:18px;padding:16px 18px 14px;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);transition:transform .2s,box-shadow .25s,border-color .2s,opacity .35s,filter .35s}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .35s,box-shadow .35s}
 .card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
@@ -179,6 +180,10 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 .cards:not(.locked) .card.cl::after{background:#0891B2;box-shadow:0 0 14px rgba(8,145,178,.3)}
 .cards:not(.locked) .card.cl .badge{background:#ECFEFF;border-color:#A5F3FC}
 .cards:not(.locked) .card.cl .go{color:#0891B2}
+.cards:not(.locked) .card.op{border-color:#A7F3D0}
+.cards:not(.locked) .card.op::after{background:#059669;box-shadow:0 0 14px rgba(5,150,105,.3)}
+.cards:not(.locked) .card.op .badge{background:#ECFDF5;border-color:#A7F3D0}
+.cards:not(.locked) .card.op .go{color:#059669}
 .cards:not(.locked) .card:hover{transform:translateY(-4px);box-shadow:var(--sh2)}
 .cards:not(.locked) .card:hover .go .ar{transform:translateX(4px)}
 
@@ -203,6 +208,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
   .shell{height:auto;min-height:100vh}
   .main{grid-template-columns:1fr;gap:26px}
   .fork{height:40px}
+  .cards{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-height:660px) and (min-width:901px){
   body{overflow:auto}.shell{height:auto;min-height:100vh}
@@ -369,8 +375,8 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
     <!-- left hero -->
     <div class="rise d1">
       <div class="eyebrow">SVM Help Desk · analytics</div>
-      <h1>One export.<br><span class="two">Six lenses.</span></h1>
-      <p class="lead">Fetch live from Jira or drop an export — one source powers every dashboard: the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries, the <b style="color:var(--violet);font-weight:600">Change Tracker</b> for the change pipeline, the <b style="color:var(--rose);font-weight:600">Release Tracker</b> for delivery, and the <b style="color:#0891B2;font-weight:600">Clarification Module</b> for similar-ticket matching. Right-click a card to open it in its own tab.</p>
+      <h1>One export.<br><span class="two">Eight lenses.</span></h1>
+      <p class="lead">Fetch live from Jira or drop an export — one source powers every dashboard: the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries, the <b style="color:var(--violet);font-weight:600">Change Tracker</b> for the change pipeline, the <b style="color:var(--rose);font-weight:600">Release Tracker</b> for delivery, the <b style="color:#0891B2;font-weight:600">Clarification Module</b> for similar-ticket matching, and <b style="color:#059669;font-weight:600">Operations Intelligence</b> for team-lead insights. Right-click a card to open it in its own tab.</p>
     </div>
 
     <!-- right stage -->
@@ -388,6 +394,8 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
         <path class="flow re" id="flowRE"></path>
         <path class="track" id="trackCL"></path>
         <path class="flow cl" id="flowCL"></path>
+        <path class="track" id="trackOP"></path>
+        <path class="flow op" id="flowOP"></path>
       </svg>
 
       <div class="source" id="sourceNode">
@@ -488,6 +496,13 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
           <h2>Clarification Module</h2>
           <p>Similar-ticket matching: finds past cases for new issues, links incidents to changes, and surfaces root causes and solutions — clustered by theme.</p>
           <div class="feat"><span>Similarity</span><span>Clusters</span><span>Inc↔Change</span><span>Search</span><span>Solutions</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
+        <a class="card op" id="cardOP" href="ops.html">
+          <div class="top"><div class="badge">📊</div><span class="go">Open <span class="ar">→</span></span></div>
+          <h2>Operations Intelligence</h2>
+          <p>Client profiles, workload heatmap, SLA breach monitor, silent ticket detection, and resolution quality — the team lead's cockpit.</p>
+          <div class="feat"><span>Client intel</span><span>Workload</span><span>SLA</span><span>Silent tickets</span><span>Quality</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
       </div>
@@ -791,7 +806,7 @@ function buildBackdrop(){
 
 /* ── connective wires ── */
 function drawWires(){
-  var stage=el("stage"),src=el("sourceNode"),fu=el("cardFU"),tr=el("cardTR"),wr=el("cardWR"),ch=el("cardCH"),re=el("cardRE"),cl=el("cardCL"),svg=el("wires");
+  var stage=el("stage"),src=el("sourceNode"),fu=el("cardFU"),tr=el("cardTR"),wr=el("cardWR"),ch=el("cardCH"),re=el("cardRE"),cl=el("cardCL"),op=el("cardOP"),svg=el("wires");
   if(!stage||!src||!fu||!tr) return;
   var sr=stage.getBoundingClientRect();
   svg.setAttribute("viewBox","0 0 "+sr.width+" "+sr.height);
@@ -806,6 +821,7 @@ function drawWires(){
   if(ch){ var pCH=pathTo(ch.getBoundingClientRect()); el("trackCH").setAttribute("d",pCH); el("flowCH").setAttribute("d",pCH); }
   if(re){ var pRE=pathTo(re.getBoundingClientRect()); el("trackRE").setAttribute("d",pRE); el("flowRE").setAttribute("d",pRE); }
   if(cl){ var pCL=pathTo(cl.getBoundingClientRect()); el("trackCL").setAttribute("d",pCL); el("flowCL").setAttribute("d",pCL); }
+  if(op){ var pOP=pathTo(op.getBoundingClientRect()); el("trackOP").setAttribute("d",pOP); el("flowOP").setAttribute("d",pOP); }
 }
 function relayout(){ buildBackdrop(); drawWires(); }
 window.addEventListener("resize", relayout);
