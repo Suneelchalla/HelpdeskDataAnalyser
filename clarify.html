@@ -4,771 +4,1541 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HD Clarification Module</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230891B2'/%3E%3Ccircle cx='15' cy='14' r='6' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M19.5 18.5L24 23' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M12 22h6' stroke='white' stroke-width='1.8' stroke-linecap='round' opacity='.5'/%3E%3Cpath d='M10 25h10' stroke='white' stroke-width='1.8' stroke-linecap='round' opacity='.5'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230891B2'/%3E%3Ccircle cx='15' cy='14' r='6' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M19.5 18.5L24 23' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#EEF1F4;--paper:#F6F8FA;--card:#FFFFFF;
-  --ink:#111A2B;--ink2:#3E4C63;--muted:#6B7A90;--faint:#9AA7B8;--line:#E3E8EE;--line2:#D2DAE3;
-  --cy:#0891B2;--cy2:#06B6D4;--cy-soft:#CFFAFE;--cy-bg:#ECFEFF;--cy-line:#A5F3FC;--cy-glow:rgba(8,145,178,.25);
-  --green:#059669;--green-bg:#ECFDF5;--green-soft:#A7F3D0;
-  --amber:#D97706;--amber-bg:#FEF7EC;--amber-soft:#FDE68A;--amber-line:#FCD34D;
-  --rose:#E11D48;--rose-bg:#FFF1F2;--rose-soft:#FECDD3;
-  --violet:#7C3AED;--violet-bg:#F5F3FF;--violet-soft:#DDD6FE;
-  --indigo:#4F46E5;--indigo-bg:#EEF2FF;--indigo-soft:#C7D2FE;
-  --r:12px;--r2:16px;
-  --disp:'Space Grotesk',sans-serif;--sans:'Inter',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace;
-  --sh:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.04);
-  --sh2:0 6px 18px rgba(16,24,40,.09),0 2px 6px rgba(16,24,40,.05);
-  --sh3:0 24px 60px rgba(16,24,40,.18);
+:root {
+  --bg: #EEF1F4; --paper: #F6F8FA; --card: #FFFFFF;
+  --ink: #111A2B; --ink2: #3E4C63; --muted: #6B7A90; --faint: #9AA7B8;
+  --line: #E3E8EE; --line2: #D2DAE3;
+  --cy: #0891B2; --cy2: #06B6D4; --cy-soft: #CFFAFE; --cy-bg: #ECFEFF;
+  --cy-line: #A5F3FC; --cy-glow: rgba(8,145,178,.25);
+  --green: #059669; --green-bg: #ECFDF5; --green-soft: #A7F3D0;
+  --amber: #D97706; --amber-bg: #FEF7EC; --amber-soft: #FDE68A;
+  --rose: #E11D48; --rose-bg: #FFF1F2; --rose-soft: #FECDD3;
+  --violet: #7C3AED; --violet-bg: #F5F3FF; --violet-soft: #DDD6FE;
+  --indigo: #4F46E5; --indigo-bg: #EEF2FF; --indigo-soft: #C7D2FE;
+  --blue: #2563EB; --blue-bg: #EFF6FF;
+  --r: 12px; --r2: 16px;
+  --disp: 'Space Grotesk', sans-serif;
+  --sans: 'Inter', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --sh: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+  --sh2: 0 6px 18px rgba(16,24,40,.09), 0 2px 6px rgba(16,24,40,.05);
 }
-*{margin:0;padding:0;box-sizing:border-box}
-html{font-size:14px}
-body{background:var(--bg);font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh}
-::selection{background:var(--cy);color:#fff}
-::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}::-webkit-scrollbar-thumb:hover{background:var(--faint)}
-button{cursor:pointer;font-family:inherit;transition:all .18s;border:none;background:none}button:active{transform:translateY(1px)}
-a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
-input[type=file]{display:none}
-h1,h2,h3,.disp{font-family:var(--disp)}
-.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-.hidden{display:none!important}
-@keyframes up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.up{animation:up .5s cubic-bezier(.22,1,.36,1) both}
-.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.16s}
-@media(prefers-reduced-motion:reduce){.up{animation:none!important}}
+* { margin: 0; padding: 0; box-sizing: border-box }
+html { font-size: 14px }
+body { background: var(--bg); font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased; min-height: 100vh }
+::selection { background: var(--cy); color: #fff }
+::-webkit-scrollbar { width: 7px; height: 7px }
+::-webkit-scrollbar-track { background: transparent }
+::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 9px }
+button { cursor: pointer; font-family: inherit; transition: all .18s; border: none; background: none }
+button:active { transform: translateY(1px) }
+a { color: var(--cy); text-decoration: none }
+a:hover { text-decoration: underline }
+h1, h2, h3, .disp { font-family: var(--disp) }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.hidden { display: none !important }
+@keyframes up { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+.up { animation: up .5s cubic-bezier(.22,1,.36,1) both }
+.d1 { animation-delay: .05s } .d2 { animation-delay: .1s } .d3 { animation-delay: .16s }
+@media (prefers-reduced-motion: reduce) { .up { animation: none !important } }
 
 /* ═══ LANDING ═══ */
-.landing{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:30px;text-align:center}
-.landing-inner{max-width:440px}
-.landing .ico{font-size:48px;margin-bottom:16px}
-.landing h1{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px}
-.landing p{color:var(--ink2);font-size:13.5px;line-height:1.6;margin-bottom:22px}
-.landing .btn{display:inline-flex;align-items:center;gap:8px;background:var(--cy);color:#fff;padding:11px 22px;border-radius:10px;font-family:var(--disp);font-weight:600;font-size:13.5px;box-shadow:0 4px 14px var(--cy-glow)}
-.landing .btn:hover{filter:brightness(1.08)}
-
-/* ═══ WRAP ═══ */
-.wrap{max-width:1440px;margin:0 auto;padding:16px 22px 60px}
+.landing { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 30px; text-align: center }
+.landing-inner { max-width: 440px }
+.landing .ico { font-size: 48px; margin-bottom: 16px }
+.landing h1 { font-size: 26px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 8px }
+.landing p { color: var(--ink2); font-size: 13.5px; line-height: 1.6; margin-bottom: 22px }
+.landing .lbtn { display: inline-flex; align-items: center; gap: 8px; background: var(--cy); color: #fff; padding: 11px 22px; border-radius: 10px; font-family: var(--disp); font-weight: 600; font-size: 13.5px }
+.wrap { max-width: 1440px; margin: 0 auto; padding: 16px 22px 60px }
 
 /* ═══ TOPBAR ═══ */
-.topbar{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
-.topbar h1{font-size:20px;font-weight:700;letter-spacing:-.4px;display:flex;align-items:center;gap:10px;white-space:nowrap}
-.topbar h1 .accent{color:var(--cy)}
-.topbar .spacer{flex:1}
-.topbar .meta{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
-.back-link{font-size:12px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
-.back-link:hover{color:var(--ink);text-decoration:none}
+.topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap }
+.topbar h1 { font-size: 20px; font-weight: 700; letter-spacing: -.4px; display: flex; align-items: center; gap: 10px; white-space: nowrap }
+.topbar h1 .accent { color: var(--cy) }
+.topbar .spacer { flex: 1 }
+.back-link { font-size: 12px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 5px }
+.back-link:hover { color: var(--ink); text-decoration: none }
 
-/* ═══ SEARCH BAR ═══ */
-.search-wrap{position:relative;flex:1;min-width:280px;max-width:600px}
-.search-input{width:100%;padding:11px 16px 11px 40px;border:1.5px solid var(--line2);border-radius:12px;font-size:13.5px;font-family:var(--sans);color:var(--ink);background:var(--card);transition:border-color .2s,box-shadow .2s;box-shadow:var(--sh)}
-.search-input:focus{outline:none;border-color:var(--cy);box-shadow:0 0 0 3px var(--cy-glow)}
-.search-input::placeholder{color:var(--faint)}
-.search-ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--faint);font-size:16px;pointer-events:none}
-.search-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:6px;color:var(--muted);font-size:14px;display:none;align-items:center;justify-content:center}
-.search-clear:hover{background:var(--paper);color:var(--ink)}
-.search-wrap.has-query .search-clear{display:flex}
+/* ═══ SEARCH ═══ */
+.search-wrap { position: relative; flex: 1; min-width: 260px; max-width: 560px }
+.search-input { width: 100%; padding: 11px 16px 11px 40px; border: 1.5px solid var(--line2); border-radius: 12px; font-size: 13.5px; font-family: var(--sans); color: var(--ink); background: var(--card); transition: border-color .2s, box-shadow .2s; box-shadow: var(--sh) }
+.search-input:focus { outline: none; border-color: var(--cy); box-shadow: 0 0 0 3px var(--cy-glow) }
+.search-input::placeholder { color: var(--faint) }
+.search-ico { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 16px; pointer-events: none }
+.search-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 6px; color: var(--muted); font-size: 14px; display: none; align-items: center; justify-content: center }
+.search-clear:hover { background: var(--paper); color: var(--ink) }
+.search-wrap.has-q .search-clear { display: flex }
+
+/* ═══ STATS DASHBOARD ═══ */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; margin-bottom: 16px }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; box-shadow: var(--sh) }
+.stat .num { font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: -.5px }
+.stat .lbl { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px }
+.stat .sub { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 4px }
+.stat.cy .num { color: var(--cy) }
+.stat.green .num { color: var(--green) }
+.stat.amber .num { color: var(--amber) }
+.stat.rose .num { color: var(--rose) }
+.stat.indigo .num { color: var(--indigo) }
+.stat.blue .num { color: var(--blue) }
+.minibar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; margin-top: 6px; background: var(--line) }
+.minibar span { display: block; height: 100% }
 
 /* ═══ TABS ═══ */
-.tabs{display:flex;gap:6px;margin-bottom:16px}
-.tab{padding:9px 16px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink2);font-family:var(--disp);font-weight:600;font-size:12.5px;display:inline-flex;align-items:center;gap:7px;box-shadow:var(--sh)}
-.tab:hover{border-color:var(--muted);color:var(--ink)}
-.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.tab .cnt{font-family:var(--mono);font-size:10px;font-weight:700;background:rgba(0,0,0,.06);border-radius:20px;padding:1px 8px}
-.tab.on .cnt{background:rgba(255,255,255,.2)}
+.tabs { display: flex; gap: 6px; margin-bottom: 14px }
+.tab { padding: 9px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink2); font-family: var(--disp); font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; box-shadow: var(--sh) }
+.tab:hover { border-color: var(--muted); color: var(--ink) }
+.tab.on { background: var(--ink); color: #fff; border-color: var(--ink) }
+.tab .cnt { font-family: var(--mono); font-size: 10px; font-weight: 700; background: rgba(0,0,0,.06); border-radius: 20px; padding: 1px 8px }
+.tab.on .cnt { background: rgba(255,255,255,.2) }
 
 /* ═══ FILTERS ═══ */
-.filters{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.filter-chip{padding:7px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--paper);color:var(--ink2);font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
-.filter-chip.on{background:var(--cy-bg);border-color:var(--cy-line);color:var(--cy)}
-.filter-label{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
-.filter-select{padding:7px 28px 7px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--paper);color:var(--ink);font-size:11.5px;font-weight:600;font-family:var(--sans);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer;outline:none}
+.filters { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap }
+.flbl { font-size: 9.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; margin-right: 2px }
+.fchip { padding: 6px 11px; border: 1px solid var(--line2); border-radius: 7px; background: var(--paper); color: var(--ink2); font-size: 11px; font-weight: 600 }
+.fchip.on { background: var(--cy-bg); border-color: var(--cy-line); color: var(--cy) }
+.fchip.inc.on { background: var(--blue-bg); border-color: #BFDBFE; color: var(--blue) }
+.fchip.sr.on { background: var(--amber-bg); border-color: var(--amber-soft); color: var(--amber) }
+.fchip.chg.on { background: var(--indigo-bg); border-color: var(--indigo-soft); color: var(--indigo) }
+.fsel { padding: 6px 26px 6px 9px; border: 1px solid var(--line2); border-radius: 7px; background: var(--paper); color: var(--ink); font-size: 11px; font-weight: 600; font-family: var(--sans); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 7px center; cursor: pointer; outline: none }
+.fdiv { width: 1px; height: 20px; background: var(--line2); margin: 0 4px }
 
 /* ═══ TICKET CARDS ═══ */
-.queue-list{display:flex;flex-direction:column;gap:12px}
-.tcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh);overflow:hidden;transition:box-shadow .25s}
-.tcard:hover{box-shadow:var(--sh2)}
-.tcard-top{padding:14px 18px 12px;display:flex;gap:14px;align-items:flex-start}
-.tcard-main{flex:1;min-width:0}
-.tcard-key{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--cy);margin-bottom:3px;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
-.tcard-key a{color:var(--cy)}
-.status-pill{font-family:var(--mono);font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.3px}
-.pill-analysis{background:#DBEAFE;color:#1D4ED8}
-.pill-ack{background:#FEF3C7;color:#92400E}
-.pill-resolved{background:var(--green-bg);color:var(--green)}
-.pill-closed{background:var(--paper);color:var(--faint)}
-.pill-other{background:var(--paper);color:var(--muted)}
-.pill-change{background:var(--indigo-bg);color:var(--indigo);border:1px solid var(--indigo-soft)}
-.tcard-summary{font-size:14px;font-weight:600;color:var(--ink);line-height:1.45;margin-bottom:8px}
-.tcard-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted)}
-.tcard-meta b{color:var(--ink2);font-weight:600}
-.tcard-right{flex-shrink:0;text-align:right}
-.tcard-priority{font-family:var(--mono);font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;text-transform:uppercase}
-.pri-critical{background:#F3E8FF;color:#7C3AED}.pri-high{background:#FFF1F2;color:#E11D48}
-.pri-medium{background:#FEF3C7;color:#92400E}.pri-low{background:var(--green-bg);color:var(--green)}
-.pri-default{background:var(--paper);color:var(--muted)}
-.tcard-date{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:4px}
+.queue-list { display: flex; flex-direction: column; gap: 10px }
+.tcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); overflow: hidden }
+.tcard-top { padding: 12px 16px 10px; display: flex; gap: 12px; align-items: flex-start }
+.tcard-main { flex: 1; min-width: 0 }
+.tcard-key { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--cy); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px }
+.tcard-key a { color: var(--cy) }
+
+/* status & type pills */
+.pill { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: .2px }
+.pill-as { background: #DBEAFE; color: #1D4ED8 }
+.pill-ack { background: #FEF3C7; color: #92400E }
+.pill-open { background: #E0E7FF; color: #4338CA }
+.pill-res { background: var(--green-bg); color: var(--green) }
+.pill-oth { background: var(--paper); color: var(--muted) }
+.pill-inc { background: var(--blue-bg); color: var(--blue) }
+.pill-sr { background: var(--amber-bg); color: var(--amber) }
+.pill-chg { background: var(--indigo-bg); color: var(--indigo) }
+
+.tcard-sum { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.4; margin-bottom: 6px }
+.tcard-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted) }
+.tcard-meta b { color: var(--ink2); font-weight: 600 }
+.tcard-r { flex-shrink: 0; text-align: right }
+.tcard-pri { font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 3px 7px; border-radius: 5px; text-transform: uppercase }
+.pri-c { background: #F3E8FF; color: #7C3AED }
+.pri-h { background: #FFF1F2; color: #E11D48 }
+.pri-m { background: #FEF3C7; color: #92400E }
+.pri-l { background: var(--green-bg); color: var(--green) }
+.pri-d { background: var(--paper); color: var(--muted) }
+.tcard-date { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 3px }
 
 /* ═══ CONFIDENCE TIERS ═══ */
-.tier-badge{font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
-.tier-sure{background:var(--green-bg);color:var(--green);border:1px solid var(--green-soft)}
-.tier-likely{background:var(--cy-bg);color:var(--cy);border:1px solid var(--cy-line)}
-.tier-assumption{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-soft)}
+.tier { font-family: var(--mono); font-size: 8.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .2px }
+.tier-s { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-soft) }
+.tier-l { background: var(--cy-bg); color: var(--cy); border: 1px solid var(--cy-line) }
+.tier-a { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-soft) }
 
-/* ═══ SIMILAR MATCHES SECTION ═══ */
-.sim-section{border-top:1px solid var(--line)}
-.sim-toggle{display:flex;align-items:center;gap:8px;padding:8px 18px;cursor:pointer;user-select:none;transition:background .15s}
-.sim-toggle:hover{background:var(--paper)}
-.sim-toggle .sim-label{font-family:var(--disp);font-size:12px;font-weight:600;color:var(--ink2)}
-.sim-toggle .sim-count{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--cy-bg);color:var(--cy);border:1px solid var(--cy-line);padding:1px 7px;border-radius:20px}
-.sim-toggle .chg-count{font-family:var(--mono);font-size:10px;font-weight:700;background:var(--indigo-bg);color:var(--indigo);border:1px solid var(--indigo-soft);padding:1px 7px;border-radius:20px}
-.sim-toggle .sim-arrow{color:var(--faint);font-size:12px;margin-left:auto;transition:transform .2s}
-.sim-toggle.open .sim-arrow{transform:rotate(180deg)}
-.sim-body{display:none;border-top:1px solid var(--line);background:var(--paper)}
-.sim-body.open{display:block}
-.sim-empty{padding:16px;text-align:center;color:var(--muted);font-size:12px}
+/* ═══ SIMILARITY SECTION ═══ */
+.sim-section { border-top: 1px solid var(--line) }
+.sim-tog { display: flex; align-items: center; gap: 8px; padding: 7px 16px; cursor: pointer; user-select: none; transition: background .12s }
+.sim-tog:hover { background: var(--paper) }
+.sim-tog .sl { font-family: var(--disp); font-size: 11.5px; font-weight: 600; color: var(--ink2) }
+.sim-tog .sc { font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 20px }
+.sc-m { background: var(--cy-bg); color: var(--cy); border: 1px solid var(--cy-line) }
+.sc-c { background: var(--indigo-bg); color: var(--indigo); border: 1px solid var(--indigo-soft) }
+.sim-tog .sa { color: var(--faint); font-size: 11px; margin-left: auto; transition: transform .2s }
+.sim-tog.open .sa { transform: rotate(180deg) }
+.sim-body { display: none; border-top: 1px solid var(--line); background: var(--paper) }
+.sim-body.open { display: block }
+.sim-empty { padding: 14px; text-align: center; color: var(--muted); font-size: 12px }
+.sim-div { padding: 5px 16px; font-family: var(--disp); font-size: 10.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; background: var(--line) }
 
-.sim-row{display:flex;gap:12px;padding:10px 18px;border-bottom:1px solid var(--line);align-items:flex-start;transition:background .12s}
-.sim-row:last-child{border-bottom:none}
-.sim-row:hover{background:rgba(8,145,178,.04)}
-.sim-row.is-change{border-left:3px solid var(--indigo)}
-.sim-score{flex-shrink:0;width:44px;height:44px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:700;gap:1px}
-.score-high{background:var(--green-bg);color:var(--green);border:1px solid var(--green-soft)}
-.score-med{background:var(--cy-bg);color:var(--cy);border:1px solid var(--cy-line)}
-.score-low{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
-.sim-info{flex:1;min-width:0}
-.sim-key{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--cy);display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
-.sim-summary{font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.4;margin:2px 0 5px}
-.sim-reasons{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px}
-.reason-tag{font-family:var(--mono);font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px}
-.reason-screen{background:#DBEAFE;color:#1D4ED8}
-.reason-menu{background:#F3E8FF;color:#7C3AED}
-.reason-rc{background:#FEF3C7;color:#92400E}
-.reason-comp{background:#ECFDF5;color:#059669}
-.reason-text{background:var(--cy-bg);color:var(--cy)}
-.reason-label{background:#FDF2F8;color:#DB2777}
-.reason-link{background:var(--indigo-bg);color:var(--indigo)}
-.reason-time{background:#FFF7ED;color:#C2410C}
-.sim-tags{display:flex;flex-wrap:wrap;gap:4px}
-.sim-tag{font-family:var(--mono);font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
-.sim-tag.rc{background:#FEF3C7;border-color:#FDE68A;color:#92400E}
-.sim-tag.fix{background:var(--green-bg);border-color:var(--green-soft);color:var(--green)}
-.sim-solution{margin-top:6px;font-size:11.5px;color:var(--ink2);line-height:1.5;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
-.sim-solution b{color:var(--ink);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+/* similar match rows */
+.sim-row { display: flex; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line); align-items: flex-start }
+.sim-row:last-child { border-bottom: none }
+.sim-row:hover { background: rgba(8,145,178,.03) }
+.sim-row.is-chg { border-left: 3px solid var(--indigo) }
+.sim-sc { flex-shrink: 0; width: 40px; height: 40px; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 700 }
+.sc-h { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-soft) }
+.sc-md { background: var(--cy-bg); color: var(--cy); border: 1px solid var(--cy-line) }
+.sc-lo { background: var(--paper); color: var(--muted); border: 1px solid var(--line) }
+.sim-i { flex: 1; min-width: 0 }
+.sim-k { font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--cy); display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap }
+.sim-s { font-size: 12px; font-weight: 600; color: var(--ink); line-height: 1.35; margin: 2px 0 4px }
+.sim-rs { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px }
 
-/* section dividers inside match panel */
-.sim-divider{padding:6px 18px;font-family:var(--disp);font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;background:var(--line);display:flex;align-items:center;gap:8px}
-.sim-divider::after{content:"";flex:1;height:1px;background:var(--line2)}
+/* match reason tags */
+.rtag { font-family: var(--mono); font-size: 8.5px; font-weight: 600; padding: 1px 5px; border-radius: 3px }
+.r-scr { background: #DBEAFE; color: #1D4ED8 }
+.r-menu { background: #F3E8FF; color: #7C3AED }
+.r-rc { background: #FEF3C7; color: #92400E }
+.r-comp { background: #ECFDF5; color: #059669 }
+.r-txt { background: var(--cy-bg); color: var(--cy) }
+.r-lnk { background: var(--indigo-bg); color: var(--indigo) }
+.r-time { background: #FFF7ED; color: #C2410C }
+.r-lbl { background: #FDF2F8; color: #DB2777 }
+
+/* solution block inside match row */
+.sim-sol { margin-top: 5px; font-size: 11px; color: var(--ink2); line-height: 1.5; background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px }
+.sim-sol b { color: var(--ink); font-weight: 700; font-size: 9.5px; text-transform: uppercase; letter-spacing: .2px }
+.stag { font-family: var(--mono); font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: var(--paper); border: 1px solid var(--line); color: var(--muted) }
+.stag.rc { background: #FEF3C7; border-color: #FDE68A; color: #92400E }
+.stag.fx { background: var(--green-bg); border-color: var(--green-soft); color: var(--green) }
 
 /* ═══ CLUSTERS ═══ */
-.cluster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
-.ccard{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh);overflow:hidden;transition:box-shadow .25s}
-.ccard:hover{box-shadow:var(--sh2)}
-.ccard-head{padding:14px 18px 12px}
-.ccard-theme{font-family:var(--disp);font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;margin-bottom:6px}
-.ccard-stats{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);margin-bottom:10px;flex-wrap:wrap}
-.ccard-stats .num{font-family:var(--mono);font-weight:700;color:var(--cy)}
-.ccard-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-bottom:10px}
-.ccard-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--cy),var(--green))}
-.ccard-detail{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--ink2)}
-.ccard-detail b{font-weight:700;color:var(--ink)}
-.ccard-expand{display:flex;align-items:center;gap:6px;padding:10px 18px;border-top:1px solid var(--line);font-family:var(--disp);font-size:12px;font-weight:600;color:var(--cy);cursor:pointer;transition:background .12s;width:100%;justify-content:center}
-.ccard-expand:hover{background:var(--cy-bg)}
-.ccard-body{display:none;border-top:1px solid var(--line);background:var(--paper);max-height:400px;overflow-y:auto}
-.ccard-body.open{display:block}
+.cl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px }
+.ccard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); overflow: hidden }
+.ccard-h { padding: 12px 16px 10px }
+.ccard-t { font-family: var(--disp); font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.3; margin-bottom: 5px }
+.ccard-st { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap }
+.ccard-st .n { font-family: var(--mono); font-weight: 700; color: var(--cy) }
+.ccard-bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-bottom: 8px }
+.ccard-bf { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cy), var(--green)) }
+.ccard-d { display: flex; flex-wrap: wrap; gap: 3px 8px; font-size: 10.5px; color: var(--ink2) }
+.ccard-d b { font-weight: 700; color: var(--ink) }
+.ccard-x { display: flex; align-items: center; gap: 6px; padding: 9px 16px; border-top: 1px solid var(--line); font-family: var(--disp); font-size: 11.5px; font-weight: 600; color: var(--cy); cursor: pointer; width: 100%; justify-content: center }
+.ccard-x:hover { background: var(--cy-bg) }
+.ccard-b { display: none; border-top: 1px solid var(--line); background: var(--paper); max-height: 380px; overflow-y: auto }
+.ccard-b.open { display: block }
 
 /* ═══ SEARCH RESULTS ═══ */
-.search-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.search-header h2{font-size:15px;font-weight:700;letter-spacing:-.3px}
-.search-header .took{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
-.sr-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh);padding:14px 18px;margin-bottom:10px;transition:box-shadow .25s}
-.sr-card:hover{box-shadow:var(--sh2)}
-.sr-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:8px}
-.sr-card .sim-score{width:48px;height:48px;font-size:13px}
-.sr-main{flex:1;min-width:0}
-.sr-key{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--cy);display:inline-flex;align-items:center;gap:8px;margin-bottom:2px;flex-wrap:wrap}
-.sr-summary{font-size:14.5px;font-weight:600;color:var(--ink);line-height:1.4;margin-bottom:6px}
-.sr-solution-block{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:8px}
-.sr-solution-block h4{font-family:var(--disp);font-size:11.5px;font-weight:700;color:var(--cy);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.sr-solution-row{font-size:12px;color:var(--ink2);line-height:1.55;margin-bottom:6px}
-.sr-solution-row b{color:var(--ink);font-weight:700}
-.sr-solution-row:last-child{margin-bottom:0}
+.sr-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
+.sr-hd h2 { font-size: 15px; font-weight: 700 }
+.sr-hd .tk { font-family: var(--mono); font-size: 10.5px; color: var(--faint) }
+.sr-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); padding: 12px 16px; margin-bottom: 9px }
+.sr-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px }
+.sr-card .sim-sc { width: 44px; height: 44px; font-size: 12px }
+.sr-sol { background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; margin-top: 7px }
+.sr-sol h4 { font-family: var(--disp); font-size: 11px; font-weight: 700; color: var(--cy); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px }
+.sr-sol .r { font-size: 11.5px; color: var(--ink2); line-height: 1.5; margin-bottom: 5px }
+.sr-sol .r b { color: var(--ink); font-weight: 700 }
+.sr-sol .r:last-child { margin-bottom: 0 }
 
-/* ═══ EMPTY / LOADING ═══ */
-.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
-.empty-state .ico{font-size:40px;margin-bottom:12px}
-.empty-state h3{font-family:var(--disp);font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px}
-.empty-state p{font-size:13px;line-height:1.6;max-width:400px;margin:0 auto}
+/* ═══ EMPTY STATE / SPINNER ═══ */
+.empty-st { text-align: center; padding: 50px 20px; color: var(--muted) }
+.empty-st .i { font-size: 36px; margin-bottom: 10px }
+.empty-st h3 { font-family: var(--disp); font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 5px }
+.empty-st p { font-size: 12.5px; line-height: 1.5; max-width: 380px; margin: 0 auto }
+.spinner { width: 20px; height: 20px; border: 2px solid var(--line); border-top-color: var(--cy); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 8px }
+@keyframes spin { to { transform: rotate(360deg) } }
 
 /* ═══ RESPONSIVE ═══ */
-@media(max-width:700px){
-  .topbar{flex-direction:column;align-items:stretch}
-  .search-wrap{max-width:none}
-  .cluster-grid{grid-template-columns:1fr}
-  .tcard-top{flex-direction:column}
+@media (max-width: 700px) {
+  .topbar { flex-direction: column; align-items: stretch }
+  .search-wrap { max-width: none }
+  .cl-grid { grid-template-columns: 1fr }
+  .stats { grid-template-columns: repeat(3, 1fr) }
 }
-@media(min-width:1921px) and (min-height:900px){body{zoom:1.18}}
-@media(min-width:2200px) and (min-height:1000px){body{zoom:1.3}}
-@media(min-width:2560px){body{zoom:1.42}}
+@media (min-width: 1921px) { body { zoom: 1.18 } }
+@media (min-width: 2560px) { body { zoom: 1.42 } }
 </style>
 </head>
 <body>
 
+<!-- ═══════════════════ LANDING (no data) ═══════════════════ -->
 <div id="landing" class="landing">
   <div class="landing-inner up">
     <div class="ico">🔎</div>
     <h1>Clarification Module</h1>
-    <p>Finds similar historical tickets for every new issue, links incidents to related changes, and surfaces root causes and solutions — so no one solves the same problem twice.</p>
-    <p style="font-size:12px;color:var(--faint);margin-bottom:18px">Load a Jira export on the <a href="index.html">launcher</a> first, then return here.</p>
-    <a class="btn" href="index.html">← Back to launcher</a>
+    <p>Finds similar historical tickets, links incidents to related changes, and surfaces root causes and solutions.</p>
+    <p style="font-size:12px; color:var(--faint); margin-bottom:18px">
+      Load a Jira export on the <a href="index.html">launcher</a> first.
+    </p>
+    <a class="lbtn" href="index.html">← Back to launcher</a>
   </div>
 </div>
 
+<!-- ═══════════════════ MAIN APP ═══════════════════ -->
 <div id="app" class="wrap hidden">
+
+  <!-- Top bar -->
   <div class="topbar up">
     <a href="index.html" class="back-link">← Launcher</a>
     <h1>🔎 <span class="accent">Clarification</span> Module</h1>
     <div class="spacer"></div>
     <div class="search-wrap" id="searchWrap">
       <span class="search-ico">⌕</span>
-      <input class="search-input" id="searchInput" type="text" placeholder="Paste a ticket subject or search keywords…" autocomplete="off">
+      <input class="search-input" id="searchInput" type="text"
+             placeholder="Paste a ticket subject or search keywords…" autocomplete="off">
       <button class="search-clear" id="searchClear">✕</button>
     </div>
-    <span class="meta" id="ticketCount"></span>
   </div>
 
-  <div class="tabs up d1" id="tabBar">
-    <button class="tab on" data-tab="queue">📋 Active queue <span class="cnt" id="queueCnt">0</span></button>
-    <button class="tab" data-tab="clusters">🧩 Issue clusters <span class="cnt" id="clusterCnt">0</span></button>
+  <!-- Stats dashboard -->
+  <div class="stats up d1" id="statsRow"></div>
+
+  <!-- Tabs -->
+  <div class="tabs up d2" id="tabBar">
+    <button class="tab on" data-tab="queue">
+      📋 Active queue <span class="cnt" id="qCnt">0</span>
+    </button>
+    <button class="tab" data-tab="clusters">
+      🧩 Issue clusters <span class="cnt" id="clCnt">0</span>
+    </button>
   </div>
 
+  <!-- Search results (shown when searching, hides tabs & views) -->
   <div id="searchView" class="hidden"></div>
 
-  <div id="queueView" class="up d2">
-    <div class="filters" id="queueFilters">
-      <span class="filter-label">Show</span>
-      <button class="filter-chip on" data-qfilter="active">Analysis &amp; Study + Acknowledged</button>
-      <button class="filter-chip" data-qfilter="all-open">All open tickets</button>
-      <span class="filter-label" style="margin-left:8px">Project</span>
-      <select class="filter-select" id="queueProjectFilter"><option value="">All projects</option></select>
+  <!-- Active Queue view -->
+  <div id="queueView" class="up d3">
+    <div class="filters" id="qFilters">
+      <span class="flbl">Status</span>
+      <button class="fchip on" data-qf="active">Analysis &amp; Study + Acknowledged</button>
+      <button class="fchip" data-qf="all-open">All open</button>
+
+      <div class="fdiv"></div>
+      <span class="flbl">Type</span>
+      <button class="fchip inc on" data-qt="all">All</button>
+      <button class="fchip inc" data-qt="incident">Incident</button>
+      <button class="fchip sr" data-qt="sr">Service Request</button>
+      <button class="fchip chg" data-qt="change">Change</button>
+
+      <div class="fdiv"></div>
+      <span class="flbl">Priority</span>
+      <select class="fsel" id="qPri">
+        <option value="">All</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+
+      <span class="flbl">Project</span>
+      <select class="fsel" id="qProj">
+        <option value="">All projects</option>
+      </select>
     </div>
     <div id="queueList" class="queue-list"></div>
   </div>
 
-  <div id="clusterView" class="hidden up d2">
+  <!-- Clusters view -->
+  <div id="clusterView" class="hidden up d3">
     <div class="filters">
-      <span class="filter-label">Min tickets</span>
-      <select class="filter-select" id="clusterMinSize">
-        <option value="2">2+</option><option value="3" selected>3+</option><option value="5">5+</option><option value="10">10+</option>
+      <span class="flbl">Min tickets</span>
+      <select class="fsel" id="clMin">
+        <option value="2">2+</option>
+        <option value="3">3+</option>
+        <option value="5" selected>5+</option>
+        <option value="10">10+</option>
+        <option value="20">20+</option>
       </select>
-      <span class="filter-label" style="margin-left:8px">Sort</span>
-      <select class="filter-select" id="clusterSort">
-        <option value="size">Most tickets</option><option value="open">Most open</option><option value="recent">Most recent</option>
+      <span class="flbl">Sort</span>
+      <select class="fsel" id="clSort">
+        <option value="size">Most tickets</option>
+        <option value="open">Most open</option>
+        <option value="recent">Most recent</option>
       </select>
     </div>
-    <div id="clusterList" class="cluster-grid"></div>
+    <div id="clList" class="cl-grid"></div>
   </div>
+
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════
+     JAVASCRIPT — Clarification Module engine & UI
+     ═══════════════════════════════════════════════════════════════ -->
 <script>
-(function(){
-var HS=window.HDStore,ROWS=null,IX=null,CLUSTERS=null;
-var ST={tab:"queue",qfilter:"active",qproject:"",sq:"",clMin:3,clSort:"size"};
-function el(id){return document.getElementById(id)}
-function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m]})}
-function fmtD(d){if(!d)return"—";var dt=d instanceof Date?d:new Date(d);if(isNaN(dt))return"—";return dt.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})}
+(function () {
+  var HS = window.HDStore;
+  var IX = null;   // similarity index (built on load)
+  var CL = null;   // cluster cache (built on demand)
 
-/* ═══ COLUMN GETTER ═══ */
-var _km=null;
-function initCols(rows){_km={};if(rows[0])Object.keys(rows[0]).forEach(function(k){_km[k.trim().toLowerCase()]=k})}
-function col(row,name){if(!_km)return"";var kk=_km[name.toLowerCase()];return kk!==undefined?String(row[kk]||"").trim():""}
+  /* ── Filter state ── */
+  var F = {
+    tab: "queue",
+    qf: "active",     // "active" | "all-open"
+    qt: "all",         // "all" | "incident" | "sr" | "change"
+    qpri: "",          // "" | "critical" | "high" | "medium" | "low"
+    qproj: "",         // "" | project name
+    clMin: 5,
+    clSort: "size"
+  };
 
-/* ═══ TEXT PROCESSING ═══ */
-var STOPS=new Set("the a an is was are were be been being have has had do does did will would could should shall may might can and or but not no nor of in on at to for from by with as into about up out if then so that this it its i we they he she my our your their you me us him her them what which who whom when where how why all each every both few more most other some such only than too very just also now here there after before during while because since until once again further already always never sometimes often usually please hi hello dear sir madam kindly thank thanks regards issue ticket request need required able unable getting error problem update updated trying tried below above mentioned attached via etc".split(" "));
+  /* ══════════════════════ Helpers ══════════════════════ */
 
-function tokenize(text){
-  if(!text)return[];
-  return String(text).toLowerCase()
-    .replace(/[\/\\|,;:!?()[\]{}"'`~@#$%^&*+=<>]/g," ")
-    .replace(/\b[A-Z]+-\d+\b/gi," ").replace(/\d{4,}/g," ")
-    .split(/[\s\-_.]+/)
-    .filter(function(t){return t.length>1&&!STOPS.has(t)&&!/^\d+$/.test(t)});
-}
-function bigrams(tok){var b=[];for(var i=0;i<tok.length-1;i++)b.push(tok[i]+" "+tok[i+1]);return b}
-function jaccard(a,b){if(!a.length||!b.length)return 0;var sA=new Set(a),sB=new Set(b),n=0;sA.forEach(function(t){if(sB.has(t))n++});return n/(sA.size+sB.size-n)}
-function subBonus(tA,tB){if(!tA.length||!tB.length)return 0;var b=0,sB=new Set(tB);tA.forEach(function(a){if(a.length<4)return;sB.forEach(function(bb){if(bb.length<4)return;if(a!==bb&&(a.indexOf(bb)>-1||bb.indexOf(a)>-1))b+=.15})});return Math.min(1,b)}
+  function el(id) { return document.getElementById(id); }
 
-/* ═══ INDEX ═══ */
-function buildIndex(rows){
-  var ix={tickets:[],byKey:{},byScreen:{},byMenu:{},byRC:{},byComp:{},byLabel:{},byToken:{},docFreq:{},changes:[],incidents:[]};
-  rows.forEach(function(row,i){
-    var t={_row:row,idx:i,
-      key:col(row,"key"),summary:col(row,"summary"),status:col(row,"status"),
-      priority:col(row,"priority"),project:col(row,"project"),
-      issueType:col(row,"issue type"),components:col(row,"components"),
-      created:col(row,"created"),resolved:col(row,"resolved"),updated:col(row,"updated"),
-      resolution:col(row,"resolution"),
-      screenName:col(row,"screen name"),menuHead:col(row,"menu head"),
-      rootCause:col(row,"root cause"),typeOfFix:col(row,"type of fix"),
-      analysis:col(row,"analysis"),solutionSummary:col(row,"solution summary"),
-      description:col(row,"description"),labels:col(row,"labels"),
-      svmInCharge:col(row,"svm in charge"),currentWorker:col(row,"current worker"),
-      severity:col(row,"severity"),
-      linkedIssues:col(row,"linked issues"),linkDetails:col(row,"link details"),
-      fixVersions:col(row,"fix versions"),deliveredDate:col(row,"delivered date"),
-      tokens:[],bgs:[],descTokens:[]
-    };
-    t.tokens=tokenize(t.summary);
-    t.bgs=bigrams(t.tokens);
-    t.descTokens=tokenize(t.description).slice(0,60); // cap description tokens
-    t.labelList=t.labels?t.labels.split(/[;,]/).map(function(s){return s.trim().toLowerCase()}).filter(Boolean):[];
-    t.isResolved=!!(t.resolved||t.resolution||/closed|resolved|completed|delivered/i.test(t.status));
-    t.hasSolution=!!(t.rootCause||t.typeOfFix||t.analysis||t.solutionSummary);
-    t.isChange=/change/i.test(t.issueType);
-    t.isIncident=/incident|service request/i.test(t.issueType);
-    // parse explicit links
-    t.linkedKeys=t.linkedIssues?t.linkedIssues.split(/[,;]/).map(function(s){return s.trim()}).filter(Boolean):[];
-
-    ix.tickets.push(t);
-    if(t.key)ix.byKey[t.key]=i;
-    if(t.isChange)ix.changes.push(i);
-    if(t.isIncident)ix.incidents.push(i);
-
-    function addInv(map,val,idx){if(!val)return;var k=val.toLowerCase();if(!map[k])map[k]=[];map[k].push(idx)}
-    addInv(ix.byScreen,t.screenName,i);
-    addInv(ix.byMenu,t.menuHead,i);
-    addInv(ix.byRC,t.rootCause,i);
-    t.components.split(/[;,]/).forEach(function(c){addInv(ix.byComp,c.trim(),i)});
-    t.labelList.forEach(function(l){addInv(ix.byLabel,l,i)});
-
-    var seen={};
-    t.tokens.forEach(function(tok){
-      if(!seen[tok]){seen[tok]=1;ix.docFreq[tok]=(ix.docFreq[tok]||0)+1}
-      if(!ix.byToken[tok])ix.byToken[tok]=[];
-      ix.byToken[tok].push(i);
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (m) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[m];
     });
-  });
-  return ix;
-}
+  }
 
-/* ═══ SCORING — returns {score, reasons[], tier} ═══ */
-function scorePair(a,b){
-  if(a.key&&a.key===b.key)return null;
-  var reasons=[],struct=0,text=0,bonus=0;
+  function fmtD(d) {
+    if (!d) return "—";
+    var dt = d instanceof Date ? d : new Date(d);
+    if (isNaN(dt)) return "—";
+    return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+  }
 
-  if(a.screenName&&b.screenName&&a.screenName.toLowerCase()===b.screenName.toLowerCase()){struct+=22;reasons.push({cls:"reason-screen",txt:"Screen: "+a.screenName})}
-  if(a.menuHead&&b.menuHead&&a.menuHead.toLowerCase()===b.menuHead.toLowerCase()){struct+=18;reasons.push({cls:"reason-menu",txt:"Menu: "+a.menuHead})}
-  if(a.rootCause&&b.rootCause&&a.rootCause.toLowerCase()===b.rootCause.toLowerCase()){struct+=12;reasons.push({cls:"reason-rc",txt:"Cause: "+a.rootCause})}
-  var cA=a.components.toLowerCase().split(/[;,]/).map(function(s){return s.trim()}).filter(Boolean);
-  var cB=b.components.toLowerCase().split(/[;,]/).map(function(s){return s.trim()}).filter(Boolean);
-  if(cA.length&&cB.length){var ci=cA.filter(function(c){return cB.indexOf(c)>-1}).length;if(ci){struct+=Math.min(8,ci*4);reasons.push({cls:"reason-comp",txt:"Component match"})}}
-  // label overlap
-  if(a.labelList&&b.labelList){var li=a.labelList.filter(function(l){return b.labelList.indexOf(l)>-1}).length;if(li){struct+=Math.min(6,li*3);reasons.push({cls:"reason-label",txt:"Label: "+a.labelList.filter(function(l){return b.labelList.indexOf(l)>-1}).join(", ")})}}
+  /* ── Column getter (case-insensitive) ── */
+  var _km = null;
 
-  var jac=jaccard(a.tokens,b.tokens);
-  text+=jac*28;
-  var bgJac=jaccard(a.bgs,b.bgs);
-  text+=bgJac*14;
-  text+=subBonus(a.tokens,b.tokens)*8;
-  // description cross-match (lower weight)
-  if(a.descTokens.length&&b.tokens.length) text+=jaccard(a.descTokens,b.tokens)*4;
-  if(b.descTokens.length&&a.tokens.length) text+=jaccard(a.tokens,b.descTokens)*4;
-  if(text>=8)reasons.push({cls:"reason-text",txt:"Text similarity"});
+  function initCols(rows) {
+    _km = {};
+    if (rows[0]) {
+      Object.keys(rows[0]).forEach(function (k) {
+        _km[k.trim().toLowerCase()] = k;
+      });
+    }
+  }
 
-  // explicit Jira link
-  if(a.linkedKeys.indexOf(b.key)>-1||b.linkedKeys.indexOf(a.key)>-1){bonus+=15;reasons.push({cls:"reason-link",txt:"Jira linked"})}
-  if(b.isResolved&&b.hasSolution)bonus+=6;
-  else if(b.isResolved)bonus+=3;
-  if(a.project&&b.project&&a.project.toLowerCase()===b.project.toLowerCase())bonus+=2;
+  function col(row, name) {
+    if (!_km) return "";
+    var k = _km[name.toLowerCase()];
+    return k !== undefined ? String(row[k] || "").trim() : "";
+  }
 
-  var score=Math.min(100,Math.round(struct+text+bonus));
-  var tier=score>=65?"sure":score>=40?"likely":"assumption";
-  return{score:score,reasons:reasons,tier:tier};
-}
+  /* ══════════════════════ Text Processing ══════════════════════ */
 
-/* ═══ FIND SIMILAR ═══ */
-function findSimilar(ticket,topN,minScore){
-  topN=topN||8;minScore=minScore||15;
-  var cands=new Set();
-  function addFrom(map,val){if(!val)return;var k=val.toLowerCase();if(map[k])map[k].forEach(function(i){cands.add(i)})}
-  addFrom(IX.byScreen,ticket.screenName);
-  addFrom(IX.byMenu,ticket.menuHead);
-  addFrom(IX.byRC,ticket.rootCause);
-  ticket.labelList.forEach(function(l){addFrom(IX.byLabel,l)});
-  // explicit linked tickets
-  ticket.linkedKeys.forEach(function(k){if(IX.byKey[k]!=null)cands.add(IX.byKey[k])});
-  // token candidates
-  var rare=ticket.tokens.slice().sort(function(a,b){return(IX.docFreq[a]||9999)-(IX.docFreq[b]||9999)});
-  rare.slice(0,8).forEach(function(tok){if(IX.byToken[tok])IX.byToken[tok].forEach(function(i){cands.add(i)})});
+  var STOPS = new Set(
+    ("the a an is was are were be been being have has had do does did " +
+     "will would could should shall may might can and or but not no nor " +
+     "of in on at to for from by with as into about up out if then so " +
+     "that this it its i we they he she my our your their you me us him " +
+     "her them what which who whom when where how why all each every " +
+     "both few more most other some such only than too very just also " +
+     "now here there after before during while because since until once " +
+     "again further already always never sometimes often usually please " +
+     "hi hello dear sir madam kindly thank thanks regards issue ticket " +
+     "request need required able unable getting error problem updated " +
+     "trying tried below above mentioned attached via etc re fw fwd")
+      .split(" ")
+  );
 
-  var results=[];
-  cands.forEach(function(i){
-    var c=IX.tickets[i];
-    var m=scorePair(ticket,c);
-    if(m&&m.score>=minScore)results.push({ticket:c,score:m.score,reasons:m.reasons,tier:m.tier});
-  });
-  results.sort(function(a,b){
-    if(b.score!==a.score)return b.score-a.score;
-    if(b.ticket.hasSolution!==a.ticket.hasSolution)return b.ticket.hasSolution?1:-1;
-    return 0;
-  });
-  return results.slice(0,topN);
-}
+  function tokenize(text) {
+    if (!text) return [];
+    return String(text).toLowerCase()
+      .replace(/[\/\\|,;:!?()[\]{}"'`~@#$%^&*+=<>]/g, " ")
+      .replace(/\b[A-Z]+-\d+\b/gi, " ")   // strip Jira keys like VCL-3508
+      .replace(/\d{4,}/g, " ")              // strip long numbers
+      .split(/[\s\-_.]+/)
+      .filter(function (w) {
+        return w.length > 1 && !STOPS.has(w) && !/^\d+$/.test(w);
+      });
+  }
 
-/* ═══ FIND RELATED CHANGES for an incident ═══ */
-function findRelatedChanges(ticket,topN){
-  topN=topN||6;
-  if(!IX.changes.length)return[];
-  var results=[];
-  var ticketCreated=ticket.created?new Date(ticket.created):null;
+  function bigrams(tokens) {
+    var bg = [];
+    for (var i = 0; i < tokens.length - 1; i++) {
+      bg.push(tokens[i] + " " + tokens[i + 1]);
+    }
+    return bg;
+  }
 
-  IX.changes.forEach(function(ci){
-    var ch=IX.tickets[ci];
-    var m=scorePair(ticket,ch);
-    if(!m)return;
+  function jaccard(a, b) {
+    if (!a.length || !b.length) return 0;
+    var sA = new Set(a), sB = new Set(b), n = 0;
+    sA.forEach(function (t) { if (sB.has(t)) n++; });
+    return n / (sA.size + sB.size - n);
+  }
 
-    // temporal proximity bonus: change delivered/created within 30 days of incident
-    if(ticketCreated){
-      var chDate=ch.deliveredDate?new Date(ch.deliveredDate):ch.resolved?new Date(ch.resolved):ch.created?new Date(ch.created):null;
-      if(chDate&&!isNaN(chDate)){
-        var daysDiff=Math.abs((ticketCreated-chDate)/(86400000));
-        if(daysDiff<=30){m.score+=Math.round(8*(1-daysDiff/30));m.reasons.push({cls:"reason-time",txt:"Within "+Math.round(daysDiff)+"d"})}
+  function subBonus(tokA, tokB) {
+    if (!tokA.length || !tokB.length) return 0;
+    var bonus = 0;
+    var sB = new Set(tokB);
+    tokA.forEach(function (a) {
+      if (a.length < 4) return;
+      sB.forEach(function (b) {
+        if (b.length < 4) return;
+        if (a !== b && (a.indexOf(b) > -1 || b.indexOf(a) > -1)) bonus += 0.15;
+      });
+    });
+    return Math.min(1, bonus);
+  }
+
+  /* ══════════════════════ Index Builder ══════════════════════ */
+
+  function buildIndex(rows) {
+    var ix = {
+      tickets: [],
+      byKey: {},        // key → index
+      byScreen: {},     // screen name (lower) → [indices]
+      byMenu: {},       // menu head (lower) → [indices]
+      byRC: {},         // root cause (lower) → [indices]
+      byComp: {},       // component (lower) → [indices]
+      byLabel: {},      // label (lower) → [indices]
+      byToken: {},      // token → [indices]
+      docFreq: {},      // token → count of tickets containing it
+      changes: [],      // indices of change tickets
+      incidents: [],    // indices of incident tickets
+      srs: []           // indices of service request tickets
+    };
+
+    rows.forEach(function (row, i) {
+      var t = {
+        _row: row,
+        idx: i,
+        key: col(row, "key"),
+        summary: col(row, "summary"),
+        status: col(row, "status"),
+        priority: col(row, "priority"),
+        project: col(row, "project"),
+        issueType: col(row, "issue type"),
+        components: col(row, "components"),
+        created: col(row, "created"),
+        resolved: col(row, "resolved"),
+        updated: col(row, "updated"),
+        resolution: col(row, "resolution"),
+        screenName: col(row, "screen name"),
+        menuHead: col(row, "menu head"),
+        rootCause: col(row, "root cause"),
+        typeOfFix: col(row, "type of fix"),
+        analysis: col(row, "analysis"),
+        solutionSummary: col(row, "solution summary"),
+        description: col(row, "description"),
+        labels: col(row, "labels"),
+        svmInCharge: col(row, "svm in charge"),
+        currentWorker: col(row, "current worker"),
+        severity: col(row, "severity"),
+        linkedIssues: col(row, "linked issues"),
+        linkDetails: col(row, "link details"),
+        deliveredDate: col(row, "delivered date"),
+        tokens: [],
+        bgs: [],
+        descTokens: []
+      };
+
+      // Tokenize summary and description
+      t.tokens = tokenize(t.summary);
+      t.bgs = bigrams(t.tokens);
+      t.descTokens = tokenize(t.description).slice(0, 50);
+
+      // Parse labels
+      t.labelList = t.labels
+        ? t.labels.split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean)
+        : [];
+
+      // Classify ticket state
+      t.isResolved = !!(t.resolved || t.resolution ||
+        /closed|resolved|completed|delivered/i.test(t.status));
+      t.hasSolution = !!(t.rootCause || t.typeOfFix || t.analysis || t.solutionSummary);
+
+      // Classify issue type
+      t.isChange = /change/i.test(t.issueType);
+      t.isIncident = /incident/i.test(t.issueType);
+      t.isSR = /service request/i.test(t.issueType);
+
+      // Parse linked issue keys
+      t.linkedKeys = t.linkedIssues
+        ? t.linkedIssues.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean)
+        : [];
+
+      // Store in index
+      ix.tickets.push(t);
+      if (t.key) ix.byKey[t.key] = i;
+      if (t.isChange) ix.changes.push(i);
+      if (t.isIncident) ix.incidents.push(i);
+      if (t.isSR) ix.srs.push(i);
+
+      // Build inverted indexes for fast candidate lookup
+      function addToInvertedIndex(map, value) {
+        if (!value) return;
+        var k = value.toLowerCase();
+        if (!map[k]) map[k] = [];
+        map[k].push(i);
+      }
+
+      addToInvertedIndex(ix.byScreen, t.screenName);
+      addToInvertedIndex(ix.byMenu, t.menuHead);
+      addToInvertedIndex(ix.byRC, t.rootCause);
+
+      t.components.split(/[;,]/).forEach(function (c) {
+        addToInvertedIndex(ix.byComp, c.trim());
+      });
+
+      t.labelList.forEach(function (l) {
+        addToInvertedIndex(ix.byLabel, l);
+      });
+
+      // Token inverted index + document frequency
+      var seenTokens = {};
+      t.tokens.forEach(function (tok) {
+        if (!seenTokens[tok]) {
+          seenTokens[tok] = 1;
+          ix.docFreq[tok] = (ix.docFreq[tok] || 0) + 1;
+        }
+        if (!ix.byToken[tok]) ix.byToken[tok] = [];
+        ix.byToken[tok].push(i);
+      });
+    });
+
+    return ix;
+  }
+
+  /* ══════════════════════ Similarity Scoring ══════════════════════
+     Returns { score, rs (reasons), tier } or null if same ticket. */
+
+  function scorePair(a, b) {
+    if (a.key && a.key === b.key) return null;
+
+    var reasons = [];
+    var struct = 0;
+    var text = 0;
+    var bonus = 0;
+
+    // ── Structural matching (high confidence) ──
+    if (a.screenName && b.screenName &&
+        a.screenName.toLowerCase() === b.screenName.toLowerCase()) {
+      struct += 22;
+      reasons.push({ c: "r-scr", t: "Screen: " + a.screenName });
+    }
+
+    if (a.menuHead && b.menuHead &&
+        a.menuHead.toLowerCase() === b.menuHead.toLowerCase()) {
+      struct += 18;
+      reasons.push({ c: "r-menu", t: "Menu: " + a.menuHead });
+    }
+
+    if (a.rootCause && b.rootCause &&
+        a.rootCause.toLowerCase() === b.rootCause.toLowerCase()) {
+      struct += 12;
+      reasons.push({ c: "r-rc", t: "Cause: " + a.rootCause });
+    }
+
+    // Component overlap
+    var compA = a.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var compB = b.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (compA.length && compB.length) {
+      var compIntersect = compA.filter(function (c) { return compB.indexOf(c) > -1; }).length;
+      if (compIntersect) {
+        struct += Math.min(8, compIntersect * 4);
+        reasons.push({ c: "r-comp", t: "Component" });
       }
     }
-    m.score=Math.min(100,m.score);
-    m.tier=m.score>=65?"sure":m.score>=40?"likely":"assumption";
-    if(m.score>=12)results.push({ticket:ch,score:m.score,reasons:m.reasons,tier:m.tier});
-  });
 
-  results.sort(function(a,b){return b.score-a.score});
-  return results.slice(0,topN);
-}
-
-/* ═══ SEARCH ═══ */
-function searchText(query,topN){
-  topN=topN||30;
-  var tokens=tokenize(query),bgs=bigrams(tokens);
-  var pseudo={key:"",summary:query,tokens:tokens,bgs:bgs,descTokens:[],
-    screenName:"",menuHead:"",rootCause:"",components:"",labelList:[],
-    linkedKeys:[],project:"",isResolved:false,hasSolution:false};
-  var candScores={};
-  tokens.forEach(function(tok){
-    if(!IX.byToken[tok])return;
-    var rarity=Math.log(IX.tickets.length/(IX.docFreq[tok]||1));
-    IX.byToken[tok].forEach(function(i){candScores[i]=(candScores[i]||0)+rarity});
-  });
-  var topCands=Object.keys(candScores).map(Number)
-    .sort(function(a,b){return candScores[b]-candScores[a]}).slice(0,250);
-
-  var results=[];
-  topCands.forEach(function(i){
-    var c=IX.tickets[i],reasons=[],score=0;
-    var jac=jaccard(tokens,c.tokens);score+=jac*40;
-    var bgJac=jaccard(bgs,c.bgs);score+=bgJac*20;
-    score+=subBonus(tokens,c.tokens)*10;
-    if(c.descTokens.length)score+=jaccard(tokens,c.descTokens)*6;
-    if(score>=8)reasons.push({cls:"reason-text",txt:"Text match"});
-    if(c.isResolved&&c.hasSolution){score+=10;reasons.push({cls:"reason-comp",txt:"Has solution"})}
-    else if(c.isResolved)score+=5;
-    if(c.screenName){score+=2;reasons.push({cls:"reason-screen",txt:"Screen: "+c.screenName})}
-    if(c.rootCause)score+=2;
-    score=Math.min(100,Math.round(score));
-    var tier=score>=65?"sure":score>=40?"likely":"assumption";
-    if(score>=10)results.push({ticket:c,score:score,reasons:reasons,tier:tier});
-  });
-  results.sort(function(a,b){return b.score!==a.score?b.score-a.score:b.ticket.hasSolution?1:-1});
-  return results.slice(0,topN);
-}
-
-/* ═══ CLUSTERING ═══ */
-function buildClusters(){
-  var N=IX.tickets.length,phraseDoc={};
-  IX.tickets.forEach(function(t,i){
-    var seen={};
-    t.bgs.forEach(function(bg){if(!seen[bg]){seen[bg]=1;if(!phraseDoc[bg])phraseDoc[bg]=new Set();phraseDoc[bg].add(i)}});
-    var seenT={};
-    t.tokens.forEach(function(tok){
-      if(!seenT[tok]&&tok.length>=4){seenT[tok]=1;var df=IX.docFreq[tok]||0;
-      if(df>=3&&df<N*0.25){var pk="_"+tok;if(!phraseDoc[pk])phraseDoc[pk]=new Set();phraseDoc[pk].add(i)}}
-    });
-  });
-  var phrases=Object.keys(phraseDoc).filter(function(p){return phraseDoc[p].size>=3})
-    .sort(function(a,b){return phraseDoc[b].size-phraseDoc[a].size});
-  var assigned=new Set(),clusters=[];
-  phrases.forEach(function(phrase){
-    var members=[];phraseDoc[phrase].forEach(function(i){if(!assigned.has(i))members.push(i)});
-    if(members.length<2)return;
-    members.forEach(function(i){assigned.add(i)});
-    var label=phrase.startsWith("_")?phrase.slice(1):phrase;
-    var triCount={};
-    members.forEach(function(i){var t=IX.tickets[i];for(var j=0;j<t.tokens.length-2;j++){var tri=t.tokens[j]+" "+t.tokens[j+1]+" "+t.tokens[j+2];triCount[tri]=(triCount[tri]||0)+1}});
-    var bestTri=null,bestTriC=0;
-    Object.keys(triCount).forEach(function(k){if(triCount[k]>bestTriC&&triCount[k]>=Math.ceil(members.length*0.4)){bestTri=k;bestTriC=triCount[k]}});
-    if(bestTri&&bestTri.length>label.length)label=bestTri;
-    var resolved=0,rc={},fx={},proj={},changes=0;
-    members.forEach(function(i){var t=IX.tickets[i];if(t.isResolved)resolved++;if(t.isChange)changes++;
-      if(t.rootCause)rc[t.rootCause]=(rc[t.rootCause]||0)+1;
-      if(t.typeOfFix)fx[t.typeOfFix]=(fx[t.typeOfFix]||0)+1;
-      if(t.project)proj[t.project]=(proj[t.project]||0)+1});
-    function topN(o,n){return Object.keys(o).sort(function(a,b){return o[b]-o[a]}).slice(0,n).map(function(k){return k+" ("+o[k]+")"})}
-    clusters.push({label:label,members:members,resolved:resolved,changes:changes,
-      rootCauses:topN(rc,3),fixes:topN(fx,3),projects:topN(proj,4),
-      recentDate:members.reduce(function(mx,i){var d=IX.tickets[i].created?new Date(IX.tickets[i].created):null;return d&&!isNaN(d)&&(!mx||d>mx)?d:mx},null)});
-  });
-  return clusters;
-}
-
-/* ═══ RENDERING HELPERS ═══ */
-function statusPill(status,isChange){
-  var s=(status||"").toLowerCase();
-  if(isChange)return'<span class="status-pill pill-change">'+esc(status)+'</span>';
-  if(s.indexOf("analysis & study")>-1)return'<span class="status-pill pill-analysis">'+esc(status)+'</span>';
-  if(s.indexOf("acknowledged")>-1||s==="open")return'<span class="status-pill pill-ack">'+esc(status)+'</span>';
-  if(/resolved|closed|completed|delivered/.test(s))return'<span class="status-pill pill-resolved">'+esc(status)+'</span>';
-  return'<span class="status-pill pill-other">'+esc(status)+'</span>';
-}
-function priBadge(p){var l=(p||"").toLowerCase();
-  if(l.indexOf("critical")>-1)return'<span class="tcard-priority pri-critical">'+esc(p)+'</span>';
-  if(l.indexOf("high")>-1||l.indexOf("urgent")>-1)return'<span class="tcard-priority pri-high">'+esc(p)+'</span>';
-  if(l.indexOf("medium")>-1)return'<span class="tcard-priority pri-medium">'+esc(p)+'</span>';
-  if(l.indexOf("low")>-1)return'<span class="tcard-priority pri-low">'+esc(p)+'</span>';
-  return'<span class="tcard-priority pri-default">'+esc(p||"—")+'</span>';
-}
-function scoreClass(s){return s>=60?"score-high":s>=35?"score-med":"score-low"}
-function tierBadge(tier){
-  if(tier==="sure")return'<span class="tier-badge tier-sure">sure shot</span>';
-  if(tier==="likely")return'<span class="tier-badge tier-likely">likely</span>';
-  return'<span class="tier-badge tier-assumption">assumption</span>';
-}
-function reasonTags(reasons){return reasons.map(function(r){return'<span class="reason-tag '+r.cls+'">'+esc(r.txt)+'</span>'}).join("")}
-
-function renderSimRow(m,isChangeSection){
-  var t=m.ticket;
-  var sol='';
-  if(t.analysis||t.solutionSummary){
-    sol='<div class="sim-solution">';
-    if(t.analysis)sol+='<b>Analysis:</b> '+esc(t.analysis).substring(0,200)+(t.analysis.length>200?"…":"")+'<br>';
-    if(t.solutionSummary)sol+='<b>Solution:</b> '+esc(t.solutionSummary).substring(0,300)+(t.solutionSummary.length>300?"…":"");
-    sol+='</div>';
-  }
-  return'<div class="sim-row'+(t.isChange?" is-change":"")+'">'
-    +'<div class="sim-score '+scoreClass(m.score)+'">'+m.score+'%</div>'
-    +'<div class="sim-info">'
-    +'<div class="sim-key"><a href="https://svmhelpdesk.atlassian.net/browse/'+esc(t.key)+'" target="_blank">'+esc(t.key)+'</a> '+statusPill(t.status,t.isChange)+' '+tierBadge(m.tier)+'</div>'
-    +'<div class="sim-summary">'+esc(t.summary)+'</div>'
-    +'<div class="sim-reasons">'+reasonTags(m.reasons)+'</div>'
-    +'<div class="sim-tags">'
-    +(t.rootCause?'<span class="sim-tag rc">'+esc(t.rootCause)+'</span>':'')
-    +(t.typeOfFix?'<span class="sim-tag fix">'+esc(t.typeOfFix)+'</span>':'')
-    +'</div>'
-    +sol
-    +'</div></div>';
-}
-
-function renderTicketCard(t,id){
-  var meta='';
-  if(t.project)meta+='<span>Project: <b>'+esc(t.project)+'</b></span>';
-  if(t.screenName)meta+='<span>Screen: <b>'+esc(t.screenName)+'</b></span>';
-  if(t.menuHead)meta+='<span>Menu: <b>'+esc(t.menuHead)+'</b></span>';
-  if(t.svmInCharge)meta+='<span>SVM: <b>'+esc(t.svmInCharge)+'</b></span>';
-  if(t.currentWorker)meta+='<span>Worker: <b>'+esc(t.currentWorker)+'</b></span>';
-  if(t.labels)meta+='<span>Labels: <b>'+esc(t.labels)+'</b></span>';
-
-  return'<div class="tcard up">'
-    +'<div class="tcard-top"><div class="tcard-main">'
-    +'<div class="tcard-key"><a href="https://svmhelpdesk.atlassian.net/browse/'+esc(t.key)+'" target="_blank">'+esc(t.key)+'</a> '+statusPill(t.status,t.isChange)
-    +(t.issueType?' <span class="status-pill pill-other">'+esc(t.issueType)+'</span>':'')
-    +'</div>'
-    +'<div class="tcard-summary">'+esc(t.summary)+'</div>'
-    +'<div class="tcard-meta">'+meta+'</div>'
-    +'</div>'
-    +'<div class="tcard-right">'+priBadge(t.priority)+'<div class="tcard-date">'+fmtD(t.created)+'</div></div>'
-    +'</div>'
-    +'<div class="sim-section">'
-    +'<div class="sim-toggle" data-toggle="'+id+'" data-tidx="'+t.idx+'">'
-    +'<span class="sim-label">🔍 Find similar tickets</span>'
-    +'<span class="sim-arrow">▾</span>'
-    +'</div>'
-    +'<div class="sim-body" id="sim-'+id+'"><div class="sim-empty" style="color:var(--cy)">Click above to analyse…</div></div>'
-    +'</div></div>';
-}
-
-/* ═══ RENDER QUEUE ═══ */
-function renderQueue(){
-  var isActive=ST.qfilter==="active";
-  var list=IX.tickets.filter(function(t){
-    if(ST.qproject&&t.project.toLowerCase()!==ST.qproject.toLowerCase())return false;
-    if(isActive){var s=t.status.toLowerCase();return s.indexOf("analysis & study")>-1||s==="acknowledged"||s==="open"}
-    return!t.isResolved;
-  });
-  var priOrd={critical:0,highest:0,high:1,urgent:1,medium:2,normal:2,low:3,lowest:4};
-  list.sort(function(a,b){
-    var pa=priOrd[(a.priority||"").toLowerCase()]!=null?priOrd[(a.priority||"").toLowerCase()]:5;
-    var pb=priOrd[(b.priority||"").toLowerCase()]!=null?priOrd[(b.priority||"").toLowerCase()]:5;
-    if(pa!==pb)return pa-pb;
-    return(b.created?new Date(b.created):0)-(a.created?new Date(a.created):0);
-  });
-  el("queueCnt").textContent=list.length;
-  if(!list.length){el("queueList").innerHTML='<div class="empty-state"><div class="ico">✓</div><h3>Queue is clear</h3><p>No tickets in '+(isActive?"Analysis & Study / Acknowledged":"open")+' status right now.</p></div>';return}
-  var html='';
-  list.forEach(function(t,i){ html+=renderTicketCard(t,"q"+i); });
-  el("queueList").innerHTML=html;
-  bindToggles();
-}
-
-/* ═══ RENDER CLUSTERS ═══ */
-function renderClusters(){
-  if(!CLUSTERS)CLUSTERS=buildClusters();
-  var min=ST.clMin;
-  var filt=CLUSTERS.filter(function(c){return c.members.length>=min});
-  if(ST.clSort==="open")filt.sort(function(a,b){return(b.members.length-b.resolved)-(a.members.length-a.resolved)});
-  else if(ST.clSort==="recent")filt.sort(function(a,b){return(b.recentDate||0)-(a.recentDate||0)});
-  else filt.sort(function(a,b){return b.members.length-a.members.length});
-  el("clusterCnt").textContent=filt.length;
-  if(!filt.length){el("clusterList").innerHTML='<div class="empty-state"><div class="ico">🧩</div><h3>No clusters found</h3><p>Try lowering the minimum ticket count.</p></div>';return}
-  var html='';
-  filt.forEach(function(c,ci){
-    var pct=Math.round(c.resolved/c.members.length*100),open=c.members.length-c.resolved;
-    html+='<div class="ccard up"><div class="ccard-head">'
-      +'<div class="ccard-theme">"'+esc(c.label)+'"</div>'
-      +'<div class="ccard-stats"><span class="num">'+c.members.length+'</span> tickets · <span class="num">'+c.resolved+'</span> resolved · <span style="color:var(--amber);font-weight:700">'+open+'</span> open'
-      +(c.changes?' · <span style="color:var(--indigo);font-weight:700">'+c.changes+'</span> changes':'')
-      +'</div>'
-      +'<div class="ccard-bar"><div class="ccard-bar-fill" style="width:'+pct+'%"></div></div>'
-      +'<div class="ccard-detail">'
-      +(c.rootCauses.length?'<span>Causes: <b>'+c.rootCauses.map(esc).join(", ")+'</b></span>':'')
-      +(c.fixes.length?'<span>Fixes: <b>'+c.fixes.map(esc).join(", ")+'</b></span>':'')
-      +(c.projects.length?'<span>Projects: <b>'+c.projects.map(esc).join(", ")+'</b></span>':'')
-      +'</div></div>'
-      +'<button class="ccard-expand" data-ctoggle="cl'+ci+'">Show tickets ▾</button>'
-      +'<div class="ccard-body" id="cl'+ci+'">'
-      +c.members.map(function(i){var t=IX.tickets[i];
-        return'<div class="sim-row'+(t.isChange?" is-change":"")+'">'
-          +'<div class="sim-score '+(t.isResolved?"score-high":"score-low")+'">'+(t.isResolved?"✓":"○")+'</div>'
-          +'<div class="sim-info"><div class="sim-key">'+esc(t.key)+' '+statusPill(t.status,t.isChange)+'</div>'
-          +'<div class="sim-summary">'+esc(t.summary)+'</div>'
-          +'<div class="sim-tags">'+(t.rootCause?'<span class="sim-tag rc">'+esc(t.rootCause)+'</span>':'')
-          +(t.typeOfFix?'<span class="sim-tag fix">'+esc(t.typeOfFix)+'</span>':'')+'</div>'
-          +(t.solutionSummary?'<div class="sim-solution"><b>Solution:</b> '+esc(t.solutionSummary).substring(0,200)+'</div>':'')
-          +'</div></div>';
-      }).join("")
-      +'</div></div>';
-  });
-  el("clusterList").innerHTML=html;
-  bindClusterToggles();
-}
-
-/* ═══ RENDER SEARCH ═══ */
-function renderSearch(query){
-  var t0=performance.now(),results=searchText(query,30),ms=Math.round(performance.now()-t0);
-  var html='<div class="search-header"><h2>Search results</h2><span class="took">'+results.length+' matches · '+ms+'ms</span></div>';
-  if(!results.length){html+='<div class="empty-state"><div class="ico">🔍</div><h3>No matches found</h3><p>Try different keywords or a shorter phrase.</p></div>'}
-  else results.forEach(function(m){
-    var t=m.ticket;
-    var solBlock='';
-    if(t.rootCause||t.typeOfFix||t.analysis||t.solutionSummary){
-      solBlock='<div class="sr-solution-block"><h4>Resolution details</h4>';
-      if(t.rootCause)solBlock+='<div class="sr-solution-row"><b>Root Cause:</b> '+esc(t.rootCause)+'</div>';
-      if(t.typeOfFix)solBlock+='<div class="sr-solution-row"><b>Type of Fix:</b> '+esc(t.typeOfFix)+'</div>';
-      if(t.analysis)solBlock+='<div class="sr-solution-row"><b>Analysis:</b> '+esc(t.analysis).substring(0,400)+(t.analysis.length>400?"…":"")+'</div>';
-      if(t.solutionSummary)solBlock+='<div class="sr-solution-row"><b>Solution:</b> '+esc(t.solutionSummary).substring(0,500)+(t.solutionSummary.length>500?"…":"")+'</div>';
-      solBlock+='</div>';
+    // Label overlap
+    if (a.labelList && b.labelList) {
+      var labelIntersect = a.labelList.filter(function (l) { return b.labelList.indexOf(l) > -1; }).length;
+      if (labelIntersect) {
+        struct += Math.min(6, labelIntersect * 3);
+        reasons.push({ c: "r-lbl", t: "Label" });
+      }
     }
-    html+='<div class="sr-card"><div class="sr-top">'
-      +'<div class="sim-score '+scoreClass(m.score)+'">'+m.score+'%</div>'
-      +'<div class="sr-main">'
-      +'<div class="sr-key"><a href="https://svmhelpdesk.atlassian.net/browse/'+esc(t.key)+'" target="_blank">'+esc(t.key)+'</a> '+statusPill(t.status,t.isChange)+' '+tierBadge(m.tier)
-      +' <span style="color:var(--faint);font-size:10px">'+fmtD(t.resolved||t.created)+'</span></div>'
-      +'<div class="sr-summary">'+esc(t.summary)+'</div>'
-      +'<div class="sim-reasons">'+reasonTags(m.reasons)+'</div>'
-      +'</div></div>'+solBlock+'</div>';
+
+    // ── Text matching ──
+    var jac = jaccard(a.tokens, b.tokens);
+    text += jac * 28;
+
+    var bgJac = jaccard(a.bgs, b.bgs);
+    text += bgJac * 14;
+
+    text += subBonus(a.tokens, b.tokens) * 8;
+
+    // Cross-match: description ↔ summary (lower weight)
+    if (a.descTokens.length && b.tokens.length) {
+      text += jaccard(a.descTokens, b.tokens) * 4;
+    }
+    if (b.descTokens.length && a.tokens.length) {
+      text += jaccard(a.tokens, b.descTokens) * 4;
+    }
+
+    if (text >= 8) {
+      reasons.push({ c: "r-txt", t: "Text similarity" });
+    }
+
+    // ── Bonus: explicit Jira link ──
+    if (a.linkedKeys.indexOf(b.key) > -1 || b.linkedKeys.indexOf(a.key) > -1) {
+      bonus += 15;
+      reasons.push({ c: "r-lnk", t: "Jira linked" });
+    }
+
+    // Bonus: resolved with solution
+    if (b.isResolved && b.hasSolution) bonus += 6;
+    else if (b.isResolved) bonus += 3;
+
+    // Bonus: same project
+    if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) {
+      bonus += 2;
+    }
+
+    var score = Math.min(100, Math.round(struct + text + bonus));
+    var tier = score >= 65 ? "s" : score >= 40 ? "l" : "a";
+
+    return { score: score, rs: reasons, tier: tier };
+  }
+
+  /* ══════════════════════ Find Similar Tickets ══════════════════════ */
+
+  function findSimilar(ticket, topN, minScore) {
+    topN = topN || 8;
+    minScore = minScore || 15;
+    var candidates = new Set();
+
+    // Gather candidates from inverted indexes (not a full scan)
+    function addCandidatesFrom(map, value) {
+      if (!value) return;
+      var k = value.toLowerCase();
+      if (map[k]) map[k].forEach(function (i) { candidates.add(i); });
+    }
+
+    addCandidatesFrom(IX.byScreen, ticket.screenName);
+    addCandidatesFrom(IX.byMenu, ticket.menuHead);
+    addCandidatesFrom(IX.byRC, ticket.rootCause);
+
+    ticket.labelList.forEach(function (l) {
+      addCandidatesFrom(IX.byLabel, l);
+    });
+
+    // Explicit Jira links
+    ticket.linkedKeys.forEach(function (key) {
+      if (IX.byKey[key] != null) candidates.add(IX.byKey[key]);
+    });
+
+    // Token-based candidates (rarest tokens first for precision)
+    var rareTokens = ticket.tokens.slice().sort(function (a, b) {
+      return (IX.docFreq[a] || 9999) - (IX.docFreq[b] || 9999);
+    });
+    rareTokens.slice(0, 8).forEach(function (tok) {
+      if (IX.byToken[tok]) {
+        IX.byToken[tok].forEach(function (i) { candidates.add(i); });
+      }
+    });
+
+    // Score each candidate
+    var results = [];
+    candidates.forEach(function (i) {
+      var match = scorePair(ticket, IX.tickets[i]);
+      if (match && match.score >= minScore) {
+        results.push({ t: IX.tickets[i], s: match.score, rs: match.rs, tier: match.tier });
+      }
+    });
+
+    // Sort: score desc, then prefer resolved-with-solution
+    results.sort(function (a, b) {
+      if (b.s !== a.s) return b.s - a.s;
+      if (b.t.hasSolution !== a.t.hasSolution) return b.t.hasSolution ? 1 : -1;
+      return 0;
+    });
+
+    return results.slice(0, topN);
+  }
+
+  /* ══════════════════════ Find Related Changes (for an incident) ══════════════════════ */
+
+  function findRelChanges(ticket, topN) {
+    topN = topN || 6;
+    if (!IX.changes.length) return [];
+
+    var results = [];
+    var ticketCreated = ticket.created ? new Date(ticket.created) : null;
+
+    IX.changes.forEach(function (ci) {
+      var change = IX.tickets[ci];
+      var match = scorePair(ticket, change);
+      if (!match) return;
+
+      // Temporal proximity bonus: change delivered/created within 30 days
+      if (ticketCreated) {
+        var changeDate = change.deliveredDate ? new Date(change.deliveredDate)
+          : change.resolved ? new Date(change.resolved)
+          : change.created ? new Date(change.created) : null;
+
+        if (changeDate && !isNaN(changeDate)) {
+          var daysDiff = Math.abs((ticketCreated - changeDate) / 86400000);
+          if (daysDiff <= 30) {
+            match.score += Math.round(8 * (1 - daysDiff / 30));
+            match.rs.push({ c: "r-time", t: "Within " + Math.round(daysDiff) + "d" });
+          }
+        }
+      }
+
+      match.score = Math.min(100, match.score);
+      match.tier = match.score >= 65 ? "s" : match.score >= 40 ? "l" : "a";
+
+      if (match.score >= 12) {
+        results.push({ t: change, s: match.score, rs: match.rs, tier: match.tier });
+      }
+    });
+
+    results.sort(function (a, b) { return b.s - a.s; });
+    return results.slice(0, topN);
+  }
+
+  /* ══════════════════════ Search ══════════════════════ */
+
+  function searchText(query, topN) {
+    topN = topN || 30;
+    var tokens = tokenize(query);
+    var bgs = bigrams(tokens);
+
+    // Rank candidates by accumulated rarity of matching tokens
+    var candidateScores = {};
+    tokens.forEach(function (tok) {
+      if (!IX.byToken[tok]) return;
+      var rarity = Math.log(IX.tickets.length / (IX.docFreq[tok] || 1));
+      IX.byToken[tok].forEach(function (i) {
+        candidateScores[i] = (candidateScores[i] || 0) + rarity;
+      });
+    });
+
+    // Take top 250 candidates by rarity score
+    var topCandidates = Object.keys(candidateScores).map(Number)
+      .sort(function (a, b) { return candidateScores[b] - candidateScores[a]; })
+      .slice(0, 250);
+
+    var results = [];
+    topCandidates.forEach(function (i) {
+      var cand = IX.tickets[i];
+      var reasons = [];
+      var score = 0;
+
+      score += jaccard(tokens, cand.tokens) * 40;
+      score += jaccard(bgs, cand.bgs) * 20;
+      score += subBonus(tokens, cand.tokens) * 10;
+
+      if (cand.descTokens.length) {
+        score += jaccard(tokens, cand.descTokens) * 6;
+      }
+
+      if (score >= 8) reasons.push({ c: "r-txt", t: "Text match" });
+
+      if (cand.isResolved && cand.hasSolution) {
+        score += 10;
+        reasons.push({ c: "r-comp", t: "Has solution" });
+      } else if (cand.isResolved) {
+        score += 5;
+      }
+
+      if (cand.screenName) {
+        score += 2;
+        reasons.push({ c: "r-scr", t: "Screen: " + cand.screenName });
+      }
+      if (cand.rootCause) score += 2;
+
+      score = Math.min(100, Math.round(score));
+      var tier = score >= 65 ? "s" : score >= 40 ? "l" : "a";
+
+      if (score >= 10) {
+        results.push({ t: cand, s: score, rs: reasons, tier: tier });
+      }
+    });
+
+    results.sort(function (a, b) {
+      return b.s !== a.s ? b.s - a.s : (b.t.hasSolution ? 1 : -1);
+    });
+    return results.slice(0, topN);
+  }
+
+  /* ══════════════════════ Clustering — Screen Name based ══════════════════════
+     Groups tickets by Screen Name (falling back to Menu Head).
+     Much more meaningful than generic keyword clustering. */
+
+  function buildClusters() {
+    var groups = {};
+
+    IX.tickets.forEach(function (t, i) {
+      var key = t.screenName || t.menuHead || null;
+      if (!key) return;   // skip tickets with no structural field
+
+      var lk = key.toLowerCase();
+      if (!groups[lk]) {
+        groups[lk] = {
+          label: key,
+          members: [],
+          resolved: 0,
+          changes: 0,
+          rc: {},
+          fx: {},
+          proj: {}
+        };
+      }
+
+      var g = groups[lk];
+      g.members.push(i);
+      if (t.isResolved) g.resolved++;
+      if (t.isChange) g.changes++;
+      if (t.rootCause) g.rc[t.rootCause] = (g.rc[t.rootCause] || 0) + 1;
+      if (t.typeOfFix) g.fx[t.typeOfFix] = (g.fx[t.typeOfFix] || 0) + 1;
+      if (t.project) g.proj[t.project] = (g.proj[t.project] || 0) + 1;
+    });
+
+    function topN(obj, n) {
+      return Object.keys(obj)
+        .sort(function (a, b) { return obj[b] - obj[a]; })
+        .slice(0, n)
+        .map(function (k) { return k + " (" + obj[k] + ")"; });
+    }
+
+    return Object.keys(groups).map(function (k) {
+      var g = groups[k];
+      g.rootCauses = topN(g.rc, 3);
+      g.fixes = topN(g.fx, 3);
+      g.projects = topN(g.proj, 4);
+      g.open = g.members.length - g.resolved;
+      g.recentDate = g.members.reduce(function (max, i) {
+        var d = IX.tickets[i].created ? new Date(IX.tickets[i].created) : null;
+        return d && !isNaN(d) && (!max || d > max) ? d : max;
+      }, null);
+      return g;
+    }).filter(function (g) { return g.members.length >= 2; });
+  }
+
+  /* ══════════════════════ Stats Dashboard ══════════════════════ */
+
+  function renderStats() {
+    var total = IX.tickets.length;
+    var inc = IX.incidents.length;
+    var sr = IX.srs.length;
+    var chg = IX.changes.length;
+    var resolved = IX.tickets.filter(function (t) { return t.isResolved; }).length;
+    var open = total - resolved;
+    var rpct = total ? Math.round(resolved / total * 100) : 0;
+
+    var activeCount = IX.tickets.filter(function (t) {
+      var s = t.status.toLowerCase();
+      return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
+    }).length;
+
+    // Priority distribution of open tickets
+    var priC = 0, priH = 0, priM = 0, priL = 0;
+    IX.tickets.filter(function (t) { return !t.isResolved; }).forEach(function (t) {
+      var p = (t.priority || "").toLowerCase();
+      if (p.indexOf("critical") > -1) priC++;
+      else if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) priH++;
+      else if (p.indexOf("medium") > -1) priM++;
+      else priL++;
+    });
+    var priTotal = priC + priH + priM + priL || 1;
+
+    var openChanges = IX.changes.filter(function (i) { return !IX.tickets[i].isResolved; }).length;
+
+    el("statsRow").innerHTML =
+      '<div class="stat cy">' +
+        '<div class="num">' + activeCount + '</div>' +
+        '<div class="lbl">Active queue</div>' +
+        '<div class="sub">Analysis &amp; Study + Acknowledged</div>' +
+      '</div>' +
+      '<div class="stat amber">' +
+        '<div class="num">' + open.toLocaleString() + '</div>' +
+        '<div class="lbl">Open tickets</div>' +
+        '<div class="sub">Across all statuses</div>' +
+      '</div>' +
+      '<div class="stat green">' +
+        '<div class="num">' + resolved.toLocaleString() + '</div>' +
+        '<div class="lbl">Resolved</div>' +
+        '<div class="sub">' + rpct + '% resolution rate</div>' +
+      '</div>' +
+      '<div class="stat blue">' +
+        '<div class="num">' + inc.toLocaleString() + '</div>' +
+        '<div class="lbl">Incidents</div>' +
+        '<div class="sub">' + sr + ' Service Requests</div>' +
+      '</div>' +
+      '<div class="stat indigo">' +
+        '<div class="num">' + chg.toLocaleString() + '</div>' +
+        '<div class="lbl">Changes</div>' +
+        '<div class="sub">' + openChanges + ' open</div>' +
+      '</div>' +
+      '<div class="stat rose">' +
+        '<div class="num">' + priC + '</div>' +
+        '<div class="lbl">Critical (open)</div>' +
+        '<div class="minibar">' +
+          '<span style="width:' + Math.round(priC / priTotal * 100) + '%;background:var(--violet)"></span>' +
+          '<span style="width:' + Math.round(priH / priTotal * 100) + '%;background:var(--rose)"></span>' +
+          '<span style="width:' + Math.round(priM / priTotal * 100) + '%;background:var(--amber)"></span>' +
+          '<span style="width:' + Math.round(priL / priTotal * 100) + '%;background:var(--green)"></span>' +
+        '</div>' +
+        '<div class="sub">C:' + priC + ' H:' + priH + ' M:' + priM + ' L:' + priL + '</div>' +
+      '</div>';
+  }
+
+  /* ══════════════════════ Rendering Helpers ══════════════════════ */
+
+  function sPill(status, isChange) {
+    var s = (status || "").toLowerCase();
+    if (isChange) return '<span class="pill pill-chg">' + esc(status) + '</span>';
+    if (s.indexOf("analysis & study") > -1) return '<span class="pill pill-as">' + esc(status) + '</span>';
+    if (s === "acknowledged") return '<span class="pill pill-ack">' + esc(status) + '</span>';
+    if (s === "open") return '<span class="pill pill-open">' + esc(status) + '</span>';
+    if (/resolved|closed|completed|delivered/.test(s)) return '<span class="pill pill-res">' + esc(status) + '</span>';
+    return '<span class="pill pill-oth">' + esc(status) + '</span>';
+  }
+
+  function tPill(t) {
+    if (t.isIncident) return '<span class="pill pill-inc">Incident</span>';
+    if (t.isSR) return '<span class="pill pill-sr">Service Req</span>';
+    if (t.isChange) return '<span class="pill pill-chg">Change</span>';
+    return t.issueType ? '<span class="pill pill-oth">' + esc(t.issueType) + '</span>' : '';
+  }
+
+  function pBadge(p) {
+    var lp = (p || "").toLowerCase();
+    if (lp.indexOf("critical") > -1) return '<span class="tcard-pri pri-c">' + esc(p) + '</span>';
+    if (lp.indexOf("high") > -1 || lp.indexOf("urgent") > -1) return '<span class="tcard-pri pri-h">' + esc(p) + '</span>';
+    if (lp.indexOf("medium") > -1) return '<span class="tcard-pri pri-m">' + esc(p) + '</span>';
+    if (lp.indexOf("low") > -1) return '<span class="tcard-pri pri-l">' + esc(p) + '</span>';
+    return '<span class="tcard-pri pri-d">' + esc(p || "—") + '</span>';
+  }
+
+  function scCls(score) {
+    return score >= 60 ? "sc-h" : score >= 35 ? "sc-md" : "sc-lo";
+  }
+
+  function tierB(tier) {
+    if (tier === "s") return '<span class="tier tier-s">sure shot</span>';
+    if (tier === "l") return '<span class="tier tier-l">likely</span>';
+    return '<span class="tier tier-a">assumption</span>';
+  }
+
+  function rTags(reasons) {
+    return reasons.map(function (r) {
+      return '<span class="rtag ' + r.c + '">' + esc(r.t) + '</span>';
+    }).join("");
+  }
+
+  /* ── Single similarity-match row ── */
+  function simRow(m) {
+    var t = m.t;
+    var sol = '';
+
+    if (t.analysis || t.solutionSummary) {
+      sol = '<div class="sim-sol">';
+      if (t.analysis) {
+        sol += '<b>Analysis:</b> ' + esc(t.analysis).substring(0, 180) +
+          (t.analysis.length > 180 ? "…" : "") + '<br>';
+      }
+      if (t.solutionSummary) {
+        sol += '<b>Solution:</b> ' + esc(t.solutionSummary).substring(0, 250) +
+          (t.solutionSummary.length > 250 ? "…" : "");
+      }
+      sol += '</div>';
+    }
+
+    return '<div class="sim-row' + (t.isChange ? " is-chg" : "") + '">' +
+      '<div class="sim-sc ' + scCls(m.s) + '">' + m.s + '%</div>' +
+      '<div class="sim-i">' +
+        '<div class="sim-k">' +
+          '<a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a> ' +
+          sPill(t.status, t.isChange) + ' ' + tierB(m.tier) +
+        '</div>' +
+        '<div class="sim-s">' + esc(t.summary) + '</div>' +
+        '<div class="sim-rs">' + rTags(m.rs) + '</div>' +
+        '<div style="display:flex;gap:3px;flex-wrap:wrap">' +
+          (t.rootCause ? '<span class="stag rc">' + esc(t.rootCause) + '</span>' : '') +
+          (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') +
+        '</div>' +
+        sol +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ── Ticket card (lightweight — similarity computed lazily on click) ── */
+  function renderCard(t, id) {
+    var meta = '';
+    if (t.project) meta += '<span>Project: <b>' + esc(t.project) + '</b></span>';
+    if (t.screenName) meta += '<span>Screen: <b>' + esc(t.screenName) + '</b></span>';
+    if (t.menuHead) meta += '<span>Menu: <b>' + esc(t.menuHead) + '</b></span>';
+    if (t.svmInCharge) meta += '<span>SVM: <b>' + esc(t.svmInCharge) + '</b></span>';
+    if (t.currentWorker) meta += '<span>Worker: <b>' + esc(t.currentWorker) + '</b></span>';
+
+    return '<div class="tcard">' +
+      '<div class="tcard-top">' +
+        '<div class="tcard-main">' +
+          '<div class="tcard-key">' +
+            '<a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a> ' +
+            sPill(t.status, t.isChange) + ' ' + tPill(t) +
+          '</div>' +
+          '<div class="tcard-sum">' + esc(t.summary) + '</div>' +
+          '<div class="tcard-meta">' + meta + '</div>' +
+        '</div>' +
+        '<div class="tcard-r">' + pBadge(t.priority) +
+          '<div class="tcard-date">' + fmtD(t.created) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sim-section">' +
+        '<div class="sim-tog" data-tog="' + id + '" data-tidx="' + t.idx + '">' +
+          '<span class="sl">🔍 Find similar tickets</span>' +
+          '<span class="sa">▾</span>' +
+        '</div>' +
+        '<div class="sim-body" id="sim-' + id + '">' +
+          '<div class="sim-empty" style="color:var(--cy)">Click to analyse…</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* ══════════════════════ Lazy Similarity Compute ══════════════════════
+     Triggered on first click of a ticket's "Find similar" toggle.
+     Shows a spinner, defers computation to next frame, then renders results. */
+
+  var _simDone = {};
+
+  function lazyCompute(ticketIdx, bodyEl, toggleBtn) {
+    var ticket = IX.tickets[ticketIdx];
+    if (!ticket) return;
+
+    // Show spinner
+    bodyEl.innerHTML = '<div class="sim-empty"><div class="spinner"></div>Analysing…</div>';
+    bodyEl.classList.add("open");
+    toggleBtn.classList.add("open");
+
+    // Defer heavy work so spinner can paint
+    setTimeout(function () {
+      // Find similar tickets
+      var allSimilar = findSimilar(ticket, 10, 15);
+      var simIncidents = allSimilar.filter(function (m) { return !m.t.isChange; });
+      var simChanges = allSimilar.filter(function (m) { return m.t.isChange; });
+
+      // Find related changes explicitly
+      var relatedChanges = findRelChanges(ticket, 6);
+
+      // Merge and deduplicate change matches
+      var changeMap = {};
+      simChanges.concat(relatedChanges).forEach(function (m) {
+        if (!changeMap[m.t.key] || changeMap[m.t.key].s < m.s) {
+          changeMap[m.t.key] = m;
+        }
+      });
+      var changeList = Object.keys(changeMap)
+        .map(function (k) { return changeMap[k]; })
+        .sort(function (a, b) { return b.s - a.s; })
+        .slice(0, 6);
+
+      // Build HTML — grouped by confidence tier
+      var html = '';
+      if (simIncidents.length) {
+        var sureShots = simIncidents.filter(function (m) { return m.tier === "s"; });
+        var likelys = simIncidents.filter(function (m) { return m.tier === "l"; });
+        var assumptions = simIncidents.filter(function (m) { return m.tier === "a"; });
+
+        if (sureShots.length) {
+          html += '<div class="sim-div">✓ Sure shot (' + sureShots.length + ')</div>';
+          html += sureShots.map(simRow).join("");
+        }
+        if (likelys.length) {
+          html += '<div class="sim-div">◎ Likely (' + likelys.length + ')</div>';
+          html += likelys.map(simRow).join("");
+        }
+        if (assumptions.length) {
+          html += '<div class="sim-div">◌ Assumptions (' + assumptions.length + ')</div>';
+          html += assumptions.map(simRow).join("");
+        }
+      } else {
+        html = '<div class="sim-empty">No similar tickets found.</div>';
+      }
+
+      if (changeList.length) {
+        html += '<div class="sim-div">🔀 Related changes (' + changeList.length + ')</div>';
+        html += changeList.map(simRow).join("");
+      }
+
+      bodyEl.innerHTML = html;
+
+      // Update toggle button with counts
+      var label = toggleBtn.querySelector(".sl");
+      if (label) label.textContent = "🔍 Similar tickets";
+
+      var arrow = toggleBtn.querySelector(".sa");
+      if (simIncidents.length) {
+        var badge = document.createElement("span");
+        badge.className = "sc sc-m";
+        badge.textContent = simIncidents.length;
+        toggleBtn.insertBefore(badge, arrow);
+      }
+      if (changeList.length) {
+        var chgBadge = document.createElement("span");
+        chgBadge.className = "sc sc-c";
+        chgBadge.textContent = changeList.length + " chg";
+        toggleBtn.insertBefore(chgBadge, arrow);
+      }
+
+      _simDone[ticketIdx] = true;
+    }, 20);
+  }
+
+  function bindToggles() {
+    document.querySelectorAll(".sim-tog").forEach(function (btn) {
+      btn.onclick = function () {
+        var id = btn.dataset.tog;
+        var ticketIdx = parseInt(btn.dataset.tidx);
+        var body = el("sim-" + id);
+        if (!body) return;
+
+        if (_simDone[ticketIdx]) {
+          // Already computed — just toggle open/close
+          var isOpen = body.classList.toggle("open");
+          btn.classList.toggle("open", isOpen);
+        } else {
+          // First click — compute then show
+          lazyCompute(ticketIdx, body, btn);
+        }
+      };
+    });
+  }
+
+  function bindClusterToggles() {
+    document.querySelectorAll(".ccard-x").forEach(function (btn) {
+      btn.onclick = function () {
+        var body = el(btn.dataset.ct);
+        if (!body) return;
+        var isOpen = body.classList.toggle("open");
+        btn.textContent = isOpen ? "Hide tickets ▴" : "Show tickets ▾";
+      };
+    });
+  }
+
+  /* ══════════════════════ Render Queue ══════════════════════ */
+
+  function renderQueue() {
+    var isActive = (F.qf === "active");
+
+    var list = IX.tickets.filter(function (t) {
+      // Project filter
+      if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
+
+      // Issue type filter
+      if (F.qt === "incident" && !t.isIncident) return false;
+      if (F.qt === "sr" && !t.isSR) return false;
+      if (F.qt === "change" && !t.isChange) return false;
+
+      // Priority filter
+      if (F.qpri) {
+        var p = (t.priority || "").toLowerCase();
+        if (p.indexOf(F.qpri) < 0) return false;
+      }
+
+      // Status filter
+      if (isActive) {
+        var s = t.status.toLowerCase();
+        return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
+      }
+      return !t.isResolved;
+    });
+
+    // Sort by priority (Critical first), then by created desc
+    var priOrder = { critical: 0, highest: 0, high: 1, urgent: 1, medium: 2, normal: 2, low: 3, lowest: 4 };
+    list.sort(function (a, b) {
+      var pa = priOrder[(a.priority || "").toLowerCase()];
+      var pb = priOrder[(b.priority || "").toLowerCase()];
+      pa = pa != null ? pa : 5;
+      pb = pb != null ? pb : 5;
+      if (pa !== pb) return pa - pb;
+      return (b.created ? new Date(b.created) : 0) - (a.created ? new Date(a.created) : 0);
+    });
+
+    el("qCnt").textContent = list.length;
+
+    if (!list.length) {
+      el("queueList").innerHTML =
+        '<div class="empty-st"><div class="i">✓</div>' +
+        '<h3>Queue clear</h3><p>No matching tickets found.</p></div>';
+      return;
+    }
+
+    var html = '';
+    list.forEach(function (t, i) {
+      html += renderCard(t, "q" + i);
+    });
+    el("queueList").innerHTML = html;
+    bindToggles();
+  }
+
+  /* ══════════════════════ Render Clusters ══════════════════════ */
+
+  function renderClusters() {
+    if (!CL) CL = buildClusters();
+
+    var filtered = CL.filter(function (c) { return c.members.length >= F.clMin; });
+
+    // Sort
+    if (F.clSort === "open") {
+      filtered.sort(function (a, b) { return b.open - a.open; });
+    } else if (F.clSort === "recent") {
+      filtered.sort(function (a, b) { return (b.recentDate || 0) - (a.recentDate || 0); });
+    } else {
+      filtered.sort(function (a, b) { return b.members.length - a.members.length; });
+    }
+
+    el("clCnt").textContent = filtered.length;
+
+    if (!filtered.length) {
+      el("clList").innerHTML =
+        '<div class="empty-st"><div class="i">🧩</div>' +
+        '<h3>No clusters</h3><p>Try lowering the minimum.</p></div>';
+      return;
+    }
+
+    var html = '';
+    filtered.forEach(function (c, ci) {
+      var pct = Math.round(c.resolved / c.members.length * 100);
+
+      html += '<div class="ccard"><div class="ccard-h">' +
+        '<div class="ccard-t">' + esc(c.label) + '</div>' +
+        '<div class="ccard-st">' +
+          '<span class="n">' + c.members.length + '</span> tickets · ' +
+          '<span class="n">' + c.resolved + '</span> resolved · ' +
+          '<span style="color:var(--amber);font-weight:700">' + c.open + '</span> open' +
+          (c.changes ? ' · <span style="color:var(--indigo);font-weight:700">' + c.changes + '</span> chg' : '') +
+        '</div>' +
+        '<div class="ccard-bar"><div class="ccard-bf" style="width:' + pct + '%"></div></div>' +
+        '<div class="ccard-d">' +
+          (c.rootCauses.length ? '<span>Causes: <b>' + c.rootCauses.map(esc).join(", ") + '</b></span>' : '') +
+          (c.fixes.length ? '<span>Fixes: <b>' + c.fixes.map(esc).join(", ") + '</b></span>' : '') +
+          (c.projects.length ? '<span>Projects: <b>' + c.projects.map(esc).join(", ") + '</b></span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<button class="ccard-x" data-ct="cl' + ci + '">Show tickets ▾</button>' +
+      '<div class="ccard-b" id="cl' + ci + '">';
+
+      // Show up to 50 tickets in a cluster
+      c.members.slice(0, 50).forEach(function (i) {
+        var t = IX.tickets[i];
+        html += '<div class="sim-row' + (t.isChange ? " is-chg" : "") + '">' +
+          '<div class="sim-sc ' + (t.isResolved ? "sc-h" : "sc-lo") + '">' +
+            (t.isResolved ? "✓" : "○") +
+          '</div>' +
+          '<div class="sim-i">' +
+            '<div class="sim-k">' + esc(t.key) + ' ' + sPill(t.status, t.isChange) + ' ' + tPill(t) + '</div>' +
+            '<div class="sim-s">' + esc(t.summary) + '</div>' +
+            (t.rootCause ? '<span class="stag rc">' + esc(t.rootCause) + '</span> ' : '') +
+            (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') +
+            (t.solutionSummary ? '<div class="sim-sol"><b>Solution:</b> ' + esc(t.solutionSummary).substring(0, 180) + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      });
+
+      if (c.members.length > 50) {
+        html += '<div class="sim-empty">Showing 50 of ' + c.members.length + '</div>';
+      }
+
+      html += '</div></div>';
+    });
+
+    el("clList").innerHTML = html;
+    bindClusterToggles();
+  }
+
+  /* ══════════════════════ Render Search Results ══════════════════════ */
+
+  function renderSearch(query) {
+    var t0 = performance.now();
+    var results = searchText(query, 30);
+    var ms = Math.round(performance.now() - t0);
+
+    var html = '<div class="sr-hd"><h2>Search results</h2>' +
+      '<span class="tk">' + results.length + ' matches · ' + ms + 'ms</span></div>';
+
+    if (!results.length) {
+      html += '<div class="empty-st"><div class="i">🔍</div>' +
+        '<h3>No matches</h3><p>Try different keywords.</p></div>';
+    } else {
+      results.forEach(function (m) {
+        var t = m.t;
+        var solBlock = '';
+
+        if (t.rootCause || t.typeOfFix || t.analysis || t.solutionSummary) {
+          solBlock = '<div class="sr-sol"><h4>Resolution details</h4>';
+          if (t.rootCause) solBlock += '<div class="r"><b>Root Cause:</b> ' + esc(t.rootCause) + '</div>';
+          if (t.typeOfFix) solBlock += '<div class="r"><b>Fix:</b> ' + esc(t.typeOfFix) + '</div>';
+          if (t.analysis) {
+            solBlock += '<div class="r"><b>Analysis:</b> ' + esc(t.analysis).substring(0, 350) +
+              (t.analysis.length > 350 ? "…" : "") + '</div>';
+          }
+          if (t.solutionSummary) {
+            solBlock += '<div class="r"><b>Solution:</b> ' + esc(t.solutionSummary).substring(0, 400) +
+              (t.solutionSummary.length > 400 ? "…" : "") + '</div>';
+          }
+          solBlock += '</div>';
+        }
+
+        html += '<div class="sr-card"><div class="sr-top">' +
+          '<div class="sim-sc ' + scCls(m.s) + '">' + m.s + '%</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="sim-k">' +
+              '<a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a> ' +
+              sPill(t.status, t.isChange) + ' ' + tPill(t) + ' ' + tierB(m.tier) +
+              ' <span style="color:var(--faint);font-size:10px">' + fmtD(t.resolved || t.created) + '</span>' +
+            '</div>' +
+            '<div class="sim-s" style="font-size:13.5px">' + esc(t.summary) + '</div>' +
+            '<div class="sim-rs">' + rTags(m.rs) + '</div>' +
+          '</div>' +
+        '</div>' + solBlock + '</div>';
+      });
+    }
+
+    el("searchView").innerHTML = html;
+  }
+
+  /* ══════════════════════ Tab / Search / Filter Wiring ══════════════════════ */
+
+  function switchTab(tab) {
+    F.tab = tab;
+    document.querySelectorAll(".tab").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.tab === tab);
+    });
+    el("queueView").classList.toggle("hidden", tab !== "queue");
+    el("clusterView").classList.toggle("hidden", tab !== "clusters");
+
+    if (tab === "clusters" && !el("clList").innerHTML) {
+      renderClusters();
+    }
+  }
+
+  document.querySelectorAll(".tab").forEach(function (b) {
+    b.onclick = function () { switchTab(b.dataset.tab); };
   });
-  el("searchView").innerHTML=html;
-}
 
-/* ═══ TOGGLE WIRING — lazy compute on first expand ═══ */
-var _simDone={};
-function computeAndRender(tidx,bodyEl,btn){
-  var t=IX.tickets[tidx];if(!t)return;
-  bodyEl.innerHTML='<div class="sim-empty"><div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 8px"></div>Analysing '+IX.tickets.length.toLocaleString()+' tickets…</div>';
-  bodyEl.classList.add("open");btn.classList.add("open");
-  setTimeout(function(){
-    var sim=findSimilar(t,10,15);
-    var simInc=sim.filter(function(m){return!m.ticket.isChange});
-    var simChg=sim.filter(function(m){return m.ticket.isChange});
-    var relChg=findRelatedChanges(t,6);
-    var chgMap={};
-    simChg.concat(relChg).forEach(function(m){if(!chgMap[m.ticket.key]||chgMap[m.ticket.key].score<m.score)chgMap[m.ticket.key]=m});
-    var chgList=Object.keys(chgMap).map(function(k){return chgMap[k]}).sort(function(a,b){return b.score-a.score}).slice(0,6);
-    var html='';
-    if(simInc.length){
-      var su=simInc.filter(function(m){return m.tier==="sure"}),li=simInc.filter(function(m){return m.tier==="likely"}),as=simInc.filter(function(m){return m.tier==="assumption"});
-      if(su.length){html+='<div class="sim-divider">✓ Sure shot matches ('+su.length+')</div>';html+=su.map(function(m){return renderSimRow(m)}).join("")}
-      if(li.length){html+='<div class="sim-divider">◎ Likely matches ('+li.length+')</div>';html+=li.map(function(m){return renderSimRow(m)}).join("")}
-      if(as.length){html+='<div class="sim-divider">◌ Assumptions ('+as.length+')</div>';html+=as.map(function(m){return renderSimRow(m)}).join("")}
-    } else { html='<div class="sim-empty">No similar incidents or service requests found.</div>'; }
-    if(chgList.length){html+='<div class="sim-divider">🔀 Related change tickets ('+chgList.length+')</div>';html+=chgList.map(function(m){return renderSimRow(m,true)}).join("")}
-    bodyEl.innerHTML=html;
-    var lbl=btn.querySelector(".sim-label");if(lbl)lbl.textContent="🔍 Similar tickets";
-    var arrow=btn.querySelector(".sim-arrow");
-    if(simInc.length){var sp=document.createElement("span");sp.className="sim-count";sp.textContent=simInc.length+" match"+(simInc.length!==1?"es":"");btn.insertBefore(sp,arrow)}
-    if(chgList.length){var sc=document.createElement("span");sc.className="chg-count";sc.textContent=chgList.length+" change"+(chgList.length!==1?"s":"");btn.insertBefore(sc,arrow)}
-    _simDone[tidx]=true;
-  },30);
-}
-function bindToggles(){document.querySelectorAll(".sim-toggle").forEach(function(btn){btn.onclick=function(){
-  var id=btn.dataset.toggle,tidx=parseInt(btn.dataset.tidx),body=el("sim-"+id);if(!body)return;
-  if(_simDone[tidx]){var o=body.classList.toggle("open");btn.classList.toggle("open",o)}
-  else{computeAndRender(tidx,body,btn)}
-}})}
-function bindClusterToggles(){document.querySelectorAll(".ccard-expand").forEach(function(btn){btn.onclick=function(){var b=el(btn.dataset.ctoggle);if(!b)return;var o=b.classList.toggle("open");btn.textContent=o?"Hide tickets ▴":"Show tickets ▾"}})}
+  // Search with debounce
+  var _searchTimer = null;
+  el("searchInput").addEventListener("input", function () {
+    var q = this.value.trim();
+    el("searchWrap").classList.toggle("has-q", !!q);
+    clearTimeout(_searchTimer);
 
-/* ═══ TAB / SEARCH / FILTER WIRING ═══ */
-function switchTab(tab){ST.tab=tab;document.querySelectorAll(".tab").forEach(function(b){b.classList.toggle("on",b.dataset.tab===tab)});
-  el("queueView").classList.toggle("hidden",tab!=="queue");el("clusterView").classList.toggle("hidden",tab!=="clusters");
-  if(tab==="clusters"&&!el("clusterList").innerHTML)renderClusters()}
-document.querySelectorAll(".tab").forEach(function(b){b.onclick=function(){switchTab(b.dataset.tab)}});
+    if (!q) {
+      el("searchView").classList.add("hidden");
+      el("tabBar").classList.remove("hidden");
+      el("statsRow").classList.remove("hidden");
+      el(F.tab === "clusters" ? "clusterView" : "queueView").classList.remove("hidden");
+      return;
+    }
 
-var _st=null;
-el("searchInput").addEventListener("input",function(){
-  var q=this.value.trim();ST.sq=q;el("searchWrap").classList.toggle("has-query",!!q);clearTimeout(_st);
-  if(!q){el("searchView").classList.add("hidden");el("tabBar").classList.remove("hidden");el(ST.tab==="clusters"?"clusterView":"queueView").classList.remove("hidden");return}
-  _st=setTimeout(function(){el("tabBar").classList.add("hidden");el("queueView").classList.add("hidden");el("clusterView").classList.add("hidden");el("searchView").classList.remove("hidden");renderSearch(q)},300);
-});
-el("searchClear").onclick=function(){el("searchInput").value="";el("searchInput").dispatchEvent(new Event("input"));el("searchInput").focus()};
+    _searchTimer = setTimeout(function () {
+      el("tabBar").classList.add("hidden");
+      el("statsRow").classList.add("hidden");
+      el("queueView").classList.add("hidden");
+      el("clusterView").classList.add("hidden");
+      el("searchView").classList.remove("hidden");
+      renderSearch(q);
+    }, 350);
+  });
 
-document.querySelectorAll("[data-qfilter]").forEach(function(btn){btn.onclick=function(){ST.qfilter=btn.dataset.qfilter;_simDone={};
-  document.querySelectorAll("[data-qfilter]").forEach(function(b){b.classList.toggle("on",b.dataset.qfilter===ST.qfilter)});renderQueue()}});
-el("queueProjectFilter").onchange=function(){ST.qproject=this.value;_simDone={};renderQueue()};
-el("clusterMinSize").onchange=function(){ST.clMin=parseInt(this.value)||3;renderClusters()};
-el("clusterSort").onchange=function(){ST.clSort=this.value;renderClusters()};
+  el("searchClear").onclick = function () {
+    el("searchInput").value = "";
+    el("searchInput").dispatchEvent(new Event("input"));
+    el("searchInput").focus();
+  };
 
-/* ═══ BOOT ═══ */
-function pickSheet(wb){return wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("jira issues")>-1})||wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1})||wb.SheetNames[1]||wb.SheetNames[0]}
-function boot(rows){
-  initCols(rows);ROWS=rows;IX=buildIndex(rows);CLUSTERS=null;
-  var projects={};IX.tickets.forEach(function(t){if(t.project)projects[t.project]=(projects[t.project]||0)+1});
-  var sel=el("queueProjectFilter");sel.innerHTML='<option value="">All projects</option>';
-  Object.keys(projects).sort(function(a,b){return projects[b]-projects[a]}).forEach(function(p){sel.innerHTML+='<option value="'+esc(p)+'">'+esc(p)+' ('+projects[p]+')</option>'});
-  var chgCount=IX.changes.length,incCount=IX.incidents.length;
-  el("ticketCount").textContent=IX.tickets.length.toLocaleString()+" tickets · "+incCount+" incidents · "+chgCount+" changes";
-  el("landing").classList.add("hidden");el("app").classList.remove("hidden");
-  if(HS&&HS.loadConfig)HS.loadConfig().then(function(cfg){
-    if(window.HDClass)window.HDClass.setOverrides(cfg.statusOverrides);
-    if(window.HDGroups)window.HDGroups.setOverrides(cfg.groupOverrides);
-    if(window.HDStages)window.HDStages.setOverrides(cfg.stageOverrides)});
-  renderQueue();
-}
-if(HS){HS.loadRows().then(function(ed){
-  if(ed&&ed.length)return boot(ed);
-  return HS.loadFile().then(function(rec){if(!rec||!rec.blob)return;
-    return new Promise(function(res,rej){var r=new FileReader();
-      r.onload=function(e){try{var wb=XLSX.read(e.target.result,{type:"array",cellDates:true});boot(XLSX.utils.sheet_to_json(wb.Sheets[pickSheet(wb)],{defval:""}));res()}catch(err){rej(err)}};
-      r.onerror=rej;r.readAsArrayBuffer(rec.blob)})})
-}).catch(function(err){console.error("Clarify boot:",err)})}
+  // Status filter chips
+  document.querySelectorAll("[data-qf]").forEach(function (btn) {
+    btn.onclick = function () {
+      F.qf = btn.dataset.qf;
+      _simDone = {};
+      document.querySelectorAll("[data-qf]").forEach(function (b) {
+        b.classList.toggle("on", b.dataset.qf === F.qf);
+      });
+      renderQueue();
+    };
+  });
+
+  // Issue type filter chips
+  document.querySelectorAll("[data-qt]").forEach(function (btn) {
+    btn.onclick = function () {
+      F.qt = btn.dataset.qt;
+      _simDone = {};
+      document.querySelectorAll("[data-qt]").forEach(function (b) {
+        b.classList.toggle("on", b.dataset.qt === F.qt);
+      });
+      renderQueue();
+    };
+  });
+
+  // Priority dropdown
+  el("qPri").onchange = function () {
+    F.qpri = this.value;
+    _simDone = {};
+    renderQueue();
+  };
+
+  // Project dropdown
+  el("qProj").onchange = function () {
+    F.qproj = this.value;
+    _simDone = {};
+    renderQueue();
+  };
+
+  // Cluster controls
+  el("clMin").onchange = function () {
+    F.clMin = parseInt(this.value) || 5;
+    renderClusters();
+  };
+
+  el("clSort").onchange = function () {
+    F.clSort = this.value;
+    renderClusters();
+  };
+
+  /* ══════════════════════ Boot ══════════════════════ */
+
+  function pickSheet(wb) {
+    return wb.SheetNames.find(function (s) { return s.toLowerCase().indexOf("jira issues") > -1; })
+      || wb.SheetNames.find(function (s) { return s.toLowerCase().indexOf("issue") > -1; })
+      || wb.SheetNames[1] || wb.SheetNames[0];
+  }
+
+  function boot(rows) {
+    initCols(rows);
+    IX = buildIndex(rows);
+    CL = null;   // rebuild clusters on demand
+
+    // Populate project dropdown
+    var projects = {};
+    IX.tickets.forEach(function (t) {
+      if (t.project) projects[t.project] = (projects[t.project] || 0) + 1;
+    });
+    var sel = el("qProj");
+    sel.innerHTML = '<option value="">All projects</option>';
+    Object.keys(projects)
+      .sort(function (a, b) { return projects[b] - projects[a]; })
+      .forEach(function (p) {
+        sel.innerHTML += '<option value="' + esc(p) + '">' + esc(p) + ' (' + projects[p] + ')</option>';
+      });
+
+    // Show app
+    el("landing").classList.add("hidden");
+    el("app").classList.remove("hidden");
+
+    // Apply master data overrides
+    if (HS && HS.loadConfig) {
+      HS.loadConfig().then(function (cfg) {
+        if (window.HDClass) window.HDClass.setOverrides(cfg.statusOverrides);
+        if (window.HDGroups) window.HDGroups.setOverrides(cfg.groupOverrides);
+        if (window.HDStages) window.HDStages.setOverrides(cfg.stageOverrides);
+      });
+    }
+
+    renderStats();
+    renderQueue();
+  }
+
+  /* ── Load data from IndexedDB (same pattern as other dashboards) ── */
+  if (HS) {
+    HS.loadRows().then(function (editedRows) {
+      if (editedRows && editedRows.length) return boot(editedRows);
+
+      return HS.loadFile().then(function (rec) {
+        if (!rec || !rec.blob) return;   // no data → show landing
+
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            try {
+              var wb = XLSX.read(e.target.result, { type: "array", cellDates: true });
+              var sheetName = pickSheet(wb);
+              var rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
+              boot(rows);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(rec.blob);
+        });
+      });
+    }).catch(function (err) {
+      console.error("Clarify boot error:", err);
+    });
+  }
+
 })();
 </script>
 </body>
