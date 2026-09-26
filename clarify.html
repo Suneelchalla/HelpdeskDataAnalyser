@@ -525,7 +525,7 @@ function buildClusters(){
 function statusPill(status,isChange){
   var s=(status||"").toLowerCase();
   if(isChange)return'<span class="status-pill pill-change">'+esc(status)+'</span>';
-  if(s.indexOf("analysis")>-1)return'<span class="status-pill pill-analysis">'+esc(status)+'</span>';
+  if(s.indexOf("analysis & study")>-1)return'<span class="status-pill pill-analysis">'+esc(status)+'</span>';
   if(s.indexOf("acknowledged")>-1||s==="open")return'<span class="status-pill pill-ack">'+esc(status)+'</span>';
   if(/resolved|closed|completed|delivered/.test(s))return'<span class="status-pill pill-resolved">'+esc(status)+'</span>';
   return'<span class="status-pill pill-other">'+esc(status)+'</span>';
@@ -568,7 +568,7 @@ function renderSimRow(m,isChangeSection){
     +'</div></div>';
 }
 
-function renderTicketCard(t,simMatches,chgMatches,id){
+function renderTicketCard(t,id){
   var meta='';
   if(t.project)meta+='<span>Project: <b>'+esc(t.project)+'</b></span>';
   if(t.screenName)meta+='<span>Screen: <b>'+esc(t.screenName)+'</b></span>';
@@ -576,26 +576,6 @@ function renderTicketCard(t,simMatches,chgMatches,id){
   if(t.svmInCharge)meta+='<span>SVM: <b>'+esc(t.svmInCharge)+'</b></span>';
   if(t.currentWorker)meta+='<span>Worker: <b>'+esc(t.currentWorker)+'</b></span>';
   if(t.labels)meta+='<span>Labels: <b>'+esc(t.labels)+'</b></span>';
-
-  var simHtml='';
-  if(simMatches.length){
-    var sureShots=simMatches.filter(function(m){return m.tier==="sure"});
-    var likelys=simMatches.filter(function(m){return m.tier==="likely"});
-    var assumptions=simMatches.filter(function(m){return m.tier==="assumption"});
-    if(sureShots.length){simHtml+='<div class="sim-divider">✓ Sure shot matches ('+sureShots.length+')</div>';simHtml+=sureShots.map(function(m){return renderSimRow(m)}).join("")}
-    if(likelys.length){simHtml+='<div class="sim-divider">◎ Likely matches ('+likelys.length+')</div>';simHtml+=likelys.map(function(m){return renderSimRow(m)}).join("")}
-    if(assumptions.length){simHtml+='<div class="sim-divider">◌ Assumptions ('+assumptions.length+')</div>';simHtml+=assumptions.map(function(m){return renderSimRow(m)}).join("")}
-  } else {
-    simHtml='<div class="sim-empty">No similar incidents or service requests found above the confidence threshold.</div>';
-  }
-
-  var chgHtml='';
-  if(chgMatches.length){
-    chgHtml+='<div class="sim-divider">🔀 Related change tickets ('+chgMatches.length+')</div>';
-    chgHtml+=chgMatches.map(function(m){return renderSimRow(m,true)}).join("");
-  }
-
-  var simCount=simMatches.length,chgCount=chgMatches.length;
 
   return'<div class="tcard up">'
     +'<div class="tcard-top"><div class="tcard-main">'
@@ -608,13 +588,11 @@ function renderTicketCard(t,simMatches,chgMatches,id){
     +'<div class="tcard-right">'+priBadge(t.priority)+'<div class="tcard-date">'+fmtD(t.created)+'</div></div>'
     +'</div>'
     +'<div class="sim-section">'
-    +'<div class="sim-toggle" data-toggle="'+id+'">'
-    +'<span class="sim-label">🔍 Similar tickets</span>'
-    +'<span class="sim-count">'+simCount+' match'+(simCount!==1?"es":"")+'</span>'
-    +(chgCount?'<span class="chg-count">'+chgCount+' change'+(chgCount!==1?"s":"")+'</span>':'')
+    +'<div class="sim-toggle" data-toggle="'+id+'" data-tidx="'+t.idx+'">'
+    +'<span class="sim-label">🔍 Find similar tickets</span>'
     +'<span class="sim-arrow">▾</span>'
     +'</div>'
-    +'<div class="sim-body" id="sim-'+id+'">'+simHtml+chgHtml+'</div>'
+    +'<div class="sim-body" id="sim-'+id+'"><div class="sim-empty" style="color:var(--cy)">Click above to analyse…</div></div>'
     +'</div></div>';
 }
 
@@ -623,7 +601,7 @@ function renderQueue(){
   var isActive=ST.qfilter==="active";
   var list=IX.tickets.filter(function(t){
     if(ST.qproject&&t.project.toLowerCase()!==ST.qproject.toLowerCase())return false;
-    if(isActive){var s=t.status.toLowerCase();return s.indexOf("analysis")>-1||s.indexOf("acknowledged")>-1||s==="open"}
+    if(isActive){var s=t.status.toLowerCase();return s.indexOf("analysis & study")>-1||s==="acknowledged"||s==="open"}
     return!t.isResolved;
   });
   var priOrd={critical:0,highest:0,high:1,urgent:1,medium:2,normal:2,low:3,lowest:4};
@@ -636,21 +614,7 @@ function renderQueue(){
   el("queueCnt").textContent=list.length;
   if(!list.length){el("queueList").innerHTML='<div class="empty-state"><div class="ico">✓</div><h3>Queue is clear</h3><p>No tickets in '+(isActive?"Analysis & Study / Acknowledged":"open")+' status right now.</p></div>';return}
   var html='';
-  list.forEach(function(t,i){
-    var sim=findSimilar(t,10,15);
-    // split: similar incidents/SRs vs change tickets
-    var simInc=sim.filter(function(m){return!m.ticket.isChange});
-    var simChg=sim.filter(function(m){return m.ticket.isChange});
-    // also find related changes explicitly
-    var relChg=findRelatedChanges(t,6);
-    // merge & dedupe change matches
-    var chgMap={};
-    simChg.concat(relChg).forEach(function(m){
-      if(!chgMap[m.ticket.key]||chgMap[m.ticket.key].score<m.score)chgMap[m.ticket.key]=m;
-    });
-    var chgList=Object.keys(chgMap).map(function(k){return chgMap[k]}).sort(function(a,b){return b.score-a.score}).slice(0,6);
-    html+=renderTicketCard(t,simInc,chgList,"q"+i);
-  });
+  list.forEach(function(t,i){ html+=renderTicketCard(t,"q"+i); });
   el("queueList").innerHTML=html;
   bindToggles();
 }
@@ -725,8 +689,41 @@ function renderSearch(query){
   el("searchView").innerHTML=html;
 }
 
-/* ═══ TOGGLE WIRING ═══ */
-function bindToggles(){document.querySelectorAll(".sim-toggle").forEach(function(btn){btn.onclick=function(){var b=el("sim-"+btn.dataset.toggle);if(!b)return;var o=b.classList.toggle("open");btn.classList.toggle("open",o)}})}
+/* ═══ TOGGLE WIRING — lazy compute on first expand ═══ */
+var _simDone={};
+function computeAndRender(tidx,bodyEl,btn){
+  var t=IX.tickets[tidx];if(!t)return;
+  bodyEl.innerHTML='<div class="sim-empty"><div class="spinner" style="width:20px;height:20px;border-width:2px;margin:0 auto 8px"></div>Analysing '+IX.tickets.length.toLocaleString()+' tickets…</div>';
+  bodyEl.classList.add("open");btn.classList.add("open");
+  setTimeout(function(){
+    var sim=findSimilar(t,10,15);
+    var simInc=sim.filter(function(m){return!m.ticket.isChange});
+    var simChg=sim.filter(function(m){return m.ticket.isChange});
+    var relChg=findRelatedChanges(t,6);
+    var chgMap={};
+    simChg.concat(relChg).forEach(function(m){if(!chgMap[m.ticket.key]||chgMap[m.ticket.key].score<m.score)chgMap[m.ticket.key]=m});
+    var chgList=Object.keys(chgMap).map(function(k){return chgMap[k]}).sort(function(a,b){return b.score-a.score}).slice(0,6);
+    var html='';
+    if(simInc.length){
+      var su=simInc.filter(function(m){return m.tier==="sure"}),li=simInc.filter(function(m){return m.tier==="likely"}),as=simInc.filter(function(m){return m.tier==="assumption"});
+      if(su.length){html+='<div class="sim-divider">✓ Sure shot matches ('+su.length+')</div>';html+=su.map(function(m){return renderSimRow(m)}).join("")}
+      if(li.length){html+='<div class="sim-divider">◎ Likely matches ('+li.length+')</div>';html+=li.map(function(m){return renderSimRow(m)}).join("")}
+      if(as.length){html+='<div class="sim-divider">◌ Assumptions ('+as.length+')</div>';html+=as.map(function(m){return renderSimRow(m)}).join("")}
+    } else { html='<div class="sim-empty">No similar incidents or service requests found.</div>'; }
+    if(chgList.length){html+='<div class="sim-divider">🔀 Related change tickets ('+chgList.length+')</div>';html+=chgList.map(function(m){return renderSimRow(m,true)}).join("")}
+    bodyEl.innerHTML=html;
+    var lbl=btn.querySelector(".sim-label");if(lbl)lbl.textContent="🔍 Similar tickets";
+    var arrow=btn.querySelector(".sim-arrow");
+    if(simInc.length){var sp=document.createElement("span");sp.className="sim-count";sp.textContent=simInc.length+" match"+(simInc.length!==1?"es":"");btn.insertBefore(sp,arrow)}
+    if(chgList.length){var sc=document.createElement("span");sc.className="chg-count";sc.textContent=chgList.length+" change"+(chgList.length!==1?"s":"");btn.insertBefore(sc,arrow)}
+    _simDone[tidx]=true;
+  },30);
+}
+function bindToggles(){document.querySelectorAll(".sim-toggle").forEach(function(btn){btn.onclick=function(){
+  var id=btn.dataset.toggle,tidx=parseInt(btn.dataset.tidx),body=el("sim-"+id);if(!body)return;
+  if(_simDone[tidx]){var o=body.classList.toggle("open");btn.classList.toggle("open",o)}
+  else{computeAndRender(tidx,body,btn)}
+}})}
 function bindClusterToggles(){document.querySelectorAll(".ccard-expand").forEach(function(btn){btn.onclick=function(){var b=el(btn.dataset.ctoggle);if(!b)return;var o=b.classList.toggle("open");btn.textContent=o?"Hide tickets ▴":"Show tickets ▾"}})}
 
 /* ═══ TAB / SEARCH / FILTER WIRING ═══ */
@@ -743,9 +740,9 @@ el("searchInput").addEventListener("input",function(){
 });
 el("searchClear").onclick=function(){el("searchInput").value="";el("searchInput").dispatchEvent(new Event("input"));el("searchInput").focus()};
 
-document.querySelectorAll("[data-qfilter]").forEach(function(btn){btn.onclick=function(){ST.qfilter=btn.dataset.qfilter;
+document.querySelectorAll("[data-qfilter]").forEach(function(btn){btn.onclick=function(){ST.qfilter=btn.dataset.qfilter;_simDone={};
   document.querySelectorAll("[data-qfilter]").forEach(function(b){b.classList.toggle("on",b.dataset.qfilter===ST.qfilter)});renderQueue()}});
-el("queueProjectFilter").onchange=function(){ST.qproject=this.value;renderQueue()};
+el("queueProjectFilter").onchange=function(){ST.qproject=this.value;_simDone={};renderQueue()};
 el("clusterMinSize").onchange=function(){ST.clMin=parseInt(this.value)||3;renderClusters()};
 el("clusterSort").onchange=function(){ST.clSort=this.value;renderClusters()};
 
