@@ -383,6 +383,7 @@ function render(){
       '<div class="divider"></div>'+
       '<div class="tabs" id="tabs">'+
         '<button class="'+(S.tab==="overview"?"on":"")+'" data-tab="overview">Overview</button>'+
+        '<button class="'+(S.tab==="releases"?"on":"")+'" data-tab="releases">Releases</button>'+
         '<button class="'+(S.tab==="tickets"?"on":"")+'" data-tab="tickets">Tickets <span class="cnt">'+FILTERED.length+'</span></button>'+
         '<button class="'+(S.tab==="trend"?"on":"")+'" data-tab="trend">Trend</button>'+
       '</div>'+
@@ -427,6 +428,7 @@ function render(){
   h+='</div>';
 
   if(S.tab==="overview") h+=renderOverview();
+  else if(S.tab==="releases") h+=renderReleases();
   else if(S.tab==="tickets") h+=renderTickets();
   else if(S.tab==="trend") h+=renderTrend();
 
@@ -573,6 +575,165 @@ function drawDonut(slices,total){
 
 function legRow(c,label,val,total,drillId){
   return '<div class="leg-row" data-drill="'+drillId+'" style="cursor:pointer"><span class="leg-dot" style="background:'+c+'"></span><span class="leg-label">'+label+'</span><span class="leg-val">'+fmtN(val)+'</span><span class="leg-pct">'+pct(val,total)+'</span></div>';
+}
+
+/* ── RELEASES TAB (pivot: SVM In Charge → Release Numbers → Tickets) ── */
+function renderReleases() {
+  // Build nested structure: SVM → { releases: { relNum → [tickets] } }
+  var svmMap = {};
+  FILTERED.forEach(function (t) {
+    var svm = t.svm || "(unassigned)";
+    var rel = t.releaseStr;
+    if (!rel) return; // skip tickets without a release number
+
+    if (!svmMap[svm]) svmMap[svm] = { releases: {}, total: 0, closed: 0 };
+    svmMap[svm].total++;
+    if (t.closed) svmMap[svm].closed++;
+
+    if (!svmMap[svm].releases[rel]) svmMap[svm].releases[rel] = [];
+    svmMap[svm].releases[rel].push(t);
+  });
+
+  // Sort SVMs by total releases (descending)
+  var svmList = Object.keys(svmMap).map(function (name) {
+    var data = svmMap[name];
+    var relKeys = Object.keys(data.releases).sort(function (a, b) {
+      return data.releases[b].length - data.releases[a].length;
+    });
+    return { name: name, data: data, relKeys: relKeys, relCount: relKeys.length };
+  }).sort(function (a, b) { return b.data.total - a.data.total; });
+
+  // Count totals
+  var totalReleaseNums = 0;
+  svmList.forEach(function (s) { totalReleaseNums += s.relCount; });
+
+  var h = '';
+
+  // Summary KPIs for this view
+  h += '<div class="kpis up d1" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">';
+  h += '<div class="card kpi" style="border-left:3px solid var(--vi)"><span class="tag">👤</span>' +
+    '<div class="kv mono">' + svmList.length + '</div>' +
+    '<div class="kl">SVM owners</div></div>';
+  h += '<div class="card kpi" style="border-left:3px solid var(--df)"><span class="tag">📦</span>' +
+    '<div class="kv mono">' + fmtN(totalReleaseNums) + '</div>' +
+    '<div class="kl">Distinct releases</div></div>';
+  var totalTix = svmList.reduce(function (s, v) { return s + v.data.total; }, 0);
+  h += '<div class="card kpi" style="border-left:3px solid var(--wa)"><span class="tag">📋</span>' +
+    '<div class="kv mono">' + fmtN(totalTix) + '</div>' +
+    '<div class="kl">Tickets with releases</div></div>';
+  // Find release with most tickets
+  var topRel = "", topRelCount = 0;
+  svmList.forEach(function (s) {
+    s.relKeys.forEach(function (r) {
+      if (s.data.releases[r].length > topRelCount) {
+        topRel = r; topRelCount = s.data.releases[r].length;
+      }
+    });
+  });
+  h += '<div class="card kpi" style="border-left:3px solid var(--bf)"><span class="tag">🔝</span>' +
+    '<div class="kv mono" style="font-size:15px">' + esc(topRel || "—") + '</div>' +
+    '<div class="kl">Busiest release (' + topRelCount + ' tickets)</div></div>';
+  h += '</div>';
+
+  // Main accordion: one card per SVM
+  svmList.forEach(function (s, si) {
+    var data = s.data;
+    var pctClosed = data.total ? Math.round(data.closed / data.total * 100) : 0;
+
+    h += '<div class="card up" style="margin-bottom:12px;overflow:hidden">';
+
+    // SVM header (clickable to collapse)
+    h += '<div style="padding:14px 18px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:background .12s" ' +
+      'class="rel-svm-hd" data-relsvm="rs' + si + '">';
+    h += '<div style="flex:1">';
+    h += '<div style="font-family:var(--disp);font-weight:700;font-size:15px;letter-spacing:-.3px">' + esc(s.name) + '</div>';
+    h += '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">' +
+      '<span class="mono" style="color:var(--vi);font-weight:700">' + s.relCount + '</span> releases · ' +
+      '<span class="mono" style="font-weight:700">' + data.total + '</span> tickets · ' +
+      '<span class="mono" style="color:var(--green);font-weight:700">' + data.closed + '</span> closed · ' +
+      '<span class="mono" style="color:var(--wa);font-weight:700">' + (data.total - data.closed) + '</span> open</div>';
+    h += '</div>';
+    // Mini progress bar
+    h += '<div style="width:80px;height:6px;border-radius:3px;background:var(--line);overflow:hidden">' +
+      '<div style="width:' + pctClosed + '%;height:100%;background:linear-gradient(90deg,var(--df),var(--green));border-radius:3px"></div></div>';
+    h += '<span style="font-family:var(--mono);font-size:11px;color:var(--faint);min-width:36px;text-align:right">' + pctClosed + '%</span>';
+    h += '<span class="rel-arrow" style="color:var(--faint);font-size:12px;transition:transform .2s">▾</span>';
+    h += '</div>';
+
+    // Release list (expandable)
+    h += '<div class="rel-svm-body" id="rs' + si + '" style="display:none;border-top:1px solid var(--line)">';
+
+    s.relKeys.forEach(function (relNum, ri) {
+      var tickets = data.releases[relNum];
+      var relClosed = tickets.filter(function (t) { return t.closed; }).length;
+      var relOpen = tickets.length - relClosed;
+
+      // Fix type breakdown
+      var relDf = tickets.filter(function (t) { return t.fixType === "Data Fix"; }).length;
+      var relBf = tickets.filter(function (t) { return t.fixType === "Bug Fix"; }).length;
+      var relWa = tickets.filter(function (t) { return t.fixType === "Workaround"; }).length;
+
+      h += '<div style="border-bottom:1px solid var(--line)">';
+
+      // Release number header
+      h += '<div style="padding:10px 18px 10px 32px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .12s" ' +
+        'class="rel-num-hd" data-relnum="rn' + si + '_' + ri + '">';
+      h += '<span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--vi);min-width:160px">' + esc(relNum) + '</span>';
+      h += '<span style="font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--ink)">' + tickets.length + ' ticket' + (tickets.length !== 1 ? "s" : "") + '</span>';
+
+      // Mini fix-type badges
+      if (relDf) h += '<span style="font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:var(--df-bg);color:var(--df);border:1px solid var(--df-soft)">' + relDf + ' DF</span>';
+      if (relBf) h += '<span style="font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:var(--bf-bg);color:var(--bf);border:1px solid var(--bf-soft)">' + relBf + ' BF</span>';
+      if (relWa) h += '<span style="font-family:var(--mono);font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:var(--wa-bg);color:var(--wa);border:1px solid var(--wa-soft)">' + relWa + ' WA</span>';
+
+      h += '<span style="flex:1"></span>';
+      if (relOpen) h += '<span style="font-family:var(--mono);font-size:10px;color:var(--wa);font-weight:700">' + relOpen + ' open</span>';
+      h += '<span class="rel-arrow" style="color:var(--faint);font-size:11px;transition:transform .2s">▸</span>';
+      h += '</div>';
+
+      // Ticket list (expandable)
+      h += '<div class="rel-num-body" id="rn' + si + '_' + ri + '" style="display:none;background:var(--paper)">';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px">';
+      h += '<thead><tr style="background:var(--line)">' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Key</th>' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Summary</th>' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Fix Type</th>' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Status</th>' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Project</th>' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Root Cause</th>' +
+        '<th style="padding:6px 10px;text-align:left;font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px">Created</th>' +
+        '</tr></thead><tbody>';
+
+      tickets.forEach(function (t) {
+        var ftCls = t.fixType === "Data Fix" ? "df" : t.fixType === "Bug Fix" ? "bf" : "wa";
+        var stCls = t.closed ? "closed" : "open";
+        h += '<tr style="border-bottom:1px solid var(--line)">' +
+          '<td style="padding:7px 10px"><a class="jkey" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank">' + esc(t.key) + '</a></td>' +
+          '<td style="padding:7px 10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(t.summary) + '">' + esc(t.summary) + '</td>' +
+          '<td style="padding:7px 10px"><span class="badge ' + ftCls + '">' + esc(t.fixType) + '</span></td>' +
+          '<td style="padding:7px 10px"><span class="badge ' + stCls + '">' + esc(t.status) + '</span></td>' +
+          '<td style="padding:7px 10px">' + esc(t.project) + '</td>' +
+          '<td style="padding:7px 10px">' + esc(t.rootCause || "—") + '</td>' +
+          '<td style="padding:7px 10px" class="mono">' + fmtD(t.created) + '</td>' +
+          '</tr>';
+      });
+
+      h += '</tbody></table></div>';
+      h += '</div>';
+    });
+
+    h += '</div>';
+    h += '</div>';
+  });
+
+  if (!svmList.length) {
+    h += '<div style="text-align:center;padding:60px;color:var(--muted)">' +
+      '<div style="font-size:36px;margin-bottom:10px">📦</div>' +
+      '<div style="font-family:var(--disp);font-size:16px;font-weight:700;color:var(--ink);margin-bottom:6px">No release numbers found</div>' +
+      '<div style="font-size:12px">No tickets in the current filter have a Release Number.</div></div>';
+  }
+
+  return h;
 }
 
 /* ── TICKETS TAB ── */
@@ -1011,6 +1172,32 @@ function bindAll(){
   // modal close
   el("modalClose").onclick=closeModal;
   el("modalOv").onclick=function(e){if(e.target===el("modalOv"))closeModal();};
+
+  // Releases tab: SVM accordion toggles
+  document.querySelectorAll(".rel-svm-hd").forEach(function (hd) {
+    hd.onclick = function () {
+      var body = el(hd.dataset.relsvm);
+      if (!body) return;
+      var open = body.style.display !== "block";
+      body.style.display = open ? "block" : "none";
+      var arrow = hd.querySelector(".rel-arrow");
+      if (arrow) arrow.style.transform = open ? "rotate(180deg)" : "";
+      hd.style.background = open ? "var(--paper)" : "";
+    };
+  });
+
+  // Releases tab: Release number accordion toggles
+  document.querySelectorAll(".rel-num-hd").forEach(function (hd) {
+    hd.onclick = function () {
+      var body = el(hd.dataset.relnum);
+      if (!body) return;
+      var open = body.style.display !== "block";
+      body.style.display = open ? "block" : "none";
+      var arrow = hd.querySelector(".rel-arrow");
+      if (arrow) arrow.style.transform = open ? "rotate(90deg)" : "";
+      hd.style.background = open ? "var(--vi-bg)" : "";
+    };
+  });
 }
 
 /* ── BOOT ── */
