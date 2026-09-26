@@ -131,14 +131,26 @@
       row["Client Reference"] = txt(f[fm.clientReference]);
       row["Analysis"] = rich(f[fm.analysis]);
       row["Solution Summary"] = rich(f[fm.solutionSummary]);
+      row["Labels"] = (f.labels || []).join("; ");
+      row["Description"] = rich(f.description);
+      row["Environment"] = txt(f.environment);
+      row["Fix Versions"] = (f.fixVersions || []).map(function (v) { return v.name || ""; }).join("; ");
+      row["Parent Key"] = f.parent ? (f.parent.key || "") : "";
+      row["Parent Summary"] = f.parent && f.parent.fields ? (f.parent.fields.summary || "") : "";
       if (f.issuelinks && f.issuelinks.length) {
-        var lk = [], ls = [];
+        var lk = [], ls = [], lt = [];
         f.issuelinks.forEach(function (l) {
           var o = l.outwardIssue || l.inwardIssue;
-          if (o) { lk.push(o.key); if (o.fields && o.fields.status) ls.push(o.fields.status.name); }
+          var ltype = l.outwardIssue ? (l.type ? l.type.outward || "" : "") : (l.type ? l.type.inward || "" : "");
+          if (o) {
+            lk.push(o.key);
+            if (o.fields && o.fields.status) ls.push(o.fields.status.name);
+            lt.push(o.key + ":" + ltype + (o.fields && o.fields.issuetype ? ":" + o.fields.issuetype.name : ""));
+          }
         });
         row["Linked Issues"] = lk.join(", "); row["Linked Ticket status"] = ls.join(", ");
-      } else { row["Linked Issues"] = ""; row["Linked Ticket status"] = ""; }
+        row["Link Details"] = lt.join(", ");
+      } else { row["Linked Issues"] = ""; row["Linked Ticket status"] = ""; row["Link Details"] = ""; }
       return row;
     });
   }
@@ -177,7 +189,7 @@
   function fetchAll(jql, onProgress, opts) {
     opts = opts || {};
     var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
-    var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter"];
+    var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent"];
     ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
 
