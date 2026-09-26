@@ -466,8 +466,10 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       byRC: {},         // root cause (lower) → [indices]
       byComp: {},       // component (lower) → [indices]
       byLabel: {},      // label (lower) → [indices]
+      byRelease: {},    // release number → [indices]
       byToken: {},      // token → [indices]
       docFreq: {},      // token → count of tickets containing it
+      idf: {},          // token → IDF weight (computed after all tickets indexed)
       changes: [],      // indices of change tickets
       incidents: [],    // indices of incident tickets
       srs: []           // indices of service request tickets
@@ -502,6 +504,9 @@ h1, h2, h3, .disp { font-family: var(--disp) }
         linkedIssues: col(row, "linked issues"),
         linkDetails: col(row, "link details"),
         deliveredDate: col(row, "delivered date"),
+        releaseNumber: col(row, "release number"),
+        releaseDataFix: col(row, "release number (data fix)"),
+        parentRelease: col(row, "parent release no"),
         tokens: [],
         bgs: [],
         descTokens: []
@@ -569,6 +574,20 @@ h1, h2, h3, .disp { font-family: var(--disp) }
         if (!ix.byToken[tok]) ix.byToken[tok] = [];
         ix.byToken[tok].push(i);
       });
+
+      // Release number inverted indexes
+      var releases = [t.releaseNumber, t.releaseDataFix, t.parentRelease].filter(Boolean);
+      t.releaseKeys = releases.map(function (r) { return r.toLowerCase().trim(); }).filter(Boolean);
+      t.releaseKeys.forEach(function (rk) {
+        if (!ix.byRelease[rk]) ix.byRelease[rk] = [];
+        ix.byRelease[rk].push(i);
+      });
+    });
+
+    // Compute IDF weights: log(N / df) — rare words get high weight
+    var N = ix.tickets.length || 1;
+    Object.keys(ix.docFreq).forEach(function (tok) {
+      ix.idf[tok] = Math.log(N / ix.docFreq[tok]);
     });
 
     return ix;
@@ -624,21 +643,46 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       }
     }
 
-    // ── Text matching ──
-    var jac = jaccard(a.tokens, b.tokens);
-    text += jac * 28;
+    // ── Release number matching (very high confidence) ──
+    if (a.releaseKeys && b.releaseKeys && a.releaseKeys.length && b.releaseKeys.length) {
+      var sharedRel = a.releaseKeys.filter(function (r) { return b.releaseKeys.indexOf(r) > -1; });
+      if (sharedRel.length) {
+        struct += 25;
+        reasons.push({ c: "r-lnk", t: "Release: " + sharedRel[0] });
+      }
+    }
 
+    // ── Text matching (TF-IDF weighted — rare words count more) ──
+    // Instead of flat Jaccard where "cost" = "INIXY", we weight each
+    // matching token by its IDF so rare/distinctive words dominate.
+    var sA = new Set(a.tokens), sB = new Set(b.tokens);
+    var matchedIdf = 0, totalIdfA = 0;
+    sA.forEach(function (tok) {
+      var w = IX.idf[tok] || 0;
+      totalIdfA += w;
+      if (sB.has(tok)) matchedIdf += w;
+    });
+    // Normalise to 0–1 (fraction of query's IDF weight that matched)
+    var idfSim = totalIdfA > 0 ? matchedIdf / totalIdfA : 0;
+    text += idfSim * 32;
+
+    // Bigram overlap (still useful for phrase matching)
     var bgJac = jaccard(a.bgs, b.bgs);
-    text += bgJac * 14;
+    text += bgJac * 12;
 
-    text += subBonus(a.tokens, b.tokens) * 8;
+    // Substring bonus for partial word matches
+    text += subBonus(a.tokens, b.tokens) * 6;
 
-    // Cross-match: description ↔ summary (lower weight)
+    // Cross-match: description ↔ summary (lower weight, also TF-IDF)
     if (a.descTokens.length && b.tokens.length) {
-      text += jaccard(a.descTokens, b.tokens) * 4;
+      var dA = new Set(a.descTokens), mdi = 0, tdi = 0;
+      dA.forEach(function (tok) { var w = IX.idf[tok] || 0; tdi += w; if (sB.has(tok)) mdi += w; });
+      text += (tdi > 0 ? mdi / tdi : 0) * 4;
     }
     if (b.descTokens.length && a.tokens.length) {
-      text += jaccard(a.tokens, b.descTokens) * 4;
+      var dB = new Set(b.descTokens), mdi2 = 0, tdi2 = 0;
+      dB.forEach(function (tok) { var w = IX.idf[tok] || 0; tdi2 += w; if (sA.has(tok)) mdi2 += w; });
+      text += (tdi2 > 0 ? mdi2 / tdi2 : 0) * 4;
     }
 
     if (text >= 8) {
@@ -661,6 +705,13 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     }
 
     var score = Math.min(100, Math.round(struct + text + bonus));
+
+    // ── Text-only gate: if NO structural fields matched, require higher score ──
+    // This prevents "cost inbox" matching everything with "cost" in it.
+    if (struct === 0 && bonus < 15 && score < 40) {
+      return null;  // suppress weak text-only matches entirely
+    }
+
     var tier = score >= 65 ? "s" : score >= 40 ? "l" : "a";
 
     return { score: score, rs: reasons, tier: tier };
@@ -692,6 +743,13 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     ticket.linkedKeys.forEach(function (key) {
       if (IX.byKey[key] != null) candidates.add(IX.byKey[key]);
     });
+
+    // Same release number (very strong signal)
+    if (ticket.releaseKeys) {
+      ticket.releaseKeys.forEach(function (rk) {
+        addCandidatesFrom(IX.byRelease, rk);
+      });
+    }
 
     // Token-based candidates (rarest tokens first for precision)
     var rareTokens = ticket.tokens.slice().sort(function (a, b) {
@@ -791,12 +849,23 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       var reasons = [];
       var score = 0;
 
-      score += jaccard(tokens, cand.tokens) * 40;
-      score += jaccard(bgs, cand.bgs) * 20;
-      score += subBonus(tokens, cand.tokens) * 10;
+      // TF-IDF weighted text similarity (rare words count more)
+      var sQ = new Set(tokens), sC = new Set(cand.tokens);
+      var matchIdf = 0, totalIdf = 0;
+      sQ.forEach(function (tok) {
+        var w = IX.idf[tok] || 0;
+        totalIdf += w;
+        if (sC.has(tok)) matchIdf += w;
+      });
+      score += (totalIdf > 0 ? matchIdf / totalIdf : 0) * 45;
+
+      score += jaccard(bgs, cand.bgs) * 15;
+      score += subBonus(tokens, cand.tokens) * 8;
 
       if (cand.descTokens.length) {
-        score += jaccard(tokens, cand.descTokens) * 6;
+        var dC = new Set(cand.descTokens), mdi = 0, tdi = 0;
+        sQ.forEach(function (tok) { var w = IX.idf[tok] || 0; tdi += w; if (dC.has(tok)) mdi += w; });
+        score += (tdi > 0 ? mdi / tdi : 0) * 5;
       }
 
       if (score >= 8) reasons.push({ c: "r-txt", t: "Text match" });
@@ -1038,6 +1107,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     if (t.menuHead) meta += '<span>Menu: <b>' + esc(t.menuHead) + '</b></span>';
     if (t.svmInCharge) meta += '<span>SVM: <b>' + esc(t.svmInCharge) + '</b></span>';
     if (t.currentWorker) meta += '<span>Worker: <b>' + esc(t.currentWorker) + '</b></span>';
+    if (t.releaseNumber) meta += '<span>Release: <b>' + esc(t.releaseNumber) + '</b></span>';
+    if (t.releaseDataFix) meta += '<span>Data Fix: <b>' + esc(t.releaseDataFix) + '</b></span>';
 
     return '<div class="tcard">' +
       '<div class="tcard-top">' +
