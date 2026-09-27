@@ -420,11 +420,11 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     if (!text) return [];
     return String(text).toLowerCase()
       .replace(/[\/\\|,;:!?()[\]{}"'`~@#$%^&*+=<>]/g, " ")
-      .replace(/\b[A-Z]+-\d+\b/gi, " ")   // strip Jira keys like VCL-3508
-      .replace(/\d{4,}/g, " ")              // strip long numbers
+      .replace(/\b[a-z]+-\d+\b/g, " ")        // strip Jira keys like vcl-3508
+      .replace(/\b\w*\d\w*\b/g, " ")           // strip ANY word containing digits (reference IDs, codes, txn numbers)
       .split(/[\s\-_.]+/)
       .filter(function (w) {
-        return w.length > 1 && !STOPS.has(w) && !/^\d+$/.test(w);
+        return w.length > 1 && !STOPS.has(w);
       });
   }
 
@@ -518,7 +518,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       // Tokenize summary and description
       t.tokens = tokenize(t.summary);
       t.bgs = bigrams(t.tokens);
-      t.descTokens = tokenize(t.description).slice(0, 50);
+      t.descTokens = tokenize(t.description).slice(0, 100);
 
       // Parse labels
       t.labelList = t.labels
@@ -656,37 +656,36 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       }
     }
 
-    // ── Text matching (TF-IDF weighted — rare words count more) ──
-    // Instead of flat Jaccard where "cost" = "INIXY", we weight each
-    // matching token by its IDF so rare/distinctive words dominate.
+    // ── Text matching (BM25-like cumulative IDF — rare words count more,
+    //    and the score is NOT diluted by unmatched unique reference tokens) ──
     var sA = new Set(a.tokens), sB = new Set(b.tokens);
-    var matchedIdf = 0, totalIdfA = 0;
+    var matchedIdf = 0;
     sA.forEach(function (tok) {
       var w = IX.idf[tok] || 0;
-      totalIdfA += w;
       if (sB.has(tok)) matchedIdf += w;
     });
-    // Normalise to 0–1 (fraction of query's IDF weight that matched)
-    var idfSim = totalIdfA > 0 ? matchedIdf / totalIdfA : 0;
-    text += idfSim * 32;
+    // Saturate at 32 — matching tokens worth ~9 IDF total gives full score.
+    // This means two moderately rare shared words = near-max text score.
+    text += Math.min(32, matchedIdf * 3.5);
 
     // Bigram overlap (still useful for phrase matching)
     var bgJac = jaccard(a.bgs, b.bgs);
-    text += bgJac * 12;
+    text += bgJac * 14;
 
     // Substring bonus for partial word matches
     text += subBonus(a.tokens, b.tokens) * 6;
 
-    // Cross-match: description ↔ summary (lower weight, also TF-IDF)
+    // Cross-match: description ↔ summary (meaningful — descriptions often
+    // contain the actual problem detail that summaries abbreviate)
     if (a.descTokens.length && b.tokens.length) {
-      var dA = new Set(a.descTokens), mdi = 0, tdi = 0;
-      dA.forEach(function (tok) { var w = IX.idf[tok] || 0; tdi += w; if (sB.has(tok)) mdi += w; });
-      text += (tdi > 0 ? mdi / tdi : 0) * 4;
+      var dA = new Set(a.descTokens), mdi = 0;
+      dA.forEach(function (tok) { if (sB.has(tok)) mdi += (IX.idf[tok] || 0); });
+      text += Math.min(8, mdi * 2);
     }
     if (b.descTokens.length && a.tokens.length) {
-      var dB = new Set(b.descTokens), mdi2 = 0, tdi2 = 0;
-      dB.forEach(function (tok) { var w = IX.idf[tok] || 0; tdi2 += w; if (sA.has(tok)) mdi2 += w; });
-      text += (tdi2 > 0 ? mdi2 / tdi2 : 0) * 4;
+      var dB = new Set(b.descTokens), mdi2 = 0;
+      dB.forEach(function (tok) { if (sA.has(tok)) mdi2 += (IX.idf[tok] || 0); });
+      text += Math.min(8, mdi2 * 2);
     }
 
     if (text >= 8) {
@@ -862,23 +861,21 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       var reasons = [];
       var score = 0;
 
-      // TF-IDF weighted text similarity (rare words count more)
+      // BM25-like cumulative IDF scoring (same approach as scorePair)
       var sQ = new Set(tokens), sC = new Set(cand.tokens);
-      var matchIdf = 0, totalIdf = 0;
+      var matchIdf = 0;
       sQ.forEach(function (tok) {
-        var w = IX.idf[tok] || 0;
-        totalIdf += w;
-        if (sC.has(tok)) matchIdf += w;
+        if (sC.has(tok)) matchIdf += (IX.idf[tok] || 0);
       });
-      score += (totalIdf > 0 ? matchIdf / totalIdf : 0) * 45;
+      score += Math.min(45, matchIdf * 5);
 
       score += jaccard(bgs, cand.bgs) * 15;
       score += subBonus(tokens, cand.tokens) * 8;
 
       if (cand.descTokens.length) {
-        var dC = new Set(cand.descTokens), mdi = 0, tdi = 0;
-        sQ.forEach(function (tok) { var w = IX.idf[tok] || 0; tdi += w; if (dC.has(tok)) mdi += w; });
-        score += (tdi > 0 ? mdi / tdi : 0) * 5;
+        var dC = new Set(cand.descTokens), mdi = 0;
+        sQ.forEach(function (tok) { if (dC.has(tok)) mdi += (IX.idf[tok] || 0); });
+        score += Math.min(8, mdi * 2);
       }
 
       if (score >= 8) reasons.push({ c: "r-txt", t: "Text match" });
