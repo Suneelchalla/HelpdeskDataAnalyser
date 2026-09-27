@@ -100,7 +100,9 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 /* ═══ FILTERS ═══ */
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap }
 .flbl { font-size: 9.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; margin-right: 2px }
-.fchip { padding: 6px 11px; border: 1px solid var(--line2); border-radius: 7px; background: var(--paper); color: var(--ink2); font-size: 11px; font-weight: 600 }
+.fchip { padding: 6px 11px; border: 1px solid var(--line2); border-radius: 7px; background: var(--paper); color: var(--ink2); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px }
+.fchip .fc { font-family: var(--mono); font-size: 9px; font-weight: 700; background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 10px }
+.fchip.on .fc { background: rgba(0,0,0,.08) }
 .fchip.on { background: var(--cy-bg); border-color: var(--cy-line); color: var(--cy) }
 .fchip.inc.on { background: var(--blue-bg); border-color: #BFDBFE; color: var(--blue) }
 .fchip.sr.on { background: var(--amber-bg); border-color: var(--amber-soft); color: var(--amber) }
@@ -109,9 +111,9 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .fdiv { width: 1px; height: 20px; background: var(--line2); margin: 0 4px }
 
 /* ═══ TICKET CARDS ═══ */
-.queue-list { display: flex; flex-direction: column; gap: 10px }
-.tcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); overflow: hidden }
-.tcard-top { padding: 12px 16px 10px; display: flex; gap: 12px; align-items: flex-start }
+.queue-list { display: flex; flex-direction: column; gap: 6px }
+.tcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sh); overflow: hidden }
+.tcard-top { padding: 9px 14px 7px; display: flex; gap: 10px; align-items: flex-start }
 .tcard-main { flex: 1; min-width: 0 }
 .tcard-key { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--cy); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px }
 .tcard-key a { color: var(--cy) }
@@ -127,8 +129,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .pill-sr { background: var(--amber-bg); color: var(--amber) }
 .pill-chg { background: var(--indigo-bg); color: var(--indigo) }
 
-.tcard-sum { font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.4; margin-bottom: 6px }
-.tcard-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted) }
+.tcard-sum { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.35; margin-bottom: 3px }
+.tcard-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 10.5px; color: var(--muted) }
 .tcard-meta b { color: var(--ink2); font-weight: 600 }
 .tcard-r { flex-shrink: 0; text-align: right }
 .tcard-pri { font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 3px 7px; border-radius: 5px; text-transform: uppercase }
@@ -147,7 +149,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 
 /* ═══ SIMILARITY SECTION ═══ */
 .sim-section { border-top: 1px solid var(--line) }
-.sim-tog { display: flex; align-items: center; gap: 8px; padding: 7px 16px; cursor: pointer; user-select: none; transition: background .12s }
+.sim-tog { display: flex; align-items: center; gap: 8px; padding: 5px 14px; cursor: pointer; user-select: none; transition: background .12s }
 .sim-tog:hover { background: var(--paper) }
 .sim-tog .sl { font-family: var(--disp); font-size: 11.5px; font-weight: 600; color: var(--ink2) }
 .sim-tog .sc { font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 20px }
@@ -161,7 +163,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .sim-div { padding: 5px 16px; font-family: var(--disp); font-size: 10.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; background: var(--line) }
 
 /* similar match rows */
-.sim-row { display: flex; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line); align-items: flex-start }
+.sim-row { display: flex; gap: 8px; padding: 7px 14px; border-bottom: 1px solid var(--line); align-items: flex-start }
 .sim-row:last-child { border-bottom: none }
 .sim-row:hover { background: rgba(8,145,178,.03) }
 .sim-row.is-chg { border-left: 3px solid var(--indigo) }
@@ -467,6 +469,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       byComp: {},       // component (lower) → [indices]
       byLabel: {},      // label (lower) → [indices]
       byRelease: {},    // release number → [indices]
+      byProject: {},    // project (lower) → [indices]
       byToken: {},      // token → [indices]
       docFreq: {},      // token → count of tickets containing it
       idf: {},          // token → IDF weight (computed after all tickets indexed)
@@ -555,6 +558,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       addToInvertedIndex(ix.byScreen, t.screenName);
       addToInvertedIndex(ix.byMenu, t.menuHead);
       addToInvertedIndex(ix.byRC, t.rootCause);
+      addToInvertedIndex(ix.byProject, t.project);
 
       t.components.split(/[;,]/).forEach(function (c) {
         addToInvertedIndex(ix.byComp, c.trim());
@@ -699,16 +703,19 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     if (b.isResolved && b.hasSolution) bonus += 6;
     else if (b.isResolved) bonus += 3;
 
-    // Bonus: same project
+    // Same project gets a small structural credit (not just a bonus)
+    // so that project-mates aren't killed by the text-only gate.
     if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) {
+      struct += 4;
       bonus += 2;
     }
 
     var score = Math.min(100, Math.round(struct + text + bonus));
 
-    // ── Text-only gate: if NO structural fields matched, require higher score ──
-    // This prevents "cost inbox" matching everything with "cost" in it.
-    if (struct === 0 && bonus < 15 && score < 40) {
+    // ── Text-only gate: if NO structural fields matched, require a reasonable
+    //    score to suppress noise. Lowered from 40→28 to let genuine text
+    //    matches through (e.g. "THD Mismatch" tickets with reference IDs). ──
+    if (struct === 0 && bonus < 15 && score < 28) {
       return null;  // suppress weak text-only matches entirely
     }
 
@@ -751,11 +758,17 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       });
     }
 
+    // Same project — limited sample to keep it fast (newest 200 from the project)
+    if (ticket.project) {
+      var projList = IX.byProject[ticket.project.toLowerCase()] || [];
+      projList.slice(-200).forEach(function (i) { candidates.add(i); });
+    }
+
     // Token-based candidates (rarest tokens first for precision)
     var rareTokens = ticket.tokens.slice().sort(function (a, b) {
       return (IX.docFreq[a] || 9999) - (IX.docFreq[b] || 9999);
     });
-    rareTokens.slice(0, 8).forEach(function (tok) {
+    rareTokens.slice(0, 15).forEach(function (tok) {
       if (IX.byToken[tok]) {
         IX.byToken[tok].forEach(function (i) { candidates.add(i); });
       }
@@ -1261,6 +1274,53 @@ h1, h2, h3, .disp { font-family: var(--disp) }
   function renderQueue() {
     var isActive = (F.qf === "active");
 
+    // Compute base set (project + priority filters only, before status/type)
+    var base = IX.tickets.filter(function (t) {
+      if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
+      if (F.qpri) {
+        var p = (t.priority || "").toLowerCase();
+        if (p.indexOf(F.qpri) < 0) return false;
+      }
+      return true;
+    });
+
+    // Count tickets per status filter (for badges)
+    var cntActive = 0, cntOpen = 0;
+    base.forEach(function (t) {
+      var s = t.status.toLowerCase();
+      if (s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open") cntActive++;
+      if (!t.isResolved) cntOpen++;
+    });
+
+    // Count tickets per type filter (within current status filter)
+    var statusFiltered = base.filter(function (t) {
+      if (isActive) {
+        var s = t.status.toLowerCase();
+        return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
+      }
+      return !t.isResolved;
+    });
+    var cntAllType = statusFiltered.length;
+    var cntInc = 0, cntSR = 0, cntChg = 0;
+    statusFiltered.forEach(function (t) {
+      if (t.isIncident) cntInc++;
+      if (t.isSR) cntSR++;
+      if (t.isChange) cntChg++;
+    });
+
+    // Update filter chip badges
+    document.querySelectorAll("[data-qf]").forEach(function (btn) {
+      var badge = btn.querySelector(".fc");
+      if (!badge) { badge = document.createElement("span"); badge.className = "fc"; btn.appendChild(badge); }
+      badge.textContent = btn.dataset.qf === "active" ? cntActive : cntOpen;
+    });
+    document.querySelectorAll("[data-qt]").forEach(function (btn) {
+      var badge = btn.querySelector(".fc");
+      if (!badge) { badge = document.createElement("span"); badge.className = "fc"; btn.appendChild(badge); }
+      var qt = btn.dataset.qt;
+      badge.textContent = qt === "all" ? cntAllType : qt === "incident" ? cntInc : qt === "sr" ? cntSR : cntChg;
+    });
+
     var list = IX.tickets.filter(function (t) {
       // Project filter
       if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
@@ -1284,15 +1344,17 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       return !t.isResolved;
     });
 
-    // Sort by priority (Critical first), then by created desc
+    // Sort by created date desc (newest first), then by priority as tiebreaker
     var priOrder = { critical: 0, highest: 0, high: 1, urgent: 1, medium: 2, normal: 2, low: 3, lowest: 4 };
     list.sort(function (a, b) {
+      var da = a.created ? new Date(a.created).getTime() : 0;
+      var db = b.created ? new Date(b.created).getTime() : 0;
+      if (da !== db) return db - da;
       var pa = priOrder[(a.priority || "").toLowerCase()];
       var pb = priOrder[(b.priority || "").toLowerCase()];
       pa = pa != null ? pa : 5;
       pb = pb != null ? pb : 5;
-      if (pa !== pb) return pa - pb;
-      return (b.created ? new Date(b.created) : 0) - (a.created ? new Date(a.created) : 0);
+      return pa - pb;
     });
 
     el("qCnt").textContent = list.length;
