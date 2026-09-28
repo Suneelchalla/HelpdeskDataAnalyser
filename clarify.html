@@ -186,6 +186,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .r-lnk { background: var(--indigo-bg); color: var(--indigo) }
 .r-time { background: #FFF7ED; color: #C2410C }
 .r-lbl { background: #FDF2F8; color: #DB2777 }
+.r-proj { background: #EEF2FF; color: #4338CA }
+.r-exact { background: #FEF9C3; color: #A16207 }
 
 /* solution block inside match row */
 .sim-sol { margin-top: 5px; font-size: 11px; color: var(--ink2); line-height: 1.5; background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px }
@@ -835,74 +837,127 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 
   /* ══════════════════════ Search ══════════════════════ */
 
+  /* Global search now uses the same multi-signal approach as findSimilar:
+     it treats the query as a mini-ticket, gathers candidates from EVERY index
+     (screen / menu / root cause / component / label / release / project / key /
+     rare tokens), and scores structural-field matches against the query plus
+     text, phrase, exact-title and ticket-key boosts. The old noise bonuses
+     (flat credit just for having a screen name / being resolved) are gone. */
   function searchText(query, topN) {
     topN = topN || 30;
+    var qLowerRaw = String(query || "").toLowerCase().trim();
     var tokens = tokenize(query);
     var bgs = bigrams(tokens);
+    var qSet = new Set(tokens);
+    if (!tokens.length && qLowerRaw.length < 2) return [];
 
-    // Rank candidates by accumulated rarity of matching tokens
-    var candidateScores = {};
+    /* Does a structural field value relate to the query? Strong = the whole
+       value appears in the query; otherwise require enough token overlap so a
+       single common word can't trigger a false structural match. */
+    function fieldHit(val) {
+      if (!val) return false;
+      var v = String(val).toLowerCase().trim();
+      if (!v) return false;
+      if (qLowerRaw && qLowerRaw.indexOf(v) > -1) return true;
+      var vt = tokenize(v);
+      if (!vt.length) return false;
+      var overlap = 0;
+      for (var k = 0; k < vt.length; k++) if (qSet.has(vt[k])) overlap++;
+      if (vt.length === 1) return overlap >= 1;
+      return overlap >= 2 || overlap === vt.length;
+    }
+
+    /* ── Candidate gathering (recall) — mirror findSimilar, don't rely on the
+       token index alone. ── */
+    var candidates = new Set();
     tokens.forEach(function (tok) {
-      if (!IX.byToken[tok]) return;
-      var rarity = Math.log(IX.tickets.length / (IX.docFreq[tok] || 1));
-      IX.byToken[tok].forEach(function (i) {
-        candidateScores[i] = (candidateScores[i] || 0) + rarity;
+      if (IX.byToken[tok]) IX.byToken[tok].forEach(function (i) { candidates.add(i); });
+    });
+    function gatherField(map) {
+      Object.keys(map).forEach(function (val) {
+        if (fieldHit(val)) map[val].forEach(function (i) { candidates.add(i); });
       });
+    }
+    gatherField(IX.byScreen);
+    gatherField(IX.byMenu);
+    gatherField(IX.byRC);
+    gatherField(IX.byComp);
+    gatherField(IX.byLabel);
+    gatherField(IX.byProject);
+    Object.keys(IX.byRelease).forEach(function (rk) {
+      if (qSet.has(rk) || (qLowerRaw && qLowerRaw.indexOf(rk) > -1)) IX.byRelease[rk].forEach(function (i) { candidates.add(i); });
+    });
+    /* Pasted / referenced ticket key */
+    Object.keys(IX.byKey).forEach(function (key) {
+      if (qLowerRaw && qLowerRaw.indexOf(key.toLowerCase()) > -1) candidates.add(IX.byKey[key]);
     });
 
-    // Take top 250 candidates by rarity score
-    var topCandidates = Object.keys(candidateScores).map(Number)
-      .sort(function (a, b) { return candidateScores[b] - candidateScores[a]; })
-      .slice(0, 250);
-
     var results = [];
-    topCandidates.forEach(function (i) {
+    candidates.forEach(function (i) {
       var cand = IX.tickets[i];
       var reasons = [];
-      var score = 0;
+      var struct = 0, text = 0, bonus = 0;
+      var sC = new Set(cand.tokens);
 
-      // BM25-like cumulative IDF scoring (same approach as scorePair)
-      var sQ = new Set(tokens), sC = new Set(cand.tokens);
-      var matchIdf = 0;
-      sQ.forEach(function (tok) {
-        if (sC.has(tok)) matchIdf += (IX.idf[tok] || 0);
-      });
-      score += Math.min(45, matchIdf * 5);
-
-      score += jaccard(bgs, cand.bgs) * 15;
-      score += subBonus(tokens, cand.tokens) * 8;
-
+      /* Text: cumulative IDF of matched query tokens (rare words weigh more). */
+      var matchIdf = 0, matched = 0;
+      qSet.forEach(function (tok) { if (sC.has(tok)) { matchIdf += (IX.idf[tok] || 0); matched++; } });
+      text += Math.min(40, matchIdf * 4);
+      /* Coverage: reward matching MORE of the query. */
+      if (qSet.size) text += (matched / qSet.size) * 12;
+      /* Phrase + partial-word signals. */
+      text += jaccard(bgs, cand.bgs) * 16;
+      text += subBonus(tokens, cand.tokens) * 6;
+      /* Query ↔ description cross-match. */
       if (cand.descTokens.length) {
         var dC = new Set(cand.descTokens), mdi = 0;
-        sQ.forEach(function (tok) { if (dC.has(tok)) mdi += (IX.idf[tok] || 0); });
-        score += Math.min(8, mdi * 2);
+        qSet.forEach(function (tok) { if (dC.has(tok)) mdi += (IX.idf[tok] || 0); });
+        text += Math.min(8, mdi * 2);
+      }
+      if (text >= 8) reasons.push({ c: "r-txt", t: "Text match" });
+
+      /* Exact / near-exact title (pasting a subject). */
+      var candSum = (cand.summary || "").toLowerCase();
+      if (qLowerRaw.length >= 6 && candSum) {
+        if (candSum === qLowerRaw) { bonus += 35; reasons.push({ c: "r-exact", t: "Exact title" }); }
+        else if (candSum.indexOf(qLowerRaw) > -1 || qLowerRaw.indexOf(candSum) > -1) { bonus += 18; reasons.push({ c: "r-exact", t: "Title match" }); }
+      }
+      /* Direct ticket-key reference. */
+      if (cand.key && qLowerRaw && qLowerRaw.indexOf(cand.key.toLowerCase()) > -1) {
+        bonus += 40; reasons.push({ c: "r-lnk", t: cand.key });
       }
 
-      if (score >= 8) reasons.push({ c: "r-txt", t: "Text match" });
+      /* Structural matches AGAINST THE QUERY (only when they truly relate). */
+      if (fieldHit(cand.screenName)) { struct += 16; reasons.push({ c: "r-scr", t: "Screen: " + cand.screenName }); }
+      if (fieldHit(cand.menuHead))  { struct += 12; reasons.push({ c: "r-menu", t: "Menu: " + cand.menuHead }); }
+      if (fieldHit(cand.rootCause)) { struct += 8;  reasons.push({ c: "r-rc", t: "Cause: " + cand.rootCause }); }
+      if (cand.components && cand.components.toLowerCase().split(/[;,]/).some(function (c) { return fieldHit(c.trim()); })) { struct += 6; reasons.push({ c: "r-comp", t: "Component" }); }
+      if (cand.labelList && cand.labelList.some(function (l) { return fieldHit(l); })) { struct += 5; reasons.push({ c: "r-lbl", t: "Label" }); }
+      if (fieldHit(cand.project)) { struct += 4; reasons.push({ c: "r-proj", t: cand.project }); }
+      if (cand.releaseKeys && cand.releaseKeys.some(function (rk) { return qSet.has(rk) || (qLowerRaw && qLowerRaw.indexOf(rk) > -1); })) { struct += 10; reasons.push({ c: "r-lnk", t: "Release" }); }
 
-      if (cand.isResolved && cand.hasSolution) {
-        score += 10;
-        reasons.push({ c: "r-comp", t: "Has solution" });
-      } else if (cand.isResolved) {
-        score += 5;
+      /* Prefer a documented solution — but only as a gated tiebreaker on top of
+         a genuine match, never as free credit. */
+      var base = struct + text + bonus;
+      if (base >= 12) {
+        if (cand.isResolved && cand.hasSolution) { bonus += 6; reasons.push({ c: "r-comp", t: "Has solution" }); }
+        else if (cand.isResolved) bonus += 3;
       }
 
-      if (cand.screenName) {
-        score += 2;
-        reasons.push({ c: "r-scr", t: "Screen: " + cand.screenName });
-      }
-      if (cand.rootCause) score += 2;
-
-      score = Math.min(100, Math.round(score));
+      var score = Math.min(100, Math.round(struct + text + bonus));
       var tier = score >= 65 ? "s" : score >= 40 ? "l" : "a";
 
-      if (score >= 10) {
+      /* Gate: require a real signal (meaningful text, any structural match, or a
+         strong bonus). Suppresses weak token-only noise. */
+      if (score >= 12 && (text >= 6 || struct > 0 || bonus >= 15)) {
         results.push({ t: cand, s: score, rs: reasons, tier: tier });
       }
     });
 
     results.sort(function (a, b) {
-      return b.s !== a.s ? b.s - a.s : (b.t.hasSolution ? 1 : -1);
+      if (b.s !== a.s) return b.s - a.s;
+      if (b.t.hasSolution !== a.t.hasSolution) return b.t.hasSolution ? 1 : -1;
+      return 0;
     });
     return results.slice(0, topN);
   }
