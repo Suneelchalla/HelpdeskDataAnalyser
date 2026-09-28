@@ -825,6 +825,11 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
     return pivot;
   },[enggMap,tix]);
 
+  /* Auto-load linked assignees when Engg Assignee tab is opened */
+  useEffect(function(){
+    if(activeTab==="enggA"&&!enggMap&&!enggLoading&&data.showReport){loadEnggAssignees();}
+  },[activeTab]);
+
   /* Client project list for client modal */
   var clientProjects = useMemo(function(){
     if(!data.showClientReport) return [];
@@ -1179,22 +1184,13 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* ENGG ASSIGNEE TAB */}
           {activeTab==="enggA"&&(function(){
-            if(!enggMap&&!enggLoading)return(
+            if(!enggMap)return(
               <div style={{padding:"40px 24px",textAlign:"center"}}>
-                <div style={{fontSize:40,marginBottom:14}}>🔧</div>
-                <div style={{fontSize:16,fontWeight:800,color:"var(--t1)",marginBottom:6}}>Engineering Assignee Dashboard</div>
-                <div style={{fontSize:13,color:"var(--t2)",marginBottom:20,maxWidth:480,margin:"0 auto 20px"}}>
-                  Fetches the assignee from each linked LRPS ticket to show who in engineering is working on what. This requires {tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";}).length} API calls — takes 15–30 seconds.
-                </div>
-                <button onClick={loadEnggAssignees} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}}>🔍 Load Engineering Assignees</button>
-              </div>);
-            if(enggLoading)return(
-              <div style={{padding:"40px 24px",textAlign:"center"}}>
-                <div style={{fontSize:14,fontWeight:700,color:"var(--violet)",marginBottom:12}}>Fetching linked ticket assignees...</div>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--violet)",marginBottom:12}}>Fetching engineering assignees from linked tickets...</div>
                 <div style={{width:"100%",maxWidth:400,margin:"0 auto",height:10,borderRadius:8,background:"var(--bg)",overflow:"hidden",border:"1px solid var(--border)"}}>
                   <div style={{width:(enggProg[1]?Math.round(enggProg[0]/enggProg[1]*100):0)+"%",height:"100%",background:"var(--violet)",borderRadius:8,transition:"width .3s"}}/>
                 </div>
-                <div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>{enggProg[0]} / {enggProg[1]} tickets fetched</div>
+                <div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>{enggProg[0]} / {enggProg[1]} tickets</div>
               </div>);
             var entries=Object.entries(enggPivot).sort(function(a,b){return b[1].n-a[1].n;});
             var maxN=entries.length?entries[0][1].n:1;
