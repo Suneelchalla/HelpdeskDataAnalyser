@@ -309,8 +309,8 @@ function ticketRow(t){
     "Priority":t.Priority||"","SVM In Charge":t["SVM In Charge"]||"","Current Worker":t["Current Worker"]||"",
     "Project":t.Project||"","Components":t.Components||"","Root Cause":t["Root Cause"]||"",
     "Type of Fix":t["Type of Fix"]||"","Created":t.Created?fd(t.Created):"","Updated":t.Updated?fd(t.Updated):"",
-    "Resolved":t.Resolved?fd(t.Resolved):"","Age·Created (days)":crAge===999?"":crAge,
-    "Age·Updated (days)":upAge===999?"":upAge,"SLA Breach":sla.anyBreach?"Yes":"",
+    "Resolved":t.Resolved?fd(t.Resolved):"","Age Created (days)":crAge===999?"":crAge,
+    "Age Updated (days)":upAge===999?"":upAge,"SLA Breach":sla.anyBreach?"Yes":"",
     "Linked Issues":t["Linked Issues"]||"","Linked Status":t["Linked Ticket status"]||"",
     "Next Action":nextStep(t.Status,c)};
 }
@@ -329,37 +329,37 @@ function generateExcelReport(p){
 
   /* ── Sheet 1: Summary ── */
   var S=[];
-  S.push(["HD FOLLOW-UP — DAILY REPORT","",""]); S.push(["Generated",today+" at "+time,""]);
+  S.push(["HD FOLLOW-UP - DAILY REPORT","",""]); S.push(["Generated",today+" at "+time,""]);
   S.push(["Source",fn,""]); if(w.length)S.push(["Worker filter",w.join(", "),""]);
   if(pf.length)S.push(["Project filter",pf.join(", "),""]);
-  S.push([]); S.push(["OVERVIEW","Count","Notes"]);
+  S.push(["","",""]); S.push(["OVERVIEW","Count","Notes"]);
   S.push(["Total Open",st.n,"All non-closed tickets"]);
-  S.push(["HD Action Required",st.hd.length,"Needs our immediate action — see 'HD Action' tab"]);
-  S.push(["Client Follow-up",st.cl.length,"Awaiting client response — see 'Client Followup' tab"]);
-  S.push(["Engineering Follow-up",st.eng.length,"With dev team — see 'Engineering' tab"]);
-  S.push(["On-Hold",st.hold.length,"Parked — see 'On-Hold' tab"]);
+  S.push(["HD Action Required",st.hd.length,"Needs our immediate action - see HD Action tab"]);
+  S.push(["Client Follow-up",st.cl.length,"Awaiting client response - see Client Followup tab"]);
+  S.push(["Engineering Follow-up",st.eng.length,"With dev team - see Engineering tab"]);
+  S.push(["On-Hold",st.hold.length,"Parked - see On-Hold tab"]);
   S.push(["Invoice Pending",st.inv.length,"Yet to raise"]);
-  S.push(["Danger Zone (90+ days)",st.dng,"Stale — see 'Danger Zone' tab"]);
+  S.push(["Danger Zone (90+ days)",st.dng,"Stale - see Danger Zone tab"]);
   S.push(["Average Age (days)",st.avg,""]);
-  S.push([]); S.push(["ATTENTION AREAS","Count","Action"]);
-  S.push(["🔥 Fires (Crit/SS > 14d)",fires.length,"Immediate escalation — see 'Fires' tab"]);
-  S.push(["💬 Stale Client Follow-ups",staleClient.length,"Chase client or schedule sync"]);
-  S.push([]); S.push(["AGING DISTRIBUTION","Count","% of Total"]);
-  ["< 7 days","7–30 days","31–60 days","61–90 days","90+ days"].forEach(function(l,i){
+  S.push(["","",""]); S.push(["ATTENTION AREAS","Count","Action"]);
+  S.push(["[!] Fires (Crit/SS > 14d)",fires.length,"Immediate escalation - see Fires tab"]);
+  S.push(["[!] Stale Client Follow-ups",staleClient.length,"Chase client or schedule sync"]);
+  S.push(["","",""]); S.push(["AGING DISTRIBUTION","Count","% of Total"]);
+  ["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"].forEach(function(l,i){
     S.push([l,st.bk[i],st.n?Math.round(st.bk[i]/st.n*100)+"%":"0%"]);});
-  S.push([]); S.push(["PRIORITY DISTRIBUTION","Count",""]);
+  S.push(["","",""]); S.push(["PRIORITY DISTRIBUTION","Count",""]);
   ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr){S.push([pr,prioDist[pr]||0,""]);});
-  S.push([]); S.push(["SLA COMPLIANCE","Value",""]);
+  S.push(["","",""]); S.push(["SLA COMPLIANCE","Value",""]);
   S.push(["First Response Compliance",slaData.frRate+"%",""]); S.push(["Resolution Compliance",slaData.resRate+"%",""]);
   S.push(["Total SLA Breaches",slaData.all.length,""]); S.push(["Response Breaches",slaData.fr.length,""]);
   S.push(["Resolution Breaches",slaData.res.length,""]);
-  S.push([]); S.push(["OBSERVATIONS","",""]);
-  if(fires.length)S.push(["⚠️",fires.length+" high-priority tickets open 14+ days — escalation recommended.",""]);
-  if(st.dng>50)S.push(["⚠️",st.dng+" tickets in danger zone (90+ days) — review for closure.",""]);
-  if(staleClient.length>st.cl.length*0.5)S.push(["⚠️","Over half of client follow-ups ("+staleClient.length+"/"+st.cl.length+") are stale.",""]);
-  if(slaData.frRate<80)S.push(["⚠️","First Response SLA below 80% ("+slaData.frRate+"%) — review triage.",""]);
-  if(fires.length===0&&st.dng<50&&slaData.frRate>=80)S.push(["✅","No critical escalation items today.",""]);
-  S.push([]); S.push(["TAB INDEX","Contents",""]);
+  S.push(["","",""]); S.push(["OBSERVATIONS","",""]);
+  if(fires.length)S.push(["[!!]",fires.length+" high-priority tickets open 14+ days - escalation recommended.",""]);
+  if(st.dng>50)S.push(["[!!]",st.dng+" tickets in danger zone (90+ days) - review for closure.",""]);
+  if(staleClient.length>st.cl.length*0.5)S.push(["[!!]","Over half of client follow-ups ("+staleClient.length+"/"+st.cl.length+") are stale.",""]);
+  if(slaData.frRate<80)S.push(["[!!]","First Response SLA below 80% ("+slaData.frRate+"%) - review triage.",""]);
+  if(fires.length===0&&st.dng<50&&slaData.frRate>=80)S.push(["[OK]","No critical escalation items today.",""]);
+  S.push(["","",""]); S.push(["TAB INDEX","Contents",""]);
   S.push(["InCharge Summary","SVM In Charge pivot with aging breakdown",""]);
   S.push(["InCharge Details","Every ticket grouped under its SVM In Charge",""]);
   S.push(["HD Action","Tickets needing HD team action ("+st.hd.length+")",""]);
@@ -369,7 +369,6 @@ function generateExcelReport(p){
   S.push(["Danger Zone","90+ day old tickets ("+st.dng+")",""]);
   S.push(["All Open","Complete list of all "+st.n+" open tickets",""]);
   var ws1=XLSX.utils.aoa_to_sheet(S);ws1["!cols"]=[{wch:32},{wch:22},{wch:55}];
-  if(!ws1["!merges"])ws1["!merges"]=[];ws1["!merges"].push({s:{r:0,c:0},e:{r:0,c:2}});
   XLSX.utils.book_append_sheet(wb,ws1,"Summary");
 
   /* ── Sheet 2: InCharge Pivot ── */
@@ -390,11 +389,11 @@ function generateExcelReport(p){
   XLSX.utils.book_append_sheet(wb,ws2,"InCharge Summary");
 
   /* ── Sheet 3: InCharge Details (grouped) ── */
-  var hdrs=["Key","Summary","Status","Category","Priority","Current Worker","Project","Root Cause","Created","Updated","Age·Created","Age·Updated","SLA Breach","Linked Issues","Next Action"];
+  var hdrs=["Key","Summary","Status","Category","Priority","Current Worker","Project","Root Cause","Created","Updated","Age Created","Age Updated","SLA Breach","Linked Issues","Next Action"];
   var ICd=[];
   ick.forEach(function(name){
-    var m=icm[name];ICd.push([]);
-    ICd.push(["▸ "+name+" — "+m.n+" tickets  |  HD: "+m.hd+"  |  Client: "+m.cl+"  |  Engg: "+m.eng+"  |  Avg age: "+(m.n?Math.round(m.ta/m.n):0)+"d"]);
+    var m=icm[name];ICd.push(["","","","","","","","","","","","","","",""]);
+    ICd.push([">> "+name+" - "+m.n+" tickets  |  HD: "+m.hd+"  |  Client: "+m.cl+"  |  Engg: "+m.eng+"  |  Avg age: "+(m.n?Math.round(m.ta/m.n):0)+"d","","","","","","","","","","","","","",""]);
     ICd.push(hdrs);
     flt.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;})
       .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
