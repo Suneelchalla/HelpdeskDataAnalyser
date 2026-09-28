@@ -395,7 +395,7 @@ function generateEnggReport(p){
   var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
   var wb=XLSX.utils.book_new();
   /* Summary */
-  var s1=[];s1.push([_v("ENGINEERING FOLLOW-UP | Pending with Engineering - For Action","tt"),_v("","tt"),_v("","tt")]);
+  var s1=[];s1.push([_v("ENGINEERING FOLLOW-UP | Incidents & Service Requests Only | Pending with Engineering","tt"),_v("","tt"),_v("","tt")]);
   s1.push([_v("Generated: "+today,"mt"),_v("","mt"),_v("From: SVM Help Desk | To: Engineering Team","mt")]);
   s1.push([_v("Source: "+fn,"mt"),_v("","mt"),_v("","mt")]);s1.push(["","",""]);
   s1.push([_v("OVERVIEW","sh"),_v("Count","sh"),_v("Notes","sh")]);
@@ -501,8 +501,8 @@ function buildEnggMailDraft(p){
   var icm={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";icm[sv]=(icm[sv]||0)+1;});
   var ick=Object.keys(icm).sort(function(a,b){return icm[b]-icm[a];});
   var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;},rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
-  var subject="Engineering Follow-up | "+today+" | "+N+" Tickets Pending";
-  var body="Dear Engineering Team,\n\nThis is the daily follow-up on "+N+" tickets pending with your team as of "+today+".\n\n  Total: "+N+"  |  Fires: "+fires.length+(fires.length?" << URGENT":"")+"  |  Stale 30+d: "+stale30.length+"  |  Danger 90+d: "+danger.length+"\n  Priority: SS:"+pri["Show Stopper"]+" Crit:"+pri["Critical"]+" High:"+pri["High"]+" Med:"+pri["Medium"]+" Low:"+pri["Low"]+"\n\n  TEAM-WISE\n"+ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],4);}).join("\n")+"\n\n"+(fires.length?"  FIRES\n"+fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,50)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n")+"\n\n":"")+"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":"2")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nExcel attached.\n\nRegards,\nSVM Help Desk Operations\n";
+  var subject="Engineering Follow-up (Incidents & SRs) | "+today+" | "+N+" Tickets Pending";
+  var body="Dear Engineering Team,\n\nThis is the daily follow-up on "+N+" tickets (Incidents & Service Requests only) pending with your team as of "+today+".\n\n  Total: "+N+"  |  Fires: "+fires.length+(fires.length?" << URGENT":"")+"  |  Stale 30+d: "+stale30.length+"  |  Danger 90+d: "+danger.length+"\n  Priority: SS:"+pri["Show Stopper"]+" Crit:"+pri["Critical"]+" High:"+pri["High"]+" Med:"+pri["Medium"]+" Low:"+pri["Low"]+"\n\n  TEAM-WISE\n"+ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],4);}).join("\n")+"\n\n"+(fires.length?"  FIRES\n"+fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,50)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n")+"\n\n":"")+"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":"2")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nExcel attached.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
 function buildDailyMailDraft(p){
@@ -1201,9 +1201,9 @@ function App(){
     setModal({title:"Invoice Yet to Raise",icon:"🧾",color:"#0891B2",tickets:tix});
   }
   function openEnggModal(){
-    var tix=flt.filter(function(t){return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
+    var tix=flt.filter(function(t){var it=t["Issue Type"]||"";return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise"&&it!=="Change Request"&&it!=="Change";});
     tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-    setCatModal({tickets:tix,title:"Engineering Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" with engineering / dev team",icon:"🔧",color:"var(--violet)",bg:"var(--violet-bg)",border:"var(--violet-border)",badgeColor:"#7C3AED",showReport:true});setCatTab("all");
+    setCatModal({tickets:tix,title:"Engineering Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" with engineering (Incidents & Service Requests only)",icon:"🔧",color:"var(--violet)",bg:"var(--violet-bg)",border:"var(--violet-border)",badgeColor:"#7C3AED",showReport:true});setCatTab("all");
   }
   function openClientModal(){
     var tix=flt.filter(function(t){return classify(t.Status)==="client"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
@@ -1233,7 +1233,7 @@ function App(){
   }
 
   /* === Report & Mail actions === */
-  function getEnggTickets(){return flt.filter(function(t){return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});}
+  function getEnggTickets(){return flt.filter(function(t){var it=t["Issue Type"]||"";return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise"&&it!=="Change Request"&&it!=="Change";});}
   function openEnggReport(){generateEnggReport({tickets:getEnggTickets(),fn:fn,w:w,pf:pf});}
   function openEnggMail(){setMailModal(buildEnggMailDraft({tickets:getEnggTickets(),fn:fn,w:w,pf:pf}));}
   function openDailyReport(){generateDailyReport({flt:flt,st:st,slaData:slaData,prioDist:prioDist,fn:fn,w:w,pf:pf});}
