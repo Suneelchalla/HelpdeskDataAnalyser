@@ -553,11 +553,18 @@ function _buildReminder(t,mode){
   ]};
   return{text:text,adf:adf,mode:mode,isClient:isClient};
 }
+/* Self-contained bridge detection for reminders (no jira-fetch.js dependency) */
+var _rmBridge=false;
+window.addEventListener("message",function(e){if(e.data&&e.data.type==="HD_BRIDGE_READY")_rmBridge=true;});
+window.postMessage({type:"HD_BRIDGE_PING"},"*");
+setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},500);
+setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},2000);
+
 function _postJiraNote(key,adf,isInternal){
   return new Promise(function(resolve,reject){
-    if(!window.HDJira||!window.HDJira.isBridgeAvailable()){reject(new Error("EXTENSION_NOT_FOUND"));return;}
-    var cfg=window.HDJira.loadConfig();
-    var host=cfg.jiraHost||"svmhelpdesk.atlassian.net";
+    if(!_rmBridge){reject(new Error("Extension bridge not detected. Refresh the page and ensure the HD Jira Bridge extension is enabled."));return;}
+    var host="svmhelpdesk.atlassian.net";
+    try{var cfg=JSON.parse(localStorage.getItem("hd-jira-cfg")||"{}");if(cfg.jiraHost)host=cfg.jiraHost;}catch(e){}
     var id=900000+Math.floor(Math.random()*99999);
     var commentBody={body:adf};
     if(isInternal)commentBody.properties=[{key:"sd.public.comment",value:{internal:true}}];
