@@ -677,7 +677,7 @@ function ReminderModal({ticket,mode,onClose}){
           </div>
           <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"var(--t2)"}}>✕</button>
         </div>
-        <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
+        <div style={{flex:1,minHeight:0,overflow:"auto",padding:"14px 20px"}}>
           <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Message Preview ({typeLabel}){loading&&" — fetching linked ticket info..."}</div>
           {linkedName&&<div style={{marginBottom:8,padding:"6px 12px",background:"var(--violet-bg)",border:"1px solid var(--violet-border)",borderRadius:8,fontSize:11,color:"var(--violet)",fontWeight:600}}>📎 Linked ticket assignee found: <b>{linkedName}</b></div>}
           <pre style={{padding:"14px 16px",background:"#F8FAFC",border:"1px solid var(--border)",borderRadius:10,fontSize:12,lineHeight:1.65,color:"var(--t1)",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{rem.text}</pre>
@@ -710,7 +710,7 @@ function MailDraftModal({data,onClose}){
           <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800}}>Daily Report — Mail Draft</div><div style={{fontSize:11,color:"var(--t3)",marginTop:2}}>Auto-generated from current data · copy or open in mail client</div></div>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
-        <div style={{flex:1,overflow:"auto",padding:"18px 24px"}}>
+        <div style={{flex:1,minHeight:0,overflow:"auto",padding:"18px 24px"}}>
           <div style={{marginBottom:16}}>
             <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",marginBottom:6}}>Subject</div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -1026,7 +1026,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
         </div>
 
         {/* Tab content */}
-        <div style={{flex:1,overflow:"auto"}}>
+        <div style={{flex:1,minHeight:0,overflow:"auto"}}>
 
           {/* ALL TICKETS TAB */}
           {activeTab==="all"&&renderTable(viewTix)}
@@ -1172,6 +1172,20 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             var activeSvmTickets=activeSvmIdx>=0?svmEntries[activeSvmIdx][1]:[];
             return(
             <div style={{padding:"16px 24px"}}>
+              {/* Selected person's tickets — shown FIRST so it's visible without scrolling past every card */}
+              {svmFilter!==null&&activeSvmIdx>=0&&(
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:activeSvmColor+"14",borderRadius:10,border:"1px solid "+activeSvmColor+"44",position:"sticky",top:0,zIndex:3}}>
+                  <div style={{width:12,height:12,borderRadius:3,background:activeSvmColor}}/>
+                  <span style={{fontSize:13,fontWeight:800,color:activeSvmColor}}>{svmFilter}</span>
+                  <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {activeSvmTickets.length} ticket{activeSvmTickets.length!==1?"s":""}</span>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){setSvmFilter(null);}} style={{background:activeSvmColor,color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
+                </div>
+              )}
+              {svmFilter!==null&&activeSvmIdx>=0&&(function(){
+                var sorted=[].concat(activeSvmTickets).sort(function(a,b){return ds(b.Created)-ds(a.Created);});
+                return(<div style={{marginBottom:16}}>{renderTable(sorted,false,true)}<div style={{fontSize:11,color:"var(--t3)",marginTop:8}}>Pick another person below to switch.</div></div>);
+              })()}
               {/* SVM blocks grid — each block is clickable */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12,marginBottom:16}}>
                 {svmEntries.map(function(entry,i){
@@ -1217,23 +1231,6 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                 })}
               </div>
 
-              {/* Active filter chip */}
-              {svmFilter!==null&&activeSvmIdx>=0&&(
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:activeSvmColor+"14",borderRadius:10,border:"1px solid "+activeSvmColor+"44"}}>
-                  <div style={{width:12,height:12,borderRadius:3,background:activeSvmColor}}/>
-                  <span style={{fontSize:13,fontWeight:800,color:activeSvmColor}}>{svmFilter}</span>
-                  <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {activeSvmTickets.length} ticket{activeSvmTickets.length!==1?"s":""}</span>
-                  <div style={{flex:1}}/>
-                  <button onClick={function(){setSvmFilter(null);}} style={{background:activeSvmColor,color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
-                </div>
-              )}
-
-              {/* Filtered: single SVM table */}
-              {svmFilter!==null&&activeSvmIdx>=0&&(function(){
-                var sorted=[].concat(activeSvmTickets).sort(function(a,b){return ds(b.Created)-ds(a.Created);});
-                return renderTable(sorted);
-              })()}
-
               {/* Unfiltered: show all SVM sections */}
               {svmFilter===null&&svmEntries.map(function(entry,i){
                 var name=entry[0],tickets=entry[1];
@@ -1250,9 +1247,8 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               })}
             </div>);
           })()}
-        </div>
 
-        {/* ENGG ASSIGNEE TAB */}
+          {/* ENGG ASSIGNEE TAB */}
           {activeTab==="enggA"&&(function(){
             /* Full-screen spinner only on the very first tick, before the pivot is built. */
             if(!enggMap&&enggLoading)return(
@@ -1328,6 +1324,23 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               </div>}
               {/* No-match note */}
               {q&&entries.length===0&&<div style={{padding:"30px 12px",textAlign:"center",color:"var(--t3)",fontSize:13}}>No assignees or tickets match “{enggSearch}”.</div>}
+              {/* Selected assignee's tickets — shown FIRST so it's visible without scrolling past every card */}
+              {svmFilter&&(function(){
+                var selE=entries.filter(function(e){return e[0]===svmFilter;})[0];
+                var selM=selE?selE[1]:enggPivot[svmFilter];
+                if(!selM)return null;
+                return(
+                <div style={{marginBottom:16}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"9px 16px",background:"var(--violet-bg)",borderRadius:10,border:"1px solid var(--violet-border)",position:"sticky",top:0,zIndex:3}}>
+                    <span style={{fontSize:13,fontWeight:800,color:"var(--violet)"}}>🔧 {svmFilter}</span>
+                    <span style={{fontSize:12,color:"var(--t2)"}}>— {selM.n} ticket{selM.n!==1?"s":""}</span>
+                    <div style={{flex:1}}/>
+                    <button onClick={function(){setSvmFilter(null);}} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all assignees</button>
+                  </div>
+                  {renderTable(selM.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}),false,true)}
+                  <div style={{fontSize:11,color:"var(--t3)",marginTop:8,marginBottom:2}}>Pick another person below to switch.</div>
+                </div>);
+              })()}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12,marginBottom:16}}>
                 {entries.map(function(entry,i){
                   var name=entry[0],m=entry[1];
@@ -1353,21 +1366,6 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   </div>);
                 })}
               </div>
-              {svmFilter&&(function(){
-                var selE=entries.filter(function(e){return e[0]===svmFilter;})[0];
-                var selM=selE?selE[1]:enggPivot[svmFilter];
-                if(!selM)return null;
-                return(
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"9px 16px",background:"var(--violet-bg)",borderRadius:10,border:"1px solid var(--violet-border)"}}>
-                    <span style={{fontSize:13,fontWeight:800,color:"var(--violet)"}}>{svmFilter}</span>
-                    <span style={{fontSize:12,color:"var(--t2)"}}>— {selM.n} tickets</span>
-                    <div style={{flex:1}}/>
-                    <button onClick={function(){setSvmFilter(null);}} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700}}>✕ Show all</button>
-                  </div>
-                  {renderTable(selM.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}),false,true)}
-                </div>);
-              })()}
               {!svmFilter&&entries.map(function(entry,i){
                 var name=entry[0],m=entry[1];var color=palE[i%palE.length];
                 return(<div key={name} style={{marginBottom:18}}>
@@ -1381,6 +1379,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               })}
             </div>);
           })()}
+        </div>
 
         {/* Footer */}
         <div style={{padding:"10px 24px",borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
