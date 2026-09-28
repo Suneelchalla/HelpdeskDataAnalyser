@@ -322,17 +322,16 @@ function generateEnggReport(p){
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 
-  /* XML sanitizer: strips illegal XML chars + escapes entities */
   function _(s){return String(s==null?"":s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-  /* cell builders */
   function S(v,id,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+'><Data ss:Type="String">'+_(v)+'</Data></Cell>';}
   function NM(v,id){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+'><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
+  function NL(v,id,hr){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+' ss:HRef="'+hr+'"><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
+  function SL(v,id,hr,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+' ss:HRef="'+hr+'"><Data ss:Type="String">'+_(v)+'</Data></Cell>';}
   function R(c,h){return'<Row'+(h?' ss:Height="'+h+'"':'')+'>'+(Array.isArray(c)?c.join(''):c)+'</Row>\n';}
   function C(w){return'<Column ss:AutoFitWidth="0" ss:Width="'+w+'"/>';}
-  function WS(name,cols,rows){return'<Worksheet ss:Name="'+_(name)+'"><Table>'+cols+'\n'+rows+'</Table></Worksheet>\n';}
+  function WS(nm,cols,rows){return'<Worksheet ss:Name="'+_(nm)+'"><Table>'+cols+'\n'+rows+'</Table></Worksheet>\n';}
   function pc(a,b){return b?Math.round(a/b*100)+"%":"0%";}
 
-  /* Stats */
   var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;})
     .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
   var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
@@ -345,7 +344,6 @@ function generateEnggReport(p){
     totCA+=(ca===999?0:ca);totUA+=(ua===999?0:ua);if(checkSLA(t).anyBreach)slaBr++;});
   var avgCA=N?Math.round(totCA/N):0,avgUA=N?Math.round(totUA/N):0;
 
-  /* InCharge map */
   var icm={};tix.forEach(function(t){
     var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";
     if(!icm[sv])icm[sv]={n:0,bkC:[0,0,0,0,0],bkU:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};
@@ -354,43 +352,46 @@ function generateEnggReport(p){
     m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;});
   var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
 
-  /* ── Styles ── */
+  /* borders */
+  var B='<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/></Borders>';
+  var BT='<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#1E3A5F"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/></Borders>';
   var STY='<Styles>'
-  +'<Style ss:ID="Default"><Alignment ss:Vertical="Center" ss:WrapText="0"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/></Style>'
-  +'<Style ss:ID="tt"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#7C3AED" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
-  +'<Style ss:ID="mt"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#6B7280"/></Style>'
-  +'<Style ss:ID="sh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#334155" ss:Pattern="Solid"/></Style>'
-  +'<Style ss:ID="th"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="tl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
-  +'<Style ss:ID="n"><Alignment ss:Vertical="Center"/></Style>'
-  +'<Style ss:ID="nw"><Alignment ss:Vertical="Center" ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="nr"><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>'
-  +'<Style ss:ID="b"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1F2937"/></Style>'
-  +'<Style ss:ID="br"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Alignment ss:Horizontal="Right"/></Style>'
-  +'<Style ss:ID="a"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/></Style>'
-  +'<Style ss:ID="aw"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="ar"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
-  +'<Style ss:ID="vh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#5B21B6"/><Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/></Style>'
-  +'<Style ss:ID="rth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="rtl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
-  +'<Style ss:ID="rf"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/></Style>'
-  +'<Style ss:ID="rfw"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="rfr"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
-  +'<Style ss:ID="oth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="otl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
-  +'<Style ss:ID="of"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/></Style>'
-  +'<Style ss:ID="ofw"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/></Style>'
-  +'<Style ss:ID="ofr"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
-  +'<Style ss:ID="ok"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#059669"/></Style>'
-  +'<Style ss:ID="wa"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#DC2626"/></Style>'
-  +'<Style ss:ID="tot"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>'
-  +'<Style ss:ID="totr"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
+  +'<Style ss:ID="Default"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>'+B+'</Style>'
+  +'<Style ss:ID="tt"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#7C3AED" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
+  +'<Style ss:ID="mt"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#6B7280"/>'+B+'</Style>'
+  +'<Style ss:ID="sh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#334155" ss:Pattern="Solid"/>'+B+'</Style>'
+  +'<Style ss:ID="th"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="tl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
+  +'<Style ss:ID="n"><Alignment ss:Vertical="Center"/>'+B+'</Style>'
+  +'<Style ss:ID="nw"><Alignment ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="nr"><Alignment ss:Vertical="Center" ss:Horizontal="Right"/>'+B+'</Style>'
+  +'<Style ss:ID="b"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1F2937"/>'+B+'</Style>'
+  +'<Style ss:ID="br"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
+  +'<Style ss:ID="lk"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#2563EB" ss:Underline="Single"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
+  +'<Style ss:ID="lka"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#2563EB" ss:Underline="Single"/><Alignment ss:Horizontal="Right"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>'+B+'</Style>'
+  +'<Style ss:ID="a"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>'+B+'</Style>'
+  +'<Style ss:ID="aw"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="ar"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
+  +'<Style ss:ID="vh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#5B21B6"/><Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/>'+B+'</Style>'
+  +'<Style ss:ID="rth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="rtl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
+  +'<Style ss:ID="rf"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/>'+B+'</Style>'
+  +'<Style ss:ID="rfw"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="rfr"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
+  +'<Style ss:ID="oth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="otl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
+  +'<Style ss:ID="of"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/>'+B+'</Style>'
+  +'<Style ss:ID="ofw"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+B+'</Style>'
+  +'<Style ss:ID="ofr"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
+  +'<Style ss:ID="ok"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#059669"/>'+B+'</Style>'
+  +'<Style ss:ID="wa"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#DC2626"/>'+B+'</Style>'
+  +'<Style ss:ID="tot"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>'+BT+'</Style>'
+  +'<Style ss:ID="totr"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+BT+'</Style>'
   +'</Styles>';
 
-  /* Ticket row builder for detail sheets */
   function trow(t,si,sri,swi,reason){
     var ca=ds(t.Created),ua=ds(t.Updated||t.Created);si=si||"n";sri=sri||"nr";swi=swi||"nw";
-    var cells=[S(t.Key,si),S((t.Summary||"").substring(0,120),swi),S(t.Status,si),S(t.Priority,si),
+    var cells=[S(t.Key,si),S((t.Summary||"").substring(0,100),swi),S(t.Status,si),S(t.Priority,si),
       S(t["SVM In Charge"]||"",si),S(t["Current Worker"]||"",si),S(t.Project||"",si),
       S(t.Created?fd(t.Created):"",si),S(t.Updated?fd(t.Updated):"",si),
       NM(ca===999?0:ca,sri),NM(ua===999?0:ua,sri),S(checkSLA(t).anyBreach?"YES":"",si),
@@ -399,7 +400,6 @@ function generateEnggReport(p){
     else cells.push(S(nextStep(t.Status,"engg"),si));
     return R(cells);}
 
-  /* Header row for detail sheets */
   function thRow(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
     return R([S("Key",lid),S("Summary",lid),S("Status",hid),S("Priority",hid),
       S("SVM In Charge",lid),S("Current Worker",lid),S("Project",lid),
@@ -409,16 +409,17 @@ function generateEnggReport(p){
 
   /* ═ Sheet 1: SUMMARY ═ */
   var s1="";
-  s1+=R(S("ENGINEERING FOLLOW-UP REPORT","tt",2),28);
+  s1+=R(S("ENGINEERING FOLLOW-UP REPORT  |  Tickets Pending with Engineering - For Action","tt",2),28);
   s1+=R([S("Generated: "+today+" at "+time,"mt"),S("","mt"),S("","mt")]);
+  s1+=R([S("From: SVM Help Desk Operations  |  To: Engineering Team","mt"),S("","mt"),S("","mt")]);
   s1+=R([S("Source: "+fn,"mt"),S("","mt"),S("","mt")]);
   if(w.length)s1+=R([S("Workers: "+w.join(", "),"mt"),S("","mt"),S("","mt")]);
   s1+=R([S(""),S(""),S("")]);
   s1+=R([S("OVERVIEW","sh"),S("Count","sh"),S("Notes","sh")],18);
-  s1+=R([S("Total with Engineering","b"),NM(N,"br"),S("Tickets currently with dev/engineering")]);
-  s1+=R([S("Fires (Critical / Show Stopper > 14d)",fires.length?"wa":"a"),NM(fires.length,fires.length?"br":"ar"),S(fires.length?"IMMEDIATE ESCALATION - see Fires tab":"None currently","a")]);
+  s1+=R([S("Total with Engineering","b"),NL(N,"lk","#'All Engg Tickets'!A1"),S("Click count to see all tickets")]);
+  s1+=R([S("Fires (Critical / Show Stopper > 14d)",fires.length?"wa":"a"),NL(fires.length,fires.length?"lk":"lka","#'Fires'!A1"),S(fires.length?"URGENT - Click count to see fire tickets":"None currently","a")]);
   s1+=R([S("Stale (no update 30+ days)","n"),NM(stale30.length,"nr"),S("No movement in 30+ days")]);
-  s1+=R([S("Danger Zone (90+ days)",danger.length?"wa":"a"),NM(danger.length,danger.length?"br":"ar"),S("Aged 90+ days - see Danger Zone tab","a")]);
+  s1+=R([S("Danger Zone (90+ days)",danger.length?"wa":"a"),NL(danger.length,danger.length?"lk":"lka","#'Danger Zone'!A1"),S("Click count to see danger tickets","a")]);
   s1+=R([S("Average Age (Created)","n"),S(avgCA+"d","nr"),S("")]);
   s1+=R([S("Average Age (Updated)","a"),S(avgUA+"d","ar"),S("","a")]);
   s1+=R([S("SLA Breaches","n"),NM(slaBr,"nr"),S("")]);
@@ -435,30 +436,30 @@ function generateEnggReport(p){
   ["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"].forEach(function(l,i){
     var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(l,si),NM(bkU[i],sri),S(pc(bkU[i],N),sri)]);});
   s1+=R([S(""),S(""),S("")]);
-  s1+=R([S("KEY OBSERVATIONS","sh"),S("","sh"),S("","sh")],18);
-  if(fires.length)s1+=R([S("!! FIRES","wa"),S(""),S(fires.length+" critical/show-stopper tickets stalled 14+ days with engineering - escalate immediately")]);
-  if(danger.length>5)s1+=R([S("!! DANGER","wa"),S(""),S(danger.length+" tickets 90+ days old - push for closure or active resolution")]);
-  if(stale30.length>N*0.4)s1+=R([S("!! STALE","wa"),S(""),S(Math.round(stale30.length/N*100)+"% of engg tickets ("+stale30.length+"/"+N+") have no update in 30+ days")]);
-  if(!fires.length&&danger.length<=5)s1+=R([S("OK","ok"),S(""),S("No critical engineering escalations today")]);
-  var sheet1=WS("Summary",C(220)+C(100)+C(420),s1);
+  s1+=R([S("OBSERVATIONS","sh"),S("","sh"),S("","sh")],18);
+  if(fires.length)s1+=R([S("!! FIRES","wa"),S(""),S(fires.length+" critical/show-stopper tickets stalled 14+ days - engineering to prioritize immediately")]);
+  if(danger.length>3)s1+=R([S("!! DANGER","wa"),S(""),S(danger.length+" tickets 90+ days old - engineering to close or provide resolution timeline")]);
+  if(stale30.length>N*0.3)s1+=R([S("!! STALE","wa"),S(""),S(Math.round(stale30.length/N*100)+"% of tickets ("+stale30.length+"/"+N+") have no update in 30+ days - status update needed")]);
+  if(!fires.length&&danger.length<=3)s1+=R([S("OK","ok"),S(""),S("No critical escalation items today")]);
+  var sheet1=WS("Summary",C(250)+C(100)+C(400),s1);
 
   /* ═ Sheet 2: INCHARGE SUMMARY ═ */
   var s2="";
-  s2+=R([S("SVM In Charge","tl"),S("Total","th"),S("SS","th"),S("Crit","th"),S("High","th"),S("Med","th"),S("Low","th"),
+  s2+=R([S("SVM In Charge","tl"),S("Total","th"),S("Show Stopper","th"),S("Critical","th"),S("High","th"),S("Medium","th"),S("Low","th"),
     S("<7d","th"),S("7-30d","th"),S("31-60d","th"),S("61-90d","th"),S("90+d","th"),S("Avg Created","th"),S("Avg Updated","th")],20);
   ick.forEach(function(k,i){var m=icm[k];var si=i%2?"a":"n",sri=i%2?"ar":"nr";
-    s2+=R([S(k,si),NM(m.n,sri),NM(m.pri["Show Stopper"]||0,sri),NM(m.pri["Critical"]||0,sri),NM(m.pri["High"]||0,sri),NM(m.pri["Medium"]||0,sri),NM(m.pri["Low"]||0,sri),
+    s2+=R([SL(k,si,"#'InCharge Details'!A1"),NL(m.n,i%2?"lka":"lk","#'InCharge Details'!A1"),NM(m.pri["Show Stopper"]||0,sri),NM(m.pri["Critical"]||0,sri),NM(m.pri["High"]||0,sri),NM(m.pri["Medium"]||0,sri),NM(m.pri["Low"]||0,sri),
       NM(m.bkC[0],sri),NM(m.bkC[1],sri),NM(m.bkC[2],sri),NM(m.bkC[3],sri),NM(m.bkC[4],sri),
       S((m.n?Math.round(m.tCA/m.n):0)+"d",sri),S((m.n?Math.round(m.tUA/m.n):0)+"d",sri)]);});
-  s2+=R([S("TOTAL","tot"),NM(N,"totr"),NM(pri["Show Stopper"]||0,"totr"),NM(pri["Critical"]||0,"totr"),NM(pri["High"]||0,"totr"),NM(pri["Medium"]||0,"totr"),NM(pri["Low"]||0,"totr"),
+  s2+=R([S("TOTAL","tot"),NL(N,"totr","#'All Engg Tickets'!A1"),NM(pri["Show Stopper"]||0,"totr"),NM(pri["Critical"]||0,"totr"),NM(pri["High"]||0,"totr"),NM(pri["Medium"]||0,"totr"),NM(pri["Low"]||0,"totr"),
     NM(bkC[0],"totr"),NM(bkC[1],"totr"),NM(bkC[2],"totr"),NM(bkC[3],"totr"),NM(bkC[4],"totr"),S(avgCA+"d","totr"),S(avgUA+"d","totr")]);
-  var sheet2=WS("InCharge Summary",C(140)+C(50)+C(38)+C(42)+C(42)+C(40)+C(38)+C(40)+C(46)+C(50)+C(50)+C(42)+C(76)+C(76),s2);
+  var sheet2=WS("InCharge Summary",C(150)+C(50)+C(72)+C(52)+C(42)+C(52)+C(38)+C(40)+C(46)+C(50)+C(50)+C(42)+C(76)+C(76),s2);
 
   /* ═ Sheet 3: INCHARGE DETAILS ═ */
   var s3="";
   ick.forEach(function(name){var m=icm[name];
     s3+=R([S("")]);
-    s3+=R(S(name+"  |  "+m.n+" tickets  |  Avg age (created): "+(m.n?Math.round(m.tCA/m.n):0)+"d  |  Avg age (updated): "+(m.n?Math.round(m.tUA/m.n):0)+"d","vh",13),22);
+    s3+=R(S(name+"  |  "+m.n+" tickets  |  Avg created: "+(m.n?Math.round(m.tCA/m.n):0)+"d  |  Avg updated: "+(m.n?Math.round(m.tUA/m.n):0)+"d","vh",13),22);
     s3+=thRow();
     tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;})
       .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
@@ -466,63 +467,55 @@ function generateEnggReport(p){
   });
   var sheet3=WS("InCharge Details",DCOL,s3);
 
-  /* ═ Sheet 4: BY PRIORITY ═ */
-  var s4=thRow();
-  tix.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
-    .forEach(function(t,i){s4+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
-  var sheet4=WS("By Priority",DCOL,s4);
-
-  /* ═ Sheet 5: FIRES ═ */
-  var s5="";
-  if(fires.length){s5+=thRow("rth","rtl","Why Fire");
+  /* ═ Sheet 4: FIRES ═ */
+  var s4="";
+  if(fires.length){s4+=thRow("rth","rtl","Why Fire");
     fires.forEach(function(t,i){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
       var why=t.Priority+" priority | Created "+ca+"d ago | Last updated "+ua+"d ago"+(checkSLA(t).anyBreach?" | SLA BREACHED":"")+(ua>30?" | NO MOVEMENT 30+ DAYS":"");
-      s5+=trow(t,"rf","rfr","rfw",why);});
-  }else{s5+=R(S("No fires currently - all critical/show-stopper engineering tickets are within 14 days","ok",13));}
-  var sheet5=WS("Fires",DCOL,s5);
+      s4+=trow(t,"rf","rfr","rfw",why);});
+  }else{s4+=R(S("No fires currently - all critical/show-stopper engineering tickets are within 14 days","ok",13));}
+  var sheet4=WS("Fires",DCOL,s4);
 
-  /* ═ Sheet 6: DANGER ZONE ═ */
-  var s6="";
-  if(danger.length){s6+=thRow("oth","otl","Why Danger Zone");
+  /* ═ Sheet 5: DANGER ZONE ═ */
+  var s5="";
+  if(danger.length){s5+=thRow("oth","otl","Why Danger Zone");
     danger.forEach(function(t,i){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
       var why="Created "+ca+"d ago | Last updated "+ua+"d ago | "+t.Priority+" priority"+(checkSLA(t).anyBreach?" | SLA BREACHED":"")+(ua>60?" | STAGNANT 60+ DAYS":"");
-      s6+=trow(t,"of","ofr","ofw",why);});
-  }else{s6+=R(S("No tickets in danger zone - none aged 90+ days","ok",13));}
-  var sheet6=WS("Danger Zone",DCOL,s6);
+      s5+=trow(t,"of","ofr","ofw",why);});
+  }else{s5+=R(S("No tickets in danger zone - none aged 90+ days","ok",13));}
+  var sheet5=WS("Danger Zone",DCOL,s5);
 
-  /* ═ Sheet 7: ALL ENGG TICKETS ═ */
-  var s7=thRow();
+  /* ═ Sheet 6: ALL ENGG TICKETS ═ */
+  var s6=thRow();
   tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
-    .forEach(function(t,i){s7+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
-  var sheet7=WS("All Engg Tickets",DCOL,s7);
+    .forEach(function(t,i){s6+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
+  var sheet6=WS("All Engg Tickets",DCOL,s6);
 
-  /* ── Assemble workbook ── */
   var xml='<?xml version="1.0" encoding="UTF-8"?>\n'
     +'<?mso-application progid="Excel.Sheet"?>\n'
     +'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
     +' xmlns:o="urn:schemas-microsoft-com:office:office"'
     +' xmlns:x="urn:schemas-microsoft-com:office:excel"'
     +' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'
-    +STY+'\n'+sheet1+sheet2+sheet3+sheet4+sheet5+sheet6+sheet7
+    +STY+'\n'+sheet1+sheet2+sheet3+sheet4+sheet5+sheet6
     +'</Workbook>';
   var blob=new Blob([xml],{type:"application/vnd.ms-excel"});
   var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;
-  a.download="Engg-Followup-Report-"+new Date().toISOString().slice(0,10)+".xls";a.click();URL.revokeObjectURL(url);
+  a.download="Engg-Followup-Report-"+new Date().toISOString().slice(0,10)+".xml";a.click();URL.revokeObjectURL(url);
 }
 
-/* === Engineering-specific Mail Draft === */
+/* === Engineering Mail Draft (FROM support TO engineering) === */
 function buildEnggMailDraft(p){
-  var tix=p.tickets,fn=p.fn,w=p.w,pf=p.pf;
+  var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[];
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var N=tix.length;
   var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
-  var stale=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
+  var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
   var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;});
   var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};
-  var abkU=[0,0,0,0,0];
-  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;abkU[abk(ds(t.Updated||t.Created))]++;});
+  var bkU=[0,0,0,0,0];
+  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;bkU[abk(ds(t.Updated||t.Created))]++;});
 
-  /* InCharge table */
   var icm={};tix.forEach(function(t){
     var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";
     if(!icm[sv])icm[sv]={n:0,bk:[0,0,0,0,0]};var m=icm[sv];m.n++;m.bk[abk(ds(t.Updated||t.Created))]++;
@@ -531,24 +524,21 @@ function buildEnggMailDraft(p){
   var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;};
   var rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
   var icTable=ick.map(function(k){var m=icm[k];return"  "+pad(k,22)+rpad(m.n,5)+"   "+rpad(m.bk[0],4)+"  "+rpad(m.bk[1],5)+"  "+rpad(m.bk[2],6)+"  "+rpad(m.bk[3],6)+"  "+rpad(m.bk[4],5);}).join("\n");
-
   var firesList=fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n");
 
-  var scope=w.length?w.join(", "):"All Workers";
-  var subject="Engineering Follow-up Report - "+today+" - "+N+" Tickets with Engineering";
+  var subject="Engineering Follow-up | "+today+" | "+N+" Tickets Pending with Engineering";
 
-  var body="Good morning team,\n\n"
-    +"Below is today's engineering follow-up summary for the support desk.\n"
-    +"These are tickets currently with the dev/engineering team that need our follow-up.\n"
-    +(w.length?"Scope: "+scope+"\n":"")
+  var body="Dear Engineering Team,\n\n"
+    +"This is the daily follow-up on tickets currently pending with your team.\n"
+    +"As of "+today+", there are "+N+" tickets requiring your attention.\n"
     +"\n"
     +"--------------------------------------------\n"
-    +"  ENGINEERING FOLLOW-UP STATUS - "+today+"\n"
+    +"  PENDING WITH ENGINEERING - "+today+"\n"
     +"--------------------------------------------\n\n"
-    +"  Total with Engineering :  "+N+"\n"
-    +"  Fires (Crit/SS > 14d) :  "+fires.length+(fires.length?"  << ESCALATE":"  (none)")+"\n"
-    +"  Stale (no update 30d) :  "+stale.length+"\n"
-    +"  Danger Zone (90+ days):  "+danger.length+"\n"
+    +"  Total Tickets        :  "+N+"\n"
+    +"  Fires (Crit/SS >14d) :  "+fires.length+(fires.length?"  << URGENT - please prioritize":"  (none)")+"\n"
+    +"  Stale (30+ days)     :  "+stale30.length+"\n"
+    +"  Danger Zone (90+d)   :  "+danger.length+"\n"
     +"\n"
     +"  PRIORITY BREAKDOWN\n"
     +"  Show Stopper: "+(pri["Show Stopper"]||0)+"  |  Critical: "+(pri["Critical"]||0)
@@ -556,26 +546,25 @@ function buildEnggMailDraft(p){
     +"  |  Low: "+(pri["Low"]||0)+"\n"
     +"\n"
     +"  AGING (by last updated)\n"
-    +"  <7d: "+abkU[0]+"  |  7-30d: "+abkU[1]+"  |  31-60d: "+abkU[2]+"  |  61-90d: "+abkU[3]+"  |  90+d: "+abkU[4]+"\n"
+    +"  <7d: "+bkU[0]+"  |  7-30d: "+bkU[1]+"  |  31-60d: "+bkU[2]+"  |  61-90d: "+bkU[3]+"  |  90+d: "+bkU[4]+"\n"
     +"\n"
-    +"  INCHARGE-WISE SUMMARY\n"
+    +"  TEAM-WISE DISTRIBUTION\n"
     +"  "+pad("Name",22)+rpad("Total",5)+"   "+rpad("<7d",4)+"  "+rpad("7-30d",5)+"  "+rpad("31-60d",6)+"  "+rpad("61-90d",6)+"  "+rpad("90+d",5)+"\n"
     +"  "+Array(62).join("-")+"\n"
     +icTable+"\n"
     +"\n"
-    +(fires.length?("  FIRES - IMMEDIATE FOLLOW-UP NEEDED\n"+firesList+"\n"+(fires.length>10?"  ... and "+(fires.length-10)+" more\n":"")+"\n"):"")
-    +"ACTION REQUIRED:\n"
-    +(fires.length?"  1. Follow up with engineering on all "+fires.length+" fire tickets TODAY\n":"")
-    +(stale.length?"  "+(fires.length?"2":"1")+". Chase update on "+stale.length+" stale tickets (no movement in 30+ days)\n":"")
-    +(danger.length?"  "+(fires.length?(stale.length?"3":"2"):(stale.length?"2":"1"))+". Review "+danger.length+" danger-zone tickets for closure or escalation\n":"")
+    +(fires.length?("  FIRES - URGENT ACTION REQUIRED\n"+firesList+"\n"+(fires.length>10?"  ... and "+(fires.length-10)+" more\n":"")+"\n"):"")
+    +"REQUESTED ACTIONS:\n"
+    +(fires.length?"  1. Please provide status updates on all "+fires.length+" fire ticket"+(fires.length>1?"s":"")+" by EOD today\n":"")
+    +(stale30.length?"  "+(fires.length?"2":"1")+". Update progress on "+stale30.length+" stale ticket"+(stale30.length>1?"s":"")+" (no movement in 30+ days)\n":"")
+    +(danger.length?"  "+(fires.length?(stale30.length?"3":"2"):(stale30.length?"2":"1"))+". Review "+danger.length+" danger-zone ticket"+(danger.length>1?"s":"")+" (90+ days) - please close or provide resolution timeline\n":"")
     +"\n"
-    +"Detailed Excel report attached.\n\n"
-    +"Best regards,\n"
-    +"SVM Help Desk\n";
+    +"Detailed ticket list attached (Excel).\n\n"
+    +"Regards,\n"
+    +"SVM Help Desk Operations\n";
 
   return{subject:subject,body:body};
 }
-
 /* ═══ Mail Draft Modal Component ═══ */
 function MailDraftModal({data,onClose}){
   if(!data)return null;
