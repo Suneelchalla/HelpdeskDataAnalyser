@@ -610,6 +610,31 @@ function _fetchLinkedAssignee(ticket){
   });
 }
 
+/* Engg-assignee cache, keyed by the LINKED issue key (not the HD ticket key).
+   Persists across modal open/close and dedupes tickets that share a linked issue,
+   so reopening the tab is instant and Jira gets far fewer requests. */
+var _enggAssigneeCache={};
+function _fetchAssigneeByKey(key){
+  key=String(key||"").trim();
+  if(!key)return Promise.resolve("");
+  if(Object.prototype.hasOwnProperty.call(_enggAssigneeCache,key))return Promise.resolve(_enggAssigneeCache[key]);
+  if(!window._rmBridge)return Promise.resolve("");
+  var host="svmhelpdesk.atlassian.net";
+  try{var cfg=JSON.parse(localStorage.getItem("hd-jira-cfg")||"{}");if(cfg.jiraHost)host=cfg.jiraHost;}catch(e){}
+  return new Promise(function(resolve){
+    var id=800000+Math.floor(Math.random()*99999),settled=false;
+    function finish(v){if(settled)return;settled=true;window.removeEventListener("message",handler);_enggAssigneeCache[key]=v||"";resolve(_enggAssigneeCache[key]);}
+    function handler(e){
+      if(!e.data||e.data.type!=="HD_BRIDGE_RESULT"||e.data.id!==id)return;
+      if(e.data.ok&&e.data.data&&e.data.data.fields){var a=e.data.data.fields.assignee;finish(a?a.displayName||a.name||"":"");}
+      else finish("");
+    }
+    window.addEventListener("message",handler);
+    window.postMessage({type:"HD_BRIDGE_CALL",id:id,host:host,path:"/rest/api/3/issue/"+encodeURIComponent(key)+"?fields=assignee",method:"GET",body:null},"*");
+    setTimeout(function(){finish("");},12000);
+  });
+}
+
 function ReminderModal({ticket,mode,onClose}){
   if(!ticket)return null;
   const[linkedName,setLinkedName]=useState("");
@@ -792,21 +817,56 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   const [enggMap, setEnggMap] = useState(null); // {ticketKey: assigneeName}
   const [enggLoading, setEnggLoading] = useState(false);
   const [enggProg, setEnggProg] = useState([0,0]);
+  const [enggBridgeMissing, setEnggBridgeMissing] = useState(false);
+  const [enggSearch, setEnggSearch] = useState("");
 
   /* Fetch all linked ticket assignees in batches of 5 */
-  function loadEnggAssignees(){
-    var toFetch=tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";});
-    setEnggLoading(true);setEnggProg([0,toFetch.length]);
-    var results={},done=0;
+  function loadEnggAssignees(force){
+    /* Pair each ticket with its first linked issue key. */
+    var withKey=tix.map(function(t){
+      var l=String(t["Linked Issues"]||"").trim();
+      if(!l||l.toLowerCase()==="nan")return null;
+      var lk=l.split(/[;,]/)[0].trim();
+      return lk?{t:t,lk:lk}:null;
+    }).filter(Boolean);
+
+    /* Rebuild the ticketKey->name map from whatever is currently in the cache
+       (blanks for not-yet-fetched). Called progressively so the pivot fills in live. */
+    function rebuild(){
+      var m={};
+      withKey.forEach(function(x){
+        m[x.t.Key]=Object.prototype.hasOwnProperty.call(_enggAssigneeCache,x.lk)?_enggAssigneeCache[x.lk]:"";
+      });
+      setEnggMap(m);
+    }
+
+    /* Unique linked keys still needing a fetch (force clears their cache first). */
+    var seen={},uniqueKeys=[];
+    withKey.forEach(function(x){
+      if(seen[x.lk])return;seen[x.lk]=1;
+      if(force)delete _enggAssigneeCache[x.lk];
+      if(!Object.prototype.hasOwnProperty.call(_enggAssigneeCache,x.lk))uniqueKeys.push(x.lk);
+    });
+
+    setEnggBridgeMissing(false);
+    rebuild(); /* show the pivot immediately (cache + SVM-In-Charge fallback) */
+
+    if(!uniqueKeys.length){setEnggLoading(false);setEnggProg([0,0]);return;}
+    if(!window._rmBridge){setEnggLoading(false);setEnggBridgeMissing(true);setEnggProg([0,0]);return;}
+
+    setEnggLoading(true);setEnggProg([0,uniqueKeys.length]);
+    var done=0;
     function batchRun(items,batchSize){
       var batches=[];for(var i=0;i<items.length;i+=batchSize)batches.push(items.slice(i,i+batchSize));
       return batches.reduce(function(p,batch){return p.then(function(){
-        return Promise.all(batch.map(function(t){
-          return _fetchLinkedAssignee(t).then(function(name){results[t.Key]=name||"";done++;setEnggProg([done,toFetch.length]);}).catch(function(){results[t.Key]="";done++;setEnggProg([done,toFetch.length]);});
+        return Promise.all(batch.map(function(lk){
+          return _fetchAssigneeByKey(lk)["catch"](function(){return "";}).then(function(){
+            done++;setEnggProg([done,items.length]);rebuild();
+          });
         }));
       });},Promise.resolve());
     }
-    batchRun(toFetch,5).then(function(){setEnggMap(results);setEnggLoading(false);});
+    batchRun(uniqueKeys,5).then(function(){setEnggLoading(false);rebuild();});
   }
 
   /* Pivot by engineering assignee */
@@ -825,10 +885,15 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
     return pivot;
   },[enggMap,tix]);
 
+  /* Reset engg-tab view state whenever the modal's ticket set changes (e.g. Engg vs Client). */
+  useEffect(function(){
+    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");
+  },[data&&data.title]);
+
   /* Auto-load linked assignees when Engg Assignee tab is opened */
   useEffect(function(){
     if(activeTab==="enggA"&&!enggMap&&!enggLoading&&data.showReport){loadEnggAssignees();}
-  },[activeTab]);
+  },[activeTab,enggMap]);
 
   /* Client project list for client modal */
   var clientProjects = useMemo(function(){
@@ -876,9 +941,9 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   var svmPalette=["#7C3AED","#5B21B6","#2563EB","#0891B2","#059669","#D97706","#E11D48","#9333EA","#4338CA","#0D9488","#B45309","#DC2626"];
 
   /* ── shared ticket table ── */
-  function renderTable(list,showAge){
+  function renderTable(list,showAge,flat){
     return(
-      <div style={{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
+      <div style={flat?{overflowX:"auto"}:{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr style={{background:"var(--bg)",position:"sticky",top:0,zIndex:2}}>
             <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Key</th>
@@ -1184,22 +1249,80 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* ENGG ASSIGNEE TAB */}
           {activeTab==="enggA"&&(function(){
-            if(!enggMap)return(
+            /* Full-screen spinner only on the very first tick, before the pivot is built. */
+            if(!enggMap&&enggLoading)return(
               <div style={{padding:"40px 24px",textAlign:"center"}}>
                 <div style={{fontSize:14,fontWeight:700,color:"var(--violet)",marginBottom:12}}>Fetching engineering assignees from linked tickets...</div>
                 <div style={{width:"100%",maxWidth:400,margin:"0 auto",height:10,borderRadius:8,background:"var(--bg)",overflow:"hidden",border:"1px solid var(--border)"}}>
                   <div style={{width:(enggProg[1]?Math.round(enggProg[0]/enggProg[1]*100):0)+"%",height:"100%",background:"var(--violet)",borderRadius:8,transition:"width .3s"}}/>
                 </div>
-                <div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>{enggProg[0]} / {enggProg[1]} tickets</div>
+                <div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>{enggProg[0]} / {enggProg[1]} linked tickets</div>
               </div>);
-            var entries=Object.entries(enggPivot).sort(function(a,b){return b[1].n-a[1].n;});
-            var maxN=entries.length?entries[0][1].n:1;
+            if(!enggMap)return(
+              <div style={{padding:"40px 24px",textAlign:"center",color:"var(--t3)",fontSize:13}}>
+                Loading… <button onClick={function(){loadEnggAssignees(true);}} style={{marginLeft:8,padding:"4px 12px",borderRadius:6,border:"1px solid var(--violet-border)",background:"var(--violet-bg)",color:"var(--violet)",fontSize:11,fontWeight:700}}>↻ Load now</button>
+              </div>);
             var ageLabelsE=["< 7d","7-30d","31-60d","61-90d","90+d"];
             var ageColorsE=["#059669","#65A30D","#CA8A04","#EA580C","#E11D48"];
             var palE=["#7C3AED","#5B21B6","#2563EB","#0891B2","#059669","#D97706","#E11D48","#9333EA","#4338CA","#0D9488","#B45309","#DC2626"];
+            var allEntries=Object.entries(enggPivot).sort(function(a,b){return b[1].n-a[1].n;});
+            /* ── search filter (matches assignee name, or a ticket's key / summary / status / project) ── */
+            var q=enggSearch.trim().toLowerCase();
+            var entries=allEntries;
+            if(q){
+              entries=allEntries.map(function(e){
+                var name=e[0],m=e[1];
+                if(name.toLowerCase().indexOf(q)>-1)return e;
+                var ft=m.tickets.filter(function(t){
+                  return (String(t.Key||"").toLowerCase().indexOf(q)>-1)
+                    ||(String(t.Summary||"").toLowerCase().indexOf(q)>-1)
+                    ||(String(t.Status||"").toLowerCase().indexOf(q)>-1)
+                    ||(String(t.Project||"").toLowerCase().indexOf(q)>-1);
+                });
+                return ft.length?[name,Object.assign({},m,{tickets:ft,n:ft.length})]:null;
+              }).filter(Boolean);
+            }
+            var resolvedCount=tix.filter(function(t){var lk=String(t["Linked Issues"]||"").split(/[;,]/)[0].trim();return lk&&_enggAssigneeCache[lk];}).length;
+            var linkedCount=tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";}).length;
+            /* ── export the current (filtered) view to CSV ── */
+            function exportEnggCSV(){
+              var rows=[["Engg Assignee","Key","Summary","Status","Priority","Project","Linked Issue","Created","Updated","Age (Updated, days)","SLA Breach","Next Action"]];
+              entries.slice().sort(function(a,b){return b[1].n-a[1].n;}).forEach(function(e){
+                var nm=e[0];
+                e[1].tickets.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t){
+                  var ua=ds(t.Updated||t.Created);
+                  rows.push([nm,t.Key||"",t.Summary||"",t.Status||"",t.Priority||"",t.Project||"",String(t["Linked Issues"]||"").split(/[;,]/)[0].trim(),t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ua===999?"":ua,checkSLA(t).anyBreach?"Yes":"",nextStep(t.Status,classify(t.Status))]);
+                });
+              });
+              var csv=rows.map(function(r){return r.map(escCSV).join(",");}).join("\n");
+              var blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+              var u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="engg-assignees.csv";a.click();URL.revokeObjectURL(u);
+            }
             return(
             <div style={{padding:"16px 24px"}}>
-              <div style={{fontSize:13,fontWeight:800,color:"var(--t1)",marginBottom:12}}>Engineering Assignees — {entries.length} people across {tix.length} tickets</div>
+              {/* Header: title + live progress + search + actions */}
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+                <div style={{fontSize:13,fontWeight:800,color:"var(--t1)"}}>Engineering Assignees — {allEntries.length} people across {tix.length} tickets</div>
+                {enggLoading&&<span style={{fontSize:11,fontWeight:700,color:"var(--violet)",display:"inline-flex",alignItems:"center",gap:6}}>
+                  <span style={{width:60,height:6,borderRadius:6,background:"var(--bg)",overflow:"hidden",display:"inline-block",border:"1px solid var(--border)"}}>
+                    <span style={{display:"block",width:(enggProg[1]?Math.round(enggProg[0]/enggProg[1]*100):0)+"%",height:"100%",background:"var(--violet)"}}/>
+                  </span>
+                  fetching {enggProg[0]}/{enggProg[1]}…
+                </span>}
+                {!enggLoading&&<span style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>{resolvedCount}/{linkedCount} linked assignees resolved from Jira</span>}
+                <div style={{flex:1}}/>
+                <input type="text" value={enggSearch} onChange={function(e){setEnggSearch(e.target.value);}} placeholder="Search assignee, key, summary…" style={{width:230,padding:"7px 12px",borderRadius:8,border:"1px solid var(--border)",fontSize:12,background:"var(--card)",color:"var(--t1)"}}/>
+                {enggSearch&&<button onClick={function(){setEnggSearch("");}} title="Clear search" style={{padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)"}}>✕</button>}
+                <button onClick={exportEnggCSV} title="Export the current (filtered) assignee → ticket rows to CSV" style={{padding:"7px 12px",borderRadius:8,border:"1px solid var(--violet-border)",background:"var(--violet-bg)",fontSize:12,fontWeight:700,color:"var(--violet)",whiteSpace:"nowrap"}}>⬇ Assignee CSV</button>
+                <button onClick={function(){setSvmFilter(null);loadEnggAssignees(true);}} disabled={enggLoading} title="Re-pull assignees from Jira (ignores cache)" style={{padding:"7px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:enggLoading?"var(--t4)":"var(--t2)",whiteSpace:"nowrap",cursor:enggLoading?"default":"pointer"}}>↻ Refetch</button>
+              </div>
+              {/* Bridge-not-detected banner */}
+              {enggBridgeMissing&&<div style={{marginBottom:12,padding:"10px 14px",borderRadius:10,background:"var(--amber-bg)",border:"1px solid var(--amber-border)",color:"var(--amber)",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:10}}>
+                <span>⚠️ Jira bridge extension not detected — showing <b>SVM In Charge</b> as a fallback. Enable the HD Jira Bridge extension and refresh, then</span>
+                <button onClick={function(){loadEnggAssignees(true);}} style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--amber-border)",background:"#fff",color:"var(--amber)",fontSize:11,fontWeight:700}}>↻ Retry</button>
+              </div>}
+              {/* No-match note */}
+              {q&&entries.length===0&&<div style={{padding:"30px 12px",textAlign:"center",color:"var(--t3)",fontSize:13}}>No assignees or tickets match “{enggSearch}”.</div>}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12,marginBottom:16}}>
                 {entries.map(function(entry,i){
                   var name=entry[0],m=entry[1];
@@ -1225,17 +1348,21 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   </div>);
                 })}
               </div>
-              {svmFilter&&enggPivot[svmFilter]&&(
+              {svmFilter&&(function(){
+                var selE=entries.filter(function(e){return e[0]===svmFilter;})[0];
+                var selM=selE?selE[1]:enggPivot[svmFilter];
+                if(!selM)return null;
+                return(
                 <div>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"9px 16px",background:"var(--violet-bg)",borderRadius:10,border:"1px solid var(--violet-border)"}}>
                     <span style={{fontSize:13,fontWeight:800,color:"var(--violet)"}}>{svmFilter}</span>
-                    <span style={{fontSize:12,color:"var(--t2)"}}>— {enggPivot[svmFilter].n} tickets</span>
+                    <span style={{fontSize:12,color:"var(--t2)"}}>— {selM.n} tickets</span>
                     <div style={{flex:1}}/>
                     <button onClick={function(){setSvmFilter(null);}} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700}}>✕ Show all</button>
                   </div>
-                  {renderTable(enggPivot[svmFilter].tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}))}
-                </div>
-              )}
+                  {renderTable(selM.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}),false,true)}
+                </div>);
+              })()}
               {!svmFilter&&entries.map(function(entry,i){
                 var name=entry[0],m=entry[1];var color=palE[i%palE.length];
                 return(<div key={name} style={{marginBottom:18}}>
@@ -1244,7 +1371,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                     <span style={{fontSize:14,fontWeight:800,color:color}}>{name}</span>
                     <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {m.n} ticket{m.n!==1?"s":""}</span>
                   </div>
-                  {renderTable(m.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}))}
+                  {renderTable(m.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}),false,true)}
                 </div>);
               })}
             </div>);
