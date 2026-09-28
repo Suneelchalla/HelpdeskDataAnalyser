@@ -534,21 +534,19 @@ function _buildReminder(t,mode){
     ?"This is a gentle follow-up regarding ticket "+t.Key+" - \""+_cl(t.Summary)+"\"."
     :"This is a follow-up reminder for ticket "+t.Key+" - \""+_cl(t.Summary)+"\".";
   var body2="This ticket was raised on "+(t.Created?fd(t.Created):"unknown")+" ("+ca+" days ago) and "
-    +(isClient?"is currently awaiting your response/action.":"has been pending with engineering since then.");
+    +(isClient?"is currently awaiting your response.":"has been pending since then.");
   var body3="Last updated: "+(t.Updated?fd(t.Updated):"unknown")+" ("+ua+" days ago).";
-  var body4="Priority: "+(t.Priority||"—")+"  |  Status: "+(t.Status||"—");
   var ask=isClient
     ?"We request you to kindly provide your response/confirmation at the earliest so we can proceed further."
     :"Kindly provide an update on the progress at the earliest.";
   var sign="Regards,\nSVM Help Desk";
 
-  var text=greeting+"\n\n"+body1+"\n\n"+body2+"\n"+body3+"\n"+body4+"\n\n"+ask+"\n\n"+sign;
+  var text=greeting+"\n\n"+body1+"\n\n"+body2+"\n"+body3+"\n\n"+ask+"\n\n"+sign;
 
   var adf={type:"doc",version:1,content:[
     {type:"paragraph",content:[{type:"text",text:greeting}]},
     {type:"paragraph",content:[{type:"text",text:body1}]},
     {type:"paragraph",content:[{type:"text",text:body2},{type:"hardBreak"},{type:"text",text:body3}]},
-    {type:"paragraph",content:[{type:"text",text:body4}]},
     {type:"paragraph",content:[{type:"text",text:ask,marks:[{type:"strong"}]}]},
     {type:"paragraph",content:[{type:"text",text:sign}]}
   ]};
