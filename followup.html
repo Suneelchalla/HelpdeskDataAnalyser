@@ -663,6 +663,15 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   /* Filtered list for ageing tab */
   var ageDisplayList = ageFilter!==null ? ageBuckets[ageFilter] : null;
 
+  /* ── Ageing buckets based on Updated date ── */
+  var ageBucketsU=[[], [], [], [], []];
+  tix.forEach(function(t){
+    var age=ds(t.Updated||t.Created);
+    var idx=age<=7?0:age<=30?1:age<=60?2:age<=90?3:4;
+    ageBucketsU[idx].push(t);
+  });
+  var ageDisplayListU = ageFilter!==null ? ageBucketsU[ageFilter] : null;
+
   /* ── SVM In Charge grouping ── */
   var svmMap={};
   tix.forEach(function(t){
@@ -743,7 +752,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* Tabs */}
         <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid var(--border)",background:"var(--bg)"}}>
-          {[["all","📋 All Tickets",tix.length],["ageing","⏰ Ageing (Created)",null],["svm","👤 SVM In Charge",svmEntries.length]].map(function(tb){
+          {[["all","📋 All Tickets",tix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].map(function(tb){
             var id=tb[0],label=tb[1],cnt=tb[2];var active=activeTab===id;
             return(<button key={id} onClick={function(){onTabChange(id);setAgeFilter(null);setSvmFilter(null);}} style={{
               padding:"10px 18px",borderRadius:"10px 10px 0 0",fontSize:12,fontWeight:700,border:"1px solid "+(active?"var(--border)":"transparent"),borderBottom:active?"1px solid #fff":"1px solid var(--border)",
@@ -817,6 +826,74 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                     <div style={{width:14,height:14,borderRadius:4,background:ageColors[i]}}/>
                     <span style={{fontSize:14,fontWeight:800,color:ageColors[i]}}>{ageLabels[i]}</span>
                     <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""}</span>
+                  </div>
+                  {renderTable(sorted)}
+                </div>);
+              })}
+            </div>
+          )}
+
+          {/* SVM IN CHARGE TAB */}
+
+          {/* AGEING (UPDATED) TAB */}
+          {activeTab==="ageingU"&&(
+            <div style={{padding:"16px 24px"}}>
+              {/* Ageing summary bar — each segment is clickable */}
+              <div style={{display:"flex",borderRadius:10,overflow:"hidden",height:40,background:"var(--bg)",marginBottom:14,border:"1px solid var(--border)"}}>
+                {ageBucketsU.map(function(bucket,i){
+                  var pct=tix.length?bucket.length/tix.length*100:0;
+                  if(bucket.length===0)return null;
+                  var isActive=ageFilter===i;
+                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets (by last updated) — click to filter"} style={{
+                    width:pct+"%",background:ageColors[i],display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:12,fontWeight:800,color:"#fff",minWidth:bucket.length>0?34:0,transition:"all .3s",
+                    cursor:"pointer",opacity:ageFilter!==null&&!isActive?0.4:1,
+                    outline:isActive?"3px solid var(--t1)":"none",outlineOffset:-2,position:"relative",zIndex:isActive?1:0
+                  }}>{bucket.length}</div>);
+                })}
+              </div>
+              {/* Legend */}
+              <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14}}>
+                {ageLabels.map(function(lbl,i){
+                  var isActive=ageFilter===i;
+                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} style={{
+                    display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,
+                    color:isActive?ageColors[i]:"var(--t2)",cursor:"pointer",
+                    background:isActive?ageColors[i]+"18":"transparent",
+                    border:isActive?"1px solid "+ageColors[i]+"44":"1px solid transparent",
+                    padding:"4px 10px",borderRadius:8,transition:"all .15s"
+                  }}>
+                    <div style={{width:10,height:10,borderRadius:3,background:ageColors[i]}}/>{lbl}: <span style={{fontFamily:"var(--mono)",fontWeight:800,color:ageColors[i]}}>{ageBucketsU[i].length}</span>
+                  </div>);
+                })}
+              </div>
+
+              {/* Active filter chip */}
+              {ageFilter!==null&&(
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:ageColors[ageFilter]+"14",borderRadius:10,border:"1px solid "+ageColors[ageFilter]+"44"}}>
+                  <div style={{width:12,height:12,borderRadius:3,background:ageColors[ageFilter]}}/>
+                  <span style={{fontSize:13,fontWeight:800,color:ageColors[ageFilter]}}>{ageLabels[ageFilter]} (by last updated)</span>
+                  <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {ageBucketsU[ageFilter].length} ticket{ageBucketsU[ageFilter].length!==1?"s":""}</span>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){setAgeFilter(null);}} style={{background:ageColors[ageFilter],color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
+                </div>
+              )}
+
+              {/* Filtered: single bucket table */}
+              {ageFilter!==null&&(function(){
+                var sorted=[].concat(ageBucketsU[ageFilter]).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+                return renderTable(sorted);
+              })()}
+
+              {/* Unfiltered: show all buckets */}
+              {ageFilter===null&&ageBucketsU.map(function(bucket,i){
+                if(bucket.length===0)return null;
+                var sorted=[].concat(bucket).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+                return(<div key={i} style={{marginBottom:18}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                    <div style={{width:14,height:14,borderRadius:4,background:ageColors[i]}}/>
+                    <span style={{fontSize:14,fontWeight:800,color:ageColors[i]}}>{ageLabels[i]}</span>
+                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""} (by last updated)</span>
                   </div>
                   {renderTable(sorted)}
                 </div>);
