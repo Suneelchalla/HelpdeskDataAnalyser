@@ -300,8 +300,237 @@ function exportFullCSV(tickets,filename){
 }
 function exportCSV(tickets,filename){ exportFullCSV(tickets,filename); }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DAILY REPORT — Multi-Tab Excel + Mail Draft Generator
+   ═══════════════════════════════════════════════════════════════════════════ */
+function ticketRow(t){
+  var c=classify(t.Status),crAge=ds(t.Created),upAge=ds(t.Updated||t.Created),sla=checkSLA(t);
+  return{"Key":t.Key||"","Summary":t.Summary||"","Status":t.Status||"","Category":CL[c]||c,
+    "Priority":t.Priority||"","SVM In Charge":t["SVM In Charge"]||"","Current Worker":t["Current Worker"]||"",
+    "Project":t.Project||"","Components":t.Components||"","Root Cause":t["Root Cause"]||"",
+    "Type of Fix":t["Type of Fix"]||"","Created":t.Created?fd(t.Created):"","Updated":t.Updated?fd(t.Updated):"",
+    "Resolved":t.Resolved?fd(t.Resolved):"","Age·Created (days)":crAge===999?"":crAge,
+    "Age·Updated (days)":upAge===999?"":upAge,"SLA Breach":sla.anyBreach?"Yes":"",
+    "Linked Issues":t["Linked Issues"]||"","Linked Status":t["Linked Ticket status"]||"",
+    "Next Action":nextStep(t.Status,c)};
+}
+var DETAIL_COLS=[{wch:15},{wch:48},{wch:24},{wch:20},{wch:13},{wch:20},{wch:20},{wch:24},{wch:18},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:10},{wch:16},{wch:16},{wch:28}];
+
+function generateExcelReport(p){
+  var flt=p.flt,st=p.st,slaData=p.slaData,prioDist=p.prioDist,fn=p.fn,w=p.w,pf=p.pf;
+  var wb=XLSX.utils.book_new();
+  var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  var time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+
+  /* fires & stale */
+  var allActive=[].concat(st.hd,st.cl,st.eng);
+  var fires=allActive.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
+  var staleClient=st.cl.filter(function(t){return ds(t.Updated||t.Created)>14;});
+
+  /* ── Sheet 1: Summary ── */
+  var S=[];
+  S.push(["HD FOLLOW-UP — DAILY REPORT","",""]); S.push(["Generated",today+" at "+time,""]);
+  S.push(["Source",fn,""]); if(w.length)S.push(["Worker filter",w.join(", "),""]);
+  if(pf.length)S.push(["Project filter",pf.join(", "),""]);
+  S.push([]); S.push(["OVERVIEW","Count","Notes"]);
+  S.push(["Total Open",st.n,"All non-closed tickets"]);
+  S.push(["HD Action Required",st.hd.length,"Needs our immediate action — see 'HD Action' tab"]);
+  S.push(["Client Follow-up",st.cl.length,"Awaiting client response — see 'Client Followup' tab"]);
+  S.push(["Engineering Follow-up",st.eng.length,"With dev team — see 'Engineering' tab"]);
+  S.push(["On-Hold",st.hold.length,"Parked — see 'On-Hold' tab"]);
+  S.push(["Invoice Pending",st.inv.length,"Yet to raise"]);
+  S.push(["Danger Zone (90+ days)",st.dng,"Stale — see 'Danger Zone' tab"]);
+  S.push(["Average Age (days)",st.avg,""]);
+  S.push([]); S.push(["ATTENTION AREAS","Count","Action"]);
+  S.push(["🔥 Fires (Crit/SS > 14d)",fires.length,"Immediate escalation — see 'Fires' tab"]);
+  S.push(["💬 Stale Client Follow-ups",staleClient.length,"Chase client or schedule sync"]);
+  S.push([]); S.push(["AGING DISTRIBUTION","Count","% of Total"]);
+  ["< 7 days","7–30 days","31–60 days","61–90 days","90+ days"].forEach(function(l,i){
+    S.push([l,st.bk[i],st.n?Math.round(st.bk[i]/st.n*100)+"%":"0%"]);});
+  S.push([]); S.push(["PRIORITY DISTRIBUTION","Count",""]);
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr){S.push([pr,prioDist[pr]||0,""]);});
+  S.push([]); S.push(["SLA COMPLIANCE","Value",""]);
+  S.push(["First Response Compliance",slaData.frRate+"%",""]); S.push(["Resolution Compliance",slaData.resRate+"%",""]);
+  S.push(["Total SLA Breaches",slaData.all.length,""]); S.push(["Response Breaches",slaData.fr.length,""]);
+  S.push(["Resolution Breaches",slaData.res.length,""]);
+  S.push([]); S.push(["OBSERVATIONS","",""]);
+  if(fires.length)S.push(["⚠️",fires.length+" high-priority tickets open 14+ days — escalation recommended.",""]);
+  if(st.dng>50)S.push(["⚠️",st.dng+" tickets in danger zone (90+ days) — review for closure.",""]);
+  if(staleClient.length>st.cl.length*0.5)S.push(["⚠️","Over half of client follow-ups ("+staleClient.length+"/"+st.cl.length+") are stale.",""]);
+  if(slaData.frRate<80)S.push(["⚠️","First Response SLA below 80% ("+slaData.frRate+"%) — review triage.",""]);
+  if(fires.length===0&&st.dng<50&&slaData.frRate>=80)S.push(["✅","No critical escalation items today.",""]);
+  S.push([]); S.push(["TAB INDEX","Contents",""]);
+  S.push(["InCharge Summary","SVM In Charge pivot with aging breakdown",""]);
+  S.push(["InCharge Details","Every ticket grouped under its SVM In Charge",""]);
+  S.push(["HD Action","Tickets needing HD team action ("+st.hd.length+")",""]);
+  S.push(["Client Followup","Tickets awaiting client ("+st.cl.length+")",""]);
+  S.push(["Engineering","Tickets with dev/engineering ("+st.eng.length+")",""]);
+  if(fires.length)S.push(["Fires","Show Stopper/Critical 14+ days ("+fires.length+")",""]);
+  S.push(["Danger Zone","90+ day old tickets ("+st.dng+")",""]);
+  S.push(["All Open","Complete list of all "+st.n+" open tickets",""]);
+  var ws1=XLSX.utils.aoa_to_sheet(S);ws1["!cols"]=[{wch:32},{wch:22},{wch:55}];
+  if(!ws1["!merges"])ws1["!merges"]=[];ws1["!merges"].push({s:{r:0,c:0},e:{r:0,c:2}});
+  XLSX.utils.book_append_sheet(wb,ws1,"Summary");
+
+  /* ── Sheet 2: InCharge Pivot ── */
+  var icm={};flt.forEach(function(t){
+    var svm=String(t["SVM In Charge"]||"").trim();if(!svm||svm.toLowerCase()==="nan")svm="(Unassigned)";
+    if(!icm[svm])icm[svm]={n:0,hd:0,cl:0,eng:0,hold:0,inv:0,bk:[0,0,0,0,0],ta:0,tu:0};
+    var m=icm[svm];m.n++;var c=classify(t.Status);
+    if(t.Status==="On-Hold")m.hold++;else if(t.Status==="Invoice Yet to Raise")m.inv++;
+    else if(c==="hd")m.hd++;else if(c==="client")m.cl++;else m.eng++;
+    var ca=ds(t.Created),ua=ds(t.Updated||t.Created);m.bk[abk(ca)]++;m.ta+=(ca===999?0:ca);m.tu+=(ua===999?0:ua);
+  });
+  var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
+  var IC=[["SVM In Charge","Total","HD Action","Client","Engg","On-Hold","Invoice","<7d","7-30d","31-60d","61-90d","90+d","Avg Age (Created)","Avg Age (Updated)"]];
+  ick.forEach(function(k){var m=icm[k];IC.push([k,m.n,m.hd,m.cl,m.eng,m.hold,m.inv,m.bk[0],m.bk[1],m.bk[2],m.bk[3],m.bk[4],m.n?Math.round(m.ta/m.n):0,m.n?Math.round(m.tu/m.n):0]);});
+  /* Totals row */
+  IC.push(["TOTAL",st.n,st.hd.length,st.cl.length,st.eng.length,st.hold.length,st.inv.length,st.bk[0],st.bk[1],st.bk[2],st.bk[3],st.bk[4],st.avg,""]);
+  var ws2=XLSX.utils.aoa_to_sheet(IC);ws2["!cols"]=[{wch:22},{wch:7},{wch:10},{wch:8},{wch:7},{wch:8},{wch:8},{wch:5},{wch:6},{wch:7},{wch:7},{wch:6},{wch:15},{wch:15}];
+  XLSX.utils.book_append_sheet(wb,ws2,"InCharge Summary");
+
+  /* ── Sheet 3: InCharge Details (grouped) ── */
+  var hdrs=["Key","Summary","Status","Category","Priority","Current Worker","Project","Root Cause","Created","Updated","Age·Created","Age·Updated","SLA Breach","Linked Issues","Next Action"];
+  var ICd=[];
+  ick.forEach(function(name){
+    var m=icm[name];ICd.push([]);
+    ICd.push(["▸ "+name+" — "+m.n+" tickets  |  HD: "+m.hd+"  |  Client: "+m.cl+"  |  Engg: "+m.eng+"  |  Avg age: "+(m.n?Math.round(m.ta/m.n):0)+"d"]);
+    ICd.push(hdrs);
+    flt.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;})
+      .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
+      .forEach(function(t){var c=classify(t.Status),ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+        ICd.push([t.Key,t.Summary,t.Status,CL[c]||c,t.Priority,t["Current Worker"]||"",t.Project||"",t["Root Cause"]||"",t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ca===999?"":ca,ua===999?"":ua,checkSLA(t).anyBreach?"Yes":"",t["Linked Issues"]||"",nextStep(t.Status,c)]);
+      });
+  });
+  var ws3=XLSX.utils.aoa_to_sheet(ICd);ws3["!cols"]=[{wch:15},{wch:48},{wch:22},{wch:18},{wch:13},{wch:18},{wch:22},{wch:16},{wch:12},{wch:12},{wch:11},{wch:11},{wch:9},{wch:16},{wch:26}];
+  XLSX.utils.book_append_sheet(wb,ws3,"InCharge Details");
+
+  /* ── Category detail sheets ── */
+  function addSheet(name,tix){if(!tix.length)return;var ws=XLSX.utils.json_to_sheet(tix.map(ticketRow));ws["!cols"]=DETAIL_COLS;XLSX.utils.book_append_sheet(wb,ws,name);}
+  addSheet("HD Action",st.hd.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+  addSheet("Client Followup",st.cl.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+  addSheet("Engineering",st.eng.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+  if(fires.length)addSheet("Fires",fires.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+  addSheet("Danger Zone",flt.filter(function(t){return ds(t.Updated||t.Created)>=90;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+  if(st.hold.length)addSheet("On-Hold",st.hold.slice());
+  addSheet("All Open",flt.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+
+  /* Download */
+  var blob=new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;
+  a.download="HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xlsx";a.click();URL.revokeObjectURL(url);
+}
+
+/* ═══ Build Mail Draft ═══ */
+function buildMailDraft(p){
+  var st=p.st,slaData=p.slaData,prioDist=p.prioDist,flt=p.flt,fn=p.fn,w=p.w,pf=p.pf;
+  var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  var allActive=[].concat(st.hd,st.cl,st.eng);
+  var fires=allActive.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
+  var staleClient=st.cl.filter(function(t){return ds(t.Updated||t.Created)>14;});
+
+  var scope=w.length?w.join(", "):"All Workers";
+  var subject="HD Daily Follow-up Report — "+today+" — "+st.n.toLocaleString()+" Open Tickets";
+
+  /* InCharge table */
+  var icm={};flt.forEach(function(t){
+    var svm=String(t["SVM In Charge"]||"").trim();if(!svm||svm.toLowerCase()==="nan")svm="(Unassigned)";
+    if(!icm[svm])icm[svm]={n:0,hd:0,cl:0,eng:0};var m=icm[svm];m.n++;var c=classify(t.Status);
+    if(t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise"){if(c==="hd")m.hd++;else if(c==="client")m.cl++;else m.eng++;}
+  });
+  var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
+  var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;};
+  var rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
+  var icTable=ick.map(function(k){var m=icm[k];return"  "+pad(k,22)+rpad(m.n,5)+"   "+rpad(m.hd,4)+"   "+rpad(m.cl,6)+"   "+rpad(m.eng,4);}).join("\n");
+
+  /* Top fires list */
+  var firesList=fires.slice(0,8).map(function(t){return"  • "+t.Key+" — "+t.Priority+" — "+(t.Summary||"").substring(0,60)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n");
+
+  var body="Good morning team,\n\n"
+    +"Please find below the daily follow-up summary as of "+today+".\n"
+    +(w.length?"Scope: "+scope+"\n":"")
+    +"\n"
+    +"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    +"📊  DAILY STATUS OVERVIEW\n"
+    +"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    +"  Total Open Tickets  :  "+st.n.toLocaleString()+"\n"
+    +"  ├── HD Action       :  "+pad(st.hd.length,6)+"(need our action)\n"
+    +"  ├── Client Follow-up:  "+pad(st.cl.length,6)+"(awaiting client)\n"
+    +"  ├── Engineering     :  "+pad(st.eng.length,6)+"(with dev team)\n"
+    +"  ├── On-Hold         :  "+pad(st.hold.length,6)+"\n"
+    +"  └── Invoice Pending :  "+pad(st.inv.length,6)+"\n"
+    +"\n"
+    +"⚠️  ATTENTION AREAS\n"
+    +"  • "+fires.length+" FIRES — Show Stopper / Critical open 14+ days\n"
+    +"  • "+staleClient.length+" client follow-ups going stale (14+ days)\n"
+    +"  • "+st.dng+" tickets in DANGER ZONE (90+ days)\n"
+    +"\n"
+    +"📊  PRIORITY BREAKDOWN\n"
+    +"  Show Stopper: "+(prioDist["Show Stopper"]||0)+"  |  Critical: "+(prioDist["Critical"]||0)
+    +"  |  High: "+(prioDist["High"]||0)+"  |  Medium: "+(prioDist["Medium"]||0)
+    +"  |  Low: "+(prioDist["Low"]||0)+"\n"
+    +"\n"
+    +"📈  SLA COMPLIANCE\n"
+    +"  First Response: "+slaData.frRate+"%  |  Resolution: "+slaData.resRate+"%  |  Total Breaches: "+slaData.all.length+"\n"
+    +"\n"
+    +"👤  INCHARGE-WISE SUMMARY\n"
+    +"  "+pad("Name",22)+rpad("Total",5)+"   "+rpad("HD",4)+"   "+rpad("Client",6)+"   "+rpad("Engg",4)+"\n"
+    +"  "+Array(48).join("─")+"\n"
+    +icTable+"\n"
+    +"\n"
+    +(fires.length?("🔥  TOP FIRES (immediate attention)\n"+firesList+"\n"+(fires.length>8?"  … and "+(fires.length-8)+" more\n":"")+"\n"):"")
+    +"📎  Detailed Excel report attached.\n\n"
+    +"Please review your assigned tickets and take necessary action.\n"
+    +"Escalate any blockers on the Fires list by EOD.\n\n"
+    +"Best regards,\n"
+    +"SVM Help Desk\n";
+
+  return{subject:subject,body:body};
+}
+
+/* ═══ Mail Draft Modal Component ═══ */
+function MailDraftModal({data,onClose}){
+  if(!data)return null;
+  var sub=data.subject,body=data.body;
+  const[copied,setCopied]=useState("");
+  function cp(text,label){navigator.clipboard.writeText(text).then(function(){setCopied(label);setTimeout(function(){setCopied("");},1800);}).catch(function(){var ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);setCopied(label);setTimeout(function(){setCopied("");},1800);});}
+  function openMail(){var ml="mailto:?subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body);window.open(ml,"_blank");}
+  var btnS={padding:"8px 16px",borderRadius:8,fontSize:12,fontWeight:700,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--t2)",display:"inline-flex",alignItems:"center",gap:6};
+  return(
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:210,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:20,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:820,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
+        <div style={{padding:"18px 24px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
+          <div style={{width:40,height:40,borderRadius:10,background:"var(--blue-bg)",border:"1px solid var(--blue-light)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>✉️</div>
+          <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800}}>Daily Report — Mail Draft</div><div style={{fontSize:11,color:"var(--t3)",marginTop:2}}>Auto-generated from current data · copy or open in mail client</div></div>
+          <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflow:"auto",padding:"18px 24px"}}>
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",marginBottom:6}}>Subject</div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{flex:1,padding:"10px 14px",background:"var(--bg)",border:"1px solid var(--border)",borderRadius:8,fontSize:13,fontWeight:600,color:"var(--t1)",fontFamily:"var(--sans)"}}>{sub}</div>
+              <button onClick={function(){cp(sub,"subject");}} style={btnS}>{copied==="subject"?"✓ Copied":"⧉ Copy"}</button>
+            </div>
+          </div>
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px"}}>Body</span>
+              <button onClick={function(){cp(body,"body");}} style={btnS}>{copied==="body"?"✓ Copied":"⧉ Copy Body"}</button>
+            </div>
+            <pre style={{padding:"16px 18px",background:"#F8FAFC",border:"1px solid var(--border)",borderRadius:10,fontSize:12,lineHeight:1.7,color:"var(--t1)",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:420,overflow:"auto"}}>{body}</pre>
+          </div>
+        </div>
+        <div style={{padding:"14px 24px",borderTop:"1px solid var(--border)",display:"flex",gap:10,justifyContent:"flex-end",flexShrink:0}}>
+          <button onClick={function(){cp(sub+"\n\n"+body,"all");}} style={Object.assign({},btnS,{background:"var(--card)"})}>{copied==="all"?"✓ Copied":"⧉ Copy All"}</button>
+          <button onClick={openMail} style={{padding:"10px 22px",borderRadius:8,fontSize:13,fontWeight:800,border:"none",background:"var(--blue)",color:"#fff",display:"inline-flex",alignItems:"center",gap:8}}>📧 Open in Mail Client</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Modal Component ─── */
-function TicketModal({data,onClose}){
+function TicketModal({data,onClose,onReport,onMail}){
   if(!data)return null;
   var tix=data.tickets||[];
   return(
@@ -317,7 +546,9 @@ function TicketModal({data,onClose}){
             <div style={{fontSize:16,fontWeight:800,color:"var(--t1)"}}>{data.title}</div>
             <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{tix.length} ticket{tix.length!==1?"s":""}</div>
           </div>
-          <button onClick={function(){exportFullCSV(tix,(data.title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
+          <button onClick={function(){if(onReport)onReport();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #059669",background:"#ECFDF5",fontSize:12,fontWeight:700,color:"#059669",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Download multi-tab daily report">📊 Report</button>
+          <button onClick={function(){if(onMail)onMail();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Mail draft">✉️ Mail</button>
+          <button onClick={function(){exportFullCSV(tix,(data.title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ CSV</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
         {/* Modal table */}
@@ -366,7 +597,7 @@ function TicketModal({data,onClose}){
 
 
 /* ─── Category Detail Modal (3 tabs: All Tickets, Ageing, SVM In Charge) ─── */
-function CategoryDetailModal({data,activeTab,onTabChange,onClose}){
+function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail}){
   if(!data)return null;
   var tix=data.tickets||[];
   var catTitle=data.title||"Tickets";
@@ -460,7 +691,9 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose}){
             <div style={{fontSize:18,fontWeight:800,color:"var(--t1)"}}>{catTitle}</div>
             <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{catSubtitle}</div>
           </div>
-          <button onClick={function(){exportFullCSV(tix,(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
+          <button onClick={function(){if(onReport)onReport();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #059669",background:"#ECFDF5",fontSize:12,fontWeight:700,color:"#059669",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Download multi-tab daily report (Excel)">📊 Daily Report</button>
+          <button onClick={function(){if(onMail)onMail();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Generate mail draft with latest numbers">✉️ Mail Draft</button>
+          <button onClick={function(){exportFullCSV(tix,(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ CSV</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
 
@@ -853,6 +1086,7 @@ function App(){
   const[modal,setModal]=useState(null); // {title, icon, color, tickets}
   const[catModal,setCatModal]=useState(null); // {tickets, title, subtitle, icon, color, bg, border, badgeColor}
   const[catTab,setCatTab]=useState("all"); // "all" | "ageing" | "svm"
+  const[mailModal,setMailModal]=useState(null); // {subject, body}
   const fRef=useRef();
   const blobRef=useRef(null); // original uploaded file, kept for "revert"
 
@@ -953,6 +1187,10 @@ function App(){
     tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
     setModal({title:"Danger Zone — 90+ days",icon:"🔴",color:"#E11D48",tickets:tix});
   }
+
+  /* ═══ Daily Report actions ═══ */
+  function openReport(){generateExcelReport({flt:flt,st:st,slaData:slaData,prioDist:prioDist,fn:fn,w:w,pf:pf});}
+  function openMailDraft(){setMailModal(buildMailDraft({st:st,slaData:slaData,prioDist:prioDist,flt:flt,fn:fn,w:w,pf:pf}));}
 
   function filterCat(c){setCf(function(prev){return prev===c?null:c;});setAf(null);setSf(null);setSearch("");}
   function filterAge(i){setAf(function(prev){return prev===i?null:i;});setCf(null);setSf(null);setSearch("");}
@@ -1346,6 +1584,17 @@ function App(){
             onClick={function(){openDangerModal();}}/>
         </div>
 
+        {/* ── Daily Report Actions ── */}
+        <div className="fu fu2 card" style={{padding:"11px 18px",marginBottom:9,display:"flex",alignItems:"center",gap:14,borderColor:"#059669",background:"linear-gradient(135deg,#ECFDF5,#F0FBF9)"}}>
+          <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid #A7F3D0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📊</div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:800,fontSize:14,color:"#059669"}}>Daily Report</div>
+            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>Multi-tab Excel with summary, in-charge split, aging (created &amp; updated), category details · or generate a mail draft with latest numbers.</div>
+          </div>
+          <button onClick={openReport} style={{background:"#059669",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>📥 Download Excel Report</button>
+          <button onClick={openMailDraft} style={{background:"var(--blue)",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>✉️ Mail Draft</button>
+        </div>
+
         {/* My Action Queue — the daily driver */}
         {(function(){
           var q=st.hd.slice().sort(function(a,b){var pr=prioRank(a.Priority)-prioRank(b.Priority);if(pr)return pr;return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
@@ -1573,9 +1822,10 @@ function App(){
       </main>
 
       {/* ─── Ticket Modal ─── */}
-      <TicketModal data={modal} onClose={closeModal}/>
+      <TicketModal data={modal} onClose={closeModal} onReport={openReport} onMail={openMailDraft}/>
       {/* ─── Category Detail Modal (Engg / Client Followup) ─── */}
-      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal}/>
+      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openReport} onMail={openMailDraft}/>
+      <MailDraftModal data={mailModal} onClose={function(){setMailModal(null);}}/>
     </div>
   );
 }
