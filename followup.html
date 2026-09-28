@@ -519,6 +519,105 @@ function buildClientMailDraft(p){
   var body="Dear "+project+" Team,\n\nWe have "+N+" tickets awaiting your response as of "+today+"."+(urgent.length?" Of these, "+urgent.length+" are HIGH priority or above.":"")+"\n\n"+(urgent.length?"  URGENT TICKETS\n"+urgent.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55);}).join("\n")+"\n\n":"")+"Please update the tickets in Jira or reply to this email.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
+/* ═══ Jira Internal Note — Reminder System ═══ */
+function _buildReminder(t,mode){
+  mode=mode||"internal";
+  var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+  var assignee=t["Assignee"]||t["SVM In Charge"]||"";
+  var firstName=assignee?assignee.split(" ")[0]:"Team";
+  var isClient=mode==="public";
+
+  var greeting=isClient
+    ?"Dear "+(assignee||"Team")+","
+    :"Dear "+(assignee||"Team")+",";
+  var body1=isClient
+    ?"This is a gentle follow-up regarding ticket "+t.Key+" - \""+_cl(t.Summary)+"\"."
+    :"This is a follow-up reminder for ticket "+t.Key+" - \""+_cl(t.Summary)+"\".";
+  var body2="This ticket was raised on "+(t.Created?fd(t.Created):"unknown")+" ("+ca+" days ago) and "
+    +(isClient?"is currently awaiting your response/action.":"has been pending with engineering since then.");
+  var body3="Last updated: "+(t.Updated?fd(t.Updated):"unknown")+" ("+ua+" days ago).";
+  var body4="Priority: "+(t.Priority||"—")+"  |  Status: "+(t.Status||"—");
+  var ask=isClient
+    ?"We request you to kindly provide your response/confirmation at the earliest so we can proceed further."
+    :"Kindly provide an update on the progress at the earliest.";
+  var sign="Regards,\nSVM Help Desk";
+
+  var text=greeting+"\n\n"+body1+"\n\n"+body2+"\n"+body3+"\n"+body4+"\n\n"+ask+"\n\n"+sign;
+
+  var adf={type:"doc",version:1,content:[
+    {type:"paragraph",content:[{type:"text",text:greeting}]},
+    {type:"paragraph",content:[{type:"text",text:body1}]},
+    {type:"paragraph",content:[{type:"text",text:body2},{type:"hardBreak"},{type:"text",text:body3}]},
+    {type:"paragraph",content:[{type:"text",text:body4}]},
+    {type:"paragraph",content:[{type:"text",text:ask,marks:[{type:"strong"}]}]},
+    {type:"paragraph",content:[{type:"text",text:sign}]}
+  ]};
+  return{text:text,adf:adf,mode:mode,isClient:isClient};
+}
+function _postJiraNote(key,adf,isInternal){
+  return new Promise(function(resolve,reject){
+    if(!window.HDJira||!window.HDJira.isBridgeAvailable()){reject(new Error("EXTENSION_NOT_FOUND"));return;}
+    var cfg=window.HDJira.loadConfig();
+    var host=cfg.jiraHost||"svmhelpdesk.atlassian.net";
+    var id=900000+Math.floor(Math.random()*99999);
+    var commentBody={body:adf};
+    if(isInternal)commentBody.properties=[{key:"sd.public.comment",value:{internal:true}}];
+    function handler(e){
+      if(!e.data||e.data.type!=="HD_BRIDGE_RESULT"||e.data.id!==id)return;
+      window.removeEventListener("message",handler);
+      if(e.data.ok)resolve(e.data.data);else reject(new Error(e.data.error||"Failed to post comment"));
+    }
+    window.addEventListener("message",handler);
+    window.postMessage({type:"HD_BRIDGE_CALL",id:id,host:host,
+      path:"/rest/api/3/issue/"+encodeURIComponent(key)+"/comment",
+      method:"POST",body:commentBody},"*");
+    setTimeout(function(){window.removeEventListener("message",handler);reject(new Error("Request timed out (30s)"));},30000);
+  });
+}
+
+function ReminderModal({ticket,mode,onClose}){
+  if(!ticket)return null;
+  var rem=_buildReminder(ticket,mode);
+  var isClient=rem.isClient;
+  const[status,setStatus]=useState("idle");
+  const[errMsg,setErrMsg]=useState("");
+  function doPost(){setStatus("sending");_postJiraNote(ticket.Key,rem.adf,!isClient).then(function(){setStatus("sent");}).catch(function(e){setErrMsg(e.message||"Failed");setStatus("error");});}
+  function doCopy(){navigator.clipboard.writeText(rem.text).catch(function(){var ta=document.createElement("textarea");ta.value=rem.text;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);});}
+  var jiraUrl=J+ticket.Key;
+  var postLabel=isClient?"📨 Reply to Customer":"📨 Post Internal Note";
+  var postingLabel=isClient?"⏳ Sending reply...":"⏳ Posting note...";
+  var successLabel=isClient?"Reply sent to customer on "+ticket.Key:"Internal note added to "+ticket.Key;
+  var typeLabel=isClient?"Reply to Customer":"Internal Note";
+  var accentColor=isClient?"var(--amber)":"var(--violet)";
+  var accentBg=isClient?"var(--amber-bg)":"var(--violet-bg)";
+  var accentBorder=isClient?"var(--amber-border)":"var(--violet-border)";
+  return(
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:16,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:640,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
+        <div style={{padding:"16px 20px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+          <div style={{width:36,height:36,borderRadius:8,background:accentBg,border:"1px solid "+accentBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{isClient?"💬":"🔔"}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:15,fontWeight:800}}>Send Reminder — {ticket.Key}</div>
+            <div style={{fontSize:11,color:"var(--t3)",marginTop:1}}>{typeLabel} · {(ticket.Summary||"").substring(0,60)}</div>
+          </div>
+          <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"var(--t2)"}}>✕</button>
+        </div>
+        <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Message Preview ({typeLabel})</div>
+          <pre style={{padding:"14px 16px",background:"#F8FAFC",border:"1px solid var(--border)",borderRadius:10,fontSize:12,lineHeight:1.65,color:"var(--t1)",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{rem.text}</pre>
+          {status==="sent"&&(<div style={{marginTop:12,padding:"12px 16px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:10,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>✅</span><div><div style={{fontWeight:700,color:"#059669",fontSize:13}}>Reminder posted!</div><div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>{successLabel}.</div></div></div>)}
+          {status==="error"&&(<div style={{marginTop:12,padding:"12px 16px",background:"var(--rose-bg)",border:"1px solid var(--rose-border)",borderRadius:10}}><div style={{fontWeight:700,color:"var(--rose)",fontSize:13}}>Could not post to Jira</div><div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>{errMsg}</div><div style={{fontSize:11,color:"var(--t2)",marginTop:4}}>Use "Copy Message" and paste it manually in Jira.</div></div>)}
+        </div>
+        <div style={{padding:"12px 20px",borderTop:"1px solid var(--border)",display:"flex",gap:8,justifyContent:"flex-end",flexShrink:0,flexWrap:"wrap"}}>
+          <button onClick={doCopy} style={{padding:"8px 16px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)"}}>📋 Copy</button>
+          <a href={jiraUrl} target="_blank" rel="noreferrer" style={{padding:"8px 16px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"inline-flex",alignItems:"center",gap:5,textDecoration:"none"}}>🔗 Jira</a>
+          {status!=="sent"&&<button onClick={doPost} disabled={status==="sending"} style={{padding:"8px 20px",borderRadius:8,border:"none",background:status==="sending"?"var(--t3)":isClient?"#D97706":"#7C3AED",color:"#fff",fontSize:12,fontWeight:800,display:"flex",alignItems:"center",gap:6}}>{status==="sending"?postingLabel:postLabel}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══ Mail Draft Modal Component ═══ */
 function MailDraftModal({data,onClose}){
   if(!data)return null;
@@ -626,7 +725,7 @@ function TicketModal({data,onClose}){
 
 
 /* ─── Category Detail Modal (3 tabs: All Tickets, Ageing, SVM In Charge) ─── */
-function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail,onClientReport,onClientMail}){
+function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail,onClientReport,onClientMail,onRemind}){
   if(!data)return null;
   var tix=data.tickets||[];
   var catTitle=data.title||"Tickets";
@@ -699,6 +798,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
             <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
+            {(data.showReport||data.showClientReport)&&onRemind&&<th style={{padding:"7px 10px",textAlign:"center",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Remind</th>}
           </tr></thead>
           <tbody>
             {list.slice(0,500).map(function(t,i){
@@ -718,6 +818,9 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                 </td>
                 <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
                 <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+                {(data.showReport||data.showClientReport)&&onRemind&&<td style={{padding:"6px 8px",textAlign:"center"}}>
+                  <button onClick={function(e){e.stopPropagation();onRemind(t,data.showReport?"internal":"public");}} title={"Send reminder for "+t.Key} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+(data.showReport?"var(--violet-border)":"var(--amber-border)"),background:data.showReport?"var(--violet-bg)":"var(--amber-bg)",color:data.showReport?"var(--violet)":"var(--amber)",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>🔔 Remind</button>
+                </td>}
               </tr>);
             })}
           </tbody>
@@ -1208,6 +1311,7 @@ function App(){
   const[catModal,setCatModal]=useState(null); // {tickets, title, subtitle, icon, color, bg, border, badgeColor}
   const[catTab,setCatTab]=useState("all"); // "all" | "ageing" | "svm"
   const[mailModal,setMailModal]=useState(null); // {subject, body}
+  const[reminderData,setReminderData]=useState(null); // {ticket, mode}
   const fRef=useRef();
   const blobRef=useRef(null); // original uploaded file, kept for "revert"
 
@@ -1950,8 +2054,9 @@ function App(){
       {/* ─── Ticket Modal ─── */}
       <TicketModal data={modal} onClose={closeModal}/>
       {/* ─── Category Detail Modal (Engg / Client Followup) ─── */}
-      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openEnggReport} onMail={openEnggMail} onClientReport={handleClientReport} onClientMail={handleClientMail}/>
+      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openEnggReport} onMail={openEnggMail} onClientReport={handleClientReport} onClientMail={handleClientMail} onRemind={function(t,mode){setReminderData({ticket:t,mode:mode||"internal"});}}/>
       <MailDraftModal data={mailModal} onClose={function(){setMailModal(null);}}/>
+      <ReminderModal ticket={reminderData?reminderData.ticket:null} mode={reminderData?reminderData.mode:"internal"} onClose={function(){setReminderData(null);}}/>
     </div>
   );
 }
