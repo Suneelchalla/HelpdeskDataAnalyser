@@ -317,29 +317,33 @@ function ticketRow(t){
 var DETAIL_COLS=[{wch:15},{wch:48},{wch:24},{wch:20},{wch:13},{wch:20},{wch:20},{wch:24},{wch:18},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:10},{wch:16},{wch:16},{wch:28}];
 
 function generateEnggReport(p){
-  var tix=p.tickets,fn=p.fn,w=p.w,pf=p.pf;
-  var wb=XLSX.utils.book_new();
+  var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[];
+  var N=tix.length;
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-  var N=tix.length;
 
-  /* derived sets */
-  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
-  var stale=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
-  var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;});
+  /* XML sanitizer: strips illegal XML chars + escapes entities */
+  function _(s){return String(s==null?"":s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+  /* cell builders */
+  function S(v,id,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+'><Data ss:Type="String">'+_(v)+'</Data></Cell>';}
+  function NM(v,id){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+'><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
+  function R(c,h){return'<Row'+(h?' ss:Height="'+h+'"':'')+'>'+(Array.isArray(c)?c.join(''):c)+'</Row>\n';}
+  function C(w){return'<Column ss:AutoFitWidth="0" ss:Width="'+w+'"/>';}
+  function WS(name,cols,rows){return'<Worksheet ss:Name="'+_(name)+'"><Table>'+cols+'\n'+rows+'</Table></Worksheet>\n';}
+  function pc(a,b){return b?Math.round(a/b*100)+"%":"0%";}
 
-  /* priority & aging */
+  /* Stats */
+  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;})
+    .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
+  var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;})
+    .sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
   var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};
-  var abkC=[0,0,0,0,0],abkU=[0,0,0,0,0],totalCA=0,totalUA=0;
+  var bkC=[0,0,0,0,0],bkU=[0,0,0,0,0],totCA=0,totUA=0,slaBr=0;
   tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;
-    var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-    abkC[abk(ca)]++;abkU[abk(ua)]++;totalCA+=(ca===999?0:ca);totalUA+=(ua===999?0:ua);
-  });
-  var avgCA=N?Math.round(totalCA/N):0,avgUA=N?Math.round(totalUA/N):0;
-
-  /* SLA */
-  var slaBr=0,slaFr=0,slaRes=0;
-  tix.forEach(function(t){var s=checkSLA(t);if(s.frBreach)slaFr++;if(s.resBreach)slaRes++;if(s.anyBreach)slaBr++;});
+    var ca=ds(t.Created),ua=ds(t.Updated||t.Created);bkC[abk(ca)]++;bkU[abk(ua)]++;
+    totCA+=(ca===999?0:ca);totUA+=(ua===999?0:ua);if(checkSLA(t).anyBreach)slaBr++;});
+  var avgCA=N?Math.round(totCA/N):0,avgUA=N?Math.round(totUA/N):0;
 
   /* InCharge map */
   var icm={};tix.forEach(function(t){
@@ -347,77 +351,163 @@ function generateEnggReport(p){
     if(!icm[sv])icm[sv]={n:0,bkC:[0,0,0,0,0],bkU:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};
     var m=icm[sv];m.n++;var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
     m.bkC[abk(ca)]++;m.bkU[abk(ua)]++;m.tCA+=(ca===999?0:ca);m.tUA+=(ua===999?0:ua);
-    m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;
-  });
+    m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;});
   var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
-  var AL5=["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"];
 
-  /* == Sheet 1: Summary == */
-  var S=[];
-  S.push(["ENGINEERING FOLLOW-UP REPORT","",""]); S.push(["Generated",today+" at "+time,""]);
-  S.push(["Source",fn,""]); if(w.length)S.push(["Worker filter",w.join(", "),""]);
-  if(pf.length)S.push(["Project filter",pf.join(", "),""]);
-  S.push(["","",""]); S.push(["OVERVIEW","Count","Notes"]);
-  S.push(["Total with Engineering",N,"Tickets currently with dev/engineering team"]);
-  S.push(["Fires (Crit/SS > 14d)",fires.length,"Need immediate escalation - see Fires tab"]);
-  S.push(["Stale (> 30 days updated)",stale.length,"No movement in 30+ days"]);
-  S.push(["Danger Zone (90+ days)",danger.length,"Aged 90+ days - see Danger Zone tab"]);
-  S.push(["Average Age (Created)",avgCA+"d",""]);
-  S.push(["Average Age (Updated)",avgUA+"d",""]);
-  S.push(["SLA Breaches",slaBr,"Response: "+slaFr+" | Resolution: "+slaRes]);
-  S.push(["","",""]); S.push(["PRIORITY BREAKDOWN","Count","% of Total"]);
-  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr){S.push([pr,pri[pr]||0,N?Math.round((pri[pr]||0)/N*100)+"%":"0%"]);});
-  S.push(["","",""]); S.push(["AGING - BY CREATED DATE","Count","% of Total"]);
-  AL5.forEach(function(l,i){S.push([l,abkC[i],N?Math.round(abkC[i]/N*100)+"%":"0%"]);});
-  S.push(["","",""]); S.push(["AGING - BY LAST UPDATED DATE","Count","% of Total"]);
-  AL5.forEach(function(l,i){S.push([l,abkU[i],N?Math.round(abkU[i]/N*100)+"%":"0%"]);});
-  S.push(["","",""]); S.push(["OBSERVATIONS","",""]);
-  if(fires.length)S.push(["[!!]",fires.length+" critical/show-stopper tickets stalled 14+ days with engineering.",""]);
-  if(danger.length>10)S.push(["[!!]",danger.length+" tickets aged 90+ days - escalate or close.",""]);
-  if(stale.length>N*0.5)S.push(["[!!]","Over half the engineering tickets ("+stale.length+"/"+N+") have no update in 30+ days.",""]);
-  if(fires.length===0&&danger.length<=10)S.push(["[OK]","No critical engineering escalations today.",""]);
-  S.push(["","",""]); S.push(["TAB INDEX","Contents",""]);
-  S.push(["InCharge Summary","SVM In Charge pivot with aging",""]); S.push(["InCharge Details","Tickets grouped under each SVM In Charge",""]);
-  S.push(["By Priority","All tickets sorted by priority then age",""]); if(fires.length)S.push(["Fires","Critical/SS tickets stale 14+ days ("+fires.length+")",""]);
-  if(danger.length)S.push(["Danger Zone","90+ day aged tickets ("+danger.length+")",""]);
-  S.push(["All Engg Tickets","Complete list of all "+N+" tickets",""]);
-  var ws1=XLSX.utils.aoa_to_sheet(S);ws1["!cols"]=[{wch:34},{wch:18},{wch:52}];
-  XLSX.utils.book_append_sheet(wb,ws1,"Summary");
+  /* ── Styles ── */
+  var STY='<Styles>'
+  +'<Style ss:ID="Default"><Alignment ss:Vertical="Center" ss:WrapText="0"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/></Style>'
+  +'<Style ss:ID="tt"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#7C3AED" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
+  +'<Style ss:ID="mt"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#6B7280"/></Style>'
+  +'<Style ss:ID="sh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#334155" ss:Pattern="Solid"/></Style>'
+  +'<Style ss:ID="th"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="tl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
+  +'<Style ss:ID="n"><Alignment ss:Vertical="Center"/></Style>'
+  +'<Style ss:ID="nw"><Alignment ss:Vertical="Center" ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="nr"><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>'
+  +'<Style ss:ID="b"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1F2937"/></Style>'
+  +'<Style ss:ID="br"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Alignment ss:Horizontal="Right"/></Style>'
+  +'<Style ss:ID="a"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/></Style>'
+  +'<Style ss:ID="aw"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="ar"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
+  +'<Style ss:ID="vh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#5B21B6"/><Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/></Style>'
+  +'<Style ss:ID="rth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="rtl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
+  +'<Style ss:ID="rf"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/></Style>'
+  +'<Style ss:ID="rfw"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="rfr"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
+  +'<Style ss:ID="oth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="otl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style>'
+  +'<Style ss:ID="of"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/></Style>'
+  +'<Style ss:ID="ofw"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/></Style>'
+  +'<Style ss:ID="ofr"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
+  +'<Style ss:ID="ok"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#059669"/></Style>'
+  +'<Style ss:ID="wa"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#DC2626"/></Style>'
+  +'<Style ss:ID="tot"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>'
+  +'<Style ss:ID="totr"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/></Style>'
+  +'</Styles>';
 
-  /* == Sheet 2: InCharge Pivot == */
-  var IC=[["SVM In Charge","Total","ShowStop","Critical","High","Medium","Low","<7d (C)","7-30d (C)","31-60d (C)","61-90d (C)","90+d (C)","<7d (U)","7-30d (U)","31-60d (U)","61-90d (U)","90+d (U)","Avg Age Created","Avg Age Updated"]];
-  ick.forEach(function(k){var m=icm[k];IC.push([k,m.n,m.pri["Show Stopper"]||0,m.pri["Critical"]||0,m.pri["High"]||0,m.pri["Medium"]||0,m.pri["Low"]||0,m.bkC[0],m.bkC[1],m.bkC[2],m.bkC[3],m.bkC[4],m.bkU[0],m.bkU[1],m.bkU[2],m.bkU[3],m.bkU[4],m.n?Math.round(m.tCA/m.n):0,m.n?Math.round(m.tUA/m.n):0]);});
-  IC.push(["TOTAL",N,pri["Show Stopper"]||0,pri["Critical"]||0,pri["High"]||0,pri["Medium"]||0,pri["Low"]||0,abkC[0],abkC[1],abkC[2],abkC[3],abkC[4],abkU[0],abkU[1],abkU[2],abkU[3],abkU[4],avgCA,avgUA]);
-  var ws2=XLSX.utils.aoa_to_sheet(IC);ws2["!cols"]=[{wch:22},{wch:6},{wch:8},{wch:8},{wch:6},{wch:7},{wch:5},{wch:7},{wch:8},{wch:9},{wch:9},{wch:8},{wch:7},{wch:8},{wch:9},{wch:9},{wch:8},{wch:15},{wch:15}];
-  XLSX.utils.book_append_sheet(wb,ws2,"InCharge Summary");
+  /* Ticket row builder for detail sheets */
+  function trow(t,si,sri,swi,reason){
+    var ca=ds(t.Created),ua=ds(t.Updated||t.Created);si=si||"n";sri=sri||"nr";swi=swi||"nw";
+    var cells=[S(t.Key,si),S((t.Summary||"").substring(0,120),swi),S(t.Status,si),S(t.Priority,si),
+      S(t["SVM In Charge"]||"",si),S(t["Current Worker"]||"",si),S(t.Project||"",si),
+      S(t.Created?fd(t.Created):"",si),S(t.Updated?fd(t.Updated):"",si),
+      NM(ca===999?0:ca,sri),NM(ua===999?0:ua,sri),S(checkSLA(t).anyBreach?"YES":"",si),
+      S(t["Linked Issues"]||"",si)];
+    if(reason!==undefined)cells.push(S(reason,swi));
+    else cells.push(S(nextStep(t.Status,"engg"),si));
+    return R(cells);}
 
-  /* == Sheet 3: InCharge Details (grouped) == */
-  var hdrs=["Key","Summary","Status","Priority","SVM In Charge","Current Worker","Project","Components","Root Cause","Created","Updated","Age Created","Age Updated","SLA Breach","Linked Issues","Next Action"];
-  var ICd=[];
-  ick.forEach(function(name){
-    var m=icm[name];ICd.push(["","","","","","","","","","","","","","","",""]);
-    ICd.push([">> "+name+" - "+m.n+" tickets  |  Avg Created: "+(m.n?Math.round(m.tCA/m.n):0)+"d  |  Avg Updated: "+(m.n?Math.round(m.tUA/m.n):0)+"d","","","","","","","","","","","","","","",""]);
-    ICd.push(hdrs);
+  /* Header row for detail sheets */
+  function thRow(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
+    return R([S("Key",lid),S("Summary",lid),S("Status",hid),S("Priority",hid),
+      S("SVM In Charge",lid),S("Current Worker",lid),S("Project",lid),
+      S("Created",hid),S("Updated",hid),S("Age (Created)",hid),S("Age (Updated)",hid),
+      S("SLA Breach",hid),S("Linked Issues",lid),S(extra||"Next Action",lid)],20);}
+  var DCOL=C(95)+C(260)+C(110)+C(80)+C(110)+C(110)+C(130)+C(75)+C(75)+C(72)+C(72)+C(60)+C(100)+C(200);
+
+  /* ═ Sheet 1: SUMMARY ═ */
+  var s1="";
+  s1+=R(S("ENGINEERING FOLLOW-UP REPORT","tt",2),28);
+  s1+=R([S("Generated: "+today+" at "+time,"mt"),S("","mt"),S("","mt")]);
+  s1+=R([S("Source: "+fn,"mt"),S("","mt"),S("","mt")]);
+  if(w.length)s1+=R([S("Workers: "+w.join(", "),"mt"),S("","mt"),S("","mt")]);
+  s1+=R([S(""),S(""),S("")]);
+  s1+=R([S("OVERVIEW","sh"),S("Count","sh"),S("Notes","sh")],18);
+  s1+=R([S("Total with Engineering","b"),NM(N,"br"),S("Tickets currently with dev/engineering")]);
+  s1+=R([S("Fires (Critical / Show Stopper > 14d)",fires.length?"wa":"a"),NM(fires.length,fires.length?"br":"ar"),S(fires.length?"IMMEDIATE ESCALATION - see Fires tab":"None currently","a")]);
+  s1+=R([S("Stale (no update 30+ days)","n"),NM(stale30.length,"nr"),S("No movement in 30+ days")]);
+  s1+=R([S("Danger Zone (90+ days)",danger.length?"wa":"a"),NM(danger.length,danger.length?"br":"ar"),S("Aged 90+ days - see Danger Zone tab","a")]);
+  s1+=R([S("Average Age (Created)","n"),S(avgCA+"d","nr"),S("")]);
+  s1+=R([S("Average Age (Updated)","a"),S(avgUA+"d","ar"),S("","a")]);
+  s1+=R([S("SLA Breaches","n"),NM(slaBr,"nr"),S("")]);
+  s1+=R([S(""),S(""),S("")]);
+  s1+=R([S("PRIORITY BREAKDOWN","sh"),S("Count","sh"),S("% of Total","sh")],18);
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){
+    var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(pr,si),NM(pri[pr]||0,sri),S(pc(pri[pr]||0,N),sri)]);});
+  s1+=R([S(""),S(""),S("")]);
+  s1+=R([S("AGING - CREATED DATE","sh"),S("Count","sh"),S("% of Total","sh")],18);
+  ["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"].forEach(function(l,i){
+    var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(l,si),NM(bkC[i],sri),S(pc(bkC[i],N),sri)]);});
+  s1+=R([S(""),S(""),S("")]);
+  s1+=R([S("AGING - LAST UPDATED","sh"),S("Count","sh"),S("% of Total","sh")],18);
+  ["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"].forEach(function(l,i){
+    var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(l,si),NM(bkU[i],sri),S(pc(bkU[i],N),sri)]);});
+  s1+=R([S(""),S(""),S("")]);
+  s1+=R([S("KEY OBSERVATIONS","sh"),S("","sh"),S("","sh")],18);
+  if(fires.length)s1+=R([S("!! FIRES","wa"),S(""),S(fires.length+" critical/show-stopper tickets stalled 14+ days with engineering - escalate immediately")]);
+  if(danger.length>5)s1+=R([S("!! DANGER","wa"),S(""),S(danger.length+" tickets 90+ days old - push for closure or active resolution")]);
+  if(stale30.length>N*0.4)s1+=R([S("!! STALE","wa"),S(""),S(Math.round(stale30.length/N*100)+"% of engg tickets ("+stale30.length+"/"+N+") have no update in 30+ days")]);
+  if(!fires.length&&danger.length<=5)s1+=R([S("OK","ok"),S(""),S("No critical engineering escalations today")]);
+  var sheet1=WS("Summary",C(220)+C(100)+C(420),s1);
+
+  /* ═ Sheet 2: INCHARGE SUMMARY ═ */
+  var s2="";
+  s2+=R([S("SVM In Charge","tl"),S("Total","th"),S("SS","th"),S("Crit","th"),S("High","th"),S("Med","th"),S("Low","th"),
+    S("<7d","th"),S("7-30d","th"),S("31-60d","th"),S("61-90d","th"),S("90+d","th"),S("Avg Created","th"),S("Avg Updated","th")],20);
+  ick.forEach(function(k,i){var m=icm[k];var si=i%2?"a":"n",sri=i%2?"ar":"nr";
+    s2+=R([S(k,si),NM(m.n,sri),NM(m.pri["Show Stopper"]||0,sri),NM(m.pri["Critical"]||0,sri),NM(m.pri["High"]||0,sri),NM(m.pri["Medium"]||0,sri),NM(m.pri["Low"]||0,sri),
+      NM(m.bkC[0],sri),NM(m.bkC[1],sri),NM(m.bkC[2],sri),NM(m.bkC[3],sri),NM(m.bkC[4],sri),
+      S((m.n?Math.round(m.tCA/m.n):0)+"d",sri),S((m.n?Math.round(m.tUA/m.n):0)+"d",sri)]);});
+  s2+=R([S("TOTAL","tot"),NM(N,"totr"),NM(pri["Show Stopper"]||0,"totr"),NM(pri["Critical"]||0,"totr"),NM(pri["High"]||0,"totr"),NM(pri["Medium"]||0,"totr"),NM(pri["Low"]||0,"totr"),
+    NM(bkC[0],"totr"),NM(bkC[1],"totr"),NM(bkC[2],"totr"),NM(bkC[3],"totr"),NM(bkC[4],"totr"),S(avgCA+"d","totr"),S(avgUA+"d","totr")]);
+  var sheet2=WS("InCharge Summary",C(140)+C(50)+C(38)+C(42)+C(42)+C(40)+C(38)+C(40)+C(46)+C(50)+C(50)+C(42)+C(76)+C(76),s2);
+
+  /* ═ Sheet 3: INCHARGE DETAILS ═ */
+  var s3="";
+  ick.forEach(function(name){var m=icm[name];
+    s3+=R([S("")]);
+    s3+=R(S(name+"  |  "+m.n+" tickets  |  Avg age (created): "+(m.n?Math.round(m.tCA/m.n):0)+"d  |  Avg age (updated): "+(m.n?Math.round(m.tUA/m.n):0)+"d","vh",13),22);
+    s3+=thRow();
     tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;})
       .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
-      .forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-        ICd.push([t.Key,t.Summary,t.Status,t.Priority,t["SVM In Charge"]||"",t["Current Worker"]||"",t.Project||"",t.Components||"",t["Root Cause"]||"",t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ca===999?"":ca,ua===999?"":ua,checkSLA(t).anyBreach?"Yes":"",t["Linked Issues"]||"",nextStep(t.Status,"engg")]);
-      });
+      .forEach(function(t,i){s3+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
   });
-  var ws3=XLSX.utils.aoa_to_sheet(ICd);ws3["!cols"]=[{wch:15},{wch:46},{wch:22},{wch:13},{wch:18},{wch:18},{wch:22},{wch:16},{wch:16},{wch:12},{wch:12},{wch:11},{wch:11},{wch:9},{wch:16},{wch:26}];
-  XLSX.utils.book_append_sheet(wb,ws3,"InCharge Details");
+  var sheet3=WS("InCharge Details",DCOL,s3);
 
-  /* == Category detail sheets == */
-  function addSheet(name,list){if(!list.length)return;var ws=XLSX.utils.json_to_sheet(list.map(ticketRow));ws["!cols"]=DETAIL_COLS;XLSX.utils.book_append_sheet(wb,ws,name);}
-  addSheet("By Priority",tix.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
-  if(fires.length)addSheet("Fires",fires.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
-  if(danger.length)addSheet("Danger Zone",danger.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
-  addSheet("All Engg Tickets",tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}));
+  /* ═ Sheet 4: BY PRIORITY ═ */
+  var s4=thRow();
+  tix.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
+    .forEach(function(t,i){s4+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
+  var sheet4=WS("By Priority",DCOL,s4);
 
-  /* Download */
-  var blob=new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  /* ═ Sheet 5: FIRES ═ */
+  var s5="";
+  if(fires.length){s5+=thRow("rth","rtl","Why Fire");
+    fires.forEach(function(t,i){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+      var why=t.Priority+" priority | Created "+ca+"d ago | Last updated "+ua+"d ago"+(checkSLA(t).anyBreach?" | SLA BREACHED":"")+(ua>30?" | NO MOVEMENT 30+ DAYS":"");
+      s5+=trow(t,"rf","rfr","rfw",why);});
+  }else{s5+=R(S("No fires currently - all critical/show-stopper engineering tickets are within 14 days","ok",13));}
+  var sheet5=WS("Fires",DCOL,s5);
+
+  /* ═ Sheet 6: DANGER ZONE ═ */
+  var s6="";
+  if(danger.length){s6+=thRow("oth","otl","Why Danger Zone");
+    danger.forEach(function(t,i){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+      var why="Created "+ca+"d ago | Last updated "+ua+"d ago | "+t.Priority+" priority"+(checkSLA(t).anyBreach?" | SLA BREACHED":"")+(ua>60?" | STAGNANT 60+ DAYS":"");
+      s6+=trow(t,"of","ofr","ofw",why);});
+  }else{s6+=R(S("No tickets in danger zone - none aged 90+ days","ok",13));}
+  var sheet6=WS("Danger Zone",DCOL,s6);
+
+  /* ═ Sheet 7: ALL ENGG TICKETS ═ */
+  var s7=thRow();
+  tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
+    .forEach(function(t,i){s7+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
+  var sheet7=WS("All Engg Tickets",DCOL,s7);
+
+  /* ── Assemble workbook ── */
+  var xml='<?xml version="1.0" encoding="UTF-8"?>\n'
+    +'<?mso-application progid="Excel.Sheet"?>\n'
+    +'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+    +' xmlns:o="urn:schemas-microsoft-com:office:office"'
+    +' xmlns:x="urn:schemas-microsoft-com:office:excel"'
+    +' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'
+    +STY+'\n'+sheet1+sheet2+sheet3+sheet4+sheet5+sheet6+sheet7
+    +'</Workbook>';
+  var blob=new Blob([xml],{type:"application/vnd.ms-excel"});
   var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;
-  a.download="Engg-Followup-Report-"+new Date().toISOString().slice(0,10)+".xlsx";a.click();URL.revokeObjectURL(url);
+  a.download="Engg-Followup-Report-"+new Date().toISOString().slice(0,10)+".xls";a.click();URL.revokeObjectURL(url);
 }
 
 /* === Engineering-specific Mail Draft === */
