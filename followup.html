@@ -533,6 +533,30 @@ function buildClientMailDraft(p){
   var body="Dear "+project+" Team,\n\nWe have "+N+" tickets awaiting your response as of "+today+"."+(urgent.length?" Of these, "+urgent.length+" are HIGH priority or above.":"")+"\n\n"+(urgent.length?"  URGENT TICKETS\n"+urgent.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55);}).join("\n")+"\n\n":"")+"Please update the tickets in Jira or reply to this email.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
+/* ═══ SINGLE-TICKET MAIL DRAFT (for Global Search) ═══ */
+function buildSingleTicketMailDraft(t){
+  var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+  var c=classify(t.Status),catLabel=CL[c]||c;
+  var isOpen=t.Status&&t.Status!=="Closed";
+  var subject="Follow-up: "+t.Key+" | "+(t.Summary||"").substring(0,60)+" | "+today;
+  var body="Dear Team,\n\nThis is a follow-up regarding the below ticket:\n\n"
+    +"  Ticket:    "+t.Key+"\n"
+    +"  Summary:   "+(t.Summary||"")+"\n"
+    +"  Status:    "+(t.Status||"")+(isOpen?" ("+catLabel+")":"")+"\n"
+    +"  Priority:  "+(t.Priority||"")+"\n"
+    +"  Project:   "+(t.Project||"")+"\n"
+    +"  Created:   "+(t.Created?fd(t.Created):"—")+" ("+ca+" days ago)\n"
+    +"  Updated:   "+(t.Updated?fd(t.Updated):"—")+" ("+ua+" days ago)\n"
+    +(t.Resolved?"  Resolved:  "+fd(t.Resolved)+"\n":"")
+    +(t["SVM In Charge"]?"  In Charge: "+t["SVM In Charge"]+"\n":"")
+    +(t["Current Worker"]?"  Worker:    "+t["Current Worker"]+"\n":"")
+    +(t["Linked Issues"]&&String(t["Linked Issues"]).trim()&&String(t["Linked Issues"]).toLowerCase()!=="nan"?"  Linked:    "+t["Linked Issues"]+"\n":"")
+    +"\n  Jira: "+J+t.Key+"\n"
+    +(isOpen?"\nPlease provide an update on this ticket at the earliest.":"\nThis ticket has been closed — for reference only.")
+    +"\n\nRegards,\nSVM Help Desk\n";
+  return{subject:subject,body:body};
+}
 /* ═══ Jira Internal Note — Reminder System ═══ */
 function _buildReminder(t,mode){
   mode=mode||"internal";
@@ -1212,7 +1236,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   /* Ageing breakdown within each SVM */
                   var svmAge=[0,0,0,0,0];
                   tickets.forEach(function(t){svmAge[abk(ds(t.Created))]++;});
-                  return(<div key={name} onClick={function(){setSvmFilter(svmFilter===name?null:name);}} style={{
+                  return(<div key={name} onClick={function(){setSvmFilter(svmFilter===name?null:name);if(scrollRef.current)scrollRef.current.scrollTop=0;}} style={{
                     background:isActive?color+"22":lightBg,
                     border:(isActive?"3px solid "+color:"2px solid "+borderC),
                     borderRadius:14,padding:"14px 16px",
@@ -1359,7 +1383,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                 {entries.map(function(entry,i){
                   var name=entry[0],m=entry[1];
                   var color=palE[i%palE.length];
-                  return(<div key={name} onClick={function(){setSvmFilter(svmFilter===name?null:name);}} style={{
+                  return(<div key={name} onClick={function(){setSvmFilter(svmFilter===name?null:name);if(scrollRef.current)scrollRef.current.scrollTop=0;}} style={{
                     background:svmFilter===name?color+"22":color+"08",border:(svmFilter===name?"3px solid "+color:"2px solid "+color+"44"),
                     borderRadius:14,padding:"14px 16px",cursor:"pointer",transition:"all .2s",
                     opacity:svmFilter!==null&&svmFilter!==name?0.4:1
@@ -1461,6 +1485,346 @@ function MultiSelect({allLabel, options, selected, onChange, minWidth}){
     </div>
   );
 }
+
+/* ═══ GLOBAL TICKET SEARCH (Ctrl+K / ⌘K) — Enhanced ═══
+   Command-palette style search with:
+   • Smart suggestions (Fires, Danger Zone, Recent, HD Action) when idle
+   • Full-text search across all tickets (open + closed)
+   • Quick filter chips: Open/Closed, HD/Client/Engg with live counts
+   • Bulk select + bulk remind (internal or client) for multiple tickets
+   • Copy ticket info to clipboard, export search results to CSV
+   • Mini ageing heat-strip & comment activity on each card
+   • Full action bar: Internal Remind, Client Remind, Mail Draft, Jira link */
+function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
+  const [q, setQ] = useState("");
+  const [stFilter, setStFilter] = useState("all");   // "all"|"open"|"closed"
+  const [catFilter, setCatFilter] = useState("all");  // "all"|"hd"|"client"|"engg"
+  const [selected, setSelected] = useState({});       // {Key: true}
+  const [copied, setCopied] = useState("");            // Key of copied ticket
+  const [sugTab, setSugTab] = useState("fire");        // "fire"|"danger"|"recent"|"hd"
+  const inputRef = useRef();
+
+  useEffect(function(){
+    if(open){ setQ(""); setStFilter("all"); setCatFilter("all"); setSelected({}); setCopied(""); setSugTab("fire");
+      setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); }, 80); }
+  }, [open]);
+
+  if(!open) return null;
+
+  var allTix = tickets || [];
+  var openTix = allTix.filter(function(t){ return t.Status && t.Status !== "Closed" && isFollowupType(t); });
+
+  /* ── Smart suggestions ── */
+  var fires = openTix.filter(function(t){ return (t.Priority==="Show Stopper"||t.Priority==="Critical") && ds(t.Updated||t.Created) > 14; })
+    .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || ds(b.Updated||b.Created)-ds(a.Updated||a.Created); }).slice(0,10);
+  var danger = openTix.filter(function(t){ return ds(t.Updated||t.Created) >= 90; })
+    .sort(function(a,b){ return ds(b.Updated||b.Created)-ds(a.Updated||a.Created); }).slice(0,10);
+  var recent = openTix.filter(function(t){ return ds(t.Updated||t.Created) <= 3; })
+    .sort(function(a,b){ return ds(a.Updated||a.Created)-ds(b.Updated||b.Created); }).slice(0,10);
+  var hdAction = openTix.filter(function(t){ return classify(t.Status)==="hd" && t.Status!=="On-Hold" && t.Status!=="Invoice Yet to Raise"; })
+    .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || ds(b.Updated||b.Created)-ds(a.Updated||a.Created); }).slice(0,10);
+  var sugTabs = [
+    {id:"fire",icon:"🔥",label:"Fires",list:fires,color:"#E11D48",desc:"Critical/SS tickets stale > 14 days"},
+    {id:"danger",icon:"🔴",label:"Danger Zone",list:danger,color:"#EA580C",desc:"Tickets stale 90+ days"},
+    {id:"recent",icon:"🕐",label:"Recently Updated",list:recent,color:"#059669",desc:"Updated in the last 3 days"},
+    {id:"hd",icon:"🎯",label:"HD Action",list:hdAction,color:"#0891B2",desc:"Tickets needing your action"}
+  ];
+  var activeSug = sugTabs.find(function(s){ return s.id===sugTab; }) || sugTabs[0];
+
+  /* ── Search + filters ── */
+  var hasQuery = q && q.trim().length >= 2;
+  var baseResults = [];
+  if(hasQuery){
+    var s = q.trim().toLowerCase();
+    baseResults = allTix.filter(function(t){
+      return (t.Key||"").toLowerCase().indexOf(s) > -1 ||
+             (t.Summary||"").toLowerCase().indexOf(s) > -1 ||
+             (t["Current Worker"]||"").toLowerCase().indexOf(s) > -1 ||
+             (t["SVM In Charge"]||"").toLowerCase().indexOf(s) > -1 ||
+             (t.Project||"").toLowerCase().indexOf(s) > -1 ||
+             (t.Status||"").toLowerCase().indexOf(s) > -1 ||
+             (t.Components||"").toLowerCase().indexOf(s) > -1;
+    }).slice(0, 100);
+  }
+  var cOpen = baseResults.filter(function(t){ return t.Status !== "Closed"; }).length;
+  var cClosed = baseResults.filter(function(t){ return t.Status === "Closed"; }).length;
+  var cHD = baseResults.filter(function(t){ return t.Status !== "Closed" && classify(t.Status)==="hd"; }).length;
+  var cClient = baseResults.filter(function(t){ return t.Status !== "Closed" && classify(t.Status)==="client"; }).length;
+  var cEngg = baseResults.filter(function(t){ return t.Status !== "Closed" && classify(t.Status)==="engg"; }).length;
+
+  var results = baseResults;
+  if(stFilter==="open") results = results.filter(function(t){ return t.Status !== "Closed"; });
+  else if(stFilter==="closed") results = results.filter(function(t){ return t.Status === "Closed"; });
+  if(catFilter!=="all") results = results.filter(function(t){ return classify(t.Status)===catFilter; });
+  results = results.slice(0, 50);
+
+  /* ── Bulk selection ── */
+  var selCount = Object.keys(selected).filter(function(k){ return selected[k]; }).length;
+  function toggleSel(key){ setSelected(function(p){ var n=Object.assign({},p); if(n[key]) delete n[key]; else n[key]=true; return n; }); }
+  function selAll(){ var n={}; results.forEach(function(t){ if(t.Key) n[t.Key]=true; }); setSelected(n); }
+  function selNone(){ setSelected({}); }
+  function getSelTickets(){ return (hasQuery?results:activeSug.list).filter(function(t){ return selected[t.Key]; }); }
+
+  /* ── Bulk remind ── */
+  function bulkRemind(mode){
+    var tix = getSelTickets();
+    if(!tix.length) return;
+    if(tix.length === 1){ onRemind(tix[0], mode); return; }
+    if(!window.confirm("Send " + (mode==="public"?"client":"internal") + " reminders for " + tix.length + " tickets?")) return;
+    var host = "svmhelpdesk.atlassian.net";
+    try{ var cfg=JSON.parse(localStorage.getItem("hd-jira-cfg")||"{}"); if(cfg.jiraHost) host=cfg.jiraHost; }catch(e){}
+    var done=0, failed=0;
+    function next(idx){
+      if(idx >= tix.length){ window.alert("Done! " + done + " sent" + (failed ? ", " + failed + " failed" : "") + "."); selNone(); return; }
+      var t = tix[idx];
+      var rem = _buildReminder(t, mode);
+      _postJiraNote(t.Key, rem.adf, mode!=="public")
+        .then(function(){ done++; })
+        .catch(function(){ failed++; })
+        .then(function(){ next(idx+1); });
+    }
+    next(0);
+  }
+
+  /* ── Copy ticket info ── */
+  function copyInfo(t){
+    var ca=ds(t.Created), ua=ds(t.Updated||t.Created), c=classify(t.Status);
+    var text = t.Key + " | " + (t.Summary||"") + "\n"
+      + "Status: " + (t.Status||"") + " (" + (CL[c]||c) + ") | Priority: " + (t.Priority||"") + "\n"
+      + "Created: " + (t.Created?fd(t.Created):"—") + " (" + ca + "d) | Updated: " + (t.Updated?fd(t.Updated):"—") + " (" + ua + "d)\n"
+      + (t.Project ? "Project: " + t.Project + "\n" : "")
+      + (t["SVM In Charge"] ? "SVM: " + t["SVM In Charge"] + "\n" : "")
+      + (t["Current Worker"] ? "Worker: " + t["Current Worker"] + "\n" : "")
+      + (t["Linked Issues"] && String(t["Linked Issues"]).trim() && String(t["Linked Issues"]).toLowerCase()!=="nan" ? "Linked: " + t["Linked Issues"] + "\n" : "")
+      + J + t.Key;
+    navigator.clipboard.writeText(text).catch(function(){ var ta=document.createElement("textarea");ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta); });
+    setCopied(t.Key); setTimeout(function(){ setCopied(""); }, 1800);
+  }
+
+  /* ── Export results CSV ── */
+  function exportCSVResults(){
+    var src = hasQuery ? results : activeSug.list;
+    if(!src.length) return;
+    var rows = [["Key","Summary","Status","Category","Priority","Project","SVM In Charge","Current Worker","Created","Updated","Age (Created)","Age (Updated)","Linked Issues","Linked Status","Root Cause","Type of Fix","Components","Issue Type","Comment Count","Last Comment","Next Action","Jira URL"]];
+    src.forEach(function(t){
+      var ca=ds(t.Created),ua=ds(t.Updated||t.Created),c=classify(t.Status);
+      rows.push([t.Key||"",t.Summary||"",t.Status||"",CL[c]||c,t.Priority||"",t.Project||"",t["SVM In Charge"]||"",t["Current Worker"]||"",t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ca===999?"":ca,ua===999?"":ua,t["Linked Issues"]||"",t["Linked Ticket status"]||"",t["Root Cause"]||"",t["Type of Fix"]||"",t.Components||"",t["Issue Type"]||"",t["Comment Count"]||"",t["Last Comment"]?fd(t["Last Comment"]):"",nextStep(t.Status,c),J+(t.Key||"")]);
+    });
+    var csv=rows.map(function(r){return r.map(escCSV).join(",");}).join("\n");
+    var blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+    var u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="search-"+(hasQuery?q.replace(/[^a-zA-Z0-9]/g,"-"):sugTab)+".csv";a.click();URL.revokeObjectURL(u);
+  }
+
+  /* ── Chip style helper ── */
+  function chip(active,color){ return {padding:"5px 12px",borderRadius:8,fontSize:11,fontWeight:700,border:"1px solid "+(active?color:"var(--border)"),background:active?color+"14":"var(--card)",color:active?color:"var(--t3)",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",whiteSpace:"nowrap"}; }
+
+  /* ── Render a ticket card (shared between suggestions and results) ── */
+  function renderCard(t, idx, showCheckbox){
+    var ca=ds(t.Created), ua=ds(t.Updated||t.Created), c=classify(t.Status);
+    var cs=CS[c]||CS.hd, sla=checkSLA(t);
+    var linked=String(t["Linked Issues"]||"").trim(); if(linked.toLowerCase()==="nan") linked="";
+    var lk1=linked?linked.split(/[;,]/)[0].trim():"";
+    var bkC=abk(ca), bkU=abk(ua);
+    var step=nextStep(t.Status,c);
+    var isOpen=t.Status&&t.Status!=="Closed";
+    var isFU=isFollowupType(t);
+    var svm=String(t["SVM In Charge"]||"").trim(); if(svm.toLowerCase()==="nan") svm="";
+    var cw=String(t["Current Worker"]||"").trim(); if(cw.toLowerCase()==="nan") cw="";
+    var commentCount=t["Comment Count"]||0;
+    var lastComment=t["Last Comment"]||"";
+    var isSel=selected[t.Key]||false;
+
+    return(
+      <div key={t.Key||idx} style={{background:isSel?"var(--blue-bg)":"var(--card)",border:"1px solid "+(isSel?"var(--blue-light)":"var(--border)"),borderRadius:14,marginBottom:10,boxShadow:"var(--shadow)",overflow:"hidden",transition:"all .2s"}}
+        onMouseOver={function(e){e.currentTarget.style.boxShadow="var(--shadow2)";}} onMouseOut={function(e){e.currentTarget.style.boxShadow="var(--shadow)";}}>
+
+        {/* ── Mini ageing heat strip ── */}
+        <div style={{height:4,background:"linear-gradient(90deg,"+AC[bkU]+" "+(Math.min(ua,120)/120*100)+"%,var(--border) "+(Math.min(ua,120)/120*100)+"%)"}}/>
+
+        {/* ── Header: checkbox + Key + Summary + badges ── */}
+        <div style={{padding:"11px 16px 0",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {showCheckbox && <label onClick={function(e){e.stopPropagation();}} style={{display:"flex",alignItems:"center",cursor:"pointer",flexShrink:0}}>
+            <input type="checkbox" checked={isSel} onChange={function(){toggleSel(t.Key);}} style={{width:15,height:15,accentColor:"var(--blue)",cursor:"pointer"}}/>
+          </label>}
+          <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:800,fontFamily:"var(--mono)",fontSize:14,color:"var(--blue)",whiteSpace:"nowrap",flexShrink:0}}>{t.Key}</a>
+          <div style={{flex:1,fontSize:13,fontWeight:600,color:"var(--t1)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}} title={t.Summary}>{t.Summary}</div>
+          <span style={{background:cs.badge,color:"#fff",padding:"3px 11px",borderRadius:20,fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{t.Status}</span>
+          {t.Priority && <span style={{fontSize:10,fontWeight:700,color:PRIORITY_COLORS[t.Priority]||"var(--t3)",background:PRIORITY_BG[t.Priority]||"var(--bg)",padding:"3px 10px",borderRadius:20,flexShrink:0}}>{t.Priority}</span>}
+          {sla.anyBreach && <span style={{background:"#FEE2E2",color:"#BE123C",padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0}}>⚡SLA</span>}
+          {!isOpen && <span style={{background:"#ECFDF5",color:"#059669",padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0}}>✓ Closed</span>}
+        </div>
+
+        {/* ── Detail grid ── */}
+        <div style={{padding:"8px 16px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:"5px 18px",fontSize:12}}>
+          <div><span style={{color:"var(--t3)",fontWeight:600}}>Created </span><span style={{fontWeight:600}}>{fd(t.Created)}</span> <span style={{fontFamily:"var(--mono)",fontWeight:800,color:AC[bkC],fontSize:11}}>({ca}d)</span></div>
+          <div><span style={{color:"var(--t3)",fontWeight:600}}>Updated </span><span style={{fontWeight:600}}>{t.Updated?fd(t.Updated):"—"}</span> <span style={{fontFamily:"var(--mono)",fontWeight:800,color:AC[bkU],fontSize:11}}>({ua}d)</span></div>
+          {t.Resolved && <div><span style={{color:"var(--t3)",fontWeight:600}}>Resolved </span><span style={{fontWeight:600,color:"var(--green)"}}>{fd(t.Resolved)}</span></div>}
+          {t.Project && <div><span style={{color:"var(--t3)",fontWeight:600}}>Project </span><span style={{fontWeight:600}}>{t.Project}</span></div>}
+          {svm && <div><span style={{color:"var(--t3)",fontWeight:600}}>SVM </span><span style={{fontWeight:600}}>{svm}</span></div>}
+          {cw && <div><span style={{color:"var(--t3)",fontWeight:600}}>Worker </span><span style={{fontWeight:600}}>{cw}</span></div>}
+          {lk1 && <div><span style={{color:"var(--t3)",fontWeight:600}}>Linked </span><a href={J+lk1} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:11,color:"var(--blue)",fontWeight:700}}>{lk1}</a>{t["Linked Ticket status"] && <span style={{color:"var(--t3)",fontSize:10,marginLeft:4}}>({t["Linked Ticket status"]})</span>}</div>}
+          {t["Root Cause"] && String(t["Root Cause"]).toLowerCase()!=="nan" && <div><span style={{color:"var(--t3)",fontWeight:600}}>Root Cause </span><span style={{fontWeight:600}}>{t["Root Cause"]}</span></div>}
+          {t["Type of Fix"] && String(t["Type of Fix"]).toLowerCase()!=="nan" && <div><span style={{color:"var(--t3)",fontWeight:600}}>Fix Type </span><span style={{fontWeight:600}}>{t["Type of Fix"]}</span></div>}
+          {t.Components && String(t.Components).toLowerCase()!=="nan" && <div><span style={{color:"var(--t3)",fontWeight:600}}>Components </span><span style={{fontWeight:600}}>{t.Components}</span></div>}
+          {t["Issue Type"] && <div><span style={{color:"var(--t3)",fontWeight:600}}>Type </span><span style={{fontWeight:600}}>{t["Issue Type"]}</span></div>}
+        </div>
+
+        {/* ── Category + Next step + Comments ── */}
+        <div style={{padding:"0 16px 8px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{padding:"3px 11px",borderRadius:8,background:cs.bg,border:"1px solid "+cs.br,color:cs.c,fontSize:11,fontWeight:700}}>{cs.icon} {CL[c]||c}</span>
+          {isOpen && <span style={{fontSize:11,color:"var(--t2)",fontWeight:600}}>💡 {step}</span>}
+          <div style={{flex:1}}/>
+          {(commentCount > 0 || lastComment) && <span style={{fontSize:10,color:"var(--t3)",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+            💬 {commentCount > 0 ? commentCount + " comment" + (commentCount!==1?"s":"") : ""}
+            {lastComment ? (commentCount > 0 ? " · last " : "Last ") + fd(lastComment) : ""}
+          </span>}
+        </div>
+
+        {/* ── Action bar ── */}
+        <div style={{padding:"9px 16px",borderTop:"1px solid var(--border)",background:"#FAFBFC",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          {isOpen && isFU && <button onClick={function(){onRemind(t,"internal");}} style={{padding:"6px 13px",borderRadius:8,border:"1px solid var(--violet-border)",background:"var(--violet-bg)",color:"var(--violet)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>🔔 Internal</button>}
+          {isOpen && isFU && <button onClick={function(){onRemind(t,"public");}} style={{padding:"6px 13px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",color:"var(--amber)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>💬 Client</button>}
+          <button onClick={function(){onMailDraft(t);}} style={{padding:"6px 13px",borderRadius:8,border:"1px solid var(--blue-light)",background:"var(--blue-bg)",color:"var(--blue)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>📧 Mail</button>
+          <button onClick={function(){copyInfo(t);}} style={{padding:"6px 13px",borderRadius:8,border:"1px solid var(--border)",background:"var(--card)",color:copied===t.Key?"var(--green)":"var(--t2)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>{copied===t.Key?"✓ Copied":"📋 Copy"}</button>
+          <a href={J+t.Key} target="_blank" rel="noreferrer" style={{padding:"6px 13px",borderRadius:8,border:"1px solid var(--border)",background:"var(--card)",color:"var(--t2)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,textDecoration:"none"}}>🔗 Jira</a>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:250,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"min(6vh,50px) 20px 20px",overflowY:"auto"}}>
+      <div style={{background:"#fff",borderRadius:20,boxShadow:"0 25px 70px rgba(0,0,0,.25)",width:"100%",maxWidth:960,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .25s cubic-bezier(.22,1,.36,1)"}}>
+
+        {/* ══ Search bar ══ */}
+        <div style={{padding:"14px 20px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12,background:"var(--bg)",flexShrink:0}}>
+          <span style={{fontSize:20,flexShrink:0}}>🔍</span>
+          <input ref={inputRef} type="text" value={q} onChange={function(e){setQ(e.target.value);setStFilter("all");setCatFilter("all");setSelected({});}}
+            placeholder="Search by ticket number, summary, worker, project, status…"
+            style={{flex:1,border:"none",background:"transparent",fontSize:16,fontWeight:600,color:"var(--t1)",outline:"none",fontFamily:"var(--sans)"}} />
+          {q && <button onClick={function(){setQ("");setStFilter("all");setCatFilter("all");setSelected({});setTimeout(function(){if(inputRef.current)inputRef.current.focus();},30);}} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:"var(--t3)",cursor:"pointer",flexShrink:0}}>✕ Clear</button>}
+          <kbd style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700,color:"var(--t4)",fontFamily:"var(--mono)",flexShrink:0}}>ESC</kbd>
+        </div>
+
+        {/* ══ Filter chips (only when searching) ══ */}
+        {hasQuery && baseResults.length > 0 && (
+          <div style={{padding:"10px 20px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",flexShrink:0}}>
+            <span style={{fontSize:10,fontWeight:700,color:"var(--t4)",textTransform:"uppercase",letterSpacing:".5px",marginRight:2}}>Status</span>
+            <button onClick={function(){setStFilter("all");}} style={chip(stFilter==="all","var(--blue)")}>All <span style={{fontFamily:"var(--mono)",fontSize:10}}>{baseResults.length}</span></button>
+            <button onClick={function(){setStFilter("open");}} style={chip(stFilter==="open","#059669")}>Open <span style={{fontFamily:"var(--mono)",fontSize:10}}>{cOpen}</span></button>
+            <button onClick={function(){setStFilter("closed");}} style={chip(stFilter==="closed","#64748B")}>Closed <span style={{fontFamily:"var(--mono)",fontSize:10}}>{cClosed}</span></button>
+            <div style={{width:1,height:20,background:"var(--border)",margin:"0 4px"}}/>
+            <span style={{fontSize:10,fontWeight:700,color:"var(--t4)",textTransform:"uppercase",letterSpacing:".5px",marginRight:2}}>Category</span>
+            <button onClick={function(){setCatFilter("all");}} style={chip(catFilter==="all","var(--blue)")}>All</button>
+            {cHD>0 && <button onClick={function(){setCatFilter("hd");}} style={chip(catFilter==="hd","#0891B2")}>🎯 HD <span style={{fontFamily:"var(--mono)",fontSize:10}}>{cHD}</span></button>}
+            {cClient>0 && <button onClick={function(){setCatFilter("client");}} style={chip(catFilter==="client","#D97706")}>💬 Client <span style={{fontFamily:"var(--mono)",fontSize:10}}>{cClient}</span></button>}
+            {cEngg>0 && <button onClick={function(){setCatFilter("engg");}} style={chip(catFilter==="engg","#7C3AED")}>🔧 Engg <span style={{fontFamily:"var(--mono)",fontSize:10}}>{cEngg}</span></button>}
+            <div style={{flex:1}}/>
+            <button onClick={exportCSVResults} title="Export current results to CSV" style={{padding:"5px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--card)",color:"var(--t2)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>⬇ CSV</button>
+          </div>
+        )}
+
+        {/* ══ Bulk action bar ══ */}
+        {selCount > 0 && (
+          <div style={{padding:"9px 20px",borderBottom:"1px solid var(--blue-light)",background:"var(--blue-bg)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",flexShrink:0,animation:"fadeUp .2s"}}>
+            <span style={{fontSize:12,fontWeight:800,color:"var(--blue)"}}>{selCount} ticket{selCount!==1?"s":""} selected</span>
+            <button onClick={function(){bulkRemind("internal");}} disabled={!window._rmBridge} title={window._rmBridge?"Send internal Jira note to all selected":"Jira bridge not detected"} style={{padding:"6px 14px",borderRadius:8,border:"1px solid var(--violet-border)",background:"var(--violet-bg)",color:"var(--violet)",fontSize:11,fontWeight:700,cursor:window._rmBridge?"pointer":"not-allowed",opacity:window._rmBridge?1:.5}}>🔔 Bulk Internal Remind</button>
+            <button onClick={function(){bulkRemind("public");}} disabled={!window._rmBridge} title={window._rmBridge?"Send client reply to all selected":"Jira bridge not detected"} style={{padding:"6px 14px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",color:"var(--amber)",fontSize:11,fontWeight:700,cursor:window._rmBridge?"pointer":"not-allowed",opacity:window._rmBridge?1:.5}}>💬 Bulk Client Remind</button>
+            <div style={{flex:1}}/>
+            <button onClick={selAll} style={{padding:"5px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--card)",color:"var(--t3)",fontSize:10,fontWeight:700,cursor:"pointer"}}>Select all ({results.length})</button>
+            <button onClick={selNone} style={{padding:"5px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--card)",color:"var(--t3)",fontSize:10,fontWeight:700,cursor:"pointer"}}>Clear</button>
+          </div>
+        )}
+
+        {/* ══ Content area ══ */}
+        <div style={{flex:1,minHeight:0,overflow:"auto",padding:"12px 16px"}}>
+
+          {/* ── Smart suggestions (idle state) ── */}
+          {!hasQuery && (<>
+            {/* Suggestion tabs */}
+            <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+              {sugTabs.map(function(st){
+                var active = sugTab===st.id;
+                return(<button key={st.id} onClick={function(){setSugTab(st.id);setSelected({});}} style={{
+                  padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,
+                  border:"1px solid "+(active?st.color+"66":"var(--border)"),
+                  background:active?st.color+"14":"var(--card)",
+                  color:active?st.color:"var(--t3)",
+                  cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"
+                }}>
+                  {st.icon} {st.label}
+                  <span style={{fontFamily:"var(--mono)",fontSize:11,fontWeight:800,background:active?st.color+"22":"var(--bg)",padding:"1px 7px",borderRadius:8,color:active?st.color:"var(--t4)"}}>{st.list.length}</span>
+                </button>);
+              })}
+              <div style={{flex:1}}/>
+              {activeSug.list.length > 0 && <button onClick={exportCSVResults} title={"Export "+activeSug.label+" to CSV"} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--card)",color:"var(--t2)",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>⬇ CSV</button>}
+            </div>
+
+            {/* Description */}
+            <div style={{fontSize:12,color:"var(--t3)",marginBottom:12,fontWeight:600}}>{activeSug.icon} {activeSug.desc} — {activeSug.list.length} ticket{activeSug.list.length!==1?"s":""}</div>
+
+            {/* Suggestion cards */}
+            {activeSug.list.length === 0 && (
+              <div style={{padding:"30px 20px",textAlign:"center",color:"var(--t3)",fontSize:13}}>
+                {sugTab==="fire" && "🎉 No fire tickets — looking good!"}
+                {sugTab==="danger" && "✅ No tickets in the danger zone."}
+                {sugTab==="recent" && "No tickets updated in the last 3 days."}
+                {sugTab==="hd" && "✅ No HD action items right now."}
+              </div>
+            )}
+            {activeSug.list.map(function(t, i){ return renderCard(t, i, true); })}
+
+            {/* Search hint */}
+            <div style={{padding:"18px 0",textAlign:"center"}}>
+              <div style={{fontSize:12,color:"var(--t4)",lineHeight:1.8}}>
+                Type to search across <span style={{fontWeight:700,color:"var(--t3)"}}>{allTix.length.toLocaleString()}</span> tickets (open + closed)
+                <br/>Search by <span style={{fontFamily:"var(--mono)",background:"var(--bg)",padding:"2px 6px",borderRadius:4,fontSize:11}}>Key</span> <span style={{fontFamily:"var(--mono)",background:"var(--bg)",padding:"2px 6px",borderRadius:4,fontSize:11}}>Summary</span> <span style={{fontFamily:"var(--mono)",background:"var(--bg)",padding:"2px 6px",borderRadius:4,fontSize:11}}>Worker</span> <span style={{fontFamily:"var(--mono)",background:"var(--bg)",padding:"2px 6px",borderRadius:4,fontSize:11}}>Project</span> <span style={{fontFamily:"var(--mono)",background:"var(--bg)",padding:"2px 6px",borderRadius:4,fontSize:11}}>Status</span>
+              </div>
+            </div>
+          </>)}
+
+          {/* ── No results ── */}
+          {hasQuery && results.length === 0 && baseResults.length === 0 && (
+            <div style={{padding:"44px 20px",textAlign:"center"}}>
+              <div style={{fontSize:36,marginBottom:12}}>😕</div>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--t2)"}}>No tickets found for "{q}"</div>
+              <div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>Try a different ticket number or keyword.</div>
+            </div>
+          )}
+
+          {/* ── Filtered-out message ── */}
+          {hasQuery && results.length === 0 && baseResults.length > 0 && (
+            <div style={{padding:"30px 20px",textAlign:"center"}}>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--t2)"}}>No tickets match the current filters</div>
+              <div style={{fontSize:12,color:"var(--t3)",marginTop:6}}>{baseResults.length} results found, but none match your status/category filter.</div>
+              <button onClick={function(){setStFilter("all");setCatFilter("all");}} style={{marginTop:12,padding:"8px 18px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",color:"var(--blue)",fontSize:12,fontWeight:700,cursor:"pointer"}}>Clear filters</button>
+            </div>
+          )}
+
+          {/* ── Search results ── */}
+          {hasQuery && results.length > 0 && (<>
+            <div style={{fontSize:11,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:10,padding:"0 4px",display:"flex",alignItems:"center",gap:8}}>
+              <span>{results.length} ticket{results.length!==1?"s":""}{(stFilter!=="all"||catFilter!=="all") ? " (filtered)" : ""}{results.length>=50?" — showing first 50":""}</span>
+              <div style={{flex:1}}/>
+              {results.length > 1 && selCount === 0 && <button onClick={selAll} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border)",background:"var(--card)",color:"var(--t3)",fontSize:10,fontWeight:700,cursor:"pointer"}}>☑ Select all for bulk action</button>}
+            </div>
+            {results.map(function(t, i){ return renderCard(t, i, true); })}
+          </>)}
+        </div>
+
+        {/* ══ Footer ══ */}
+        <div style={{padding:"9px 20px",borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--bg)",flexShrink:0}}>
+          <span style={{fontSize:11,color:"var(--t3)",fontWeight:600}}>{allTix.length.toLocaleString()} total tickets · {openTix.length.toLocaleString()} open</span>
+          <span style={{fontSize:10,color:"var(--t4)"}}>
+            <kbd style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 6px",fontFamily:"var(--mono)",fontSize:10}}>Ctrl+K</kbd> search · <kbd style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 6px",fontFamily:"var(--mono)",fontSize:10}}>ESC</kbd> close
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 /* ─── Main App ─── */
 /* ═══ EDITABLE DATA GRID ═══
@@ -1618,6 +1982,7 @@ function App(){
   const[catTab,setCatTab]=useState("all"); // "all" | "ageing" | "svm"
   const[mailModal,setMailModal]=useState(null); // {subject, body}
   const[reminderData,setReminderData]=useState(null); // {ticket, mode}
+  const[globalSearchOpen,setGlobalSearchOpen]=useState(false); // Global ticket search (Ctrl+K)
   const fRef=useRef();
   const blobRef=useRef(null); // original uploaded file, kept for "revert"
 
@@ -1631,12 +1996,15 @@ function App(){
   function clr(){setCf(null);setAf(null);setSf(null);setGf(null);setSearch("");}
   function closeModal(){setModal(null);}
 
-  /* Keyboard: Esc closes modal */
+  /* Keyboard: Esc closes modal, Ctrl+K opens global search */
   useEffect(function(){
-    function handleKey(e){if(e.key==="Escape"){if(catModal)setCatModal(null);else if(modal)setModal(null);}}
+    function handleKey(e){
+      if((e.ctrlKey||e.metaKey)&&(e.key==="k"||e.key==="K")){e.preventDefault();setGlobalSearchOpen(true);return;}
+      if(e.key==="Escape"){if(globalSearchOpen)setGlobalSearchOpen(false);else if(reminderData)setReminderData(null);else if(mailModal)setMailModal(null);else if(catModal)setCatModal(null);else if(modal)setModal(null);}
+    }
     document.addEventListener("keydown",handleKey);
     return function(){document.removeEventListener("keydown",handleKey);};
-  },[modal,catModal]);
+  },[modal,catModal,globalSearchOpen,reminderData,mailModal]);
 
   /* Load the shared data. Prefer in-app edits (from the Edit Data tab); fall
      back to parsing the uploaded Excel and seeding the edit store from it. */
@@ -2010,6 +2378,15 @@ function App(){
         <MultiSelect allLabel="All Request Types" options={itypes.map(function(x){return [x[0],x[1]];})} selected={itF} onChange={function(v){setItF(v);clr();}} minWidth={170}/>
         <div style={{flex:1}}/>
 
+        {/* Global search trigger */}
+        <button onClick={function(){setGlobalSearchOpen(true);}} title="Search tickets (Ctrl+K)"
+          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 16px",borderRadius:10,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",minWidth:180,transition:"all .18s"}}
+          onMouseOver={function(e){e.currentTarget.style.borderColor="var(--blue)";e.currentTarget.style.color="var(--blue)";}}
+          onMouseOut={function(e){e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--t2)";}}>
+          <span style={{fontSize:13}}>🔍</span> Search tickets…
+          <kbd style={{marginLeft:"auto",background:"var(--card)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,color:"var(--t4)",fontFamily:"var(--mono)"}}>⌘K</kbd>
+        </button>
+
         <nav style={{display:"flex",background:"var(--bg)",borderRadius:10,padding:3,gap:2,border:"1px solid var(--border)"}}>
           {[["followup","📌 Follow-ups",op.length],["gaps","⚠️ Data Gaps",gd.t.length],["data","✏️ Edit Data",raw?raw.length:0]].map(function(x){var id=x[0],lb=x[1],cnt=x[2];return(
             <button key={id} onClick={function(){setTab(id);clr();}} style={{background:tab===id?"var(--blue)":"transparent",color:tab===id?"#fff":"var(--t3)",border:"none",padding:"7px 16px",borderRadius:8,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
@@ -2373,6 +2750,10 @@ function App(){
       <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openEnggReport} onMail={openEnggMail} onClientReport={handleClientReport} onClientMail={handleClientMail} onRemind={function(t,mode){setReminderData({ticket:t,mode:mode||"internal"});}}/>
       <MailDraftModal data={mailModal} onClose={function(){setMailModal(null);}}/>
       <ReminderModal ticket={reminderData?reminderData.ticket:null} mode={reminderData?reminderData.mode:"internal"} onClose={function(){setReminderData(null);}}/>
+      {/* ─── Global Ticket Search ─── */}
+      <GlobalSearchModal open={globalSearchOpen} onClose={function(){setGlobalSearchOpen(false);}} tickets={raw}
+        onRemind={function(t,mode){setGlobalSearchOpen(false);setReminderData({ticket:t,mode:mode||"internal"});}}
+        onMailDraft={function(t){setGlobalSearchOpen(false);setMailModal(buildSingleTicketMailDraft(t));}}/>
     </div>
   );
 }
