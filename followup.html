@@ -667,7 +667,7 @@ function ReminderModal({ticket,mode,onClose}){
   var accentBg=isClient?"var(--amber-bg)":"var(--violet-bg)";
   var accentBorder=isClient?"var(--amber-border)":"var(--violet-border)";
   return(
-    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",zIndex:220,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",zIndex:220,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
       <div style={{background:"#fff",borderRadius:16,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:640,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
         <div style={{padding:"16px 20px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
           <div style={{width:36,height:36,borderRadius:8,background:accentBg,border:"1px solid "+accentBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{isClient?"💬":"🔔"}</div>
@@ -703,7 +703,7 @@ function MailDraftModal({data,onClose}){
   function openMail(){var ml="mailto:?subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent(body);window.open(ml,"_blank");}
   var btnS={padding:"8px 16px",borderRadius:8,fontSize:12,fontWeight:700,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--t2)",display:"inline-flex",alignItems:"center",gap:6};
   return(
-    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:210,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:210,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
       <div style={{background:"#fff",borderRadius:20,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:820,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
         <div style={{padding:"18px 24px",borderBottom:"1px solid var(--border)",display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
           <div style={{width:40,height:40,borderRadius:10,background:"var(--blue-bg)",border:"1px solid var(--blue-light)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>✉️</div>
@@ -742,7 +742,7 @@ function TicketModal({data,onClose}){
   return(
     <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{
       position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.4)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",
-      zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeUp .25s cubic-bezier(.22,1,.36,1)"
+      zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto",animation:"fadeUp .25s cubic-bezier(.22,1,.36,1)"
     }}>
       <div style={{background:"#fff",borderRadius:20,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:1100,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
         {/* Modal header */}
@@ -876,7 +876,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
     function _real(v){var s=String(v||"").trim();return s&&!_skip[s.toLowerCase()]?s:"";}
     var pivot={};
     tix.forEach(function(t){
-      var name=_real(enggMap[t.Key])||_real(t["SVM In Charge"])||"(Unknown)";
+      var name=_real(enggMap[t.Key])||"(No linked assignee)";
       if(!pivot[name])pivot[name]={n:0,bk:[0,0,0,0,0],pri:{},tickets:[]};
       var m=pivot[name];m.n++;m.tickets.push(t);
       var ua=ds(t.Updated||t.Created);m.bk[abk(ua)]++;
@@ -995,7 +995,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   return(
     <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{
       position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.4)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",
-      zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,animation:"fadeUp .25s cubic-bezier(.22,1,.36,1)"
+      zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto",animation:"fadeUp .25s cubic-bezier(.22,1,.36,1)"
     }}>
       <div style={{background:"#fff",borderRadius:20,boxShadow:"0 20px 60px rgba(0,0,0,.2)",width:"100%",maxWidth:1200,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",animation:"modalIn .3s cubic-bezier(.22,1,.36,1)"}}>
         {/* Modal header */}
@@ -1319,7 +1319,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               </div>
               {/* Bridge-not-detected banner */}
               {enggBridgeMissing&&<div style={{marginBottom:12,padding:"10px 14px",borderRadius:10,background:"var(--amber-bg)",border:"1px solid var(--amber-border)",color:"var(--amber)",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:10}}>
-                <span>⚠️ Jira bridge extension not detected — showing <b>SVM In Charge</b> as a fallback. Enable the HD Jira Bridge extension and refresh, then</span>
+                <span>⚠️ Jira bridge extension not detected — linked-ticket assignees can't be fetched. Enable the HD Jira Bridge extension and refresh, then</span>
                 <button onClick={function(){loadEnggAssignees(true);}} style={{padding:"4px 12px",borderRadius:6,border:"1px solid var(--amber-border)",background:"#fff",color:"var(--amber)",fontSize:11,fontWeight:700}}>↻ Retry</button>
               </div>}
               {/* No-match note */}
