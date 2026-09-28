@@ -160,7 +160,7 @@ input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const{useState,useMemo,useCallback,useRef,useEffect}=React;
+const{useState,useMemo,useCallback,useRef,useEffect,useLayoutEffect}=React;
 const J="https://svmhelpdesk.atlassian.net/browse/";
 
 /* ═══ STATUS CLASSIFICATION (aligned with the confirmed Status→owner map used
@@ -173,6 +173,10 @@ const J="https://svmhelpdesk.atlassian.net/browse/";
    keep the rest of this file unchanged. */
 const HD_S=window.HDClass.HD, CLIENT_S=window.HDClass.CLIENT, ENGG_S=window.HDClass.ENGG;
 const classify=s=>window.HDClass.classify3(s);
+/* The Follow-up module tracks Incidents & Service Requests only. Change /
+   Change Request (and any other issue types) are handled in the Change module,
+   so they're scoped out of every count, category, modal and report here. */
+const isFollowupType=function(t){var it=String((t&&t["Issue Type"])||"").toLowerCase();return it.indexOf("incident")>-1||it.indexOf("service request")>-1||it.indexOf("service req")>-1;};
 /* Priority ordering + a plain next-step hint per status, for the Action Queue. */
 const PRIO_ORD={"Show Stopper":0,"Critical":1,"High":2,"Medium":3,"Low":4};
 const prioRank=p=>(PRIO_ORD[p]!==undefined?PRIO_ORD[p]:5);
@@ -819,6 +823,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   const [enggProg, setEnggProg] = useState([0,0]);
   const [enggBridgeMissing, setEnggBridgeMissing] = useState(false);
   const [enggSearch, setEnggSearch] = useState("");
+  const scrollRef=useRef(null), savedScroll=useRef(0);
 
   /* Fetch all linked ticket assignees in batches of 5 */
   function loadEnggAssignees(force){
@@ -855,18 +860,22 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
     if(!window._rmBridge){setEnggLoading(false);setEnggBridgeMissing(true);setEnggProg([0,0]);return;}
 
     setEnggLoading(true);setEnggProg([0,uniqueKeys.length]);
-    var done=0;
+    var done=0,lastPaint=0;
+    /* Throttle the pivot refresh so the assignee list doesn't reshuffle/reflow on
+       every ticket (which would fight the user's scroll). The progress bar still
+       updates every ticket; the pivot repaints at most every ~2s, plus once at the end. */
+    function paint(force){var now=Date.now();if(force||now-lastPaint>=2000){lastPaint=now;if(scrollRef.current)savedScroll.current=scrollRef.current.scrollTop;rebuild();}}
     function batchRun(items,batchSize){
       var batches=[];for(var i=0;i<items.length;i+=batchSize)batches.push(items.slice(i,i+batchSize));
       return batches.reduce(function(p,batch){return p.then(function(){
         return Promise.all(batch.map(function(lk){
           return _fetchAssigneeByKey(lk)["catch"](function(){return "";}).then(function(){
-            done++;setEnggProg([done,items.length]);rebuild();
+            done++;setEnggProg([done,items.length]);paint(false);
           });
         }));
       });},Promise.resolve());
     }
-    batchRun(uniqueKeys,5).then(function(){setEnggLoading(false);rebuild();});
+    batchRun(uniqueKeys,5).then(function(){setEnggLoading(false);paint(true);});
   }
 
   /* Pivot by engineering assignee */
@@ -889,6 +898,11 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   useEffect(function(){
     setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");setClientProj("");
   },[data&&data.title]);
+
+  /* Keep the user's scroll position stable across the periodic pivot repaints while loading. */
+  useLayoutEffect(function(){
+    if(enggLoading&&scrollRef.current&&savedScroll.current)scrollRef.current.scrollTop=savedScroll.current;
+  },[enggMap]);
 
   /* Auto-load linked assignees when Engg Assignee tab is opened */
   useEffect(function(){
@@ -1026,7 +1040,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
         </div>
 
         {/* Tab content */}
-        <div style={{flex:1,minHeight:0,overflow:"auto"}}>
+        <div ref={scrollRef} style={{flex:1,minHeight:0,overflow:"auto"}}>
 
           {/* ALL TICKETS TAB */}
           {activeTab==="all"&&renderTable(viewTix)}
@@ -1588,6 +1602,8 @@ function App(){
   const[sf,setSf]=useState(null);
   const[gf,setGf]=useState(null);
   const[pf,setPf]=useState([]);
+  const[svmF,setSvmF]=useState([]); // SVM In Charge filter
+  const[itF,setItF]=useState([]);   // Request Type (Issue Type) filter
   const[search,setSearch]=useState("");
   const[sortCol,setSortCol]=useState("age");
   const[sortDir,setSortDir]=useState("desc");
@@ -1608,7 +1624,7 @@ function App(){
   const handleFile=useCallback(async function(e){
     const f=e.target.files?.[0];if(!f)return;
     setLoading(true);setFn(f.name);
-    try{setRaw(await px(f));setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSearch("");setDtFrom("");setDtTo("");setDtLabel("All Time");setModal(null);}
+    try{setRaw(await px(f));setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSvmF([]);setItF([]);setSearch("");setDtFrom("");setDtTo("");setDtLabel("All Time");setModal(null);}
     catch(err){alert(err.message);}
     setLoading(false);e.target.value="";
   },[]);
@@ -1643,7 +1659,7 @@ function App(){
 
   /* Commit edits from the Edit Data tab: everything recomputes off `raw`. */
   function applyEditedRows(newRows){
-    setRaw(newRows);setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSearch("");setModal(null);
+    setRaw(newRows);setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSvmF([]);setItF([]);setSearch("");setModal(null);
     if(window.HDStore)window.HDStore.saveRows(newRows);
   }
   /* Throw away edits and reload the originally uploaded file. */
@@ -1752,26 +1768,34 @@ function App(){
     return parts.join(" ");
   },[dtFrom,dtTo]);
 
-  const op=useMemo(()=>dateFiltered?dateFiltered.filter(r=>r.Status&&r.Status!=="Closed"):[],[dateFiltered]);
+  const op=useMemo(()=>dateFiltered?dateFiltered.filter(r=>r.Status&&r.Status!=="Closed"&&isFollowupType(r)):[],[dateFiltered]);
   const totalCreated=useMemo(function(){return dateFiltered?dateFiltered.length:0;},[dateFiltered]);
   const totalClosed=useMemo(function(){return dateFiltered?dateFiltered.filter(function(t){return t.Status==="Closed";}).length:0;},[dateFiltered]);
   const wks=useMemo(()=>{const m={};op.forEach(t=>{const x=t["Current Worker"];if(x)m[x]=(m[x]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);},[op]);
   const pjs=useMemo(()=>{const s=new Set();op.forEach(t=>{if(t.Project)s.add(t.Project)});return[...s].sort();},[op]);
+  /* Global filter option lists (from the scoped open set) */
+  const svmNorm=function(t){var s=String(t["SVM In Charge"]||"").trim();return(!s||s.toLowerCase()==="nan")?"(Unassigned)":s;};
+  const svms=useMemo(()=>{const m={};op.forEach(t=>{const s=svmNorm(t);m[s]=(m[s]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);},[op]);
+  const itypes=useMemo(()=>{const m={};op.forEach(t=>{const it=t["Issue Type"]||"(None)";m[it]=(m[it]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);},[op]);
 
   const flt=useMemo(()=>{
     let l=op;
     if(w.length)l=l.filter(t=>w.indexOf(t["Current Worker"])>-1);
     if(pf.length)l=l.filter(t=>pf.indexOf(t.Project)>-1);
+    if(svmF.length)l=l.filter(t=>svmF.indexOf(svmNorm(t))>-1);
+    if(itF.length)l=l.filter(t=>itF.indexOf(t["Issue Type"]||"(None)")>-1);
     return l;
-  },[op,w,pf]);
+  },[op,w,pf,svmF,itF]);
 
-  /* All tickets filtered by worker/project (includes closed) for SLA */
+  /* All tickets filtered by the global filters (includes closed) for SLA — scoped to Incidents/SRs */
   var allFiltered=useMemo(function(){
-    var l=dateFiltered||[];
+    var l=(dateFiltered||[]).filter(isFollowupType);
     if(w.length)l=l.filter(function(t){return w.indexOf(t["Current Worker"])>-1;});
     if(pf.length)l=l.filter(function(t){return pf.indexOf(t.Project)>-1;});
+    if(svmF.length)l=l.filter(function(t){return svmF.indexOf(svmNorm(t))>-1;});
+    if(itF.length)l=l.filter(function(t){return itF.indexOf(t["Issue Type"]||"(None)")>-1;});
     return l;
-  },[dateFiltered,w,pf]);
+  },[dateFiltered,w,pf,svmF,itF]);
 
   /* SLA breach computation — against ALL tickets in range */
   var slaData=useMemo(function(){
@@ -1948,11 +1972,11 @@ function App(){
 
   /* Data Gaps */
   const GF=["Root Cause","Components","SVM In Charge"];
-  const gd=useMemo(()=>{if(!dateFiltered)return{t:[],s:{}};let l=dateFiltered;if(w.length)l=l.filter(t=>w.indexOf(t["Current Worker"])>-1);if(pf.length)l=l.filter(t=>pf.indexOf(t.Project)>-1);
+  const gd=useMemo(()=>{if(!dateFiltered)return{t:[],s:{}};let l=dateFiltered.filter(isFollowupType);if(w.length)l=l.filter(t=>w.indexOf(t["Current Worker"])>-1);if(pf.length)l=l.filter(t=>pf.indexOf(t.Project)>-1);if(svmF.length)l=l.filter(t=>svmF.indexOf(svmNorm(t))>-1);if(itF.length)l=l.filter(t=>itF.indexOf(t["Issue Type"]||"(None)")>-1);
     const ct={};GF.forEach(f=>ct[f]=0);const tx=[];
     l.forEach(t=>{const g=GF.filter(f=>{const v=t[f];return!v||String(v).trim()===""||String(v).trim().toLowerCase()==="nan";});if(g.length){g.forEach(x=>ct[x]++);tx.push({...t,_g:g});}});
     return{t:tx,s:ct};
-  },[dateFiltered,w,pf]);
+  },[dateFiltered,w,pf,svmF,itF]);
   const dg=useMemo(()=>gf?gd.t.filter(t=>t._g.includes(gf)):gd.t,[gd,gf]);
 
   /* No inline upload — the file is uploaded once on the launcher (index.html)
@@ -1982,6 +2006,8 @@ function App(){
 
         <MultiSelect allLabel={"All Workers · "+op.length+" open"} options={wks.map(function(x){return [x[0],x[1]];})} selected={w} onChange={function(v){setW(v);clr();}} minWidth={240}/>
         <MultiSelect allLabel="All Projects" options={pjs.map(function(p){return [p];})} selected={pf} onChange={function(v){setPf(v);clr();}} minWidth={170}/>
+        <MultiSelect allLabel="All In-Charge" options={svms.map(function(x){return [x[0],x[1]];})} selected={svmF} onChange={function(v){setSvmF(v);clr();}} minWidth={160}/>
+        <MultiSelect allLabel="All Request Types" options={itypes.map(function(x){return [x[0],x[1]];})} selected={itF} onChange={function(v){setItF(v);clr();}} minWidth={170}/>
         <div style={{flex:1}}/>
 
         <nav style={{display:"flex",background:"var(--bg)",borderRadius:10,padding:3,gap:2,border:"1px solid var(--border)"}}>
