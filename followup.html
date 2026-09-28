@@ -11,6 +11,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="hd-store.js"></script>
+<script>
+/* Bridge detection for Jira reminders — runs immediately before Babel */
+window._rmBridge=false;
+window.addEventListener("message",function(e){if(e.data&&e.data.type==="HD_BRIDGE_READY")window._rmBridge=true;});
+window.postMessage({type:"HD_BRIDGE_PING"},"*");
+setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},300);
+setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},1000);
+setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},3000);
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -553,16 +562,9 @@ function _buildReminder(t,mode){
   ]};
   return{text:text,adf:adf,mode:mode,isClient:isClient};
 }
-/* Self-contained bridge detection for reminders (no jira-fetch.js dependency) */
-var _rmBridge=false;
-window.addEventListener("message",function(e){if(e.data&&e.data.type==="HD_BRIDGE_READY")_rmBridge=true;});
-window.postMessage({type:"HD_BRIDGE_PING"},"*");
-setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},500);
-setTimeout(function(){window.postMessage({type:"HD_BRIDGE_PING"},"*");},2000);
-
 function _postJiraNote(key,adf,isInternal){
   return new Promise(function(resolve,reject){
-    if(!_rmBridge){reject(new Error("Extension bridge not detected. Refresh the page and ensure the HD Jira Bridge extension is enabled."));return;}
+    if(!window._rmBridge){reject(new Error("Extension bridge not detected. Refresh the page and make sure HD Jira Bridge extension is enabled."));return;}
     var host="svmhelpdesk.atlassian.net";
     try{var cfg=JSON.parse(localStorage.getItem("hd-jira-cfg")||"{}");if(cfg.jiraHost)host=cfg.jiraHost;}catch(e){}
     var id=900000+Math.floor(Math.random()*99999);
