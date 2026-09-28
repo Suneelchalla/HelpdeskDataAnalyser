@@ -316,253 +316,253 @@ function ticketRow(t){
 }
 var DETAIL_COLS=[{wch:15},{wch:48},{wch:24},{wch:20},{wch:13},{wch:20},{wch:20},{wch:24},{wch:18},{wch:16},{wch:14},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:10},{wch:16},{wch:16},{wch:28}];
 
+/* ═══ Shared SpreadsheetML infrastructure ═══ */
+var _x=function(s){return String(s==null?"":s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");};
+var _B='<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/></Borders>';
+var _BT='<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#1E3A5F"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/></Borders>';
+function _S(v,id,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+'><Data ss:Type="String">'+_x(v)+'</Data></Cell>';}
+function _NM(v,id){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+'><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
+function _NL(v,id,hr){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+' ss:HRef="'+hr+'"><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
+function _SL(v,id,hr,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+' ss:HRef="'+hr+'"><Data ss:Type="String">'+_x(v)+'</Data></Cell>';}
+function _R(c,h){return'<Row'+(h?' ss:Height="'+h+'"':'')+'>'+(Array.isArray(c)?c.join(''):c)+'</Row>\n';}
+function _C(w){return'<Column ss:AutoFitWidth="0" ss:Width="'+w+'"/>';}
+function _WS(nm,cols,rows){return'<Worksheet ss:Name="'+_x(nm)+'"><Table>'+cols+'\n'+rows+'</Table></Worksheet>\n';}
+function _pc(a,b){return b?Math.round(a/b*100)+"%":"0%";}
+var _STY='<Styles>'
++'<Style ss:ID="Default"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>'+_B+'</Style>'
++'<Style ss:ID="tt"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#7C3AED" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+_B+'</Style>'
++'<Style ss:ID="ttb"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#2563EB" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+_B+'</Style>'
++'<Style ss:ID="tto"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#D97706" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+_B+'</Style>'
++'<Style ss:ID="mt"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#6B7280"/>'+_B+'</Style>'
++'<Style ss:ID="sh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#334155" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="th"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="tl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+_B+'</Style>'
++'<Style ss:ID="n">'+_B+'</Style>'
++'<Style ss:ID="nw"><Alignment ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="nr"><Alignment ss:Horizontal="Right"/>'+_B+'</Style>'
++'<Style ss:ID="b"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1F2937"/>'+_B+'</Style>'
++'<Style ss:ID="br"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Alignment ss:Horizontal="Right"/>'+_B+'</Style>'
++'<Style ss:ID="lk"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#2563EB" ss:Underline="Single"/><Alignment ss:Horizontal="Right"/>'+_B+'</Style>'
++'<Style ss:ID="lka"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#2563EB" ss:Underline="Single"/><Alignment ss:Horizontal="Right"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="a"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="aw"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="ar"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+_B+'</Style>'
++'<Style ss:ID="vh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#5B21B6"/><Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="rth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="rtl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="rf"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="rfw"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="rfr"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+_B+'</Style>'
++'<Style ss:ID="oth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="otl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="of"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/>'+_B+'</Style>'
++'<Style ss:ID="ofw"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+_B+'</Style>'
++'<Style ss:ID="ofr"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+_B+'</Style>'
++'<Style ss:ID="ok"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#059669"/>'+_B+'</Style>'
++'<Style ss:ID="wa"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#DC2626"/>'+_B+'</Style>'
++'<Style ss:ID="tot"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>'+_BT+'</Style>'
++'<Style ss:ID="totr"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+_BT+'</Style>'
++'</Styles>';
+var _DCOL=_C(95)+_C(260)+_C(110)+_C(80)+_C(110)+_C(110)+_C(130)+_C(75)+_C(75)+_C(72)+_C(72)+_C(60)+_C(100)+_C(200);
+function _trow(t,si,sri,swi,reason){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);si=si||"n";sri=sri||"nr";swi=swi||"nw";
+  var c=[_S(t.Key,si),_S((t.Summary||"").substring(0,100),swi),_S(t.Status,si),_S(t.Priority,si),_S(t["SVM In Charge"]||"",si),_S(t["Current Worker"]||"",si),_S(t.Project||"",si),_S(t.Created?fd(t.Created):"",si),_S(t.Updated?fd(t.Updated):"",si),_NM(ca===999?0:ca,sri),_NM(ua===999?0:ua,sri),_S(checkSLA(t).anyBreach?"YES":"",si),_S(t["Linked Issues"]||"",si)];
+  c.push(reason!==undefined?_S(reason,swi):_S(nextStep(t.Status,classify(t.Status)),si));return _R(c);}
+function _thRow(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
+  return _R([_S("Key",lid),_S("Summary",lid),_S("Status",hid),_S("Priority",hid),_S("SVM In Charge",lid),_S("Current Worker",lid),_S("Project",lid),_S("Created",hid),_S("Updated",hid),_S("Age (Created)",hid),_S("Age (Updated)",hid),_S("SLA Breach",hid),_S("Linked Issues",lid),_S(extra||"Next Action",lid)],20);}
+function _xlDown(xml,fname){var b=new Blob([xml],{type:"application/vnd.ms-excel"});var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=fname;a.click();URL.revokeObjectURL(u);}
+function _xmlWrap(sheets){return'<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'+_STY+'\n'+sheets+'</Workbook>';}
+function _icMap(tix){var m={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";if(!m[sv])m[sv]={n:0,bkC:[0,0,0,0,0],bkU:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};var o=m[sv];o.n++;var ca=ds(t.Created),ua=ds(t.Updated||t.Created);o.bkC[abk(ca)]++;o.bkU[abk(ua)]++;o.tCA+=(ca===999?0:ca);o.tUA+=(ua===999?0:ua);o.pri[t.Priority]=(o.pri[t.Priority]||0)+1;});return m;}
+function _ticketSheet(name,tix,hid,lid,extra,si1,sr1,sw1){var s=_thRow(hid,lid,extra);
+  tix.forEach(function(t,i){var alt=i%2;s+=_trow(t,alt?(si1||"a"):"n",alt?(sr1||"ar"):"nr",alt?(sw1||"aw"):"nw",extra?undefined:undefined);});return _WS(name,_DCOL,s);}
+
+/* ═══ 1. ENGINEERING REPORT ═══ */
 function generateEnggReport(p){
-  var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[];
-  var N=tix.length;
+  var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[],N=tix.length;
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var time=new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
-
-  function _(s){return String(s==null?"":s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\uFFFE\uFFFF]/g,"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
-  function S(v,id,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+'><Data ss:Type="String">'+_(v)+'</Data></Cell>';}
-  function NM(v,id){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+'><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
-  function NL(v,id,hr){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+' ss:HRef="'+hr+'"><Data ss:Type="Number">'+(v==null||isNaN(v)?0:v)+'</Data></Cell>';}
-  function SL(v,id,hr,ma){return'<Cell'+(id?' ss:StyleID="'+id+'"':'')+(ma?' ss:MergeAcross="'+ma+'"':'')+' ss:HRef="'+hr+'"><Data ss:Type="String">'+_(v)+'</Data></Cell>';}
-  function R(c,h){return'<Row'+(h?' ss:Height="'+h+'"':'')+'>'+(Array.isArray(c)?c.join(''):c)+'</Row>\n';}
-  function C(w){return'<Column ss:AutoFitWidth="0" ss:Width="'+w+'"/>';}
-  function WS(nm,cols,rows){return'<Worksheet ss:Name="'+_(nm)+'"><Table>'+cols+'\n'+rows+'</Table></Worksheet>\n';}
-  function pc(a,b){return b?Math.round(a/b*100)+"%":"0%";}
-
-  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;})
-    .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
   var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
-  var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;})
-    .sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-  var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};
-  var bkC=[0,0,0,0,0],bkU=[0,0,0,0,0],totCA=0,totUA=0,slaBr=0;
-  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;
-    var ca=ds(t.Created),ua=ds(t.Updated||t.Created);bkC[abk(ca)]++;bkU[abk(ua)]++;
-    totCA+=(ca===999?0:ca);totUA+=(ua===999?0:ua);if(checkSLA(t).anyBreach)slaBr++;});
+  var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};var bkC=[0,0,0,0,0],bkU=[0,0,0,0,0],totCA=0,totUA=0,slaBr=0;
+  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ca=ds(t.Created),ua=ds(t.Updated||t.Created);bkC[abk(ca)]++;bkU[abk(ua)]++;totCA+=(ca===999?0:ca);totUA+=(ua===999?0:ua);if(checkSLA(t).anyBreach)slaBr++;});
   var avgCA=N?Math.round(totCA/N):0,avgUA=N?Math.round(totUA/N):0;
-
-  var icm={};tix.forEach(function(t){
-    var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";
-    if(!icm[sv])icm[sv]={n:0,bkC:[0,0,0,0,0],bkU:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};
-    var m=icm[sv];m.n++;var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-    m.bkC[abk(ca)]++;m.bkU[abk(ua)]++;m.tCA+=(ca===999?0:ca);m.tUA+=(ua===999?0:ua);
-    m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;});
-  var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
-
-  /* borders */
-  var B='<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/></Borders>';
-  var BT='<Borders><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#1E3A5F"/><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#D1D5DB"/></Borders>';
-  var STY='<Styles>'
-  +'<Style ss:ID="Default"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1F2937"/>'+B+'</Style>'
-  +'<Style ss:ID="tt"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#7C3AED" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
-  +'<Style ss:ID="mt"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#6B7280"/>'+B+'</Style>'
-  +'<Style ss:ID="sh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#334155" ss:Pattern="Solid"/>'+B+'</Style>'
-  +'<Style ss:ID="th"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="tl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A5F" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
-  +'<Style ss:ID="n"><Alignment ss:Vertical="Center"/>'+B+'</Style>'
-  +'<Style ss:ID="nw"><Alignment ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="nr"><Alignment ss:Vertical="Center" ss:Horizontal="Right"/>'+B+'</Style>'
-  +'<Style ss:ID="b"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1F2937"/>'+B+'</Style>'
-  +'<Style ss:ID="br"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
-  +'<Style ss:ID="lk"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#2563EB" ss:Underline="Single"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
-  +'<Style ss:ID="lka"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#2563EB" ss:Underline="Single"/><Alignment ss:Horizontal="Right"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>'+B+'</Style>'
-  +'<Style ss:ID="a"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/>'+B+'</Style>'
-  +'<Style ss:ID="aw"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="ar"><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
-  +'<Style ss:ID="vh"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#5B21B6"/><Interior ss:Color="#EDE9FE" ss:Pattern="Solid"/>'+B+'</Style>'
-  +'<Style ss:ID="rth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="rtl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#BE123C" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
-  +'<Style ss:ID="rf"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/>'+B+'</Style>'
-  +'<Style ss:ID="rfw"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="rfr"><Interior ss:Color="#FFF1F2" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
-  +'<Style ss:ID="oth"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="otl"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#B45309" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/>'+B+'</Style>'
-  +'<Style ss:ID="of"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/>'+B+'</Style>'
-  +'<Style ss:ID="ofw"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:WrapText="1"/>'+B+'</Style>'
-  +'<Style ss:ID="ofr"><Interior ss:Color="#FFFBEB" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+B+'</Style>'
-  +'<Style ss:ID="ok"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#059669"/>'+B+'</Style>'
-  +'<Style ss:ID="wa"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#DC2626"/>'+B+'</Style>'
-  +'<Style ss:ID="tot"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>'+BT+'</Style>'
-  +'<Style ss:ID="totr"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><Alignment ss:Horizontal="Right"/>'+BT+'</Style>'
-  +'</Styles>';
-
-  function trow(t,si,sri,swi,reason){
-    var ca=ds(t.Created),ua=ds(t.Updated||t.Created);si=si||"n";sri=sri||"nr";swi=swi||"nw";
-    var cells=[S(t.Key,si),S((t.Summary||"").substring(0,100),swi),S(t.Status,si),S(t.Priority,si),
-      S(t["SVM In Charge"]||"",si),S(t["Current Worker"]||"",si),S(t.Project||"",si),
-      S(t.Created?fd(t.Created):"",si),S(t.Updated?fd(t.Updated):"",si),
-      NM(ca===999?0:ca,sri),NM(ua===999?0:ua,sri),S(checkSLA(t).anyBreach?"YES":"",si),
-      S(t["Linked Issues"]||"",si)];
-    if(reason!==undefined)cells.push(S(reason,swi));
-    else cells.push(S(nextStep(t.Status,"engg"),si));
-    return R(cells);}
-
-  function thRow(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
-    return R([S("Key",lid),S("Summary",lid),S("Status",hid),S("Priority",hid),
-      S("SVM In Charge",lid),S("Current Worker",lid),S("Project",lid),
-      S("Created",hid),S("Updated",hid),S("Age (Created)",hid),S("Age (Updated)",hid),
-      S("SLA Breach",hid),S("Linked Issues",lid),S(extra||"Next Action",lid)],20);}
-  var DCOL=C(95)+C(260)+C(110)+C(80)+C(110)+C(110)+C(130)+C(75)+C(75)+C(72)+C(72)+C(60)+C(100)+C(200);
-
-  /* ═ Sheet 1: SUMMARY ═ */
-  var s1="";
-  s1+=R(S("ENGINEERING FOLLOW-UP REPORT  |  Tickets Pending with Engineering - For Action","tt",2),28);
-  s1+=R([S("Generated: "+today+" at "+time,"mt"),S("","mt"),S("","mt")]);
-  s1+=R([S("From: SVM Help Desk Operations  |  To: Engineering Team","mt"),S("","mt"),S("","mt")]);
-  s1+=R([S("Source: "+fn,"mt"),S("","mt"),S("","mt")]);
-  if(w.length)s1+=R([S("Workers: "+w.join(", "),"mt"),S("","mt"),S("","mt")]);
-  s1+=R([S(""),S(""),S("")]);
-  s1+=R([S("OVERVIEW","sh"),S("Count","sh"),S("Notes","sh")],18);
-  s1+=R([S("Total with Engineering","b"),NL(N,"lk","#'All Engg Tickets'!A1"),S("Click count to see all tickets")]);
-  s1+=R([S("Fires (Critical / Show Stopper > 14d)",fires.length?"wa":"a"),NL(fires.length,fires.length?"lk":"lka","#'Fires'!A1"),S(fires.length?"URGENT - Click count to see fire tickets":"None currently","a")]);
-  s1+=R([S("Stale (no update 30+ days)","n"),NM(stale30.length,"nr"),S("No movement in 30+ days")]);
-  s1+=R([S("Danger Zone (90+ days)",danger.length?"wa":"a"),NL(danger.length,danger.length?"lk":"lka","#'Danger Zone'!A1"),S("Click count to see danger tickets","a")]);
-  s1+=R([S("Average Age (Created)","n"),S(avgCA+"d","nr"),S("")]);
-  s1+=R([S("Average Age (Updated)","a"),S(avgUA+"d","ar"),S("","a")]);
-  s1+=R([S("SLA Breaches","n"),NM(slaBr,"nr"),S("")]);
-  s1+=R([S(""),S(""),S("")]);
-  s1+=R([S("PRIORITY BREAKDOWN","sh"),S("Count","sh"),S("% of Total","sh")],18);
-  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){
-    var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(pr,si),NM(pri[pr]||0,sri),S(pc(pri[pr]||0,N),sri)]);});
-  s1+=R([S(""),S(""),S("")]);
-  s1+=R([S("AGING - CREATED DATE","sh"),S("Count","sh"),S("% of Total","sh")],18);
-  ["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"].forEach(function(l,i){
-    var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(l,si),NM(bkC[i],sri),S(pc(bkC[i],N),sri)]);});
-  s1+=R([S(""),S(""),S("")]);
-  s1+=R([S("AGING - LAST UPDATED","sh"),S("Count","sh"),S("% of Total","sh")],18);
-  ["< 7 days","7-30 days","31-60 days","61-90 days","90+ days"].forEach(function(l,i){
-    var si=i%2?"a":"n",sri=i%2?"ar":"nr";s1+=R([S(l,si),NM(bkU[i],sri),S(pc(bkU[i],N),sri)]);});
-  s1+=R([S(""),S(""),S("")]);
-  s1+=R([S("OBSERVATIONS","sh"),S("","sh"),S("","sh")],18);
-  if(fires.length)s1+=R([S("!! FIRES","wa"),S(""),S(fires.length+" critical/show-stopper tickets stalled 14+ days - engineering to prioritize immediately")]);
-  if(danger.length>3)s1+=R([S("!! DANGER","wa"),S(""),S(danger.length+" tickets 90+ days old - engineering to close or provide resolution timeline")]);
-  if(stale30.length>N*0.3)s1+=R([S("!! STALE","wa"),S(""),S(Math.round(stale30.length/N*100)+"% of tickets ("+stale30.length+"/"+N+") have no update in 30+ days - status update needed")]);
-  if(!fires.length&&danger.length<=3)s1+=R([S("OK","ok"),S(""),S("No critical escalation items today")]);
-  var sheet1=WS("Summary",C(250)+C(100)+C(400),s1);
-
-  /* ═ Sheet 2: INCHARGE SUMMARY ═ */
-  var s2="";
-  s2+=R([S("SVM In Charge","tl"),S("Total","th"),S("Show Stopper","th"),S("Critical","th"),S("High","th"),S("Medium","th"),S("Low","th"),
-    S("<7d","th"),S("7-30d","th"),S("31-60d","th"),S("61-90d","th"),S("90+d","th"),S("Avg Created","th"),S("Avg Updated","th")],20);
-  ick.forEach(function(k,i){var m=icm[k];var si=i%2?"a":"n",sri=i%2?"ar":"nr";
-    s2+=R([SL(k,si,"#'InCharge Details'!A1"),NL(m.n,i%2?"lka":"lk","#'InCharge Details'!A1"),NM(m.pri["Show Stopper"]||0,sri),NM(m.pri["Critical"]||0,sri),NM(m.pri["High"]||0,sri),NM(m.pri["Medium"]||0,sri),NM(m.pri["Low"]||0,sri),
-      NM(m.bkC[0],sri),NM(m.bkC[1],sri),NM(m.bkC[2],sri),NM(m.bkC[3],sri),NM(m.bkC[4],sri),
-      S((m.n?Math.round(m.tCA/m.n):0)+"d",sri),S((m.n?Math.round(m.tUA/m.n):0)+"d",sri)]);});
-  s2+=R([S("TOTAL","tot"),NL(N,"totr","#'All Engg Tickets'!A1"),NM(pri["Show Stopper"]||0,"totr"),NM(pri["Critical"]||0,"totr"),NM(pri["High"]||0,"totr"),NM(pri["Medium"]||0,"totr"),NM(pri["Low"]||0,"totr"),
-    NM(bkC[0],"totr"),NM(bkC[1],"totr"),NM(bkC[2],"totr"),NM(bkC[3],"totr"),NM(bkC[4],"totr"),S(avgCA+"d","totr"),S(avgUA+"d","totr")]);
-  var sheet2=WS("InCharge Summary",C(150)+C(50)+C(72)+C(52)+C(42)+C(52)+C(38)+C(40)+C(46)+C(50)+C(50)+C(42)+C(76)+C(76),s2);
-
-  /* ═ Sheet 3: INCHARGE DETAILS ═ */
-  var s3="";
-  ick.forEach(function(name){var m=icm[name];
-    s3+=R([S("")]);
-    s3+=R(S(name+"  |  "+m.n+" tickets  |  Avg created: "+(m.n?Math.round(m.tCA/m.n):0)+"d  |  Avg updated: "+(m.n?Math.round(m.tUA/m.n):0)+"d","vh",13),22);
-    s3+=thRow();
-    tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;})
-      .sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
-      .forEach(function(t,i){s3+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
-  });
-  var sheet3=WS("InCharge Details",DCOL,s3);
-
-  /* ═ Sheet 4: FIRES ═ */
-  var s4="";
-  if(fires.length){s4+=thRow("rth","rtl","Why Fire");
-    fires.forEach(function(t,i){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-      var why=t.Priority+" priority | Created "+ca+"d ago | Last updated "+ua+"d ago"+(checkSLA(t).anyBreach?" | SLA BREACHED":"")+(ua>30?" | NO MOVEMENT 30+ DAYS":"");
-      s4+=trow(t,"rf","rfr","rfw",why);});
-  }else{s4+=R(S("No fires currently - all critical/show-stopper engineering tickets are within 14 days","ok",13));}
-  var sheet4=WS("Fires",DCOL,s4);
-
-  /* ═ Sheet 5: DANGER ZONE ═ */
-  var s5="";
-  if(danger.length){s5+=thRow("oth","otl","Why Danger Zone");
-    danger.forEach(function(t,i){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-      var why="Created "+ca+"d ago | Last updated "+ua+"d ago | "+t.Priority+" priority"+(checkSLA(t).anyBreach?" | SLA BREACHED":"")+(ua>60?" | STAGNANT 60+ DAYS":"");
-      s5+=trow(t,"of","ofr","ofw",why);});
-  }else{s5+=R(S("No tickets in danger zone - none aged 90+ days","ok",13));}
-  var sheet5=WS("Danger Zone",DCOL,s5);
-
-  /* ═ Sheet 6: ALL ENGG TICKETS ═ */
-  var s6=thRow();
-  tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);})
-    .forEach(function(t,i){s6+=trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
-  var sheet6=WS("All Engg Tickets",DCOL,s6);
-
-  var xml='<?xml version="1.0" encoding="UTF-8"?>\n'
-    +'<?mso-application progid="Excel.Sheet"?>\n'
-    +'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
-    +' xmlns:o="urn:schemas-microsoft-com:office:office"'
-    +' xmlns:x="urn:schemas-microsoft-com:office:excel"'
-    +' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'
-    +STY+'\n'+sheet1+sheet2+sheet3+sheet4+sheet5+sheet6
-    +'</Workbook>';
-  var blob=new Blob([xml],{type:"application/vnd.ms-excel"});
-  var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;
-  a.download="Engg-Followup-Report-"+new Date().toISOString().slice(0,10)+".xml";a.click();URL.revokeObjectURL(url);
+  var icm=_icMap(tix),ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
+  /* Summary */
+  var s1="";s1+=_R(_S("ENGINEERING FOLLOW-UP  |  Pending with Engineering - For Action","tt",2),28);
+  s1+=_R([_S("Generated: "+today+" at "+time,"mt"),_S("","mt"),_S("From: SVM Help Desk  |  To: Engineering Team","mt")]);
+  s1+=_R([_S("Source: "+fn,"mt"),_S("","mt"),_S("","mt")]);s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("OVERVIEW","sh"),_S("Count","sh"),_S("Notes","sh")],18);
+  s1+=_R([_S("Total with Engineering","b"),_NL(N,"lk","#'All Engg Tickets'!A1"),_S("Click count to view all tickets")]);
+  s1+=_R([_S("Fires (Crit/SS > 14d)",fires.length?"wa":"a"),_NL(fires.length,"lk","#'Fires'!A1"),_S(fires.length?"URGENT - see Fires tab":"None","a")]);
+  s1+=_R([_S("Danger Zone (90+ days)",danger.length?"wa":"a"),_NL(danger.length,"lk","#'Danger Zone'!A1"),_S("See Danger Zone tab","a")]);
+  s1+=_R([_S("Avg Age Created / Updated","n"),_S(avgCA+"d / "+avgUA+"d","nr"),_S("")]);
+  s1+=_R([_S("SLA Breaches","a"),_NM(slaBr,"ar"),_S("","a")]);
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("PRIORITY","sh"),_S("Count","sh"),_S("%","sh")],18);
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1+=_R([_S(pr,si),_NM(pri[pr]||0,sr),_S(_pc(pri[pr]||0,N),sr)]);});
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("AGING (Created)","sh"),_S("Count","sh"),_S("%","sh")],18);
+  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1+=_R([_S(l,si),_NM(bkC[i],sr),_S(_pc(bkC[i],N),sr)]);});
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("AGING (Updated)","sh"),_S("Count","sh"),_S("%","sh")],18);
+  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1+=_R([_S(l,si),_NM(bkU[i],sr),_S(_pc(bkU[i],N),sr)]);});
+  var sheet1=_WS("Summary",_C(250)+_C(100)+_C(400),s1);
+  /* InCharge Summary */
+  var s2="";s2+=_R([_S("SVM In Charge","tl"),_S("Total","th"),_S("Show Stopper","th"),_S("Critical","th"),_S("High","th"),_S("Medium","th"),_S("Low","th"),_S("<7d","th"),_S("7-30d","th"),_S("31-60d","th"),_S("61-90d","th"),_S("90+d","th"),_S("Avg Created","th"),_S("Avg Updated","th")],20);
+  ick.forEach(function(k,i){var m=icm[k],si=i%2?"a":"n",sr=i%2?"ar":"nr";s2+=_R([_SL(k,si,"#'InCharge Details'!A1"),_NL(m.n,i%2?"lka":"lk","#'InCharge Details'!A1"),_NM(m.pri["Show Stopper"]||0,sr),_NM(m.pri["Critical"]||0,sr),_NM(m.pri["High"]||0,sr),_NM(m.pri["Medium"]||0,sr),_NM(m.pri["Low"]||0,sr),_NM(m.bkC[0],sr),_NM(m.bkC[1],sr),_NM(m.bkC[2],sr),_NM(m.bkC[3],sr),_NM(m.bkC[4],sr),_S((m.n?Math.round(m.tCA/m.n):0)+"d",sr),_S((m.n?Math.round(m.tUA/m.n):0)+"d",sr)]);});
+  s2+=_R([_S("TOTAL","tot"),_NM(N,"totr"),_NM(pri["Show Stopper"]||0,"totr"),_NM(pri["Critical"]||0,"totr"),_NM(pri["High"]||0,"totr"),_NM(pri["Medium"]||0,"totr"),_NM(pri["Low"]||0,"totr"),_NM(bkC[0],"totr"),_NM(bkC[1],"totr"),_NM(bkC[2],"totr"),_NM(bkC[3],"totr"),_NM(bkC[4],"totr"),_S(avgCA+"d","totr"),_S(avgUA+"d","totr")]);
+  var sheet2=_WS("InCharge Summary",_C(150)+_C(50)+_C(72)+_C(52)+_C(42)+_C(52)+_C(38)+_C(40)+_C(46)+_C(50)+_C(50)+_C(42)+_C(76)+_C(76),s2);
+  /* InCharge Details */
+  var s3="";ick.forEach(function(name){var m=icm[name];s3+=_R([_S("")]);s3+=_R(_S(name+"  |  "+m.n+" tickets  |  Avg created: "+(m.n?Math.round(m.tCA/m.n):0)+"d  |  Avg updated: "+(m.n?Math.round(m.tUA/m.n):0)+"d","vh",13),22);s3+=_thRow();
+    tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){s3+=_trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});});
+  var sheet3=_WS("InCharge Details",_DCOL,s3);
+  /* Fires */
+  var sf="";if(fires.length){sf+=_thRow("rth","rtl","Why Fire");fires.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sf+=_trow(t,"rf","rfr","rfw",t.Priority+" | Created "+ca+"d ago | Updated "+ua+"d ago"+(ua>30?" | NO MOVEMENT 30+d":""));});}else sf+=_R(_S("No fires currently","ok",13));
+  var sheet4=_WS("Fires",_DCOL,sf);
+  /* Danger */
+  var sd="";if(danger.length){sd+=_thRow("oth","otl","Why Danger Zone");danger.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sd+=_trow(t,"of","ofr","ofw","Created "+ca+"d ago | Updated "+ua+"d ago | "+t.Priority+(ua>60?" | STAGNANT 60+d":""));});}else sd+=_R(_S("No danger zone tickets","ok",13));
+  var sheet5=_WS("Danger Zone",_DCOL,sd);
+  /* All */
+  var sa=_thRow();tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){sa+=_trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
+  var sheet6=_WS("All Engg Tickets",_DCOL,sa);
+  _xlDown(_xmlWrap(sheet1+sheet2+sheet3+sheet4+sheet5+sheet6),"Engg-Followup-"+new Date().toISOString().slice(0,10)+".xml");
 }
 
-/* === Engineering Mail Draft (FROM support TO engineering) === */
-function buildEnggMailDraft(p){
-  var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[];
+/* ═══ 2. OVERALL DAILY REPORT ═══ */
+function generateDailyReport(p){
+  var flt=p.flt,st=p.st,slaData=p.slaData,prioDist=p.prioDist,fn=p.fn,w=p.w||[],pf=p.pf||[];
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-  var N=tix.length;
+  var allAct=[].concat(st.hd,st.cl,st.eng);
+  var fires=allAct.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
+  var staleC=st.cl.filter(function(t){return ds(t.Updated||t.Created)>14;});
+  var icm=_icMap(flt),ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
+  /* Summary */
+  var s1="";s1+=_R(_S("HD FOLLOW-UP  |  DAILY STATUS REPORT","ttb",2),28);
+  s1+=_R([_S("Generated: "+today,"mt"),_S("","mt"),_S("Source: "+fn,"mt")]);
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("OVERVIEW","sh"),_S("Count","sh"),_S("Notes","sh")],18);
+  s1+=_R([_S("Total Open","b"),_NL(st.n,"lk","#'All Open'!A1"),_S("All non-closed tickets")]);
+  s1+=_R([_S("HD Action Required","a"),_NL(st.hd.length,"lka","#'HD Action'!A1"),_S("Needs our action - see HD Action tab","a")]);
+  s1+=_R([_S("Client Follow-up","n"),_NL(st.cl.length,"lk","#'Client Followup'!A1"),_S("Awaiting client - see Client Followup tab")]);
+  s1+=_R([_S("Engineering Follow-up","a"),_NL(st.eng.length,"lka","#'Engineering'!A1"),_S("With dev team - see Engineering tab","a")]);
+  s1+=_R([_S("On-Hold","n"),_NM(st.hold.length,"nr"),_S("Parked")]);
+  s1+=_R([_S("Invoice Pending","a"),_NM(st.inv.length,"ar"),_S("","a")]);
+  s1+=_R([_S("Danger Zone (90+d)","n"),_NL(st.dng,"lk","#'Danger Zone'!A1"),_S("See Danger Zone tab")]);
+  s1+=_R([_S("Average Age","a"),_S(st.avg+"d","ar"),_S("","a")]);
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("ATTENTION","sh"),_S("Count","sh"),_S("","sh")],18);
+  s1+=_R([_S("Fires (Crit/SS > 14d)",fires.length?"wa":"n"),_NL(fires.length,"lk","#'Fires'!A1"),_S(fires.length?"Immediate escalation needed":"None")]);
+  s1+=_R([_S("Stale Client Follow-ups","a"),_NM(staleC.length,"ar"),_S("Client tickets > 14 days","a")]);
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("PRIORITY","sh"),_S("Count","sh"),_S("%","sh")],18);
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1+=_R([_S(pr,si),_NM(prioDist[pr]||0,sr),_S(_pc(prioDist[pr]||0,st.n),sr)]);});
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("SLA COMPLIANCE","sh"),_S("Value","sh"),_S("","sh")],18);
+  s1+=_R([_S("First Response","n"),_S(slaData.frRate+"%","nr"),_S("")]);
+  s1+=_R([_S("Resolution","a"),_S(slaData.resRate+"%","ar"),_S("","a")]);
+  s1+=_R([_S("Total Breaches","n"),_NM(slaData.all.length,"nr"),_S("")]);
+  var sheet1=_WS("Summary",_C(250)+_C(100)+_C(400),s1);
+  /* InCharge Summary */
+  var s2="";s2+=_R([_S("SVM In Charge","tl"),_S("Total","th"),_S("HD","th"),_S("Client","th"),_S("Engg","th"),_S("<7d","th"),_S("7-30d","th"),_S("31-60d","th"),_S("61-90d","th"),_S("90+d","th"),_S("Avg Age","th")],20);
+  ick.forEach(function(k,i){var m=icm[k],si=i%2?"a":"n",sr=i%2?"ar":"nr";
+    var hd=0,cl=0,eng=0;flt.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===k;}).forEach(function(t){var c=classify(t.Status);if(t.Status==="On-Hold"||t.Status==="Invoice Yet to Raise")return;if(c==="hd")hd++;else if(c==="client")cl++;else eng++;});
+    s2+=_R([_S(k,si),_NM(m.n,sr),_NM(hd,sr),_NM(cl,sr),_NM(eng,sr),_NM(m.bkC[0],sr),_NM(m.bkC[1],sr),_NM(m.bkC[2],sr),_NM(m.bkC[3],sr),_NM(m.bkC[4],sr),_S((m.n?Math.round(m.tCA/m.n):0)+"d",sr)]);});
+  s2+=_R([_S("TOTAL","tot"),_NM(st.n,"totr"),_NM(st.hd.length,"totr"),_NM(st.cl.length,"totr"),_NM(st.eng.length,"totr"),_NM(st.bk[0],"totr"),_NM(st.bk[1],"totr"),_NM(st.bk[2],"totr"),_NM(st.bk[3],"totr"),_NM(st.bk[4],"totr"),_S(st.avg+"d","totr")]);
+  var sheet2=_WS("InCharge Summary",_C(150)+_C(50)+_C(42)+_C(50)+_C(42)+_C(40)+_C(46)+_C(50)+_C(50)+_C(42)+_C(60),s2);
+  /* Detail sheets */
+  function ds2(nm,arr){var s=_thRow();arr.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){s+=_trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});return _WS(nm,_DCOL,s);}
+  var sh3=ds2("HD Action",st.hd.slice());var sh4=ds2("Client Followup",st.cl.slice());var sh5=ds2("Engineering",st.eng.slice());
+  /* Fires */
+  var sf="";if(fires.length){sf+=_thRow("rth","rtl","Why Fire");fires.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sf+=_trow(t,"rf","rfr","rfw",t.Priority+" | "+ca+"d old | Updated "+ua+"d ago");});}else sf+=_R(_S("No fires","ok",13));
+  var sh6=_WS("Fires",_DCOL,sf);
+  /* Danger */
+  var sd="";var dg=flt.filter(function(t){return ds(t.Updated||t.Created)>=90;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  if(dg.length){sd+=_thRow("oth","otl","Why Danger");dg.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sd+=_trow(t,"of","ofr","ofw",ca+"d old | Updated "+ua+"d ago | "+t.Priority);});}else sd+=_R(_S("None","ok",13));
+  var sh7=_WS("Danger Zone",_DCOL,sd);
+  /* All */
+  var sh8=ds2("All Open",flt.slice());
+  _xlDown(_xmlWrap(sheet1+sheet2+sh3+sh4+sh5+sh6+sh7+sh8),"HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xml");
+}
+
+/* ═══ 3. CLIENT-SPECIFIC REPORT ═══ */
+function generateClientReport(p){
+  var project=p.project,tix=p.tickets,fn=p.fn;
+  var N=tix.length,today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};var bkU=[0,0,0,0,0],totUA=0;
+  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ua=ds(t.Updated||t.Created);bkU[abk(ua)]++;totUA+=(ua===999?0:ua);});
+  var avgUA=N?Math.round(totUA/N):0;
+  var urgent=tix.filter(function(t){return t.Priority==="Show Stopper"||t.Priority==="Critical"||t.Priority==="High";}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  /* Summary */
+  var s1="";s1+=_R(_S("PENDING TICKETS  |  "+project+" - Awaiting Your Response","tto",2),28);
+  s1+=_R([_S("Generated: "+today,"mt"),_S("","mt"),_S("From: SVM Help Desk Operations","mt")]);
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("STATUS","sh"),_S("Count","sh"),_S("","sh")],18);
+  s1+=_R([_S("Total Pending with You","b"),_NL(N,"lk","#'All Tickets'!A1"),_S("Click to see all")]);
+  s1+=_R([_S("Urgent (High+)","a"),_NL(urgent.length,"lka","#'Urgent'!A1"),_S("Needs immediate attention","a")]);
+  s1+=_R([_S("Avg Age (Updated)","n"),_S(avgUA+"d","nr"),_S("")]);
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("PRIORITY","sh"),_S("Count","sh"),_S("%","sh")],18);
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1+=_R([_S(pr,si),_NM(pri[pr]||0,sr),_S(_pc(pri[pr]||0,N),sr)]);});
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("AGING (Updated)","sh"),_S("Count","sh"),_S("%","sh")],18);
+  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1+=_R([_S(l,si),_NM(bkU[i],sr),_S(_pc(bkU[i],N),sr)]);});
+  s1+=_R([_S(""),_S(""),_S("")]);
+  s1+=_R([_S("We request your earliest response on these tickets. Please prioritize urgent items.","b"),_S(""),_S("")]);
+  var sheet1=_WS("Summary",_C(250)+_C(80)+_C(300),s1);
+  /* Urgent */
+  var su=_thRow("rth","rtl","Action Needed");urgent.forEach(function(t,i){su+=_trow(t,i%2?"rf":"n",i%2?"rfr":"nr",i%2?"rfw":"nw","Please respond - "+t.Priority+" priority, "+ds(t.Updated||t.Created)+"d since last update");});
+  if(!urgent.length)su+=_R(_S("No urgent tickets - thank you!","ok",13));
+  var sheet2=_WS("Urgent",_DCOL,su);
+  /* All */
+  var sa=_thRow();tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){sa+=_trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
+  var sheet3=_WS("All Tickets",_DCOL,sa);
+  _xlDown(_xmlWrap(sheet1+sheet2+sheet3),project.replace(/[^a-zA-Z0-9]/g,"-").substring(0,30)+"-Pending-"+new Date().toISOString().slice(0,10)+".xml");
+}
+
+/* ═══ MAIL DRAFTS ═══ */
+function buildEnggMailDraft(p){
+  var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[];var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});var N=tix.length;
   var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
-  var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
-  var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;});
-  var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};
-  var bkU=[0,0,0,0,0];
-  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;bkU[abk(ds(t.Updated||t.Created))]++;});
+  var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;});
+  var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;});
+  var icm={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";if(!icm[sv])icm[sv]=0;icm[sv]++;});
+  var ick=Object.keys(icm).sort(function(a,b){return icm[b]-icm[a];});
+  var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;};var rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
+  var icT=ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],5);}).join("\n");
+  var fList=fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n");
+  var subject="Engineering Follow-up | "+today+" | "+N+" Tickets Pending";
+  var body="Dear Engineering Team,\n\nThis is the daily follow-up on tickets pending with your team.\nAs of "+today+", there are "+N+" tickets requiring your attention.\n\n"
+    +"  Total Tickets        :  "+N+"\n  Fires (Crit/SS >14d) :  "+fires.length+(fires.length?"  << URGENT":"")+"\n  Stale (30+ days)     :  "+stale30.length+"\n  Danger Zone (90+d)   :  "+danger.length+"\n\n"
+    +"  Priority: SS:"+pri["Show Stopper"]+" | Crit:"+pri["Critical"]+" | High:"+pri["High"]+" | Med:"+pri["Medium"]+" | Low:"+pri["Low"]+"\n\n"
+    +"  TEAM-WISE\n  "+pad("Name",22)+rpad("Total",5)+"\n  "+Array(30).join("-")+"\n"+icT+"\n\n"
+    +(fires.length?"  FIRES - URGENT\n"+fList+"\n\n":"")
+    +"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status update on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets (30+ days)\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":fires.length||stale30.length?"2":"1")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nDetailed Excel attached.\n\nRegards,\nSVM Help Desk Operations\n";
+  return{subject:subject,body:body};
+}
 
-  var icm={};tix.forEach(function(t){
-    var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";
-    if(!icm[sv])icm[sv]={n:0,bk:[0,0,0,0,0]};var m=icm[sv];m.n++;m.bk[abk(ds(t.Updated||t.Created))]++;
-  });
-  var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
+function buildDailyMailDraft(p){
+  var st=p.st,slaData=p.slaData,prioDist=p.prioDist,flt=p.flt,fn=p.fn;
+  var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+  var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
   var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;};
-  var rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
-  var icTable=ick.map(function(k){var m=icm[k];return"  "+pad(k,22)+rpad(m.n,5)+"   "+rpad(m.bk[0],4)+"  "+rpad(m.bk[1],5)+"  "+rpad(m.bk[2],6)+"  "+rpad(m.bk[3],6)+"  "+rpad(m.bk[4],5);}).join("\n");
-  var firesList=fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n");
+  var subject="HD Daily Report | "+today+" | "+st.n+" Open Tickets";
+  var body="Good morning team,\n\nDaily follow-up summary as of "+today+".\n\n"
+    +"  Total Open           :  "+st.n+"\n  HD Action            :  "+st.hd.length+"\n  Client Follow-up     :  "+st.cl.length+"\n  Engineering          :  "+st.eng.length+"\n  On-Hold / Invoice    :  "+st.hold.length+" / "+st.inv.length+"\n  Danger Zone (90+d)   :  "+st.dng+"\n\n"
+    +"  Fires: "+fires.length+"  |  SLA FR: "+slaData.frRate+"%  |  SLA Res: "+slaData.resRate+"%\n\n"
+    +"  Priority: SS:"+(prioDist["Show Stopper"]||0)+" | Crit:"+(prioDist["Critical"]||0)+" | High:"+(prioDist["High"]||0)+" | Med:"+(prioDist["Medium"]||0)+" | Low:"+(prioDist["Low"]||0)+"\n\n"
+    +"Detailed Excel attached.\n\nRegards,\nSVM Help Desk\n";
+  return{subject:subject,body:body};
+}
 
-  var subject="Engineering Follow-up | "+today+" | "+N+" Tickets Pending with Engineering";
-
-  var body="Dear Engineering Team,\n\n"
-    +"This is the daily follow-up on tickets currently pending with your team.\n"
-    +"As of "+today+", there are "+N+" tickets requiring your attention.\n"
-    +"\n"
-    +"--------------------------------------------\n"
-    +"  PENDING WITH ENGINEERING - "+today+"\n"
-    +"--------------------------------------------\n\n"
-    +"  Total Tickets        :  "+N+"\n"
-    +"  Fires (Crit/SS >14d) :  "+fires.length+(fires.length?"  << URGENT - please prioritize":"  (none)")+"\n"
-    +"  Stale (30+ days)     :  "+stale30.length+"\n"
-    +"  Danger Zone (90+d)   :  "+danger.length+"\n"
-    +"\n"
-    +"  PRIORITY BREAKDOWN\n"
-    +"  Show Stopper: "+(pri["Show Stopper"]||0)+"  |  Critical: "+(pri["Critical"]||0)
-    +"  |  High: "+(pri["High"]||0)+"  |  Medium: "+(pri["Medium"]||0)
-    +"  |  Low: "+(pri["Low"]||0)+"\n"
-    +"\n"
-    +"  AGING (by last updated)\n"
-    +"  <7d: "+bkU[0]+"  |  7-30d: "+bkU[1]+"  |  31-60d: "+bkU[2]+"  |  61-90d: "+bkU[3]+"  |  90+d: "+bkU[4]+"\n"
-    +"\n"
-    +"  TEAM-WISE DISTRIBUTION\n"
-    +"  "+pad("Name",22)+rpad("Total",5)+"   "+rpad("<7d",4)+"  "+rpad("7-30d",5)+"  "+rpad("31-60d",6)+"  "+rpad("61-90d",6)+"  "+rpad("90+d",5)+"\n"
-    +"  "+Array(62).join("-")+"\n"
-    +icTable+"\n"
-    +"\n"
-    +(fires.length?("  FIRES - URGENT ACTION REQUIRED\n"+firesList+"\n"+(fires.length>10?"  ... and "+(fires.length-10)+" more\n":"")+"\n"):"")
-    +"REQUESTED ACTIONS:\n"
-    +(fires.length?"  1. Please provide status updates on all "+fires.length+" fire ticket"+(fires.length>1?"s":"")+" by EOD today\n":"")
-    +(stale30.length?"  "+(fires.length?"2":"1")+". Update progress on "+stale30.length+" stale ticket"+(stale30.length>1?"s":"")+" (no movement in 30+ days)\n":"")
-    +(danger.length?"  "+(fires.length?(stale30.length?"3":"2"):(stale30.length?"2":"1"))+". Review "+danger.length+" danger-zone ticket"+(danger.length>1?"s":"")+" (90+ days) - please close or provide resolution timeline\n":"")
-    +"\n"
-    +"Detailed ticket list attached (Excel).\n\n"
-    +"Regards,\n"
-    +"SVM Help Desk Operations\n";
-
+function buildClientMailDraft(p){
+  var project=p.project,tix=p.tickets;
+  var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});var N=tix.length;
+  var urgent=tix.filter(function(t){return t.Priority==="Show Stopper"||t.Priority==="Critical"||t.Priority==="High";});
+  var subject="Action Required: "+N+" Tickets Pending Your Response | "+project+" | "+today;
+  var body="Dear "+project+" Team,\n\nWe have "+N+" support tickets currently awaiting your response or action.\n"+(urgent.length?"Of these, "+urgent.length+" are HIGH priority or above and require urgent attention.\n":"")+"\nPlease find the details below and in the attached Excel.\n\n"
+    +"  Total Pending        :  "+N+"\n  Urgent (High+)       :  "+urgent.length+"\n\n"
+    +(urgent.length?"  URGENT TICKETS\n"+urgent.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55);}).join("\n")+"\n\n":"")
+    +"We request your earliest response on these tickets to help us move them forward.\nPlease update the ticket directly in Jira or reply to this email.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
 /* ═══ Mail Draft Modal Component ═══ */
@@ -672,7 +672,7 @@ function TicketModal({data,onClose}){
 
 
 /* ─── Category Detail Modal (3 tabs: All Tickets, Ageing, SVM In Charge) ─── */
-function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail}){
+function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail,onClientReport,onClientMail}){
   if(!data)return null;
   var tix=data.tickets||[];
   var catTitle=data.title||"Tickets";
@@ -684,6 +684,18 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   var badgeColor=data.badgeColor||"#7C3AED";
   const [ageFilter, setAgeFilter] = useState(null);
   const [svmFilter, setSvmFilter] = useState(null);
+  const [clientProj, setClientProj] = useState("");
+
+  /* Client project list for client modal */
+  var clientProjects = useMemo(function(){
+    if(!data.showClientReport) return [];
+    var pm={};tix.forEach(function(t){var p=t.Project||"(No Project)";pm[p]=(pm[p]||0)+1;});
+    return Object.entries(pm).sort(function(a,b){return b[1]-a[1];});
+  },[tix,data.showClientReport]);
+  var clientTix = useMemo(function(){
+    if(!clientProj) return [];
+    return tix.filter(function(t){return (t.Project||"(No Project)")===clientProj;});
+  },[tix,clientProj]);
 
   /* ── Ageing buckets based on Created date ── */
   var ageLabels=["< 7 days","7–30 days","31–60 days","61–90 days","90+ days"];
@@ -766,8 +778,11 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             <div style={{fontSize:18,fontWeight:800,color:"var(--t1)"}}>{catTitle}</div>
             <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{catSubtitle}</div>
           </div>
-          {data.showReport&&onReport&&<button onClick={function(){onReport();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--violet)",background:"var(--violet-bg)",fontSize:12,fontWeight:700,color:"var(--violet)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Download engineering follow-up report (Excel)">📊 Engg Report</button>}
-          {data.showReport&&onMail&&<button onClick={function(){onMail();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Generate engineering mail draft">✉️ Mail Draft</button>}
+          {data.showReport&&onReport&&<button onClick={function(){onReport();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--violet)",background:"var(--violet-bg)",fontSize:12,fontWeight:700,color:"var(--violet)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Engg Report</button>}
+          {data.showReport&&onMail&&<button onClick={function(){onMail();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Engg Mail</button>}
+          {data.showClientReport&&<select value={clientProj} onChange={function(e){setClientProj(e.target.value);}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",minWidth:180,fontFamily:"inherit"}}><option value="">-- Select Client --</option>{clientProjects.map(function(cp){return <option key={cp[0]} value={cp[0]}>{cp[0]} ({cp[1]})</option>;})}</select>}
+          {data.showClientReport&&clientProj&&onClientReport&&<button onClick={function(){onClientReport(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Client Report</button>}
+          {data.showClientReport&&clientProj&&onClientMail&&<button onClick={function(){onClientMail(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Client Mail</button>}
           <button onClick={function(){exportFullCSV(tix,(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ CSV</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
@@ -1239,7 +1254,7 @@ function App(){
   function openClientModal(){
     var tix=flt.filter(function(t){return classify(t.Status)==="client"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
     tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-    setCatModal({tickets:tix,title:"Client Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" awaiting client response",icon:"💬",color:"var(--amber)",bg:"var(--amber-bg)",border:"var(--amber-border)",badgeColor:"#D97706"});setCatTab("all");
+    setCatModal({tickets:tix,title:"Client Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" awaiting client response",icon:"💬",color:"var(--amber)",bg:"var(--amber-bg)",border:"var(--amber-border)",badgeColor:"#D97706",showClientReport:true});setCatTab("all");
   }
   function closeCatModal(){setCatModal(null);}
   function openAgeModal(i){
@@ -1263,10 +1278,14 @@ function App(){
     setModal({title:"Danger Zone — 90+ days",icon:"🔴",color:"#E11D48",tickets:tix});
   }
 
-  /* === Engineering Report & Mail actions === */
+  /* === Report & Mail actions === */
   function getEnggTickets(){return flt.filter(function(t){return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});}
-  function openReport(){generateEnggReport({tickets:getEnggTickets(),fn:fn,w:w,pf:pf});}
-  function openMailDraft(){setMailModal(buildEnggMailDraft({tickets:getEnggTickets(),fn:fn,w:w,pf:pf}));}
+  function openEnggReport(){generateEnggReport({tickets:getEnggTickets(),fn:fn,w:w,pf:pf});}
+  function openEnggMail(){setMailModal(buildEnggMailDraft({tickets:getEnggTickets(),fn:fn,w:w,pf:pf}));}
+  function openDailyReport(){generateDailyReport({flt:flt,st:st,slaData:slaData,prioDist:prioDist,fn:fn,w:w,pf:pf});}
+  function openDailyMail(){setMailModal(buildDailyMailDraft({st:st,slaData:slaData,prioDist:prioDist,flt:flt,fn:fn}));}
+  function handleClientReport(proj,tickets){generateClientReport({project:proj,tickets:tickets,fn:fn});}
+  function handleClientMail(proj,tickets){setMailModal(buildClientMailDraft({project:proj,tickets:tickets}));}
 
   function filterCat(c){setCf(function(prev){return prev===c?null:c;});setAf(null);setSf(null);setSearch("");}
   function filterAge(i){setAf(function(prev){return prev===i?null:i;});setCf(null);setSf(null);setSearch("");}
@@ -1660,15 +1679,15 @@ function App(){
             onClick={function(){openDangerModal();}}/>
         </div>
 
-        {/* ── Engineering Follow-up Report Actions ── */}
-        <div className="fu fu2 card" style={{padding:"11px 18px",marginBottom:9,display:"flex",alignItems:"center",gap:14,borderColor:"var(--violet-border)",background:"linear-gradient(135deg,var(--violet-bg),#F3EFFF)"}}>
-          <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid var(--violet-border)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>🔧</div>
+        {/* ── Daily Report Actions ── */}
+        <div className="fu fu2 card" style={{padding:"11px 18px",marginBottom:9,display:"flex",alignItems:"center",gap:14,borderColor:"var(--blue-light)",background:"linear-gradient(135deg,var(--blue-bg),#EFF6FF)"}}>
+          <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid var(--blue-light)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>📊</div>
           <div style={{flex:1}}>
-            <div style={{fontWeight:800,fontSize:14,color:"var(--violet)"}}>Engineering Follow-up Report</div>
-            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{st.eng.length} tickets with engineering &mdash; download detailed Excel (in-charge split, aging by created &amp; updated, fires) or generate a mail draft.</div>
+            <div style={{fontWeight:800,fontSize:14,color:"var(--blue)"}}>Daily Report</div>
+            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{st.n} open tickets &mdash; download overall daily report (all categories, in-charge split, fires, danger zone) or generate a mail summary.</div>
           </div>
-          <button onClick={openReport} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>📥 Engg Report (Excel)</button>
-          <button onClick={openMailDraft} style={{background:"var(--blue)",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>✉️ Mail Draft</button>
+          <button onClick={openDailyReport} style={{background:"var(--blue)",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>📥 Daily Report (Excel)</button>
+          <button onClick={openDailyMail} style={{background:"#334155",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>✉️ Mail Draft</button>
         </div>
 
         {/* My Action Queue — the daily driver */}
@@ -1900,7 +1919,7 @@ function App(){
       {/* ─── Ticket Modal ─── */}
       <TicketModal data={modal} onClose={closeModal}/>
       {/* ─── Category Detail Modal (Engg / Client Followup) ─── */}
-      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openReport} onMail={openMailDraft}/>
+      <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openEnggReport} onMail={openEnggMail} onClientReport={handleClientReport} onClientMail={handleClientMail}/>
       <MailDraftModal data={mailModal} onClose={function(){setMailModal(null);}}/>
     </div>
   );
