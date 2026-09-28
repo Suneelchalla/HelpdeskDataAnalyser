@@ -425,7 +425,7 @@ function generateEnggReport(p){
   /* All */
   var sa=_thRow();tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){sa+=_trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
   var sheet6=_WS("All Engg Tickets",_DCOL,sa);
-  _xlDown(_xmlWrap(sheet1+sheet2+sheet3+sheet4+sheet5+sheet6),"Engg-Followup-"+new Date().toISOString().slice(0,10)+".xml");
+  _xlDown(_xmlWrap(sheet1+sheet2+sheet3+sheet4+sheet5+sheet6),"Engg-Followup-"+new Date().toISOString().slice(0,10)+".xls");
 }
 
 /* ═══ 2. OVERALL DAILY REPORT ═══ */
@@ -481,7 +481,7 @@ function generateDailyReport(p){
   var sh7=_WS("Danger Zone",_DCOL,sd);
   /* All */
   var sh8=ds2("All Open",flt.slice());
-  _xlDown(_xmlWrap(sheet1+sheet2+sh3+sh4+sh5+sh6+sh7+sh8),"HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xml");
+  _xlDown(_xmlWrap(sheet1+sheet2+sh3+sh4+sh5+sh6+sh7+sh8),"HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xls");
 }
 
 /* ═══ 3. CLIENT-SPECIFIC REPORT ═══ */
@@ -516,7 +516,7 @@ function generateClientReport(p){
   /* All */
   var sa=_thRow();tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){sa+=_trow(t,i%2?"a":"n",i%2?"ar":"nr",i%2?"aw":"nw");});
   var sheet3=_WS("All Tickets",_DCOL,sa);
-  _xlDown(_xmlWrap(sheet1+sheet2+sheet3),project.replace(/[^a-zA-Z0-9]/g,"-").substring(0,30)+"-Pending-"+new Date().toISOString().slice(0,10)+".xml");
+  _xlDown(_xmlWrap(sheet1+sheet2+sheet3),project.replace(/[^a-zA-Z0-9]/g,"-").substring(0,30)+"-Pending-"+new Date().toISOString().slice(0,10)+".xls");
 }
 
 /* ═══ MAIL DRAFTS ═══ */
