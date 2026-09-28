@@ -114,7 +114,7 @@ input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
 
 /* ── MULTI-SELECT DROPDOWN (React) ── */
 .msel-r{position:relative;display:inline-block}
-.msel-r-btn{display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--t1);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;min-width:180px;max-width:320px;white-space:nowrap;font-family:inherit;text-align:left}
+.msel-r-btn{display:flex;align-items:center;gap:6px;background:var(--bg);color:var(--t1);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;min-width:0;max-width:320px;white-space:nowrap;font-family:inherit;text-align:left;width:100%}
 .msel-r-btn:hover{border-color:var(--border2)}
 .msel-r-btn.open{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 .msel-r-btn .txt{flex:1;overflow:hidden;text-overflow:ellipsis}
@@ -2367,34 +2367,34 @@ function App(){
   return(
     <div style={{minHeight:"100vh",background:"var(--bg)"}}>
       {/* ─── Header ─── */}
-      <header style={{background:"#FFFFFF",borderBottom:"1px solid var(--border)",padding:"0 24px",height:50,display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
-        <Logo size={30}/>
-        <span style={{fontWeight:800,fontSize:15,color:"var(--t1)",letterSpacing:"-.2px"}}>HD Tracker</span>
-        <div style={{width:1,height:28,background:"var(--border)",margin:"0 6px"}}/>
+      <header style={{background:"#FFFFFF",borderBottom:"1px solid var(--border)",padding:"0 16px",height:50,display:"flex",alignItems:"center",gap:8,position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 3px rgba(0,0,0,.04)"}}>
+        <Logo size={28}/>
+        <span style={{fontWeight:800,fontSize:14,color:"var(--t1)",letterSpacing:"-.2px",whiteSpace:"nowrap"}}>HD Tracker</span>
+        <div style={{width:1,height:24,background:"var(--border)",margin:"0 2px",flexShrink:0}}/>
 
-        <MultiSelect allLabel={"All Workers · "+op.length+" open"} options={wks.map(function(x){return [x[0],x[1]];})} selected={w} onChange={function(v){setW(v);clr();}} minWidth={240}/>
-        <MultiSelect allLabel="All Projects" options={pjs.map(function(p){return [p];})} selected={pf} onChange={function(v){setPf(v);clr();}} minWidth={170}/>
-        <MultiSelect allLabel="All In-Charge" options={svms.map(function(x){return [x[0],x[1]];})} selected={svmF} onChange={function(v){setSvmF(v);clr();}} minWidth={160}/>
-        <MultiSelect allLabel="All Request Types" options={itypes.map(function(x){return [x[0],x[1]];})} selected={itF} onChange={function(v){setItF(v);clr();}} minWidth={170}/>
-        <div style={{flex:1}}/>
+        <MultiSelect allLabel={"All Workers · "+op.length+" open"} options={wks.map(function(x){return [x[0],x[1]];})} selected={w} onChange={function(v){setW(v);clr();}} minWidth={155}/>
+        <MultiSelect allLabel="All Projects" options={pjs.map(function(p){return [p];})} selected={pf} onChange={function(v){setPf(v);clr();}} minWidth={120}/>
+        <MultiSelect allLabel="All In-Charge" options={svms.map(function(x){return [x[0],x[1]];})} selected={svmF} onChange={function(v){setSvmF(v);clr();}} minWidth={120}/>
+        <MultiSelect allLabel="All Types" options={itypes.map(function(x){return [x[0],x[1]];})} selected={itF} onChange={function(v){setItF(v);clr();}} minWidth={110}/>
+        <div style={{flex:1,minWidth:4}}/>
 
-        {/* Global search trigger */}
+        {/* Global search trigger — compact */}
         <button onClick={function(){setGlobalSearchOpen(true);}} title="Search tickets (Ctrl+K)"
-          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 16px",borderRadius:10,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",minWidth:180,transition:"all .18s"}}
+          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 12px",borderRadius:9,fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6,whiteSpace:"nowrap",flexShrink:0,transition:"all .18s"}}
           onMouseOver={function(e){e.currentTarget.style.borderColor="var(--blue)";e.currentTarget.style.color="var(--blue)";}}
           onMouseOut={function(e){e.currentTarget.style.borderColor="var(--border)";e.currentTarget.style.color="var(--t2)";}}>
-          <span style={{fontSize:13}}>🔍</span> Search tickets…
-          <kbd style={{marginLeft:"auto",background:"var(--card)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,color:"var(--t4)",fontFamily:"var(--mono)"}}>⌘K</kbd>
+          <span style={{fontSize:13}}>🔍</span> Search…
+          <kbd style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:4,padding:"1px 5px",fontSize:9,fontWeight:700,color:"var(--t4)",fontFamily:"var(--mono)"}}>⌘K</kbd>
         </button>
 
-        <nav style={{display:"flex",background:"var(--bg)",borderRadius:10,padding:3,gap:2,border:"1px solid var(--border)"}}>
-          {[["followup","📌 Follow-ups",op.length],["gaps","⚠️ Data Gaps",gd.t.length],["data","✏️ Edit Data",raw?raw.length:0]].map(function(x){var id=x[0],lb=x[1],cnt=x[2];return(
-            <button key={id} onClick={function(){setTab(id);clr();}} style={{background:tab===id?"var(--blue)":"transparent",color:tab===id?"#fff":"var(--t3)",border:"none",padding:"7px 16px",borderRadius:8,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        <nav style={{display:"flex",background:"var(--bg)",borderRadius:10,padding:3,gap:2,border:"1px solid var(--border)",flexShrink:0}}>
+          {[["followup","📌 Follow-ups",op.length],["gaps","⚠️ Gaps",gd.t.length],["data","✏️ Edit",raw?raw.length:0]].map(function(x){var id=x[0],lb=x[1],cnt=x[2];return(
+            <button key={id} onClick={function(){setTab(id);clr();}} style={{background:tab===id?"var(--blue)":"transparent",color:tab===id?"#fff":"var(--t3)",border:"none",padding:"7px 12px",borderRadius:8,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
               {lb} <span style={{background:tab===id?"rgba(255,255,255,.2)":"rgba(0,0,0,.06)",padding:"1px 6px",borderRadius:10,fontSize:10,fontWeight:800}}>{cnt}</span>
             </button>
           );})}
         </nav>
-        <button onClick={function(){window.location.href="index.html";}} style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 14px",borderRadius:8,fontSize:11,fontWeight:600}}>← Launcher</button>
+        <button onClick={function(){window.location.href="index.html";}} title="Back to launcher" style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 10px",borderRadius:8,fontSize:11,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>← Home</button>
         <input type="file" accept=".xlsx,.xls" ref={fRef} onChange={handleFile}/>
       </header>
 
