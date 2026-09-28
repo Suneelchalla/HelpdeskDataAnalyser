@@ -887,7 +887,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
   /* Reset engg-tab view state whenever the modal's ticket set changes (e.g. Engg vs Client). */
   useEffect(function(){
-    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");
+    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");setClientProj("");
   },[data&&data.title]);
 
   /* Auto-load linked assignees when Engg Assignee tab is opened */
@@ -906,11 +906,16 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
     return tix.filter(function(t){return (t.Project||"(No Project)")===clientProj;});
   },[tix,clientProj]);
 
+  /* When a client is selected in the Client modal, every tab/list/count below
+     is driven by viewTix so the selection actually filters what's shown
+     (not just the report/mail buttons). Otherwise it's the full ticket set. */
+  var viewTix = (data.showClientReport && clientProj) ? clientTix : tix;
+
   /* ── Ageing buckets based on Created date ── */
   var ageLabels=["< 7 days","7–30 days","31–60 days","61–90 days","90+ days"];
   var ageColors=["#059669","#65A30D","#CA8A04","#EA580C","#E11D48"];
   var ageBuckets=[[], [], [], [], []];
-  tix.forEach(function(t){
+  viewTix.forEach(function(t){
     var age=ds(t.Created);
     var idx=age<=7?0:age<=30?1:age<=60?2:age<=90?3:4;
     ageBuckets[idx].push(t);
@@ -920,7 +925,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
   /* ── Ageing buckets based on Updated date ── */
   var ageBucketsU=[[], [], [], [], []];
-  tix.forEach(function(t){
+  viewTix.forEach(function(t){
     var age=ds(t.Updated||t.Created);
     var idx=age<=7?0:age<=30?1:age<=60?2:age<=90?3:4;
     ageBucketsU[idx].push(t);
@@ -929,7 +934,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
   /* ── SVM In Charge grouping ── */
   var svmMap={};
-  tix.forEach(function(t){
+  viewTix.forEach(function(t){
     var svm=t["SVM In Charge"]||"(Unassigned)";
     svm=String(svm).trim();if(!svm||svm.toLowerCase()==="nan")svm="(Unassigned)";
     if(!svmMap[svm])svmMap[svm]=[];
@@ -1011,7 +1016,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* Tabs */}
         <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid var(--border)",background:"var(--bg)"}}>
-          {[["all","📋 All Tickets",tix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
+          {[["all","📋 All Tickets",viewTix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
             var id=tb[0],label=tb[1],cnt=tb[2];var active=activeTab===id;
             return(<button key={id} onClick={function(){onTabChange(id);setAgeFilter(null);setSvmFilter(null);}} style={{
               padding:"10px 18px",borderRadius:"10px 10px 0 0",fontSize:12,fontWeight:700,border:"1px solid "+(active?"var(--border)":"transparent"),borderBottom:active?"1px solid #fff":"1px solid var(--border)",
@@ -1024,7 +1029,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
         <div style={{flex:1,overflow:"auto"}}>
 
           {/* ALL TICKETS TAB */}
-          {activeTab==="all"&&renderTable(tix)}
+          {activeTab==="all"&&renderTable(viewTix)}
 
           {/* AGEING TAB */}
           {activeTab==="ageing"&&(
@@ -1032,7 +1037,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               {/* Ageing summary bar — each segment is clickable */}
               <div style={{display:"flex",borderRadius:10,overflow:"hidden",height:40,background:"var(--bg)",marginBottom:14,border:"1px solid var(--border)"}}>
                 {ageBuckets.map(function(bucket,i){
-                  var pct=tix.length?bucket.length/tix.length*100:0;
+                  var pct=viewTix.length?bucket.length/viewTix.length*100:0;
                   if(bucket.length===0)return null;
                   var isActive=ageFilter===i;
                   return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets — click to filter"} style={{
@@ -1100,7 +1105,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               {/* Ageing summary bar — each segment is clickable */}
               <div style={{display:"flex",borderRadius:10,overflow:"hidden",height:40,background:"var(--bg)",marginBottom:14,border:"1px solid var(--border)"}}>
                 {ageBucketsU.map(function(bucket,i){
-                  var pct=tix.length?bucket.length/tix.length*100:0;
+                  var pct=viewTix.length?bucket.length/viewTix.length*100:0;
                   if(bucket.length===0)return null;
                   var isActive=ageFilter===i;
                   return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets (by last updated) — click to filter"} style={{
@@ -1379,7 +1384,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* Footer */}
         <div style={{padding:"10px 24px",borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontSize:11,color:"var(--t3)"}}>{catTitle} · {tix.length} tickets</span>
+          <span style={{fontSize:11,color:"var(--t3)"}}>{catTitle} · {viewTix.length} tickets{data.showClientReport&&clientProj?" · filtered to "+clientProj:""}</span>
         </div>
       </div>
     </div>
@@ -1668,9 +1673,9 @@ function App(){
     setModal({title:"Invoice Yet to Raise",icon:"🧾",color:"#0891B2",tickets:tix});
   }
   function openEnggModal(){
-    var tix=flt.filter(function(t){var it=t["Issue Type"]||"";return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise"&&it!=="Change Request"&&it!=="Change";});
+    var tix=flt.filter(function(t){return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
     tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-    setCatModal({tickets:tix,title:"Engineering Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" with engineering (Incidents & Service Requests only)",icon:"🔧",color:"var(--violet)",bg:"var(--violet-bg)",border:"var(--violet-border)",badgeColor:"#7C3AED",showReport:true});setCatTab("all");
+    setCatModal({tickets:tix,title:"Engineering Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" with engineering / dev",icon:"🔧",color:"var(--violet)",bg:"var(--violet-bg)",border:"var(--violet-border)",badgeColor:"#7C3AED",showReport:true});setCatTab("all");
   }
   function openClientModal(){
     var tix=flt.filter(function(t){return classify(t.Status)==="client"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
