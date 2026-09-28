@@ -533,8 +533,10 @@ function buildClientMailDraft(p){
 function _buildReminder(t,mode){
   mode=mode||"internal";
   var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-  var assignee=t["Assignee"]||t["SVM In Charge"]||"";
-  var firstName=assignee?assignee.split(" ")[0]:"Team";
+  /* Smart name: skip system/generic accounts, prefer real person */
+  var _skip={"svm help desk":1,"svm helpdesk":1,"jira misc":1,"jiramisc":1,"unassigned":1,"":1,"nan":1};
+  function _real(v){var s=String(v||"").trim();return s&&!_skip[s.toLowerCase()]?s:"";}
+  var assignee=_real(t["_linkedAssignee"])||_real(t["Assignee"])||_real(t["SVM In Charge"])||_real(t["Current Worker"])||"Team";
   var isClient=mode==="public";
 
   var greeting=isClient
@@ -583,12 +585,52 @@ function _postJiraNote(key,adf,isInternal){
   });
 }
 
+function _fetchLinkedAssignee(ticket){
+  var linked=String(ticket["Linked Issues"]||"").trim();
+  if(!linked||linked.toLowerCase()==="nan")return Promise.resolve("");
+  var key=linked.split(/[;,]/)[0].trim();
+  if(!key||!window._rmBridge)return Promise.resolve("");
+  var host="svmhelpdesk.atlassian.net";
+  try{var cfg=JSON.parse(localStorage.getItem("hd-jira-cfg")||"{}");if(cfg.jiraHost)host=cfg.jiraHost;}catch(e){}
+  return new Promise(function(resolve){
+    var id=800000+Math.floor(Math.random()*99999);
+    function handler(e){
+      if(!e.data||e.data.type!=="HD_BRIDGE_RESULT"||e.data.id!==id)return;
+      window.removeEventListener("message",handler);
+      if(e.data.ok&&e.data.data&&e.data.data.fields){
+        var a=e.data.data.fields.assignee;
+        resolve(a?a.displayName||a.name||"":"");
+      }else resolve("");
+    }
+    window.addEventListener("message",handler);
+    window.postMessage({type:"HD_BRIDGE_CALL",id:id,host:host,
+      path:"/rest/api/3/issue/"+encodeURIComponent(key)+"?fields=assignee",
+      method:"GET",body:null},"*");
+    setTimeout(function(){window.removeEventListener("message",handler);resolve("");},8000);
+  });
+}
+
 function ReminderModal({ticket,mode,onClose}){
   if(!ticket)return null;
-  var rem=_buildReminder(ticket,mode);
-  var isClient=rem.isClient;
+  const[linkedName,setLinkedName]=useState("");
+  const[loading,setLoading]=useState(true);
   const[status,setStatus]=useState("idle");
   const[errMsg,setErrMsg]=useState("");
+
+  /* Fetch linked ticket assignee on open */
+  useEffect(function(){
+    setLoading(true);setStatus("idle");setErrMsg("");setLinkedName("");
+    _fetchLinkedAssignee(ticket).then(function(name){setLinkedName(name);setLoading(false);}).catch(function(){setLoading(false);});
+  },[ticket]);
+
+  /* Build reminder with linked name injected */
+  var rem=useMemo(function(){
+    var t2=Object.assign({},ticket);
+    if(linkedName){t2["_linkedAssignee"]=linkedName;}
+    return _buildReminder(t2,mode);
+  },[ticket,mode,linkedName]);
+
+  var isClient=rem.isClient;
   function doPost(){setStatus("sending");_postJiraNote(ticket.Key,rem.adf,!isClient).then(function(){setStatus("sent");}).catch(function(e){setErrMsg(e.message||"Failed");setStatus("error");});}
   function doCopy(){navigator.clipboard.writeText(rem.text).catch(function(){var ta=document.createElement("textarea");ta.value=rem.text;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);});}
   var jiraUrl=J+ticket.Key;
@@ -611,7 +653,8 @@ function ReminderModal({ticket,mode,onClose}){
           <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"var(--t2)"}}>✕</button>
         </div>
         <div style={{flex:1,overflow:"auto",padding:"14px 20px"}}>
-          <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Message Preview ({typeLabel})</div>
+          <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Message Preview ({typeLabel}){loading&&" — fetching linked ticket info..."}</div>
+          {linkedName&&<div style={{marginBottom:8,padding:"6px 12px",background:"var(--violet-bg)",border:"1px solid var(--violet-border)",borderRadius:8,fontSize:11,color:"var(--violet)",fontWeight:600}}>📎 Linked ticket assignee found: <b>{linkedName}</b></div>}
           <pre style={{padding:"14px 16px",background:"#F8FAFC",border:"1px solid var(--border)",borderRadius:10,fontSize:12,lineHeight:1.65,color:"var(--t1)",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{rem.text}</pre>
           {status==="sent"&&(<div style={{marginTop:12,padding:"12px 16px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:10,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>✅</span><div><div style={{fontWeight:700,color:"#059669",fontSize:13}}>Reminder posted!</div><div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>{successLabel}.</div></div></div>)}
           {status==="error"&&(<div style={{marginTop:12,padding:"12px 16px",background:"var(--rose-bg)",border:"1px solid var(--rose-border)",borderRadius:10}}><div style={{fontWeight:700,color:"var(--rose)",fontSize:13}}>Could not post to Jira</div><div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>{errMsg}</div><div style={{fontSize:11,color:"var(--t2)",marginTop:4}}>Use "Copy Message" and paste it manually in Jira.</div></div>)}
@@ -746,6 +789,41 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   const [ageFilter, setAgeFilter] = useState(null);
   const [svmFilter, setSvmFilter] = useState(null);
   const [clientProj, setClientProj] = useState("");
+  const [enggMap, setEnggMap] = useState(null); // {ticketKey: assigneeName}
+  const [enggLoading, setEnggLoading] = useState(false);
+  const [enggProg, setEnggProg] = useState([0,0]);
+
+  /* Fetch all linked ticket assignees in batches of 5 */
+  function loadEnggAssignees(){
+    var toFetch=tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";});
+    setEnggLoading(true);setEnggProg([0,toFetch.length]);
+    var results={},done=0;
+    function batchRun(items,batchSize){
+      var batches=[];for(var i=0;i<items.length;i+=batchSize)batches.push(items.slice(i,i+batchSize));
+      return batches.reduce(function(p,batch){return p.then(function(){
+        return Promise.all(batch.map(function(t){
+          return _fetchLinkedAssignee(t).then(function(name){results[t.Key]=name||"";done++;setEnggProg([done,toFetch.length]);}).catch(function(){results[t.Key]="";done++;setEnggProg([done,toFetch.length]);});
+        }));
+      });},Promise.resolve());
+    }
+    batchRun(toFetch,5).then(function(){setEnggMap(results);setEnggLoading(false);});
+  }
+
+  /* Pivot by engineering assignee */
+  var enggPivot=useMemo(function(){
+    if(!enggMap)return{};
+    var _skip={"svm help desk":1,"svm helpdesk":1,"jira misc":1,"jiramisc":1,"unassigned":1,"":1,"nan":1};
+    function _real(v){var s=String(v||"").trim();return s&&!_skip[s.toLowerCase()]?s:"";}
+    var pivot={};
+    tix.forEach(function(t){
+      var name=_real(enggMap[t.Key])||_real(t["SVM In Charge"])||"(Unknown)";
+      if(!pivot[name])pivot[name]={n:0,bk:[0,0,0,0,0],pri:{},tickets:[]};
+      var m=pivot[name];m.n++;m.tickets.push(t);
+      var ua=ds(t.Updated||t.Created);m.bk[abk(ua)]++;
+      m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;
+    });
+    return pivot;
+  },[enggMap,tix]);
 
   /* Client project list for client modal */
   var clientProjects = useMemo(function(){
@@ -863,7 +941,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* Tabs */}
         <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid var(--border)",background:"var(--bg)"}}>
-          {[["all","📋 All Tickets",tix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].map(function(tb){
+          {[["all","📋 All Tickets",tix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
             var id=tb[0],label=tb[1],cnt=tb[2];var active=activeTab===id;
             return(<button key={id} onClick={function(){onTabChange(id);setAgeFilter(null);setSvmFilter(null);}} style={{
               padding:"10px 18px",borderRadius:"10px 10px 0 0",fontSize:12,fontWeight:700,border:"1px solid "+(active?"var(--border)":"transparent"),borderBottom:active?"1px solid #fff":"1px solid var(--border)",
@@ -1098,6 +1176,83 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             </div>);
           })()}
         </div>
+
+        {/* ENGG ASSIGNEE TAB */}
+          {activeTab==="enggA"&&(function(){
+            if(!enggMap&&!enggLoading)return(
+              <div style={{padding:"40px 24px",textAlign:"center"}}>
+                <div style={{fontSize:40,marginBottom:14}}>🔧</div>
+                <div style={{fontSize:16,fontWeight:800,color:"var(--t1)",marginBottom:6}}>Engineering Assignee Dashboard</div>
+                <div style={{fontSize:13,color:"var(--t2)",marginBottom:20,maxWidth:480,margin:"0 auto 20px"}}>
+                  Fetches the assignee from each linked LRPS ticket to show who in engineering is working on what. This requires {tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";}).length} API calls — takes 15–30 seconds.
+                </div>
+                <button onClick={loadEnggAssignees} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"12px 28px",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}}>🔍 Load Engineering Assignees</button>
+              </div>);
+            if(enggLoading)return(
+              <div style={{padding:"40px 24px",textAlign:"center"}}>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--violet)",marginBottom:12}}>Fetching linked ticket assignees...</div>
+                <div style={{width:"100%",maxWidth:400,margin:"0 auto",height:10,borderRadius:8,background:"var(--bg)",overflow:"hidden",border:"1px solid var(--border)"}}>
+                  <div style={{width:(enggProg[1]?Math.round(enggProg[0]/enggProg[1]*100):0)+"%",height:"100%",background:"var(--violet)",borderRadius:8,transition:"width .3s"}}/>
+                </div>
+                <div style={{fontSize:12,color:"var(--t3)",marginTop:8}}>{enggProg[0]} / {enggProg[1]} tickets fetched</div>
+              </div>);
+            var entries=Object.entries(enggPivot).sort(function(a,b){return b[1].n-a[1].n;});
+            var maxN=entries.length?entries[0][1].n:1;
+            var ageLabelsE=["< 7d","7-30d","31-60d","61-90d","90+d"];
+            var ageColorsE=["#059669","#65A30D","#CA8A04","#EA580C","#E11D48"];
+            var palE=["#7C3AED","#5B21B6","#2563EB","#0891B2","#059669","#D97706","#E11D48","#9333EA","#4338CA","#0D9488","#B45309","#DC2626"];
+            return(
+            <div style={{padding:"16px 24px"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"var(--t1)",marginBottom:12}}>Engineering Assignees — {entries.length} people across {tix.length} tickets</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:12,marginBottom:16}}>
+                {entries.map(function(entry,i){
+                  var name=entry[0],m=entry[1];
+                  var color=palE[i%palE.length];
+                  return(<div key={name} onClick={function(){setSvmFilter(svmFilter===name?null:name);}} style={{
+                    background:svmFilter===name?color+"22":color+"08",border:(svmFilter===name?"3px solid "+color:"2px solid "+color+"44"),
+                    borderRadius:14,padding:"14px 16px",cursor:"pointer",transition:"all .2s",
+                    opacity:svmFilter!==null&&svmFilter!==name?0.4:1
+                  }}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                      <div style={{fontSize:13,fontWeight:800,color:color,maxWidth:"65%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={name}>{name}</div>
+                      <div style={{fontSize:22,fontWeight:900,color:color,fontFamily:"var(--mono)",letterSpacing:"-1px"}}>{m.n}</div>
+                    </div>
+                    <div style={{display:"flex",gap:3,height:6,borderRadius:4,overflow:"hidden",background:"rgba(0,0,0,.06)"}}>
+                      {m.bk.map(function(c,j){return c>0?<div key={j} title={ageLabelsE[j]+": "+c} style={{width:(c/m.n*100)+"%",background:ageColorsE[j],minWidth:3}}/>:null;})}
+                    </div>
+                    <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                      {m.bk.map(function(c,j){return c>0?<span key={j} style={{fontSize:9,fontWeight:700,color:ageColorsE[j]}}>{ageLabelsE[j]}:{c}</span>:null;})}
+                    </div>
+                    <div style={{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}>
+                      {["Critical","High","Medium","Low"].map(function(p){var c=m.pri[p]||0;return c>0?<span key={p} style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:4,background:p==="Critical"?"#FFF1F2":p==="High"?"#FFFBEB":"#F1F5F9",color:p==="Critical"?"#E11D48":p==="High"?"#D97706":"var(--t3)"}}>{p}: {c}</span>:null;})}
+                    </div>
+                  </div>);
+                })}
+              </div>
+              {svmFilter&&enggPivot[svmFilter]&&(
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"9px 16px",background:"var(--violet-bg)",borderRadius:10,border:"1px solid var(--violet-border)"}}>
+                    <span style={{fontSize:13,fontWeight:800,color:"var(--violet)"}}>{svmFilter}</span>
+                    <span style={{fontSize:12,color:"var(--t2)"}}>— {enggPivot[svmFilter].n} tickets</span>
+                    <div style={{flex:1}}/>
+                    <button onClick={function(){setSvmFilter(null);}} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700}}>✕ Show all</button>
+                  </div>
+                  {renderTable(enggPivot[svmFilter].tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}))}
+                </div>
+              )}
+              {!svmFilter&&entries.map(function(entry,i){
+                var name=entry[0],m=entry[1];var color=palE[i%palE.length];
+                return(<div key={name} style={{marginBottom:18}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                    <div style={{width:14,height:14,borderRadius:4,background:color}}/>
+                    <span style={{fontSize:14,fontWeight:800,color:color}}>{name}</span>
+                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {m.n} ticket{m.n!==1?"s":""}</span>
+                  </div>
+                  {renderTable(m.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}))}
+                </div>);
+              })}
+            </div>);
+          })()}
 
         {/* Footer */}
         <div style={{padding:"10px 24px",borderTop:"1px solid var(--border)",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
