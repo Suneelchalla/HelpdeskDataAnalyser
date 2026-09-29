@@ -119,25 +119,25 @@ tr:hover td { background: rgba(5,150,105,.02) }
 .msel{position:relative;display:inline-block}
 .msel-btn{display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;transition:border-color .15s;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;font-family:inherit}
 .msel-btn:hover{border-color:var(--line2)}
-.msel-btn.open{border-color:var(--em);box-shadow:0 0 0 3px rgba(5,150,105,.12)}
+.msel-btn.open{border-color:var(--accent,var(--hd,#0F766E));box-shadow:0 0 0 3px rgba(15,118,110,.12)}
 .msel-btn .msel-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.msel-btn .msel-cnt{background:var(--em);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;flex-shrink:0}
-.msel-btn .msel-arrow{color:var(--muted);font-size:10px;flex-shrink:0;transition:transform .15s}
+.msel-btn .msel-cnt{background:var(--accent,var(--hd,#0F766E));color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;flex-shrink:0}
+.msel-btn .msel-arrow{color:var(--faint,#9AA7B8);font-size:10px;flex-shrink:0;transition:transform .15s}
 .msel-btn.open .msel-arrow{transform:rotate(180deg)}
 .msel-dd{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:340px;max-height:360px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);z-index:200;display:none;flex-direction:column;overflow:hidden}
 .msel-dd.open{display:flex}
-.msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:9px 12px;font-size:12px;color:var(--ink);font-family:inherit;outline:none;width:100%;background:var(--paper)}
-.msel-dd .msel-actions{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
-.msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--muted);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
+.msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:9px 12px;font-size:12px;color:var(--ink);font-family:inherit;outline:none;width:100%;background:var(--paper,#F6F8FA);box-sizing:border-box}
+.msel-dd .msel-actions{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--paper,#F6F8FA)}
+.msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--muted,#6B7A90);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
 .msel-dd .msel-actions button:hover{color:var(--ink);border-color:var(--line2)}
 .msel-dd .msel-list{overflow-y:auto;flex:1;padding:4px 0}
 .msel-dd .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--ink);transition:background .1s}
-.msel-dd .msel-opt:hover{background:var(--paper)}
-.msel-dd .msel-opt .msel-chk{width:15px;height:15px;border:1.5px solid var(--line2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;background:#fff;transition:all .12s}
-.msel-dd .msel-opt.on .msel-chk{background:var(--em);border-color:var(--em)}
+.msel-dd .msel-opt:hover{background:var(--paper,#F6F8FA)}
+.msel-dd .msel-opt .msel-chk{width:15px;height:15px;border:1.5px solid var(--line2,#D2DAE3);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;background:#fff;transition:all .12s}
+.msel-dd .msel-opt.on .msel-chk{background:var(--accent,var(--hd,#0F766E));border-color:var(--accent,var(--hd,#0F766E))}
 .msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.msel-dd .msel-opt .msel-n{font-family:var(--mono);font-size:10px;color:var(--muted)}
-.msel-empty{padding:16px;text-align:center;color:var(--muted);font-size:11px}
+.msel-empty{padding:16px;text-align:center;color:var(--faint,#9AA7B8);font-size:11px}
+@media print{.msel-dd{display:none!important}}
 
 @media (max-width: 700px) { .topbar { flex-direction: column; align-items: stretch } .stats { grid-template-columns: repeat(3, 1fr) } }
 @media (min-width: 1921px) { body { zoom: 1.18 } }
@@ -188,19 +188,139 @@ tr:hover td { background: rgba(5,150,105,.02) }
 <script>
 (function () {
   var HS = window.HDStore;
-  var TK = [];   // all parsed ticket objects (filtered)
+  var TK = [];   // filtered tickets
   var ALL_TK = []; // unfiltered
   var NOW = new Date();
 
   var F = { tab: "clients", issueType: [] };
 
-  /* ═══ MULTI-SELECT DROPDOWN COMPONENT ═══ */
-  var _mselInstances={},_mselIdSeq=0;
-  function mselCreate(cid,allLabel,options,selected,onChange){var id='msel-'+(++_mselIdSeq);_mselInstances[id]={sel:selected.slice(),opts:options,onChange:onChange,search:'',allLabel:allLabel};return id;}
-  function mselHTML(id){var inst=_mselInstances[id];if(!inst)return'';var sel=inst.sel,allLabel=inst.allLabel;var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';return'<div class="msel" id="'+id+'"><button type="button" class="msel-btn" data-msel="'+id+'"><span class="msel-text">'+esc(text)+'</span>'+(sel.length>0?'<span class="msel-cnt">'+sel.length+'</span>':'')+'<span class="msel-arrow">▾</span></button><div class="msel-dd" id="'+id+'-dd"><input class="msel-search" placeholder="Search…" data-msel-search="'+id+'" autocomplete="off"/><div class="msel-actions"><button data-msel-all="'+id+'">Select all</button><button data-msel-none="'+id+'">Clear</button></div><div class="msel-list" id="'+id+'-list"></div></div></div>';}
-  function mselRenderList(id){var inst=_mselInstances[id];if(!inst)return;var listEl=document.getElementById(id+'-list');if(!listEl)return;var q=inst.search.toLowerCase();var filtered=inst.opts.filter(function(o){return!q||o.toLowerCase().indexOf(q)>-1;});if(!filtered.length){listEl.innerHTML='<div class="msel-empty">No matches</div>';return;}listEl.innerHTML=filtered.map(function(o){var on=inst.sel.indexOf(o)>-1;return'<div class="msel-opt'+(on?' on':'')+'" data-msel-val="'+esc(o)+'" data-msel-id="'+id+'"><span class="msel-chk">'+(on?'✓':'')+'</span><span class="msel-lbl">'+esc(o)+'</span></div>';}).join('');}
-  function mselBind(){document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.msel;var dd=document.getElementById(id+'-dd');var isOpen=dd.classList.contains('open');document.querySelectorAll('.msel-dd.open').forEach(function(d){d.classList.remove('open');});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});if(!isOpen){dd.classList.add('open');btn.classList.add('open');mselRenderList(id);var si=dd.querySelector('.msel-search');if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}}};});document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){inp.onclick=function(e){e.stopPropagation();};inp.oninput=function(){var id=inp.dataset.mselSearch;_mselInstances[id].search=inp.value;mselRenderList(id);};});document.querySelectorAll('[data-msel-all]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselAll,inst=_mselInstances[id];inst.sel=inst.opts.slice();mselRenderList(id);inst.onChange(inst.sel.slice());};});document.querySelectorAll('[data-msel-none]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselNone,inst=_mselInstances[id];inst.sel=[];mselRenderList(id);inst.onChange([]);};});document.querySelectorAll('.msel-list').forEach(function(list){list.onclick=function(e){e.stopPropagation();var opt=e.target.closest('.msel-opt');if(!opt)return;var id=opt.dataset.mselId,val=opt.dataset.mselVal;var inst=_mselInstances[id];if(!inst)return;var idx=inst.sel.indexOf(val);if(idx>-1)inst.sel.splice(idx,1);else inst.sel.push(val);mselRenderList(id);inst.onChange(inst.sel.slice());};});}
-  document.addEventListener('click',function(){document.querySelectorAll('.msel-dd.open').forEach(function(d){d.classList.remove('open');});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});});
+/* ═══ MULTI-SELECT DROPDOWN — stays open during selection, renders on close ═══ */
+var _mselInstances={},_mselIdSeq=0;
+
+function mselCreate(cid, allLabel, options, selected, onChange, onClose){
+  var id='msel-'+(++_mselIdSeq);
+  _mselInstances[id]={sel:selected.slice(),opts:options,onChange:onChange,onClose:onClose||null,search:'',allLabel:allLabel};
+  return id;
+}
+
+function mselHTML(id){
+  var inst=_mselInstances[id]; if(!inst) return '';
+  var sel=inst.sel, allLabel=inst.allLabel;
+  var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';
+  return '<div class="msel" id="'+id+'">' +
+    '<button type="button" class="msel-btn" data-msel="'+id+'">' +
+      '<span class="msel-text">'+esc(text)+'</span>' +
+      (sel.length>0?'<span class="msel-cnt">'+sel.length+'</span>':'') +
+      '<span class="msel-arrow">▾</span>' +
+    '</button>' +
+    '<div class="msel-dd" id="'+id+'-dd">' +
+      '<input class="msel-search" placeholder="Search…" data-msel-search="'+id+'" autocomplete="off"/>' +
+      '<div class="msel-actions">' +
+        '<button data-msel-all="'+id+'">Select all</button>' +
+        '<button data-msel-none="'+id+'">Clear</button>' +
+      '</div>' +
+      '<div class="msel-list" id="'+id+'-list"></div>' +
+    '</div></div>';
+}
+
+function mselRenderList(id){
+  var inst=_mselInstances[id]; if(!inst) return;
+  var listEl=document.getElementById(id+'-list'); if(!listEl) return;
+  var q=inst.search.toLowerCase();
+  var filtered=inst.opts.filter(function(o){return !q||o.toLowerCase().indexOf(q)>-1;});
+  if(!filtered.length){listEl.innerHTML='<div class="msel-empty">No matches</div>';return;}
+  listEl.innerHTML=filtered.map(function(o){
+    var on=inst.sel.indexOf(o)>-1;
+    return '<div class="msel-opt'+(on?' on':'')+'" data-msel-val="'+esc(o)+'" data-msel-id="'+id+'">' +
+      '<span class="msel-chk">'+(on?'✓':'')+'</span>' +
+      '<span class="msel-lbl">'+esc(o)+'</span></div>';
+  }).join('');
+}
+
+/* Update the button text + badge without re-rendering the whole page */
+function mselUpdateBtn(id){
+  var inst=_mselInstances[id]; if(!inst) return;
+  var btn=document.querySelector('.msel-btn[data-msel="'+id+'"]'); if(!btn) return;
+  var sel=inst.sel, allLabel=inst.allLabel;
+  var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';
+  btn.querySelector('.msel-text').textContent=text;
+  var cnt=btn.querySelector('.msel-cnt');
+  if(sel.length>0){
+    if(!cnt){cnt=document.createElement('span');cnt.className='msel-cnt';btn.insertBefore(cnt,btn.querySelector('.msel-arrow'));}
+    cnt.textContent=sel.length;
+  } else { if(cnt) cnt.remove(); }
+}
+
+/* Close all open dropdowns and fire their onClose callbacks */
+function mselCloseAll(){
+  document.querySelectorAll('.msel-dd.open').forEach(function(dd){
+    dd.classList.remove('open');
+    var id=dd.id.replace('-dd','');
+    var inst=_mselInstances[id];
+    if(inst&&inst.onClose) inst.onClose();
+  });
+  document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});
+}
+
+function mselBind(){
+  /* Toggle open/close */
+  document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){
+    btn.onclick=function(e){
+      e.stopPropagation();
+      var id=btn.dataset.msel;
+      var dd=document.getElementById(id+'-dd');
+      var wasOpen=dd.classList.contains('open');
+      mselCloseAll();
+      if(!wasOpen){
+        dd.classList.add('open'); btn.classList.add('open');
+        mselRenderList(id);
+        var si=dd.querySelector('.msel-search');
+        if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}
+      }
+    };
+  });
+  /* Search */
+  document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){
+    inp.onclick=function(e){e.stopPropagation();};
+    inp.oninput=function(){_mselInstances[inp.dataset.mselSearch].search=inp.value;mselRenderList(inp.dataset.mselSearch);};
+  });
+  /* Select all */
+  document.querySelectorAll('[data-msel-all]').forEach(function(btn){
+    btn.onclick=function(e){
+      e.stopPropagation();
+      var id=btn.dataset.mselAll, inst=_mselInstances[id];
+      inst.sel=inst.opts.slice();
+      mselRenderList(id); mselUpdateBtn(id);
+      inst.onChange(inst.sel.slice());
+    };
+  });
+  /* Clear */
+  document.querySelectorAll('[data-msel-none]').forEach(function(btn){
+    btn.onclick=function(e){
+      e.stopPropagation();
+      var id=btn.dataset.mselNone, inst=_mselInstances[id];
+      inst.sel=[];
+      mselRenderList(id); mselUpdateBtn(id);
+      inst.onChange([]);
+    };
+  });
+  /* Option toggle */
+  document.querySelectorAll('.msel-list').forEach(function(list){
+    list.onclick=function(e){
+      e.stopPropagation();
+      var opt=e.target.closest('.msel-opt'); if(!opt) return;
+      var id=opt.dataset.mselId, val=opt.dataset.mselVal;
+      var inst=_mselInstances[id]; if(!inst) return;
+      var idx=inst.sel.indexOf(val);
+      if(idx>-1) inst.sel.splice(idx,1); else inst.sel.push(val);
+      mselRenderList(id); mselUpdateBtn(id);
+      inst.onChange(inst.sel.slice());
+    };
+  });
+}
+/* Close on outside click */
+document.addEventListener('click', function(){ mselCloseAll(); });
+
 
   function el(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (m) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[m]; }); }
@@ -832,39 +952,21 @@ tr:hover td { background: rgba(5,150,105,.02) }
   }
 
   function applyIssueTypeFilter() {
-    if (F.issueType.length) {
-      TK = ALL_TK.filter(function (t) { return F.issueType.indexOf(t.issueType) > -1; });
-    } else {
-      TK = ALL_TK.slice();
-    }
+    TK = F.issueType.length ? ALL_TK.filter(function(t){return F.issueType.indexOf(t.issueType)>-1;}) : ALL_TK.slice();
   }
-
   function buildIssueTypeMsel() {
-    var types = {};
-    ALL_TK.forEach(function (t) { if (t.issueType) types[t.issueType] = (types[t.issueType] || 0) + 1; });
+    var types = {}; ALL_TK.forEach(function(t){if(t.issueType)types[t.issueType]=(types[t.issueType]||0)+1;});
     var sorted = Object.keys(types).sort();
-    var mid = mselCreate("itMsel", "All types", sorted, F.issueType, function (sel) {
-      F.issueType = sel;
-      renderAll();
-    });
-    var slot = el("itMselSlot");
-    if (slot) { slot.innerHTML = mselHTML(mid); mselBind(); }
+    var mid = mselCreate("itMsel","All types",sorted,F.issueType,function(sel){F.issueType=sel;},function(){renderAll();});
+    var slot = el("itMselSlot"); if(slot){slot.innerHTML=mselHTML(mid);mselBind();}
   }
-
   function renderAll() {
     applyIssueTypeFilter();
-    el("ticketMeta").textContent = TK.length.toLocaleString() + " tickets" + (F.issueType.length ? " · " + F.issueType.join(", ") : "");
+    el("ticketMeta").textContent=TK.length.toLocaleString()+" tickets"+(F.issueType.length?" · "+F.issueType.join(", "):"");
     renderStats();
-    el("clientView").innerHTML = "";
-    el("workloadView").innerHTML = "";
-    el("healthView").innerHTML = "";
-    el("qualityView").innerHTML = "";
-    if (F.tab === "clients") renderClients();
-    else if (F.tab === "workload") renderWorkload();
-    else if (F.tab === "health") renderHealth();
-    else if (F.tab === "quality") renderQuality();
+    el("clientView").innerHTML=""; el("workloadView").innerHTML=""; el("healthView").innerHTML=""; el("qualityView").innerHTML="";
+    if(F.tab==="clients")renderClients();else if(F.tab==="workload")renderWorkload();else if(F.tab==="health")renderHealth();else if(F.tab==="quality")renderQuality();
   }
-
   function boot(rows) {
     initCols(rows);
     ALL_TK = parseTickets(rows);
