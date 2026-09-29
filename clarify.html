@@ -97,6 +97,38 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .tab .cnt { font-family: var(--mono); font-size: 10px; font-weight: 700; background: rgba(0,0,0,.06); border-radius: 20px; padding: 1px 8px }
 .tab.on .cnt { background: rgba(255,255,255,.2) }
 
+/* ── multi-select dropdown ── */
+.msel{position:relative;display:inline-block}
+.msel-btn{display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line2);border-radius:7px;padding:6px 11px;font-size:11px;font-weight:600;color:var(--ink);cursor:pointer;transition:border-color .15s;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;font-family:inherit}
+.msel-btn:hover{border-color:var(--muted)}
+.msel-btn.open{border-color:var(--cy);box-shadow:0 0 0 3px var(--cy-glow)}
+.msel-btn .msel-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-btn .msel-cnt{background:var(--cy);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0}
+.msel-btn .msel-arrow{color:var(--faint);font-size:10px;flex-shrink:0;transition:transform .15s}
+.msel-btn.open .msel-arrow{transform:rotate(180deg)}
+.msel-dd{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:320px;max-height:340px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh2);z-index:200;display:none;flex-direction:column;overflow:hidden}
+.msel-dd.open{display:flex}
+.msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:8px 12px;font-size:11px;color:var(--ink);font-family:inherit;outline:none;width:100%;background:var(--paper);box-sizing:border-box}
+.msel-dd .msel-actions{display:flex;gap:4px;padding:5px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+.msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--muted);padding:2px 9px;border-radius:5px;font-size:9.5px;font-weight:600;font-family:inherit;cursor:pointer}
+.msel-dd .msel-actions button:hover{color:var(--ink);border-color:var(--line2)}
+.msel-dd .msel-list{overflow-y:auto;flex:1;padding:3px 0}
+.msel-dd .msel-opt{display:flex;align-items:center;gap:7px;padding:5px 12px;cursor:pointer;font-size:11px;color:var(--ink);transition:background .1s}
+.msel-dd .msel-opt:hover{background:var(--paper)}
+.msel-dd .msel-opt .msel-chk{width:14px;height:14px;border:1.5px solid var(--line2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;background:#fff;transition:all .12s}
+.msel-dd .msel-opt.on .msel-chk{background:var(--cy);border-color:var(--cy)}
+.msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-empty{padding:14px;text-align:center;color:var(--faint);font-size:11px}
+
+/* ── global filter bar ── */
+.gfilters{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.gfilters .flbl{font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-right:2px}
+.gfilters .fdiv{width:1px;height:20px;background:var(--line2);margin:0 4px}
+.gfilters .fsel{padding:6px 26px 6px 9px;border:1px solid var(--line2);border-radius:7px;background:var(--paper);color:var(--ink);font-size:11px;font-weight:600;font-family:var(--sans);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;cursor:pointer;outline:none}
+.gfilters .greset{padding:5px 10px;border:1px solid var(--line2);border-radius:7px;background:var(--paper);color:var(--muted);font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
+.gfilters .greset:hover{color:var(--ink);border-color:var(--muted)}
+.gfilters .gcount{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:auto}
+
 /* ═══ FILTERS ═══ */
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap }
 .flbl { font-size: 9.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; margin-right: 2px }
@@ -216,6 +248,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .sr-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
 .sr-hd h2 { font-size: 15px; font-weight: 700 }
 .sr-hd .tk { font-family: var(--mono); font-size: 10.5px; color: var(--faint) }
+.sr-hd .sr-exp { margin-left: auto; padding: 7px 14px; border: 1px solid var(--cy-line); border-radius: 8px; background: var(--cy-bg); color: var(--cy); font-size: 11px; font-weight: 700; font-family: var(--disp); display: inline-flex; align-items: center; gap: 5px; cursor: pointer }
+.sr-hd .sr-exp:hover { background: var(--cy); color: #fff }
 .sr-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); padding: 12px 16px; margin-bottom: 9px }
 .sr-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px }
 .sr-card .sim-sc { width: 44px; height: 44px; font-size: 12px }
@@ -276,6 +310,24 @@ h1, h2, h3, .disp { font-family: var(--disp) }
   </div>
 
   <!-- Stats dashboard -->
+  <!-- Global filters -->
+  <div class="gfilters" id="gFilters">
+    <span class="flbl">Client</span>
+    <select class="fsel" id="gClient"><option value="">All clients</option></select>
+    <div class="fdiv"></div>
+    <span class="flbl">Request type</span>
+    <span id="gTypeMselSlot"></span>
+    <div class="fdiv"></div>
+    <span class="flbl">Sort results</span>
+    <select class="fsel" id="gSort">
+      <option value="relevance">Relevance</option>
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+    </select>
+    <button class="greset" id="gReset">↺ Reset</button>
+    <span class="gcount" id="gCount"></span>
+  </div>
+
   <div class="stats up d1" id="statsRow"></div>
 
   <!-- Tabs -->
@@ -355,13 +407,26 @@ h1, h2, h3, .disp { font-family: var(--disp) }
   var IX = null;   // similarity index (built on load)
   var CL = null;   // cluster cache (built on demand)
 
+  /* ═══ MULTI-SELECT DROPDOWN — stays open during selection ═══ */
+  var _mselInstances={},_mselIdSeq=0;
+  function mselCreate(cid,allLabel,options,selected,onChange,onClose){var id='msel-'+(++_mselIdSeq);_mselInstances[id]={sel:selected.slice(),opts:options,onChange:onChange,onClose:onClose||null,search:'',allLabel:allLabel};return id;}
+  function mselHTML(id){var inst=_mselInstances[id];if(!inst)return'';var sel=inst.sel,allLabel=inst.allLabel;var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';return'<div class="msel" id="'+id+'"><button type="button" class="msel-btn" data-msel="'+id+'"><span class="msel-text">'+esc(text)+'</span>'+(sel.length>0?'<span class="msel-cnt">'+sel.length+'</span>':'')+'<span class="msel-arrow">▾</span></button><div class="msel-dd" id="'+id+'-dd"><input class="msel-search" placeholder="Search…" data-msel-search="'+id+'" autocomplete="off"/><div class="msel-actions"><button data-msel-all="'+id+'">Select all</button><button data-msel-none="'+id+'">Clear</button></div><div class="msel-list" id="'+id+'-list"></div></div></div>';}
+  function mselRenderList(id){var inst=_mselInstances[id];if(!inst)return;var listEl=document.getElementById(id+'-list');if(!listEl)return;var q=inst.search.toLowerCase();var filtered=inst.opts.filter(function(o){return!q||o.toLowerCase().indexOf(q)>-1;});if(!filtered.length){listEl.innerHTML='<div class="msel-empty">No matches</div>';return;}listEl.innerHTML=filtered.map(function(o){var on=inst.sel.indexOf(o)>-1;return'<div class="msel-opt'+(on?' on':'')+'" data-msel-val="'+esc(o)+'" data-msel-id="'+id+'"><span class="msel-chk">'+(on?'✓':'')+'</span><span class="msel-lbl">'+esc(o)+'</span></div>';}).join('');}
+  function mselUpdateBtn(id){var inst=_mselInstances[id];if(!inst)return;var btn=document.querySelector('.msel-btn[data-msel="'+id+'"]');if(!btn)return;var sel=inst.sel,allLabel=inst.allLabel;var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';btn.querySelector('.msel-text').textContent=text;var cnt=btn.querySelector('.msel-cnt');if(sel.length>0){if(!cnt){cnt=document.createElement('span');cnt.className='msel-cnt';btn.insertBefore(cnt,btn.querySelector('.msel-arrow'));}cnt.textContent=sel.length;}else{if(cnt)cnt.remove();}}
+  function mselCloseAll(){document.querySelectorAll('.msel-dd.open').forEach(function(dd){dd.classList.remove('open');var id=dd.id.replace('-dd','');var inst=_mselInstances[id];if(inst&&inst.onClose)inst.onClose();});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});}
+  function mselBind(){document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.msel;var dd=document.getElementById(id+'-dd');var wasOpen=dd.classList.contains('open');mselCloseAll();if(!wasOpen){dd.classList.add('open');btn.classList.add('open');mselRenderList(id);var si=dd.querySelector('.msel-search');if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}}};});document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){inp.onclick=function(e){e.stopPropagation();};inp.oninput=function(){_mselInstances[inp.dataset.mselSearch].search=inp.value;mselRenderList(inp.dataset.mselSearch);};});document.querySelectorAll('[data-msel-all]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselAll,inst=_mselInstances[id];inst.sel=inst.opts.slice();mselRenderList(id);mselUpdateBtn(id);inst.onChange(inst.sel.slice());};});document.querySelectorAll('[data-msel-none]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselNone,inst=_mselInstances[id];inst.sel=[];mselRenderList(id);mselUpdateBtn(id);inst.onChange([]);};});document.querySelectorAll('.msel-list').forEach(function(list){list.onclick=function(e){e.stopPropagation();var opt=e.target.closest('.msel-opt');if(!opt)return;var id=opt.dataset.mselId,val=opt.dataset.mselVal;var inst=_mselInstances[id];if(!inst)return;var idx=inst.sel.indexOf(val);if(idx>-1)inst.sel.splice(idx,1);else inst.sel.push(val);mselRenderList(id);mselUpdateBtn(id);inst.onChange(inst.sel.slice());};});}
+  document.addEventListener('click',function(){mselCloseAll();});
+
   /* ── Filter state ── */
   var F = {
     tab: "queue",
-    qf: "active",     // "active" | "all-open"
-    qt: "all",         // "all" | "incident" | "sr" | "change"
-    qpri: "",          // "" | "critical" | "high" | "medium" | "low"
-    qproj: "",         // "" | project name
+    gClient: "",        // global client/project filter
+    gType: [],          // global request type multi-select
+    gSort: "relevance", // search result sort
+    qf: "active",
+    qt: "all",
+    qpri: "",
+    qproj: "",
     clMin: 5,
     clSort: "size"
   };
@@ -381,6 +446,13 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     var dt = d instanceof Date ? d : new Date(d);
     if (isNaN(dt)) return "—";
     return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+  }
+
+  /* ── Global pre-filter (client + request type) ── */
+  function passesGlobal(t) {
+    if (F.gClient && t.project.toLowerCase() !== F.gClient.toLowerCase()) return false;
+    if (F.gType.length && F.gType.indexOf(t.issueType) < 0) return false;
+    return true;
   }
 
   /* ── Column getter (case-insensitive) ── */
@@ -970,6 +1042,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     var groups = {};
 
     IX.tickets.forEach(function (t, i) {
+      if (!passesGlobal(t)) return;
       var key = t.screenName || t.menuHead || null;
       if (!key) return;   // skip tickets with no structural field
 
@@ -1019,22 +1092,23 @@ h1, h2, h3, .disp { font-family: var(--disp) }
   /* ══════════════════════ Stats Dashboard ══════════════════════ */
 
   function renderStats() {
-    var total = IX.tickets.length;
-    var inc = IX.incidents.length;
-    var sr = IX.srs.length;
-    var chg = IX.changes.length;
-    var resolved = IX.tickets.filter(function (t) { return t.isResolved; }).length;
+    var gTickets = IX.tickets.filter(passesGlobal);
+    var total = gTickets.length;
+    var inc = gTickets.filter(function(t){return t.isIncident;}).length;
+    var sr = gTickets.filter(function(t){return t.isSR;}).length;
+    var chg = gTickets.filter(function(t){return t.isChange;}).length;
+    var resolved = gTickets.filter(function (t) { return t.isResolved; }).length;
     var open = total - resolved;
     var rpct = total ? Math.round(resolved / total * 100) : 0;
 
-    var activeCount = IX.tickets.filter(function (t) {
+    var activeCount = gTickets.filter(function (t) {
       var s = t.status.toLowerCase();
       return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
     }).length;
 
     // Priority distribution of open tickets
     var priC = 0, priH = 0, priM = 0, priL = 0;
-    IX.tickets.filter(function (t) { return !t.isResolved; }).forEach(function (t) {
+    gTickets.filter(function (t) { return !t.isResolved; }).forEach(function (t) {
       var p = (t.priority || "").toLowerCase();
       if (p.indexOf("critical") > -1) priC++;
       else if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) priH++;
@@ -1043,7 +1117,10 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     });
     var priTotal = priC + priH + priM + priL || 1;
 
-    var openChanges = IX.changes.filter(function (i) { return !IX.tickets[i].isResolved; }).length;
+    var openChanges = gTickets.filter(function (t) { return t.isChange && !t.isResolved; }).length;
+
+    // Update global count
+    el("gCount").textContent = total.toLocaleString() + " tickets" + (F.gClient || F.gType.length ? " (filtered)" : "");
 
     el("statsRow").innerHTML =
       '<div class="stat cy">' +
@@ -1326,8 +1403,9 @@ h1, h2, h3, .disp { font-family: var(--disp) }
   function renderQueue() {
     var isActive = (F.qf === "active");
 
-    // Compute base set (project + priority filters only, before status/type)
+    // Compute base set (global + project + priority filters, before status/type)
     var base = IX.tickets.filter(function (t) {
+      if (!passesGlobal(t)) return false;
       if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
       if (F.qpri) {
         var p = (t.priority || "").toLowerCase();
@@ -1374,6 +1452,9 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     });
 
     var list = IX.tickets.filter(function (t) {
+      // Global filter
+      if (!passesGlobal(t)) return false;
+
       // Project filter
       if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
 
@@ -1501,15 +1582,96 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     bindClusterToggles();
   }
 
+  /* ══════════════════════ Export Search Results to Excel ══════════════════════ */
+
+  var _lastSearchResults = [];
+  var _lastSearchQuery = "";
+
+  function exportSearchResults() {
+    var results = _lastSearchResults;
+    if (!results.length) return;
+    var rows = results.map(function (m) {
+      var t = m.t;
+      return {
+        "Match %": m.s,
+        "Confidence": m.tier === "s" ? "Sure Shot" : m.tier === "l" ? "Likely" : "Assumption",
+        "Match Reasons": m.rs.map(function (r) { return r.t; }).join(", "),
+        "Key": t.key,
+        "Summary": t.summary,
+        "Status": t.status,
+        "Issue Type": t.issueType,
+        "Priority": t.priority,
+        "Project": t.project,
+        "Components": t.components,
+        "Created": t.created,
+        "Resolved": t.resolved,
+        "Updated": t.updated,
+        "Resolution": t.resolution,
+        "Screen Name": t.screenName,
+        "Menu Head": t.menuHead,
+        "Root Cause": t.rootCause,
+        "Type of Fix": t.typeOfFix,
+        "Analysis": t.analysis,
+        "Solution Summary": t.solutionSummary,
+        "SVM In Charge": t.svmInCharge,
+        "Current Worker": t.currentWorker,
+        "Severity": t.severity,
+        "Labels": t.labels,
+        "Release Number": t.releaseNumber,
+        "Release (Data Fix)": t.releaseDataFix,
+        "Linked Issues": t.linkedIssues,
+        "Jira Link": "https://svmhelpdesk.atlassian.net/browse/" + t.key
+      };
+    });
+
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var colWidths = Object.keys(rows[0]).map(function (k) {
+      var maxLen = k.length;
+      rows.forEach(function (r) { var v = String(r[k] || ""); if (v.length > maxLen) maxLen = v.length; });
+      return { wch: Math.min(maxLen + 2, 60) };
+    });
+    ws["!cols"] = colWidths;
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Search Results");
+    var slug = String(_lastSearchQuery || "search").replace(/[^\w]+/g, "-").substring(0, 30).toLowerCase();
+    XLSX.writeFile(wb, "Clarify-" + slug + "-" + new Date().toISOString().slice(0, 10) + ".xlsx");
+  }
+
   /* ══════════════════════ Render Search Results ══════════════════════ */
 
   function renderSearch(query) {
     var t0 = performance.now();
-    var results = searchText(query, 30);
+    var results = searchText(query, 80);
+
+    // Apply global filters
+    results = results.filter(function (m) { return passesGlobal(m.t); });
+
+    // Apply sort
+    if (F.gSort === "newest") {
+      results.sort(function (a, b) {
+        var da = a.t.created ? new Date(a.t.created).getTime() : 0;
+        var db = b.t.created ? new Date(b.t.created).getTime() : 0;
+        return db - da;
+      });
+    } else if (F.gSort === "oldest") {
+      results.sort(function (a, b) {
+        var da = a.t.created ? new Date(a.t.created).getTime() : 0;
+        var db = b.t.created ? new Date(b.t.created).getTime() : 0;
+        return da - db;
+      });
+    }
+    // else "relevance" — already sorted by score
+
+    results = results.slice(0, 30);
+    _lastSearchResults = results;
+    _lastSearchQuery = query;
     var ms = Math.round(performance.now() - t0);
 
     var html = '<div class="sr-hd"><h2>Search results</h2>' +
-      '<span class="tk">' + results.length + ' matches · ' + ms + 'ms</span></div>';
+      '<span class="tk">' + results.length + ' matches · ' + ms + 'ms</span>' +
+      (results.length ? '<button class="sr-exp" id="srExport">⬇ Export Excel</button>' : '') +
+      '</div>';
 
     if (!results.length) {
       html += '<div class="empty-st"><div class="i">🔍</div>' +
@@ -1550,6 +1712,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     }
 
     el("searchView").innerHTML = html;
+    var expBtn = el("srExport");
+    if (expBtn) expBtn.onclick = exportSearchResults;
   }
 
   /* ══════════════════════ Tab / Search / Filter Wiring ══════════════════════ */
@@ -1664,11 +1828,53 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     IX = buildIndex(rows);
     CL = null;   // rebuild clusters on demand
 
-    // Populate project dropdown
+    // Populate global client dropdown
     var projects = {};
     IX.tickets.forEach(function (t) {
       if (t.project) projects[t.project] = (projects[t.project] || 0) + 1;
     });
+    var gClientSel = el("gClient");
+    gClientSel.innerHTML = '<option value="">All clients (' + IX.tickets.length + ')</option>';
+    Object.keys(projects)
+      .sort(function (a, b) { return projects[b] - projects[a]; })
+      .forEach(function (p) {
+        gClientSel.innerHTML += '<option value="' + esc(p) + '">' + esc(p) + ' (' + projects[p] + ')</option>';
+      });
+
+    // Build global request type multi-select
+    var types = {};
+    IX.tickets.forEach(function (t) { if (t.issueType) types[t.issueType] = (types[t.issueType] || 0) + 1; });
+    var typeList = Object.keys(types).sort();
+    var gTypeMselId = mselCreate("gType", "All types", typeList, F.gType,
+      function (sel) { F.gType = sel; },
+      function () { globalFilterChanged(); }
+    );
+    var slot = el("gTypeMselSlot");
+    if (slot) { slot.innerHTML = mselHTML(gTypeMselId); mselBind(); }
+
+    // Wire global client dropdown
+    gClientSel.onchange = function () { F.gClient = gClientSel.value; globalFilterChanged(); };
+
+    // Wire global sort dropdown
+    el("gSort").onchange = function () {
+      F.gSort = this.value;
+      // Re-render search if active
+      var q = el("searchInput").value.trim();
+      if (q) renderSearch(q);
+    };
+
+    // Wire reset button
+    el("gReset").onclick = function () {
+      F.gClient = ""; F.gType = []; F.gSort = "relevance";
+      gClientSel.value = "";
+      el("gSort").value = "relevance";
+      // Reset multi-select instance
+      var inst = _mselInstances[gTypeMselId];
+      if (inst) { inst.sel = []; mselUpdateBtn(gTypeMselId); }
+      globalFilterChanged();
+    };
+
+    // Populate per-queue project dropdown too
     var sel = el("qProj");
     sel.innerHTML = '<option value="">All projects</option>';
     Object.keys(projects)
@@ -1692,6 +1898,18 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 
     renderStats();
     renderQueue();
+  }
+
+  function globalFilterChanged() {
+    _simDone = {};
+    CL = null;  // rebuild clusters with new filter
+    renderStats();
+    renderQueue();
+    // Re-render search if active
+    var q = el("searchInput").value.trim();
+    if (q) renderSearch(q);
+    // Re-render clusters if visible
+    if (F.tab === "clusters") renderClusters();
   }
 
   /* ── Load data from IndexedDB (same pattern as other dashboards) ── */
