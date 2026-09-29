@@ -277,7 +277,7 @@ var RAW_ROWS=[];
 var FILENAME="";
 var DATA_ASOF=null;  // max created/resolved date
 var SNAPS={};        // captured weekly open-backlog history (survives across uploads)
-var S={ client:"", na:"", status:"", cols:DEFAULT_COLS.slice(), colsOpen:false };
+var S={ client:"", na:"", status:"", issueType:"", cols:DEFAULT_COLS.slice(), colsOpen:false };
 
 /* ═══════════════════════ PARSE ═══════════════════════ */
 function readFile(file){
@@ -316,6 +316,7 @@ function normalize(rows){
       na:String(pick(row,"next action")||"").trim(),
       currentWorker:String(pick(row,"current worker")||"").trim(),
       svmInCharge:String(pick(row,"svm in charge")||"").trim(),
+      issueType:String(pick(row,"issue type")||"").trim(),
       _raw:row
     };
   }).filter(function(t){return t.key;});
@@ -387,6 +388,7 @@ function clientTickets(){
     if((t.client||"(no project)")!==S.client) return false;
     if(S.na && naKey(t)!==S.na) return false;
     if(S.status && t.status!==S.status) return false;
+    if(S.issueType && (t.issueType||"")!==S.issueType) return false;
     return true;
   });
 }
@@ -615,8 +617,10 @@ function render(){
   // option lists for the Next-action / Status filters (scoped to the selected client)
   var clientAll=RAW.filter(function(t){ return (t.client||"(no project)")===S.client; });
   var statusList=Object.keys(clientAll.reduce(function(a,t){ if(t.status)a[t.status]=1; return a; },{})).sort();
+  var issueTypeList=Object.keys(clientAll.reduce(function(a,t){ if(t.issueType)a[t.issueType]=1; return a; },{})).sort();
   var naHasUnset=clientAll.some(function(t){ return naKey(t)==="unset"; });
-  if(S.status && statusList.indexOf(S.status)<0) S.status="";   // drop stale status when switching client
+  if(S.status && statusList.indexOf(S.status)<0) S.status="";
+  if(S.issueType && issueTypeList.indexOf(S.issueType)<0) S.issueType="";   // drop stale status when switching client
   var ct=clientTickets();
   var K=kpis(ct);
   var weeks=lastWeeks(WEEKS_BACK);
@@ -689,7 +693,9 @@ function render(){
       '</select>'+
       '<span class="flabel">Status</span>'+
       '<select id="stsel"><option value="">All statuses</option>'+statusList.map(function(s){return '<option value="'+esc(s)+'" '+(S.status===s?"selected":"")+'>'+esc(s)+'</option>';}).join("")+'</select>'+
-      ((S.na||S.status)?'<button class="btn" id="clrsel">✕ Clear</button>':'')+
+      '<span class="flabel">Request type</span>'+
+      '<select id="itsel"><option value="">All types</option>'+issueTypeList.map(function(it){return '<option value="'+esc(it)+'" '+(S.issueType===it?"selected":"")+'>'+esc(it)+'</option>';}).join("")+'</select>'+
+      ((S.na||S.status||S.issueType)?'<button class="btn" id="clrsel">✕ Clear</button>':'')+
       '<details class="colpick" '+(S.colsOpen?'open':'')+'>'+
         '<summary class="btn">🧩 Columns ('+S.cols.length+')</summary>'+
         '<div class="colmenu"><div class="colmenu-h">Pending-list columns</div>'+
@@ -828,10 +834,11 @@ function currentStageHTML(rows){
 
 /* ═══════════════════════ EVENTS ═══════════════════════ */
 function bind(){
-  el("csel").onchange=function(e){ S.client=e.target.value; S.status=""; render(); };
+  el("csel").onchange=function(e){ S.client=e.target.value; S.status=""; S.issueType=""; render(); };
   el("nasel").onchange=function(e){ S.na=e.target.value; render(); };
   el("stsel").onchange=function(e){ S.status=e.target.value; render(); };
-  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; render(); };
+  el("itsel").onchange=function(e){ S.issueType=e.target.value; render(); };
+  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; S.issueType=""; render(); };
   var rh=el("resethist"); if(rh) rh.onclick=function(){
     if(!confirm("Reset all captured weekly history?\n\nThis clears the week-over-week open-backlog trend for every client and can't be undone. The current export is re-captured as a fresh starting point.")) return;
     if(window.HDStore) window.HDStore.clearSnapshots();
@@ -851,6 +858,7 @@ function bind(){
     var parts=["Weekly-Report", slug(S.client)||"All-clients"];
     if(S.na) parts.push(S.na.toUpperCase());
     if(S.status) parts.push(slug(S.status));
+    if(S.issueType) parts.push(slug(S.issueType));
     parts.push(new Date().toISOString().slice(0,10));
     document.title=parts.join("_");
     window.print();
