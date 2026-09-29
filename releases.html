@@ -224,6 +224,30 @@ tbody tr.detail-row{background:var(--paper)}
 @media(min-width:2560px){body{zoom:1.42}}
 @media(min-width:3200px){body{zoom:1.65}}
 @media(min-width:3840px){body{zoom:1.9}}
+/* ── multi-select dropdown ── */
+.msel{position:relative;display:inline-block}
+.msel-btn{display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;transition:border-color .15s;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;font-family:inherit}
+.msel-btn:hover{border-color:var(--line2)}
+.msel-btn.open{border-color:var(--vi);box-shadow:0 0 0 3px rgba(124,58,237,.12)}
+.msel-btn .msel-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-btn .msel-cnt{background:var(--vi);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;flex-shrink:0}
+.msel-btn .msel-arrow{color:var(--faint);font-size:10px;flex-shrink:0;transition:transform .15s}
+.msel-btn.open .msel-arrow{transform:rotate(180deg)}
+.msel-dd{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:340px;max-height:360px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh2);z-index:200;display:none;flex-direction:column;overflow:hidden}
+.msel-dd.open{display:flex}
+.msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:9px 12px;font-size:12px;color:var(--ink);font-family:inherit;outline:none;width:100%;background:var(--paper)}
+.msel-dd .msel-actions{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+.msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--faint);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
+.msel-dd .msel-actions button:hover{color:var(--ink);border-color:var(--line2)}
+.msel-dd .msel-list{overflow-y:auto;flex:1;padding:4px 0}
+.msel-dd .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--ink);transition:background .1s}
+.msel-dd .msel-opt:hover{background:var(--paper)}
+.msel-dd .msel-opt .msel-chk{width:15px;height:15px;border:1.5px solid var(--line2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;background:#fff;transition:all .12s}
+.msel-dd .msel-opt.on .msel-chk{background:var(--vi);border-color:var(--vi)}
+.msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-dd .msel-opt .msel-n{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.msel-empty{padding:16px;text-align:center;color:var(--faint);font-size:11px}
+@media print{.msel-dd{display:none!important}}
 @media(max-width:1200px){.hrow1{flex-wrap:wrap}.filters{flex-wrap:wrap}}
 @media(max-width:680px){.ogrid{grid-template-columns:1fr}.blbl{min-width:80px;max-width:100px}}
 </style>
@@ -245,13 +269,21 @@ tbody tr.detail-row{background:var(--paper)}
 </div>
 
 <script>
+/* ═══ MULTI-SELECT DROPDOWN COMPONENT ═══ */
+var _mselInstances={},_mselIdSeq=0;
+function mselCreate(containerId,allLabel,options,selected,onChange){var id='msel-'+(++_mselIdSeq);_mselInstances[id]={sel:selected.slice(),opts:options,onChange:onChange,search:'',allLabel:allLabel};return id;}
+function mselHTML(id){var inst=_mselInstances[id];if(!inst)return'';var sel=inst.sel,allLabel=inst.allLabel;var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';return'<div class="msel" id="'+id+'"><button type="button" class="msel-btn" data-msel="'+id+'"><span class="msel-text">'+esc(text)+'</span>'+(sel.length>0?'<span class="msel-cnt">'+sel.length+'</span>':'')+'<span class="msel-arrow">▾</span></button><div class="msel-dd" id="'+id+'-dd"><input class="msel-search" placeholder="Search…" data-msel-search="'+id+'" autocomplete="off"/><div class="msel-actions"><button data-msel-all="'+id+'">Select all</button><button data-msel-none="'+id+'">Clear</button></div><div class="msel-list" id="'+id+'-list"></div></div></div>';}
+function mselRenderList(id){var inst=_mselInstances[id];if(!inst)return;var listEl=document.getElementById(id+'-list');if(!listEl)return;var q=inst.search.toLowerCase();var filtered=inst.opts.filter(function(o){return!q||o.toLowerCase().indexOf(q)>-1;});if(!filtered.length){listEl.innerHTML='<div class="msel-empty">No matches</div>';return;}listEl.innerHTML=filtered.map(function(o){var on=inst.sel.indexOf(o)>-1;return'<div class="msel-opt'+(on?' on':'')+'" data-msel-val="'+esc(o)+'" data-msel-id="'+id+'"><span class="msel-chk">'+(on?'✓':'')+'</span><span class="msel-lbl">'+esc(o)+'</span></div>';}).join('');}
+function mselBind(){document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.msel;var dd=document.getElementById(id+'-dd');var isOpen=dd.classList.contains('open');document.querySelectorAll('.msel-dd.open').forEach(function(d){d.classList.remove('open');});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});if(!isOpen){dd.classList.add('open');btn.classList.add('open');mselRenderList(id);var si=dd.querySelector('.msel-search');if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}}};});document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){inp.onclick=function(e){e.stopPropagation();};inp.oninput=function(){var id=inp.dataset.mselSearch;_mselInstances[id].search=inp.value;mselRenderList(id);};});document.querySelectorAll('[data-msel-all]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselAll,inst=_mselInstances[id];inst.sel=inst.opts.slice();mselRenderList(id);inst.onChange(inst.sel.slice());};});document.querySelectorAll('[data-msel-none]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselNone,inst=_mselInstances[id];inst.sel=[];mselRenderList(id);inst.onChange([]);};});document.querySelectorAll('.msel-list').forEach(function(list){list.onclick=function(e){e.stopPropagation();var opt=e.target.closest('.msel-opt');if(!opt)return;var id=opt.dataset.mselId,val=opt.dataset.mselVal;var inst=_mselInstances[id];if(!inst)return;var idx=inst.sel.indexOf(val);if(idx>-1)inst.sel.splice(idx,1);else inst.sel.push(val);mselRenderList(id);inst.onChange(inst.sel.slice());};});}
+document.addEventListener('click',function(){document.querySelectorAll('.msel-dd.open').forEach(function(d){d.classList.remove('open');});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});});
+
 /* ═══════════════════════ HD Release Tracker ═══════════════════════ */
 var FILENAME="", BLOB=null, RAW=[], FILTERED=[];
 var PAGE_SIZE=50;
 var JIRA="https://svmhelpdesk.atlassian.net/browse/";
 
 var S={
-  tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", issueType:"", from:"", to:"",
+  tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", issueType:[], from:"", to:"",
   sortCol:"created", sortDir:"desc", page:0,
   kpiFilter:""  // active KPI highlight
 };
@@ -322,7 +354,7 @@ function applyFilters(){
     if(S.proj&&t.project!==S.proj) return false;
     if(S.svm&&t.svm!==S.svm) return false;
     if(S.fixType&&t.fixType!==S.fixType) return false;
-    if(S.issueType&&t.issueType!==S.issueType) return false;
+    if(S.issueType.length&&S.issueType.indexOf(t.issueType)<0) return false;
     if(S.status==="closed"&&!t.closed) return false;
     if(S.status==="open"&&t.closed) return false;
     if(S.from){var fd=new Date(S.from);if(t.created&&t.created<fd)return false;}
@@ -373,6 +405,8 @@ function render(){
 
   var projs=distinctSorted(RAW,"project");
   var svms=distinctSorted(RAW,"svm");
+  var itypes=distinctSorted(RAW,"issueType");
+  var _itMselId=mselCreate("itMsel","All request types",itypes,S.issueType,function(sel){S.issueType=sel;S.page=0;S.kpiFilter="";render();});
 
   var h='<header class="top">'+
     '<div class="hrow hrow1">'+
@@ -403,11 +437,10 @@ function render(){
         '<option value="Data Fix"'+(S.fixType==="Data Fix"?' selected':'')+'>Data Fix</option>'+
         '<option value="Bug Fix"'+(S.fixType==="Bug Fix"?' selected':'')+'>Bug Fix</option>'+
         '<option value="Workaround"'+(S.fixType==="Workaround"?' selected':'')+'>Workaround</option></select></div>'+
-      '<div class="fcell"><span class="flabel">Request Type</span><select class="fsel" id="fIssueType"><option value="">All types</option>'+
-        distinctSorted(RAW,"issueType").map(function(it){return'<option value="'+esc(it)+'"'+(S.issueType===it?' selected':'')+'>'+esc(it)+'</option>';}).join('')+'</select></div>'+
       '<div class="fcell"><span class="flabel">Status</span><select class="fsel" id="fStatus"><option value="">All</option>'+
         '<option value="closed"'+(S.status==="closed"?' selected':'')+'>Closed</option>'+
         '<option value="open"'+(S.status==="open"?' selected':'')+'>Outstanding</option></select></div>'+
+      '<div class="fcell"><span class="flabel">Request Type</span>'+mselHTML(_itMselId)+'</div>'+
       '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
       '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+
     '</div>'+
@@ -1092,12 +1125,12 @@ function bindAll(){
   var fp=el("fProj");if(fp)fp.onchange=function(){S.proj=fp.value;S.page=0;render();};
   var fs=el("fSvm");if(fs)fs.onchange=function(){S.svm=fs.value;S.page=0;render();};
   var ff=el("fFix");if(ff)ff.onchange=function(){S.fixType=ff.value;S.page=0;S.kpiFilter="";render();};
-  var fit=el("fIssueType");if(fit)fit.onchange=function(){S.issueType=fit.value;S.page=0;S.kpiFilter="";render();};
   var fst=el("fStatus");if(fst)fst.onchange=function(){S.status=fst.value;S.page=0;S.kpiFilter="";render();};
+  mselBind();
   var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
   var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
   var rb=el("resetBtn");if(rb)rb.onclick=function(){
-    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType="";S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType=[];S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
 
   // KPI clicks → single-click opens drill modal directly
   document.querySelectorAll("[data-kpi]").forEach(function(k){
