@@ -115,6 +115,30 @@ tr:hover td { background: rgba(5,150,105,.02) }
 .empty-st h3 { font-family: var(--disp); font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 5px }
 .empty-st p { font-size: 12.5px; line-height: 1.5; max-width: 380px; margin: 0 auto }
 
+/* ── multi-select dropdown ── */
+.msel{position:relative;display:inline-block}
+.msel-btn{display:flex;align-items:center;gap:6px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;transition:border-color .15s;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;font-family:inherit}
+.msel-btn:hover{border-color:var(--line2)}
+.msel-btn.open{border-color:var(--em);box-shadow:0 0 0 3px rgba(5,150,105,.12)}
+.msel-btn .msel-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-btn .msel-cnt{background:var(--em);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;flex-shrink:0}
+.msel-btn .msel-arrow{color:var(--muted);font-size:10px;flex-shrink:0;transition:transform .15s}
+.msel-btn.open .msel-arrow{transform:rotate(180deg)}
+.msel-dd{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:340px;max-height:360px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12);z-index:200;display:none;flex-direction:column;overflow:hidden}
+.msel-dd.open{display:flex}
+.msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:9px 12px;font-size:12px;color:var(--ink);font-family:inherit;outline:none;width:100%;background:var(--paper)}
+.msel-dd .msel-actions{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+.msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--muted);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
+.msel-dd .msel-actions button:hover{color:var(--ink);border-color:var(--line2)}
+.msel-dd .msel-list{overflow-y:auto;flex:1;padding:4px 0}
+.msel-dd .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--ink);transition:background .1s}
+.msel-dd .msel-opt:hover{background:var(--paper)}
+.msel-dd .msel-opt .msel-chk{width:15px;height:15px;border:1.5px solid var(--line2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;background:#fff;transition:all .12s}
+.msel-dd .msel-opt.on .msel-chk{background:var(--em);border-color:var(--em)}
+.msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msel-dd .msel-opt .msel-n{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.msel-empty{padding:16px;text-align:center;color:var(--muted);font-size:11px}
+
 @media (max-width: 700px) { .topbar { flex-direction: column; align-items: stretch } .stats { grid-template-columns: repeat(3, 1fr) } }
 @media (min-width: 1921px) { body { zoom: 1.18 } }
 @media (min-width: 2560px) { body { zoom: 1.42 } }
@@ -140,9 +164,7 @@ tr:hover td { background: rgba(5,150,105,.02) }
     <h1>📊 <span class="accent">Operations</span> Intelligence</h1>
     <div class="spacer"></div>
     <span style="font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px">Request Type</span>
-    <select id="fIssueType" style="appearance:none;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 30px 7px 12px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2711%27 height=%2711%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%236B7A90%27 stroke-width=%272.5%27%3E%3Cpath d=%27M6 9l6 6 6-6%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 10px center;font-family:inherit">
-      <option value="">All types</option>
-    </select>
+    <span id="itMselSlot"></span>
     <span class="mono" style="font-size:11px; color:var(--muted)" id="ticketMeta"></span>
   </div>
 
@@ -166,11 +188,19 @@ tr:hover td { background: rgba(5,150,105,.02) }
 <script>
 (function () {
   var HS = window.HDStore;
-  var TK = [];   // all parsed ticket objects
+  var TK = [];   // all parsed ticket objects (filtered)
+  var ALL_TK = []; // unfiltered
   var NOW = new Date();
 
-  var F = { tab: "clients", issueType: "" };
-  var ALL_TK = [];  // unfiltered ticket list (for populating the dropdown)
+  var F = { tab: "clients", issueType: [] };
+
+  /* ═══ MULTI-SELECT DROPDOWN COMPONENT ═══ */
+  var _mselInstances={},_mselIdSeq=0;
+  function mselCreate(cid,allLabel,options,selected,onChange){var id='msel-'+(++_mselIdSeq);_mselInstances[id]={sel:selected.slice(),opts:options,onChange:onChange,search:'',allLabel:allLabel};return id;}
+  function mselHTML(id){var inst=_mselInstances[id];if(!inst)return'';var sel=inst.sel,allLabel=inst.allLabel;var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';return'<div class="msel" id="'+id+'"><button type="button" class="msel-btn" data-msel="'+id+'"><span class="msel-text">'+esc(text)+'</span>'+(sel.length>0?'<span class="msel-cnt">'+sel.length+'</span>':'')+'<span class="msel-arrow">▾</span></button><div class="msel-dd" id="'+id+'-dd"><input class="msel-search" placeholder="Search…" data-msel-search="'+id+'" autocomplete="off"/><div class="msel-actions"><button data-msel-all="'+id+'">Select all</button><button data-msel-none="'+id+'">Clear</button></div><div class="msel-list" id="'+id+'-list"></div></div></div>';}
+  function mselRenderList(id){var inst=_mselInstances[id];if(!inst)return;var listEl=document.getElementById(id+'-list');if(!listEl)return;var q=inst.search.toLowerCase();var filtered=inst.opts.filter(function(o){return!q||o.toLowerCase().indexOf(q)>-1;});if(!filtered.length){listEl.innerHTML='<div class="msel-empty">No matches</div>';return;}listEl.innerHTML=filtered.map(function(o){var on=inst.sel.indexOf(o)>-1;return'<div class="msel-opt'+(on?' on':'')+'" data-msel-val="'+esc(o)+'" data-msel-id="'+id+'"><span class="msel-chk">'+(on?'✓':'')+'</span><span class="msel-lbl">'+esc(o)+'</span></div>';}).join('');}
+  function mselBind(){document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.msel;var dd=document.getElementById(id+'-dd');var isOpen=dd.classList.contains('open');document.querySelectorAll('.msel-dd.open').forEach(function(d){d.classList.remove('open');});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});if(!isOpen){dd.classList.add('open');btn.classList.add('open');mselRenderList(id);var si=dd.querySelector('.msel-search');if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}}};});document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){inp.onclick=function(e){e.stopPropagation();};inp.oninput=function(){var id=inp.dataset.mselSearch;_mselInstances[id].search=inp.value;mselRenderList(id);};});document.querySelectorAll('[data-msel-all]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselAll,inst=_mselInstances[id];inst.sel=inst.opts.slice();mselRenderList(id);inst.onChange(inst.sel.slice());};});document.querySelectorAll('[data-msel-none]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselNone,inst=_mselInstances[id];inst.sel=[];mselRenderList(id);inst.onChange([]);};});document.querySelectorAll('.msel-list').forEach(function(list){list.onclick=function(e){e.stopPropagation();var opt=e.target.closest('.msel-opt');if(!opt)return;var id=opt.dataset.mselId,val=opt.dataset.mselVal;var inst=_mselInstances[id];if(!inst)return;var idx=inst.sel.indexOf(val);if(idx>-1)inst.sel.splice(idx,1);else inst.sel.push(val);mselRenderList(id);inst.onChange(inst.sel.slice());};});}
+  document.addEventListener('click',function(){document.querySelectorAll('.msel-dd.open').forEach(function(d){d.classList.remove('open');});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});});
 
   function el(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (m) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[m]; }); }
@@ -802,32 +832,33 @@ tr:hover td { background: rgba(5,150,105,.02) }
   }
 
   function applyIssueTypeFilter() {
-    if (F.issueType) {
-      TK = ALL_TK.filter(function (t) { return t.issueType === F.issueType; });
+    if (F.issueType.length) {
+      TK = ALL_TK.filter(function (t) { return F.issueType.indexOf(t.issueType) > -1; });
     } else {
       TK = ALL_TK.slice();
     }
   }
 
-  function populateIssueTypeDropdown() {
-    var sel = el("fIssueType"); if (!sel) return;
+  function buildIssueTypeMsel() {
     var types = {};
     ALL_TK.forEach(function (t) { if (t.issueType) types[t.issueType] = (types[t.issueType] || 0) + 1; });
     var sorted = Object.keys(types).sort();
-    sel.innerHTML = '<option value="">All types (' + ALL_TK.length + ')</option>' +
-      sorted.map(function (it) { return '<option value="' + esc(it) + '"' + (F.issueType === it ? ' selected' : '') + '>' + esc(it) + ' (' + types[it] + ')</option>'; }).join("");
+    var mid = mselCreate("itMsel", "All types", sorted, F.issueType, function (sel) {
+      F.issueType = sel;
+      renderAll();
+    });
+    var slot = el("itMselSlot");
+    if (slot) { slot.innerHTML = mselHTML(mid); mselBind(); }
   }
 
   function renderAll() {
     applyIssueTypeFilter();
-    el("ticketMeta").textContent = TK.length.toLocaleString() + " tickets loaded" + (F.issueType ? " · " + F.issueType : "");
+    el("ticketMeta").textContent = TK.length.toLocaleString() + " tickets" + (F.issueType.length ? " · " + F.issueType.join(", ") : "");
     renderStats();
-    // Clear lazy-rendered tabs so they re-render with filtered data
     el("clientView").innerHTML = "";
     el("workloadView").innerHTML = "";
     el("healthView").innerHTML = "";
     el("qualityView").innerHTML = "";
-    // Re-render the active tab
     if (F.tab === "clients") renderClients();
     else if (F.tab === "workload") renderWorkload();
     else if (F.tab === "health") renderHealth();
@@ -850,10 +881,7 @@ tr:hover td { background: rgba(5,150,105,.02) }
       });
     }
 
-    populateIssueTypeDropdown();
-    var sel = el("fIssueType");
-    if (sel) sel.onchange = function () { F.issueType = sel.value; renderAll(); };
-
+    buildIssueTypeMsel();
     renderStats();
     renderClients();
   }
