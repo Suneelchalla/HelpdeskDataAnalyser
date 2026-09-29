@@ -251,7 +251,7 @@ var PAGE_SIZE=50;
 var JIRA="https://svmhelpdesk.atlassian.net/browse/";
 
 var S={
-  tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", from:"", to:"",
+  tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", issueType:"", from:"", to:"",
   sortCol:"created", sortDir:"desc", page:0,
   kpiFilter:""  // active KPI highlight
 };
@@ -322,6 +322,7 @@ function applyFilters(){
     if(S.proj&&t.project!==S.proj) return false;
     if(S.svm&&t.svm!==S.svm) return false;
     if(S.fixType&&t.fixType!==S.fixType) return false;
+    if(S.issueType&&t.issueType!==S.issueType) return false;
     if(S.status==="closed"&&!t.closed) return false;
     if(S.status==="open"&&t.closed) return false;
     if(S.from){var fd=new Date(S.from);if(t.created&&t.created<fd)return false;}
@@ -402,6 +403,8 @@ function render(){
         '<option value="Data Fix"'+(S.fixType==="Data Fix"?' selected':'')+'>Data Fix</option>'+
         '<option value="Bug Fix"'+(S.fixType==="Bug Fix"?' selected':'')+'>Bug Fix</option>'+
         '<option value="Workaround"'+(S.fixType==="Workaround"?' selected':'')+'>Workaround</option></select></div>'+
+      '<div class="fcell"><span class="flabel">Request Type</span><select class="fsel" id="fIssueType"><option value="">All types</option>'+
+        distinctSorted(RAW,"issueType").map(function(it){return'<option value="'+esc(it)+'"'+(S.issueType===it?' selected':'')+'>'+esc(it)+'</option>';}).join('')+'</select></div>'+
       '<div class="fcell"><span class="flabel">Status</span><select class="fsel" id="fStatus"><option value="">All</option>'+
         '<option value="closed"'+(S.status==="closed"?' selected':'')+'>Closed</option>'+
         '<option value="open"'+(S.status==="open"?' selected':'')+'>Outstanding</option></select></div>'+
@@ -1089,11 +1092,12 @@ function bindAll(){
   var fp=el("fProj");if(fp)fp.onchange=function(){S.proj=fp.value;S.page=0;render();};
   var fs=el("fSvm");if(fs)fs.onchange=function(){S.svm=fs.value;S.page=0;render();};
   var ff=el("fFix");if(ff)ff.onchange=function(){S.fixType=ff.value;S.page=0;S.kpiFilter="";render();};
+  var fit=el("fIssueType");if(fit)fit.onchange=function(){S.issueType=fit.value;S.page=0;S.kpiFilter="";render();};
   var fst=el("fStatus");if(fst)fst.onchange=function(){S.status=fst.value;S.page=0;S.kpiFilter="";render();};
   var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
   var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
   var rb=el("resetBtn");if(rb)rb.onclick=function(){
-    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType="";S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
 
   // KPI clicks → single-click opens drill modal directly
   document.querySelectorAll("[data-kpi]").forEach(function(k){
