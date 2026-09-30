@@ -118,8 +118,10 @@ th.sort{cursor:pointer;user-select:none}th.sort:hover{color:var(--ink)}
 td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
 tr.row-click{cursor:pointer}tr.row-click:hover td{background:var(--paper)}
 td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
-.ell{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.key{font-weight:700;font-family:var(--mono);font-size:11.5px}
+.ell{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.key{font-weight:700;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+td.num{white-space:nowrap}td .chip2{white-space:nowrap}
+.tdn{white-space:nowrap}
 .chip2{display:inline-block;padding:2px 9px;border-radius:6px;font-size:10.5px;font-weight:700;white-space:nowrap}
 .chip2.g{background:var(--green-soft);color:var(--green)}.chip2.g2{background:var(--green-bg);color:var(--green);border:1px solid var(--green-soft)}
 .chip2.a{background:var(--amber-soft);color:var(--amber)}.chip2.o{background:var(--sla-soft);color:#B4400A}
@@ -149,7 +151,7 @@ select,input[type=number],input[type=text],input[type=time],textarea{font-family
 .modal{background:var(--card);border-radius:20px;box-shadow:var(--sh3);width:min(980px,100%);animation:pop .18s ease-out}
 @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
 .mh{display:flex;gap:12px;align-items:flex-start;padding:18px 22px 12px;border-bottom:1px solid var(--line)}
-.mh .x{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--paper);font-size:15px;color:var(--ink2)}
+.mh .x{margin-left:0;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--paper);font-size:15px;color:var(--ink2)}
 .mb{padding:16px 22px 22px}
 .tl{display:flex;height:22px;border-radius:7px;overflow:hidden;gap:2px;margin:4px 0 6px}
 .tl i{display:block;min-width:4px;border-radius:3px}
@@ -178,6 +180,14 @@ select,input[type=number],input[type=text],input[type=time],textarea{font-family
 .tog{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
 .tog button{border:none;background:none;padding:4px 11px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--muted)}.tog button.on{background:var(--ink);color:#fff}
 .bigpct{font-family:var(--mono);font-weight:700}
+.sub2{font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap}
+.ghost.sm{padding:4px 9px;font-size:11px;white-space:nowrap}
+.rm-pre{padding:14px 16px;background:var(--paper);border:1px solid var(--line);border-radius:10px;font-size:12px;line-height:1.65;font-family:var(--mono);white-space:pre-wrap;word-break:break-word;margin:0}
+.rm-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--paper);margin-bottom:12px;font-size:13px}
+.rm-opt{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.5;padding:8px 10px;border:1px solid var(--line);border-radius:9px;cursor:pointer;background:#fff}
+.rm-opt input{margin-top:3px}.rm-opt.on{border-color:var(--sla);background:var(--sla-bg)}
+.rm-msg{margin-top:12px;padding:11px 14px;border-radius:10px;font-size:12.5px;line-height:1.55}
+.rm-msg.ok{background:var(--green-bg);border:1px solid var(--green-soft);color:var(--ink2)}.rm-msg.bad{background:var(--rose-bg);border:1px solid var(--rose-soft);color:var(--ink2)}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -553,13 +563,34 @@ function renderOverview(v) {
   var hold = ["hd", "engg", "client"].map(function (k) {
     var o = s.by[k]; return "<tr><td>" + kchip(k) + '</td><td class="num">' + o.n + '</td><td class="num" style="color:' + (o.br ? "var(--rose)" : "inherit") + '">' + o.br + '</td><td class="num">' + o.risk + '</td><td class="num">' + (o.n - o.br - o.risk) + "</td></tr>"; }).join("");
   var att = v.filter(function (x) { return x.r && !x.r.isClosed && (x.b === "breached" || x.b === "danger" || x.b === "warning"); }).sort(function (a, b) { return (b.r.pct || 0) - (a.r.pct || 0); }).slice(0, 10);
-  var arow = att.map(function (x) { return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell">' + esc(x.t.summary) + "</td><td>" + kchip(x.r.currentKind) + "</td><td>" + chip(x.b) + '</td><td class="num" style="color:' + (x.b === "breached" ? "var(--rose)" : "inherit") + '">' + (x.r.remainingMin < 0 ? "+" + fdur(-x.r.remainingMin) : x.r.remainingMin === 0 ? "at limit" : fdur(x.r.remainingMin) + " left") + "</td></tr>"; }).join("");
+  var arow = att.map(function (x) { return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell">' + esc(x.t.summary) + "</td><td>" + kchip(x.r.currentKind) + "</td><td>" + chip(x.b) + "</td><td>" + breakCell(x) + "</td><td>" + remindCell(x) + "</td></tr>"; }).join("");
   h += '<div class="grid2"><div class="card panel"><h3>Who has the open tickets</h3><div class="sub">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused.</div><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Over target</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' + hold + "</tbody></table></div></div>" +
-    '<div class="card panel"><h3>Needs attention</h3><div class="sub">Open tickets closest to, or past, their target.</div>' + (att.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Summary</th><th>Held by</th><th>State</th><th class="num">Remaining</th></tr></thead><tbody>' + arow + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is at risk right now.</div>') + "</div></div>";
+    '<div class="card panel"><h3>Needs attention</h3><div class="sub">Open tickets closest to, or past, their target, with the exact time each one breaks.</div>' + (att.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Summary</th><th>Held by</th><th>State</th><th>Breaks at</th><th></th></tr></thead><tbody>' + arow + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is at risk right now.</div>') + "</div></div>";
   M.innerHTML = h;
 }
 
 /* ═════════ tickets tab ═════════ */
+function fdtw(ms) { return ms == null ? "—" : new Date(ms).toLocaleString("en-GB", { timeZone: IST, weekday: "short", day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); }
+function binfoOf(x) { if (!x.r) return null; if (x.bi === undefined) x.bi = Sla.breachInfo(x.r, ST.cal, ST.now); return x.bi; }
+function canRemind(x) { return !!(x.r && !x.r.isClosed && x.r.targetMin != null); }
+function notesGet() { try { return JSON.parse(localStorage.getItem("hd-sla-notes") || "{}"); } catch (e) { return {}; } }
+function noteSet(key, o) { var n = notesGet(); n[key] = o; try { localStorage.setItem("hd-sla-notes", JSON.stringify(n)); } catch (e) {} }
+/* the "Breaks at" cell: exact time for running tickets, what's left for paused ones, when it happened for breached ones */
+function breakCell(x) {
+  var bi = binfoOf(x); if (!bi) return "—";
+  switch (bi.state) {
+    case "running": return "<b>" + fdtw(bi.breachAt) + "</b>" + (bi.breachAt != null ? '<div class="sub2">in ' + fcal((bi.breachAt - ST.now) / 60000) + "</div>" : "");
+    case "paused": return '<span class="chip2 k-client">Paused</span><div class="sub2">' + fdur(bi.remainingMin) + " left once it returns</div>";
+    case "breached": return '<span class="chip2 r">Breached</span><div class="sub2">' + fdtw(bi.breachedAt) + "</div>";
+    case "missed": return '<span class="sub2">Missed ' + fdtw(bi.breachedAt) + "</span>";
+  } return "—";
+}
+function agoText(at) { var m = (Date.now() - at) / 60000; return m < 1 ? "just now" : fcal(m) + " ago"; }
+function remindCell(x) {
+  if (!canRemind(x)) return "";
+  var n = notesGet()[x.t.key];
+  return '<button class="ghost sm" data-remind="' + esc(x.t.key) + '" title="Preview and send an SLA reminder as an internal note">🔔 Remind</button>' + (n ? '<div class="sub2">sent ' + agoText(n.at) + "</div>" : "");
+}
 function histSuspect(t) { var e = histFor(t); return !!(e && e.suspect); }
 function sortVal(x, k) {
   var r = x.r;
@@ -568,6 +599,7 @@ function sortVal(x, k) {
     case "created": return x.t.created; case "target": return r && r.targetMin != null ? r.targetMin : -1;
     case "elapsed": return r ? r.elapsedMin : -1; case "paused": return r ? r.pausedMin : -1; case "pct": return r && r.pct != null ? r.pct : -1;
     case "worker": return x.t.worker || ""; case "client": return x.t.prefix;
+    case "breach": { var bi = binfoOf(x); if (!bi) return 9e15; if (bi.state === "breached" || bi.state === "missed") return bi.breachedAt == null ? 0 : bi.breachedAt; if (bi.state === "running") return bi.breachAt == null ? 9e15 : bi.breachAt; if (bi.state === "paused") return 8e15; return 9e15; }
   } return 0;
 }
 function th(label, k, num) { var on = ST.sort.key === k; return '<th class="sort' + (num ? " num" : "") + '" data-sort="' + k + '" aria-sort="' + (on ? (ST.sort.dir === "asc" ? "ascending" : "descending") : "none") + '">' + label + (on ? (ST.sort.dir === "asc" ? " ▲" : " ▼") : "") + "</th>"; }
@@ -579,16 +611,15 @@ function renderTickets(v) {
   var pg = v.slice((ST.page - 1) * ST.PAGE, ST.page * ST.PAGE);
   var body = pg.map(function (x) {
     var t = x.t, r = x.r;
-    return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td>" + esc(t.prefix) + "</td><td>" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + fd(t.created) +
-      '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + '</td><td class="num">' + (r && r.pausedMin ? fdur(r.pausedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + chip(x.b) + "</td></tr>";
+    return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
   }).join("");
-  M.innerHTML = '<div class="card panel"><div class="panel-h"><h3>' + v.length.toLocaleString() + (v.length === 1 ? ' ticket' : ' tickets') + '</h3><button class="ghost" id="btnExport">Export to Excel</button></div><div class="sub">Click a ticket for its full status timeline and how its clock was counted.</div>' +
-    (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + th("Ticket", "key") + "<th>Summary</th>" + th("Client", "client") + th("Severity", "sev") + "<th>Status</th><th>Held by</th>" + th("Worker", "worker") + th("Created", "created", 1) + th("Target", "target", 1) + th("Counted", "elapsed", 1) + th("Client wait excl.", "paused", 1) + th("Used", "pct") + "<th>Result</th></tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
+  M.innerHTML = '<div class="card panel"><div class="panel-h"><h3>' + v.length.toLocaleString() + (v.length === 1 ? ' ticket' : ' tickets') + '</h3><button class="ghost" id="btnExport">Export to Excel</button></div><div class="sub">Click a ticket for its full status timeline. <b>Breaks at</b> is the exact time the target runs out on your working calendar; 🔔 Remind previews and sends it as an internal note. Created date and client-wait time are in each ticket’s detail.</div>' +
+    (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + th("Ticket", "key") + "<th>Summary</th>" + th("Severity", "sev") + "<th>Status</th><th>Held by</th>" + th("Worker", "worker") + th("Target", "target", 1) + th("Counted", "elapsed", 1) + th("Used", "pct") + th("Breaks at", "breach") + "<th>Result</th><th></th></tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
 }
 function exportXlsx() {
   var v = view(), rows = v.map(function (x) { var t = x.t, r = x.r; return { Ticket: t.key, Summary: t.summary, Client: t.prefix, Project: t.project, Type: t.type, Severity: t.sev ? Sla.sevName(t.sev) : (t.priority || ""), Status: t.status, "Current worker": t.worker, "SVM in charge": t.svm, Created: new Date(t.created).toISOString(),
     "Target (h)": r && r.targetMin != null ? +(r.targetMin / 60).toFixed(2) : "", "Counted (h)": r ? +(r.elapsedMin / 60).toFixed(2) : "", "Help Desk (h)": r ? +(r.hdMin / 60).toFixed(2) : "", "Engineering (h)": r ? +(r.enggMin / 60).toFixed(2) : "", "Client wait excluded (h)": r ? +(r.pausedMin / 60).toFixed(2) : "",
-    "Times with client": r ? r.clientRounds : "", Reopened: r ? r.reopens : "", Closed: r ? (r.isClosed ? "Yes" : "No") : "", Result: BK[x.b][0] }; });
+    "Breach state": (function () { var bi = binfoOf(x); return bi ? bi.state : ""; })(), "Breaks at (IST)": (function () { var bi = binfoOf(x); return bi && bi.breachAt ? fdtw(bi.breachAt) : ""; })(), "Breached at (IST)": (function () { var bi = binfoOf(x); return bi && bi.breachedAt ? fdtw(bi.breachedAt) : ""; })(), "Times with client": r ? r.clientRounds : "", Reopened: r ? r.reopens : "", Closed: r ? (r.isClosed ? "Yes" : "No") : "", Result: BK[x.b][0] }; });
   if (!rows.length) { toast("Nothing to export.", true); return; }
   if (window.XLSX) { var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "SLA"); XLSX.writeFile(wb, "SLA_" + new Date().toISOString().slice(0, 10) + ".xlsx"); return; }
   var cols = Object.keys(rows[0]), csv = [cols.join(",")].concat(rows.map(function (r) { return cols.map(function (c) { return '"' + String(r[c]).replace(/"/g, '""') + '"'; }).join(","); })).join("\n");
@@ -597,10 +628,10 @@ function exportXlsx() {
 
 /* ═════════ ticket detail ═════════ */
 function overlay(id, html) { var o = $(id); if (!o) { o = document.createElement("div"); o.id = id; o.className = "ov"; document.body.appendChild(o); } o.innerHTML = html; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); return o; }
-function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; }
+function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } }
 function renderDetail() {
   var t = ST.byKey[ST.detail]; if (!t) return;
-  var r = getResult(t), b = bucketOf(r), h = '<div class="modal"><div class="mh"><div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="font-size:20px">' + keyLink(t.key) + "</h2>" + chip(b) + (r && r.isPaused ? kchip("client") + ' <span style="font-size:11.5px;color:var(--muted)">clock paused</span>' : "") + '</div><div style="font-size:14px;margin-top:6px;font-weight:500">' + esc(t.summary) + '</div><div style="font-size:11.5px;color:var(--muted);margin-top:5px">' + esc(clientName(t.prefix)) + " · " + esc(t.type) + " · " + esc(t.priority || "No priority") + " · worker " + esc(t.worker || "—") + " · SVM " + esc(t.svm || "—") + " · created " + fdt(t.created) + '</div></div><button class="x" data-closedetail aria-label="Close">✕</button></div><div class="mb">';
+  var r = getResult(t), b = bucketOf(r), h = '<div class="modal"><div class="mh"><div style="flex:1;min-width:0"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="font-size:20px">' + keyLink(t.key) + "</h2>" + chip(b) + (r && r.isPaused ? kchip("client") + ' <span style="font-size:11.5px;color:var(--muted)">clock paused</span>' : "") + '</div><div style="font-size:14px;margin-top:6px;font-weight:500">' + esc(t.summary) + '</div><div style="font-size:11.5px;color:var(--muted);margin-top:5px">' + esc(clientName(t.prefix)) + " · " + esc(t.type) + " · " + esc(t.priority || "No priority") + " · worker " + esc(t.worker || "—") + " · SVM " + esc(t.svm || "—") + " · created " + fdt(t.created) + '</div></div>' + (r && !r.isClosed && r.targetMin != null ? '<button class="primary" data-remind="' + esc(t.key) + '">🔔 Send SLA reminder</button>' : "") + '<button class="x" data-closedetail aria-label="Close">✕</button></div><div class="mb">';
   if (!r) {
     h += '<div class="empty"><b>No status history for this ticket yet.</b><br>The clock needs its status changes to work out time with the client.<br><br><button class="primary" id="btnFetchOne"' + (BR.ready && !ST.fetching ? "" : " disabled") + ">" + (ST.fetching ? "Fetching…" : "Load history for this ticket") + "</button>" + (BR.ready ? "" : '<div style="margin-top:8px;font-size:12px">Extension not detected.</div>') + "</div></div></div>";
   } else {
@@ -610,7 +641,8 @@ function renderDetail() {
       kpi(r.remainingMin != null && r.remainingMin < 0 ? "Over target by" : "Remaining", r.remainingMin == null ? "—" : r.remainingMin === 0 ? "At limit" : fdur(Math.abs(r.remainingMin)), r.pct != null ? Math.round(r.pct) + "% used" : "", r.remainingMin != null && r.remainingMin <= 0 ? "var(--rose)" : "var(--green)") +
       kpi("Not counted (with client)", fdur(r.pausedMin), r.clientRounds + " time" + (r.clientRounds === 1 ? "" : "s") + " with client", "#F0A838") +
       kpi("Age since created", fcal(r.ageCalMin), "calendar time, incl. weekends", "var(--ink2)") + "</div>";
-    h += '<div class="sr">' + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "Created <b>" + fcal(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(calText()) + "), which came to <b>" + fdur(r.elapsedMin) + "</b>" + dayNote + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
+    var bi = Sla.breachInfo(r, ST.cal, ST.now);
+    h += '<div class="sr">' + breachSentence(bi) + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "Created <b>" + fcal(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(calText()) + "), which came to <b>" + fdur(r.elapsedMin) + "</b>" + dayNote + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
       (r.pausedMin > 0 ? "<b>" + fdur(r.pausedMin) + "</b> of working time was spent with the client and was <b>not</b> counted. " : "This ticket has not been with the client. ") +
       (e && e.suspect ? '<br><span style="color:var(--amber)"><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</span> ' : "") +
       (r.unmapped.length ? '<br><span style="color:var(--amber)">Status(es) not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</span>" : "") + "</div>";
@@ -627,7 +659,133 @@ function renderDetail() {
   }
   overlay("detail", h);
 }
+function breachSentence(bi) {
+  switch (bi.state) {
+    case "running": return "At the current pace it <b>breaches on " + fdtw(bi.breachAt) + " IST</b> (" + fdur(bi.remainingMin) + " of working time left). ";
+    case "paused": return "The clock is <b>paused</b> while the ticket is with the client, with " + fdur(bi.remainingMin) + " of working time left. If it came back now it would breach on <b>" + fdtw(bi.ifResumedAt) + " IST</b>. ";
+    case "breached": return "<b>Breached on " + fdtw(bi.breachedAt) + " IST</b> and now " + fdur(bi.overByMin) + " over target. ";
+    case "missed": return "Closed after breaching on <b>" + fdtw(bi.breachedAt) + " IST</b>. ";
+  } return "";
+}
 function openDetail(key) { ST.detail = key; closeOv("search"); ST.detail = key; renderDetail(); var x = document.querySelector("[data-closedetail]"); if (x) x.focus(); }
+
+/* ═════════ SLA reminder (internal note in Jira) ═════════
+   One message per ticket, always rebuilt from the ticket's CURRENT state, so it never goes stale:
+   running → the exact breach time; with the client → clock paused + earliest breach if it returned now;
+   already breached → when it breached and by how much. Sending updates the ticket's existing SLA note
+   in place (or adds one if there is none), so a ticket carries a single, current SLA note. */
+var SLA_MARK = "SLA reminder · HD SLA Tracker";
+var GENERIC = { "svm help desk": 1, "svm helpdesk": 1, "jira misc": 1, "jiramisc": 1, "unassigned": 1, "": 1, "nan": 1 };
+function liveOf(t) {
+  var e = histFor(t); if (!e) return null; var now = Date.now();
+  var r = Sla.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: ST.cfg, cal: ST.cal, now: now, classify: classify });
+  return { r: r, bi: Sla.breachInfo(r, ST.cal, now), now: now, e: e };
+}
+function buildSlaMessage(t, L, extra) {
+  var r = L.r, bi = L.bi, b = function (x) { return { t: x, b: 1 }; }, n = function (x) { return { t: x }; }, BR = { br: 1 };
+  var who = [t.worker, t.svm].map(function (x) { return String(x || "").trim(); }).filter(function (x) { return x && !GENERIC[x.toLowerCase()]; })[0] || "Team";
+  var holder = { hd: "Help Desk", engg: "Engineering", client: "the client" }[r.currentKind] || "us";
+  var used = Math.round(r.pct) + "% of the " + fdur(r.targetMin) + " target used";
+  var head, ask;
+  if (bi.state === "breached") {
+    head = [b("SLA breached on " + fdtw(bi.breachedAt) + " IST"), n(" — now " + fdur(bi.overByMin) + " over the " + fdur(r.targetMin) + " target and still open.")];
+    ask = "Kindly prioritise this ticket and post an update immediately.";
+  } else if (bi.state === "paused") {
+    head = [n("The SLA clock is currently "), b("paused"), n(" because the ticket is with the client (" + r.currentStatus + "). " + fdur(bi.remainingMin) + " of working time is left (" + used + "). If it came back to us now it would breach on "), b(fdtw(bi.ifResumedAt) + " IST"), n(".")];
+    ask = "Kindly follow up with the client for the required response so the ticket can move forward.";
+  } else {
+    head = [n("Breach time: "), b(fdtw(bi.breachAt) + " IST"), n(" — " + fdur(bi.remainingMin) + " of working time left (" + used + ").")];
+    ask = "Kindly action this ticket before the breach time.";
+  }
+  var paras = [
+    [b(SLA_MARK)],
+    [n("Dear " + who + ",")],
+    [n("This is an SLA reminder for ticket " + t.key + ' - "' + String(t.summary || "").replace(/\s+/g, " ").trim() + '".')],
+    head,
+    [n("Severity: " + (t.sev ? Sla.sevName(t.sev) : (t.priority || "Unrated")) + " · Held by: " + ({ hd: "Help Desk", engg: "Engineering", client: "Client" }[r.currentKind] || "—") + " (" + r.currentStatus + ")"), BR, n("Created: " + fdt(t.created) + " (" + fcal(r.ageCalMin) + " ago) · Working time used: " + fdur(r.elapsedMin))]
+  ];
+  if (extra && extra.trim()) paras.push([n(extra.trim())]);
+  paras.push([b(ask)], [n("Regards,"), BR, n("SVM Help Desk")], [n("Last updated " + fdt(L.now) + " IST · working time: " + calText() + ". This note is refreshed in place by HD SLA Tracker.")]);
+  var text = paras.map(function (p) { return p.map(function (x) { return x.br ? "\n" : x.t; }).join(""); }).join("\n\n");
+  var adf = { type: "doc", version: 1, content: paras.map(function (p) { return { type: "paragraph", content: p.map(function (x) { return x.br ? { type: "hardBreak" } : (x.b ? { type: "text", text: x.t, marks: [{ type: "strong" }] } : { type: "text", text: x.t }); }) }; }) };
+  return { text: text, adf: adf, headline: head.map(function (x) { return x.t; }).join("") };
+}
+function adfText(nd) { if (!nd) return ""; if (nd.text) return nd.text; return (nd.content || []).map(adfText).join(" "); }
+function noteUrl(key) { return "/rest/api/3/issue/" + encodeURIComponent(key) + "/comment"; }
+/* Update this ticket's SLA note in place; add one if none exists. Always an INTERNAL note. */
+function postSlaNote(key, adf, mode) {
+  var host = jiraHost();
+  function create(why) {
+    return bridgeCall(host, noteUrl(key), "POST", { body: adf, properties: [{ key: "sd.public.comment", value: { internal: true } }] }).then(function (c) { return { action: "added", id: c && c.id, why: why || "" }; });
+  }
+  if (mode !== "update") return create("");
+  var mem = notesGet()[key];
+  function findAndUpdate() {
+    return bridgeCall(host, noteUrl(key) + "?orderBy=-created&maxResults=100", "GET").then(function (d) {
+      var hit = (d.comments || []).filter(function (c) { return adfText(c.body).indexOf(SLA_MARK) > -1; })[0];
+      if (!hit) return create("");
+      return bridgeCall(host, noteUrl(key) + "/" + hit.id, "PUT", { body: adf }).then(function () { return { action: "updated", id: hit.id }; }, function () { return create("could not edit the earlier SLA note, so a new one was added"); });
+    });
+  }
+  if (mem && mem.commentId) return bridgeCall(host, noteUrl(key) + "/" + mem.commentId, "PUT", { body: adf }).then(function () { return { action: "updated", id: mem.commentId }; }, findAndUpdate);
+  return findAndUpdate();
+}
+function openRemind(key) {
+  var t = ST.byKey[key]; if (!t) return;
+  ST.rm = { key: key, extra: "", mode: "update", status: "idle", res: null, err: "" };
+  renderRemind(); clearInterval(ST.rmTimer);
+  ST.rmTimer = setInterval(function () { if ($("remind")) refreshRemind(); else clearInterval(ST.rmTimer); }, 30000);
+}
+function rmStateHtml(t, L) {
+  if (!L) return '<div class="empty" style="padding:20px"><b>No status history for this ticket yet.</b><br>The reminder needs it to work out the breach time.</div>';
+  if (L.r.isClosed) return '<div class="empty" style="padding:20px"><b>This ticket is closed.</b> No SLA reminder is needed.</div>';
+  if (L.r.targetMin == null) return '<div class="empty" style="padding:20px"><b>No SLA target applies to this ticket</b> (its priority is not one of the severities).</div>';
+  return "";
+}
+function renderRemind() {
+  var rm = ST.rm, t = ST.byKey[rm.key], L = liveOf(t), blocked = rmStateHtml(t, L);
+  var h = '<div class="modal" style="width:min(680px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:17px">🔔 SLA reminder — ' + keyLink(t.key) + '</h2><div style="font-size:12px;color:var(--muted);margin-top:3px">' + esc(String(t.summary || "").slice(0, 90)) + '</div></div><button class="x" data-closeremind aria-label="Close">✕</button></div><div class="mb">';
+  if (blocked) h += blocked + "</div></div>";
+  else {
+    h += '<div class="rm-head" id="rmHead"></div><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">Message (rebuilt from the ticket’s current state — updates while this window is open)</div><pre class="rm-pre" id="rmPre"></pre>' +
+      '<div class="fld" style="margin-top:12px"><label for="rmExtra">Add a line to the message (optional)</label><input type="text" id="rmExtra" maxlength="240" style="width:100%" placeholder="e.g. Client is unreachable, please call before 3 PM" value="' + esc(rm.extra) + '"></div>' +
+      '<div style="display:grid;gap:8px;margin-top:12px"><label class="rm-opt ' + (rm.mode === "update" ? "on" : "") + '"><input type="radio" name="rmMode" value="update"' + (rm.mode === "update" ? " checked" : "") + '><span><b>Update the ticket’s SLA note</b> (recommended)<br><span style="color:var(--muted)">Edits the existing SLA note in place, or adds it the first time. The ticket keeps one current SLA note.</span></span></label>' +
+      '<label class="rm-opt ' + (rm.mode === "new" ? "on" : "") + '"><input type="radio" name="rmMode" value="new"' + (rm.mode === "new" ? " checked" : "") + '><span><b>Add as a new internal note</b><br><span style="color:var(--muted)">Adds a fresh note each time, which is what notifies people who watch the ticket.</span></span></label></div>' +
+      '<div id="rmStatus"></div>' + (BR.ready ? "" : '<div class="rm-msg bad">Extension not detected — you can copy the message, but posting to Jira needs the HD Jira Bridge extension.</div>') +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap"><button class="ghost" id="rmCopy">📋 Copy</button><a class="ghost" href="' + browse(t.key) + '" target="_blank" rel="noopener">🔗 Open in Jira</a><button class="primary" id="rmSend"' + (BR.ready ? "" : " disabled") + '>📨 Post internal note</button></div></div></div>';
+  }
+  overlay("remind", h); refreshRemind(); rmStatusHtml();
+  var x = document.querySelector("[data-closeremind]"); if (x) x.focus();
+}
+function refreshRemind() {
+  var rm = ST.rm; if (!rm || !$("rmPre")) return; var t = ST.byKey[rm.key], L = liveOf(t); if (!L || L.r.isClosed || L.r.targetMin == null) return;
+  var m = buildSlaMessage(t, L, rm.extra), bi = L.bi;
+  $("rmPre").textContent = m.text;
+  var tag = bi.state === "breached" ? chip("breached") : bi.state === "paused" ? kchip("client") : chip(Sla.bucket(L.r));
+  $("rmHead").innerHTML = tag + '<span>' + esc(m.headline) + "</span>";
+}
+function rmStatusHtml() {
+  var el = $("rmStatus"), rm = ST.rm; if (!el || !rm) return; var send = $("rmSend");
+  if (rm.status === "sending") { el.innerHTML = '<div class="rm-msg">Posting to Jira…</div>'; if (send) send.disabled = true; return; }
+  if (send) send.disabled = !BR.ready;
+  if (rm.status === "done") el.innerHTML = '<div class="rm-msg ok" role="status"><b>' + (rm.res.action === "updated" ? "SLA note updated" : "Internal note added") + " on " + esc(rm.key) + ".</b> " + (rm.res.why ? esc(rm.res.why.charAt(0).toUpperCase() + rm.res.why.slice(1)) + ". " : "") + 'It is an internal note, so the client cannot see it. <a href="' + browse(rm.key) + '" target="_blank" rel="noopener">Open in Jira</a> to check.</div>';
+  else if (rm.status === "error") el.innerHTML = '<div class="rm-msg bad" role="alert"><b>Could not post to Jira.</b> ' + esc(rm.err) + "</div>";
+  else el.innerHTML = "";
+}
+function sendRemind() {
+  var rm = ST.rm; if (!rm || rm.status === "sending") return; var t = ST.byKey[rm.key], L = liveOf(t); if (!L || L.r.isClosed) return;
+  rm.status = "sending"; rmStatusHtml();
+  var m = buildSlaMessage(t, L, rm.extra);
+  postSlaNote(rm.key, m.adf, rm.mode).then(function (res) {
+    rm.status = "done"; rm.res = res; noteSet(rm.key, { commentId: res.id, at: Date.now() });
+    rmStatusHtml(); if (ST.tab !== "settings") renderAll();
+  }, function (e) { rm.status = "error"; rm.err = String(e && e.message || e); rmStatusHtml(); });
+}
+function copyRemind() {
+  var rm = ST.rm, t = ST.byKey[rm.key], L = liveOf(t); if (!L) return; var text = buildSlaMessage(t, L, rm.extra).text;
+  function fallback() { var ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("Message copied."); } catch (e) { toast("Could not copy — select the text and copy it manually.", true); } ta.remove(); }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast("Message copied."); }, fallback); else fallback();
+}
 
 /* ═════════ global search ═════════ */
 function openSearch() {
@@ -726,6 +884,10 @@ document.addEventListener("click", function (e) {
   if (q("#btnFetchAll")) { runFetch(missingKeys(false, true)); return; }
   if ((x = q("[data-kpires]"))) { ST.f.result = x.dataset.kpires; ST.tab = "tickets"; ST.page = 1; buildFilters(); renderAll(); window.scrollTo(0, 0); return; }
   if ((x = q("[data-sort]"))) { var sk = x.dataset.sort; ST.sort = { key: sk, dir: ST.sort.key === sk && ST.sort.dir === "desc" ? "asc" : "desc" }; renderAll(); return; }
+  if ((x = q("[data-remind]"))) { openRemind(x.dataset.remind); return; }
+  if (q("[data-closeremind]") || t.id === "remind") { closeOv("remind"); return; }
+  if (q("#rmSend")) { sendRemind(); return; }
+  if (q("#rmCopy")) { copyRemind(); return; }
   if ((x = q("[data-open]"))) { if (t.closest("a")) return; openDetail(x.dataset.open); return; }
   if (q("[data-closedetail]") || t.id === "detail") { closeOv("detail"); return; }
   if (q("[data-closesearch]") || t.id === "search") { closeOv("search"); return; }
@@ -756,10 +918,12 @@ document.addEventListener("input", function (e) {
   var t = e.target;
   if (t.dataset && t.dataset.mss) { msList(t.dataset.mss); return; }
   if (t.id === "sq") return;
+  if (t.id === "rmExtra" && ST.rm) { ST.rm.extra = t.value; ST.rm.status = "idle"; refreshRemind(); rmStatusHtml(); return; }
   if (t.dataset && t.dataset.d && ST.draft) readDraftInput(t);
 });
 document.addEventListener("change", function (e) {
   var t = e.target;
+  if (t.name === "rmMode" && ST.rm) { ST.rm.mode = t.value; document.querySelectorAll(".rm-opt").forEach(function (o) { o.classList.toggle("on", o.querySelector("input").checked); }); return; }
   if (t.id === "rFrom" || t.id === "rTo") { ST.ui.from = ($("rFrom") || {}).value || ""; ST.ui.to = ($("rTo") || {}).value || ""; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
   if (t.dataset && t.dataset.umsel) { if (t.value) setStatusOverride(t.dataset.umsel, t.value); return; }
   if (t.dataset && t.dataset.d && ST.draft) { readDraftInput(t); if (t.dataset.d.indexOf("def:") === 0) { var hs = $("holTxt"); ST.draft._hol = hs ? hs.value : ST.draft._hol; renderSettings(); } return; }
@@ -770,7 +934,7 @@ document.addEventListener("keydown", function (e) {
   if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (ST.cfg) openSearch(); return; }
   if (e.key === "Escape") {
     var openDd = document.querySelector(".ms-dd.open");
-    if ($("search")) closeOv("search"); else if ($("detail")) closeOv("detail"); else if (openDd) openDd.classList.remove("open");
+    if ($("remind")) closeOv("remind"); else if ($("search")) closeOv("search"); else if ($("detail")) closeOv("detail"); else if (openDd) openDd.classList.remove("open");
     return;
   }
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDetail(e.target.dataset.open); }
