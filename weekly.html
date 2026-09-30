@@ -428,19 +428,9 @@ var RAW_ROWS=[];
 var FILENAME="";
 var DATA_ASOF=null;  // max created/resolved date
 var SNAPS={};        // captured weekly open-backlog history (survives across uploads)
-var S={ client:"", na:"", status:"", issueType:[], itPref:[], itDef:[], cols:DEFAULT_COLS.slice(), colsOpen:false };
+var S={ client:"", na:"", status:"", issueType:[], cols:DEFAULT_COLS.slice(), colsOpen:false };
 
-/* Default Request Type = Incident + Service Request (only those present in the data).
-   itPref = the user's own choice (survives client switches); S.issueType = itPref narrowed
-   to the types the selected client actually has. */
-function defaultIssueTypes(){
-  var want=["incident","service request"], seen={}, out=[];
-  RAW.forEach(function(t){ if(t.issueType && !seen[t.issueType]){ seen[t.issueType]=1; if(want.indexOf(t.issueType.toLowerCase())>-1) out.push(t.issueType); } });
-  return out;
-}
-function sameSet(a,b){ return a.length===b.length && a.every(function(x){return b.indexOf(x)>-1;}); }
-
-/* ═══════════════════════ PARSE ═══════════════════════
+/* ═══════════════════════ PARSE ═══════════════════════ */
 function readFile(file){
   return new Promise(function(res,rej){
     var r=new FileReader();
@@ -781,8 +771,8 @@ function render(){
   var issueTypeList=Object.keys(clientAll.reduce(function(a,t){ if(t.issueType)a[t.issueType]=1; return a; },{})).sort();
   var naHasUnset=clientAll.some(function(t){ return naKey(t)==="unset"; });
   if(S.status && statusList.indexOf(S.status)<0) S.status="";
-  S.issueType=S.itPref.filter(function(it){return issueTypeList.indexOf(it)>-1;});
-  var _itMselId=mselCreate("itMsel","All types",issueTypeList,S.issueType,function(sel){S.itPref=sel.slice();S.issueType=sel;},function(){render();});
+  S.issueType=S.issueType.filter(function(it){return issueTypeList.indexOf(it)>-1;});
+  var _itMselId=mselCreate("itMsel","All types",issueTypeList,S.issueType,function(sel){S.issueType=sel;},function(){render();});
   var ct=clientTickets();
   var K=kpis(ct);
   var weeks=lastWeeks(WEEKS_BACK);
@@ -857,7 +847,7 @@ function render(){
       '<select id="stsel"><option value="">All statuses</option>'+statusList.map(function(s){return '<option value="'+esc(s)+'" '+(S.status===s?"selected":"")+'>'+esc(s)+'</option>';}).join("")+'</select>'+
       '<span class="flabel">Request type</span>'+
       mselHTML(_itMselId)+
-      ((S.na||S.status||!sameSet(S.itPref,S.itDef))?'<button class="btn" id="clrsel" title="Reset filters (Request type back to Incident + Service Request)">✕ Clear</button>':'')+
+      ((S.na||S.status||S.issueType.length)?'<button class="btn" id="clrsel">✕ Clear</button>':'')+
       '<details class="colpick" '+(S.colsOpen?'open':'')+'>'+
         '<summary class="btn">🧩 Columns ('+S.cols.length+')</summary>'+
         '<div class="colmenu"><div class="colmenu-h">Pending-list columns</div>'+
@@ -1000,7 +990,7 @@ function bind(){
   el("nasel").onchange=function(e){ S.na=e.target.value; render(); };
   el("stsel").onchange=function(e){ S.status=e.target.value; render(); };
   mselBind();
-  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; S.itPref=S.itDef.slice(); S.issueType=S.itPref.slice(); render(); };
+  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; S.issueType=[]; render(); };
   var rh=el("resethist"); if(rh) rh.onclick=function(){
     if(!confirm("Reset all captured weekly history?\n\nThis clears the week-over-week open-backlog trend for every client and can't be undone. The current export is re-captured as a fresh starting point.")) return;
     if(window.HDStore) window.HDStore.clearSnapshots();
@@ -1109,7 +1099,7 @@ function boot(){
     var cfg=r[3]||{}; window.HDClass.setOverrides(cfg.statusOverrides); window.HDStages.setOverrides(cfg.stageOverrides);
     if(!rec){ window.location.replace("index.html"); return; }
     FILENAME=rec.name;
-    function go(rows){ RAW_ROWS=rows; RAW=normalize(rows); S.itDef=defaultIssueTypes(); S.itPref=S.itDef.slice(); S.issueType=S.itDef.slice(); computeAsOf(); captureSnapshot(); render(); }
+    function go(rows){ RAW_ROWS=rows; RAW=normalize(rows); computeAsOf(); captureSnapshot(); render(); }
     if(edited && edited.length){ go(edited); }
     else { readFile(rec.blob).then(go).catch(function(err){ alert("Could not read stored file: "+err.message); window.location.replace("index.html"); }); }
   });
