@@ -280,6 +280,7 @@ tbody tr.detail-row{background:var(--paper)}
 .exp-grp .n{font-size:11px;color:var(--muted);font-weight:600}
 .exp-grp .chips{display:flex;gap:5px;flex-wrap:wrap;margin-left:auto}
 .exp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.exp-norel{color:var(--wa);font-weight:700;font-family:var(--sans)}
 .exp-age{font-family:var(--mono);font-size:11px}
 .exp-age.old{color:var(--bf);font-weight:700}
 .exp-note{padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--ink2);background:var(--wa-bg);border:1px solid var(--wa-soft);border-radius:var(--r)}
@@ -432,6 +433,7 @@ document.addEventListener('click', function(){ mselCloseAll(); });
 
 /* ═══════════════════════ HD Release Tracker ═══════════════════════ */
 var FILENAME="", BLOB=null, RAW=[], FILTERED=[];
+var NOREL=[], EXP_ALL=[];   // NOREL = open tickets with NO release number (used only by the Expected Releases tab)
 var PAGE_SIZE=50;
 var JIRA="https://svmhelpdesk.atlassian.net/browse/";
 
@@ -468,6 +470,18 @@ function classifyFix(row){
   return "Data Fix";
 }
 
+/* Same fix-type rules as classifyFix, but for tickets that have no release number yet. */
+function looseFix(row){
+  var it=String(row["Issue Type"]||"").trim();
+  var rc=String(row["Root Cause"]||"").trim().toLowerCase();
+  var tf=String(row["Type of Fix"]||"").trim().toLowerCase();
+  if(it==="Incident"){
+    if(WA_RC.indexOf(rc)>-1||WA_TF.indexOf(tf)>-1) return "Workaround";
+    return "Bug Fix";
+  }
+  return "Data Fix";
+}
+
 function releaseStr(row){
   return String(row["Release Number"]||row["Release Number (Data Fix)"]||row["Parent Release No"]||"").trim();
 }
@@ -476,9 +490,15 @@ function isClosed(status){return status==="Closed"||status==="Completed";}
 
 /* ── normalize rows ── */
 function normalize(rows){
-  return rows.map(function(r,i){
-    var ft=classifyFix(r);
-    if(!ft) return null;
+  var all=rows.map(function(r,i){
+    var ft=classifyFix(r), noRel=false;
+    if(!ft){
+      /* No release number: normally excluded, but keep OPEN tickets aside for the Expected Releases tab */
+      if(!String(r["Key"]||"").trim()) return null;
+      var st0=String(r["Status"]||"").trim();
+      if(isClosed(st0)||EXP_EXCLUDE.indexOf(st0.toLowerCase())>-1) return null;
+      ft=looseFix(r); noRel=true;
+    }
     var created=toD(r["Created"]);
     var resolved=toD(r["Resolved"]);
     return{
@@ -495,16 +515,22 @@ function normalize(rows){
       linked:String(r["Linked Issues"]||"").trim(), linkedStatus:String(r["Linked Ticket status"]||"").trim(),
       analysis:String(r["Analysis"]||"").trim(), solution:String(r["Solution Summary"]||"").trim(),
       screenName:String(r["Screen Name"]||"").trim(), nextAction:String(r["Next Action"]||"").trim(),
-      created:created, resolved:resolved, fixType:ft,
+      created:created, resolved:resolved, fixType:ft, noRel:noRel,
       closed:isClosed(String(r["Status"]||"").trim()),
       _raw:r
     };
   }).filter(Boolean);
+  NOREL=all.filter(function(t){return t.noRel;});
+  return all.filter(function(t){return !t.noRel;});
 }
 
 /* ── filtering ── */
 function applyFilters(){
-  FILTERED=RAW.filter(function(t){
+  FILTERED=RAW.filter(passF);
+  EXP_ALL=RAW.concat(NOREL).filter(passF);   // same global filters, plus tickets with no release no.
+}
+function passF(t){
+  {
     if(S.proj&&t.project!==S.proj) return false;
     if(S.svm&&t.svm!==S.svm) return false;
     if(S.fixType&&t.fixType!==S.fixType) return false;
@@ -529,7 +555,7 @@ function applyFilters(){
       if(S.kpiFilter==="open"&&t.closed) return false;
     }
     return true;
-  });
+  }
 }
 
 /* ── distinct values for filters ── */
@@ -1036,6 +1062,7 @@ var EXP_STAGES=[
   {id:"prep",  label:"Release Prep & Approval", color:"#D97706", st:["release plan (uat or hot fix)","release plan (production)","release kit prep.","poc release approval","project lead approval","approval db admin","db admin approval","script release","assign to svm deployment team"]},
   {id:"client",label:"Client Approval & Deploy", color:"#0D9488", st:["release in progress","client release approval","client release approval (prod)","client hotfix testing","client deployment (prod)","client approval (db script)"]}
 ];
+var EXP_NOREL="(release no. not assigned)";
 function expKey(s){return String(s||"").trim().toLowerCase();}
 function expStageOf(status){
   var k=expKey(status);
@@ -1049,7 +1076,7 @@ function expOrder(status){
 }
 function expAge(t){ return t.created?Math.max(0,Math.floor((Date.now()-t.created.getTime())/86400000)):null; }
 function expPool(){
-  return FILTERED.filter(function(t){ return !t.closed && EXP_EXCLUDE.indexOf(expKey(t.status))<0; });
+  return EXP_ALL.filter(function(t){ return !t.closed && EXP_EXCLUDE.indexOf(expKey(t.status))<0; });
 }
 function expCompute(){
   var pool=expPool(), counts={};
@@ -1087,7 +1114,7 @@ function expTable(rows,showRel,sortable){
       '<td>'+esc(t.svm||"—")+'</td>'+
       '<td>'+esc(t.worker||"—")+'</td>'+
       '<td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
-      (showRel?'<td class="mono" style="font-size:10px">'+esc(t.releaseStr||"—")+'</td>':'')+
+      (showRel?'<td class="mono" style="font-size:10px">'+(t.releaseStr?esc(t.releaseStr):'<span class="exp-norel">not assigned</span>')+'</td>':'')+
       '<td class="mono" style="font-size:11px">'+fmtD(t.created)+' <span class="exp-age'+(age!=null&&age>=30?' old':'')+'">· '+(age==null?"—":age+"d")+'</span></td>'+
     '</tr>';
   });
@@ -1100,11 +1127,11 @@ function renderExpecting(){
     function(){ S.page=0; render(); });
 
   /* KPI strip */
-  var rels={}, ageSum=0, ageN=0;
-  list.forEach(function(t){ if(t.releaseStr) rels[t.releaseStr]=1; var a=expAge(t); if(a!=null){ageSum+=a;ageN++;} });
+  var rels={}, ageSum=0, ageN=0, noRelN=0;
+  list.forEach(function(t){ if(t.releaseStr) rels[t.releaseStr]=1; else noRelN++; var a=expAge(t); if(a!=null){ageSum+=a;ageN++;} });
   var h='<div class="exp-kpis up">'+
     '<div class="card exp-kpi" style="border-left-color:var(--vi)"><div class="l">Expected tickets</div><div class="v">'+fmtN(list.length)+'</div><div class="s">'+(S.expStatus.length?'of '+fmtN(pool.length)+' ready':'ready to release')+'</div></div>'+
-    '<div class="card exp-kpi" style="border-left-color:var(--vi2)"><div class="l">Release numbers</div><div class="v">'+fmtN(Object.keys(rels).length)+'</div><div class="s">distinct</div></div>'+
+    '<div class="card exp-kpi" style="border-left-color:var(--vi2)"><div class="l">Release numbers</div><div class="v">'+fmtN(Object.keys(rels).length)+'</div><div class="s">'+(noRelN?noRelN+' ticket'+(noRelN>1?'s':'')+' without release no.':'distinct')+'</div></div>'+
     '<div class="card exp-kpi" style="border-left-color:var(--faint)"><div class="l">Avg ticket age</div><div class="v">'+(ageN?Math.round(ageSum/ageN):"—")+'<span style="font-size:12px;color:var(--muted)"> d</span></div><div class="s">since created</div></div>';
   EXP_STAGES.forEach(function(st){
     var sts=c.opts.filter(function(o){ return expStageOf(o)===st; });
@@ -1147,8 +1174,8 @@ function renderExpecting(){
 
   /* grouped by release number */
   var groups={};
-  list.forEach(function(t){ var k=t.releaseStr||"(no release no.)"; (groups[k]=groups[k]||[]).push(t); });
-  var keys=Object.keys(groups).sort(function(a,b){ return groups[b].length-groups[a].length||a.localeCompare(b); });
+  list.forEach(function(t){ var k=t.releaseStr||EXP_NOREL; (groups[k]=groups[k]||[]).push(t); });
+  var keys=Object.keys(groups).sort(function(a,b){ if(a===EXP_NOREL)return 1; if(b===EXP_NOREL)return -1; return groups[b].length-groups[a].length||a.localeCompare(b); });
   var openAll=list.length<=60;
   keys.forEach(function(k){
     var rows=sortTickets(groups[k],"created","asc"), sc={}, ft={df:0,bf:0,wa:0}, oldest=0;
@@ -1162,7 +1189,7 @@ function renderExpecting(){
       return '<span class="pill"><i class="exp-dot" style="background:'+(stg?stg.color:"#9AA7B8")+'"></i>'+esc(s)+' · '+sc[s]+'</span>';
     }).join('');
     h+='<details class="card exp-grp up d2"'+(openAll?' open':'')+'><summary>'+
-      '<span class="rel">'+esc(k)+'</span><span class="n">'+rows.length+' ticket'+(rows.length>1?'s':'')+' · oldest '+oldest+'d</span>'+
+      '<span class="rel"'+(k===EXP_NOREL?' style="color:var(--wa)"':'')+'>'+esc(k)+'</span><span class="n">'+rows.length+' ticket'+(rows.length>1?'s':'')+' · oldest '+oldest+'d</span>'+
       (ft.df?'<span class="badge df">DF '+ft.df+'</span>':'')+(ft.bf?'<span class="badge bf">BF '+ft.bf+'</span>':'')+(ft.wa?'<span class="badge wa">WA '+ft.wa+'</span>':'')+
       '<span class="chips">'+chips+'</span></summary>'+expTable(rows,false,false)+'</details>';
   });
