@@ -201,6 +201,63 @@
           t.oncomplete = function () { res(true); };
         });
       }).catch(function () { return false; });
+    },
+
+    /* ── SLA Tracker: settings + status-history cache ──
+       Written/read only by sla.html. Like weekly snapshots and Master Data, both are
+       deliberately NOT cleared by "Change file" / a new upload: the history cache is
+       keyed by ticket and revalidated against each ticket's Updated time, so it stays
+       correct across uploads and saves re-fetching. Cleared only from the SLA page.
+       History shape: { tickets: { "KEY-1": { updated:<ms|null>, fetchedAt:<ms>,
+                        src:"bulk"|"issue", transitions:[{t:<ms>,from,to}] } } } */
+    saveSlaConfig: function (cfg) {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction(STORE, "readwrite");
+          t.objectStore(STORE).put({ cfg: cfg, savedAt: Date.now() }, "sla-config");
+          t.oncomplete = function () { res(true); };
+          t.onerror = function () { rej(t.error); };
+        });
+      });
+    },
+    // Returns the saved SLA settings object, or null if none saved yet (caller applies defaults).
+    loadSlaConfig: function () {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var g = db.transaction(STORE, "readonly").objectStore(STORE).get("sla-config");
+          g.onsuccess = function () { res(g.result ? g.result.cfg || null : null); };
+          g.onerror = function () { rej(g.error); };
+        });
+      }).catch(function () { return null; });
+    },
+    saveSlaHistory: function (obj) {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var t = db.transaction(STORE, "readwrite");
+          t.objectStore(STORE).put({ hist: obj, savedAt: Date.now() }, "sla-history");
+          t.oncomplete = function () { res(true); };
+          t.onerror = function () { rej(t.error); };
+        });
+      });
+    },
+    // Never returns null: { tickets: {} } when nothing is cached.
+    loadSlaHistory: function () {
+      return open().then(function (db) {
+        return new Promise(function (res, rej) {
+          var g = db.transaction(STORE, "readonly").objectStore(STORE).get("sla-history");
+          g.onsuccess = function () { var v = g.result && g.result.hist; res(v && v.tickets ? v : { tickets: {} }); };
+          g.onerror = function () { rej(g.error); };
+        });
+      }).catch(function () { return { tickets: {} }; });
+    },
+    clearSlaHistory: function () {
+      return open().then(function (db) {
+        return new Promise(function (res) {
+          var t = db.transaction(STORE, "readwrite");
+          t.objectStore(STORE).delete("sla-history");
+          t.oncomplete = function () { res(true); };
+        });
+      }).catch(function () { return false; });
     }
   };
 })();
