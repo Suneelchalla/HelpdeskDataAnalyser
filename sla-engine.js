@@ -29,10 +29,16 @@
     { id: "low",         name: "Low",          color: "#6B7A90" }
   ];
   var DEFAULT_CONFIG = {
-    businessStart: "00:00",
-    businessEnd: "24:00",
+    /* Default working calendar, used by every client that has no calendar of its own. */
+    businessStart: "10:00",
+    businessEnd: "18:00",
     workDays: [1, 2, 3, 4, 5],
     holidays: [],                       // [{date:"2026-01-26", name:"Republic Day"}]
+    /* Own calendar for specific clients, keyed by ticket-key prefix, e.g. Swire on a 24/7 contract:
+         { SWIPHX: { businessStart:"00:00", businessEnd:"24:00", workDays:[0,1,2,3,4,5,6], holidays:false } }
+       holidays:true (default) skips the holiday list for that client; false counts holidays as working time.
+       A client's calendar applies to ALL of its tickets, past and present. */
+    calendars: {},
     targets: {
       defaults: { showstopper: 4, critical: 48, high: 32, medium: 48, low: 90 },   // business hours
       clients: {}                       // { "SWIPHX": { high: 24 } }  — only the exceptions
@@ -64,6 +70,11 @@
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
+    if (saved.calendars && typeof saved.calendars === "object") Object.keys(saved.calendars).forEach(function (k) {
+      var x = saved.calendars[k], ok = /^\d{1,2}:\d{2}$/;
+      if (x && ok.test(x.businessStart) && ok.test(x.businessEnd) && Array.isArray(x.workDays) && x.workDays.length)
+        c.calendars[String(k).toUpperCase()] = { businessStart: x.businessStart, businessEnd: x.businessEnd, workDays: x.workDays.slice(), holidays: x.holidays !== false };
+    });
     if (saved.templates) ["soon", "breached"].forEach(function (k) { var v = saved.templates[k]; if (typeof v === "string" && v.trim() && !isLegacy(k, v)) c.templates[k] = v; });
     if (saved.targets) {
       if (saved.targets.defaults) Object.keys(saved.targets.defaults).forEach(function (k) { c.targets.defaults[k] = saved.targets.defaults[k]; });
@@ -100,6 +111,21 @@
     (cfg.holidays || []).forEach(function (h) { var d = typeof h === "string" ? h : h && h.date; if (d) hol[String(d).slice(0, 10)] = 1; });
     var wd = {}; (cfg.workDays || [1, 2, 3, 4, 5]).forEach(function (d) { wd[d] = 1; });
     return { tz: 330, startMin: start, endMin: end, dayMin: end - start, workDays: wd, holidays: hol };
+  }
+  /* One calendar per client, with the default for everyone else.
+       set.default        → the default calendar
+       set.get(prefix)    → that client's calendar, or the default
+       set.has(prefix)    → does the client have its own? */
+  function makeCalendarSet(cfg) {
+    var def = makeCalendar(cfg), cache = {}, own = cfg.calendars || {};
+    return {
+      default: def,
+      has: function (p) { return !!own[p]; },
+      get: function (p) {
+        var c = own[p]; if (!c) return def;
+        return cache[p] || (cache[p] = makeCalendar({ businessStart: c.businessStart, businessEnd: c.businessEnd, workDays: c.workDays, holidays: c.holidays === false ? [] : cfg.holidays }));
+      }
+    };
   }
   /* Business minutes between two instants (ms). */
   function bizMinutes(a, b, cal) {
@@ -253,8 +279,10 @@
      calendar figures use the default 1440. */
   function fmtDur(m, dayMin) {
     if (m == null || isNaN(m)) return "—";
+    var neg = m < 0, a = Math.abs(Math.round(m)), s = neg ? "-" : "";
+    if (dayMin === "h") return s + Math.floor(a / 60) + "h " + (a % 60) + "m";          // hours only: for totals that mix clients with different working days
     var D = dayMin > 0 && dayMin < 1440 ? dayMin : 1440;
-    var neg = m < 0, a = Math.abs(Math.round(m)), d = Math.floor(a / D), h = Math.floor((a % D) / 60), mn = a % 60, s = neg ? "-" : "";
+    var d = Math.floor(a / D), h = Math.floor((a % D) / 60), mn = a % 60;
     if (d > 0) s += d + "d ";
     if (h > 0 || d > 0) s += h + "h ";
     s += mn + "m";
@@ -263,7 +291,7 @@
 
   return {
     DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig,
-    parseTs: parseTs, makeCalendar: makeCalendar, bizMinutes: bizMinutes,
+    parseTs: parseTs, makeCalendar: makeCalendar, makeCalendarSet: makeCalendarSet, bizMinutes: bizMinutes,
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
     advanceBiz: advanceBiz, breachInfo: breachInfo
