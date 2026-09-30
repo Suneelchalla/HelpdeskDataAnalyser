@@ -40,7 +40,16 @@
     warnPct: 75,
     dangerPct: 90,
     goalPct: 90,                        // SLA % the team aims for (colours only)
-    issueTypes: ["Incident", "Service Request"]
+    issueTypes: ["Incident", "Service Request"],
+    /* Wording of the reminder posted to Jira. Two templates, chosen automatically per ticket:
+         soon     → open and not yet breached (running, or paused with the client)
+         breached → open and already over target
+       Blank line = new paragraph, line break stays a line break, **text** is bold, {placeholders} are filled in.
+       The "SLA reminder · HD SLA Tracker — <state>" heading and the "Last updated…" footer are added automatically. */
+    templates: {
+      soon: "Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n\nRegards,\nSVM Help Desk",
+      breached: "Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n\nRegards,\nSVM Help Desk"
+    }
   };
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
@@ -51,6 +60,7 @@
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
+    if (saved.templates) ["soon", "breached"].forEach(function (k) { if (typeof saved.templates[k] === "string" && saved.templates[k].trim()) c.templates[k] = saved.templates[k]; });
     if (saved.targets) {
       if (saved.targets.defaults) Object.keys(saved.targets.defaults).forEach(function (k) { c.targets.defaults[k] = saved.targets.defaults[k]; });
       if (saved.targets.clients) c.targets.clients = clone(saved.targets.clients);
