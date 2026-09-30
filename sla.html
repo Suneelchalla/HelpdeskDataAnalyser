@@ -96,7 +96,7 @@ header.top{background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-bo
 
 main{padding:16px 24px 60px;max-width:1500px;margin:0 auto}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:14px}
-@media(min-width:1100px){main>.kpis{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){main>.kpis{grid-template-columns:repeat(5,1fr)}}
 .kpi{padding:13px 15px;position:relative;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:var(--r2);box-shadow:var(--sh);font-family:inherit;color:inherit;cursor:default}
 .kpi.clk{cursor:pointer}.kpi.clk:hover{box-shadow:var(--sh2);transform:translateY(-1px)}
 .kpi .kv{font-size:26px;font-weight:700;font-family:var(--mono);letter-spacing:-1.5px;line-height:1;display:block}
@@ -168,6 +168,16 @@ select,input[type=number],input[type=text],input[type=time],textarea{font-family
 .fld input[type=number]{width:96px}
 .daychips{display:flex;gap:5px}.daychips label{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border:1px solid var(--line2);padding:5px 10px;border-radius:8px;background:#fff;cursor:pointer}
 .warnline{font-size:11.5px;color:var(--amber);margin-top:8px}
+.slabar{position:relative;height:12px;background:var(--line);border-radius:6px;min-width:140px}
+.slabar i{display:block;height:100%;border-radius:6px}.slabar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
+.slabar .g{background:#22A05A}.slabar .a{background:#F59E0B}.slabar .r{background:var(--rose)}
+.hm th,.hm td{text-align:center}.hm th:first-child,.hm td:first-child{text-align:left;white-space:nowrap}
+.hm td.cell{font-family:var(--mono);font-weight:700;font-size:12px;min-width:74px}.hm td.cell small{display:block;font-size:9.5px;font-weight:500;opacity:.7}
+.hm td.g{background:var(--green-soft);color:var(--green)}.hm td.a{background:var(--amber-soft);color:var(--amber)}.hm td.r{background:var(--rose-soft);color:var(--rose)}.hm td.n{color:var(--faint)}
+.hm tr.all td{border-top:1.5px solid var(--line2);font-weight:700}
+.tog{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.tog button{border:none;background:none;padding:4px 11px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--muted)}.tog button.on{background:var(--ink);color:#fff}
+.bigpct{font-family:var(--mono);font-weight:700}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -196,18 +206,29 @@ function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").repla
 var IST = "Asia/Kolkata";
 function fdt(ms) { return ms == null ? "—" : new Date(ms).toLocaleString("en-GB", { timeZone: IST, day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); }
 function fd(ms) { return ms == null ? "—" : new Date(ms).toLocaleDateString("en-GB", { timeZone: IST, day: "2-digit", month: "short", year: "2-digit" }); }
-var fdur = Sla.fmtDur;
+function fdur(m) { return Sla.fmtDur(m, ST && ST.cal ? ST.cal.dayMin : 1440); }        // working time: 1d = one working day
+function fcal(m) { return Sla.fmtDur(m); }                                              // calendar time: 1d = 24h
+var DN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function calText() {
+  var c = ST.cfg, w = c.workDays.slice().sort(), run = w.length > 1 && w[w.length - 1] - w[0] === w.length - 1;
+  var days = run ? DN[w[0]] + "–" + DN[w[w.length - 1]] : w.map(function (d) { return DN[d]; }).join(", ");
+  var hrs = ST.cal.dayMin >= 1440 ? "24 hours a day" : c.businessStart + "–" + c.businessEnd;
+  return days + ", " + hrs + " IST" + (ST.cal.dayMin >= 1440 ? "" : " · 1 day = " + Sla.fmtDur(ST.cal.dayMin).replace(/ 0m$/, ""));
+}
 function pct(n, d) { return d > 0 ? Math.round(n / d * 100) : null; }
 function pctTxt(v) { return v == null ? "—" : v + "%"; }
 function pad(n) { return String(n).padStart(2, "0"); }
 
 /* ═════════ state ═════════ */
+/* History cache format/version. Bumped when the way history is fetched changed (v1 could hold silently
+   empty histories), so entries from older versions are discarded instead of being trusted. */
+var HIST_VER = 2;
 var ST = {
   tab: "overview", rows: [], tickets: [], byKey: {}, cfg: null, cal: null, hist: { tickets: {} }, results: {}, now: Date.now(),
   ui: { preset: "1m", from: "", to: "" },
   f: { client: [], sev: [], type: [], svm: [], worker: [], result: "" }, opts: {},
   sort: { key: "pct", dir: "desc" }, page: 1, PAGE: 25,
-  fetching: false, cancel: false, prog: null, mode: "auto", failed: [], failedSet: {}, detail: null, draft: null, probe: null, saves: 0
+  trendBy: "month", matrixBy: "client", fetching: false, cancel: false, prog: null, mode: "auto", failed: [], failedSet: {}, detail: null, draft: null, probe: null, saves: 0
 };
 try { var u = JSON.parse(localStorage.getItem("hd-sla-ui")); if (u && u.preset) ST.ui = u; } catch (e) {}
 function saveUi() { try { localStorage.setItem("hd-sla-ui", JSON.stringify(ST.ui)); } catch (e) {} }
@@ -305,7 +326,7 @@ function getResult(t) {
   ST.results[t.key] = r; return r;
 }
 function bucketOf(r) { return r ? Sla.bucket(r) : "nohist"; }
-function applyFilters(list) {
+function applyFilters(list, skipResult) {
   var f = ST.f;
   return list.filter(function (t) {
     if (f.client.length && f.client.indexOf(t.prefix) < 0) return false;
@@ -313,12 +334,13 @@ function applyFilters(list) {
     if (f.type.length && f.type.indexOf(t.type) < 0) return false;
     if (f.svm.length && f.svm.indexOf(t.svm || "(blank)") < 0) return false;
     if (f.worker.length && f.worker.indexOf(t.worker || "(blank)") < 0) return false;
-    if (f.result) {
+    if (f.result && !skipResult) {
       var r = getResult(t), b = bucketOf(r);
       switch (f.result) {
         case "open": if (!r || r.isClosed) return false; break;
         case "closed": if (!r || !r.isClosed) return false; break;
         case "breached": if (b !== "breached" && b !== "missed") return false; break;
+        case "openbreached": if (b !== "breached" || !r || r.isClosed) return false; break;
         case "risk": if (b !== "warning" && b !== "danger") return false; break;
         case "paused": if (!r || !r.isPaused) return false; break;
         case "nohist": if (r) return false; break;
@@ -370,7 +392,7 @@ function msUpdate(k) { var b = document.querySelector('[data-msb="' + k + '"]');
 function buildFilters() {
   var u = ST.ui, r = rangeMs();
   var presets = [["1m", "1M"], ["3m", "3M"], ["4m", "4M"], ["6m", "6M"], ["12m", "12M"], ["custom", "Custom"]];
-  var resChips = [["", "All"], ["open", "Open"], ["closed", "Closed"], ["breached", "Breached"], ["risk", "At risk"], ["paused", "With client"], ["nohist", "No history"]];
+  var resChips = [["", "All"], ["open", "Open"], ["closed", "Closed"], ["breached", "Breached / missed"], ["risk", "At risk"], ["paused", "With client"], ["nohist", "No history"]];
   $("filters").innerHTML =
     '<div class="grp"><label>Created</label><div class="seg" role="group" aria-label="Created within">' + presets.map(function (p) { return '<button data-preset="' + p[0] + '" class="' + (u.preset === p[0] ? "on" : "") + '">' + p[1] + "</button>"; }).join("") + "</div>" +
     (u.preset === "custom" ? '<input type="date" id="rFrom" value="' + esc(u.from) + '" aria-label="From"><input type="date" id="rTo" value="' + esc(u.to) + '" aria-label="To">' : "") + "</div>" +
@@ -384,29 +406,40 @@ function renderTabs() {
 }
 
 /* ═════════ data bar + fetching ═════════ */
-function missingKeys(force) {
+function filtersActive() { var f = ST.f; return !!(f.client.length || f.sev.length || f.type.length || f.svm.length || f.worker.length); }
+/* What "Fetch" acts on: tickets in the date range that ALSO match the filters (client, severity, …).
+   The Result chips are ignored here because they depend on history that isn't fetched yet. */
+function fetchScope() { return applyFilters(ST.scope, true); }
+function missingKeys(force, allInRange) {
   if (force) ST.failedSet = {};
-  return ST.scope.filter(function (t) { return force || (!histFor(t) && !ST.failedSet[t.key]); }).map(function (t) { return t.key; });
+  return (allInRange ? ST.scope : fetchScope()).filter(function (t) { return force || (!histFor(t) && !ST.failedSet[t.key]); }).map(function (t) { return t.key; });
 }
 function renderBar() {
-  var el = $("bar"), r = rangeMs(), n = ST.scope.length;
+  var el = $("bar"), r = rangeMs();
   if (ST.fetching && ST.prog) {
     var p = ST.prog, w = p.total ? Math.round(p.done / p.total * 100) : 0;
-    el.innerHTML = '<div class="databar"><div class="txt"><b>Fetching status history…</b> <span id="progTxt">' + p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches") + '</span><div class="pbar"><i id="progFill" style="width:' + w + '%"></i></div></div><button class="ghost" id="btnCancel">Cancel</button></div>';
+    el.innerHTML = '<div class="databar"><div class="txt"><b>Fetching status history…</b> <span id="progTxt">' + p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches, checking each result") + '</span><div class="pbar"><i id="progFill" style="width:' + w + '%"></i></div></div><button class="ghost" id="btnCancel">Cancel</button></div>';
     return;
   }
-  var miss = missingKeys(false).length, bad = ST.scope.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
+  var sc = fetchScope(), n = sc.length, inRange = ST.scope.length, active = filtersActive();
+  var miss = missingKeys(false).length, bad = sc.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
+  var missAll = active ? missingKeys(false, true).length : miss;
+  var sus = sc.filter(function (t) { var e = histFor(t); return e && e.suspect; }).length;
   var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + bad.length + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
+  var warn = sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + sus + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "";
+  var head = active ? "<b>" + n.toLocaleString() + "</b> " + (n === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : "<b>" + n.toLocaleString() + "</b> " + (n === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
+  var tip = !active && miss > 40 ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
   var pill = '<span class="pill ' + (BR.ready ? "ok" : "") + '"><i></i>' + (BR.ready ? "Extension connected" : "Extension not detected") + "</span>";
   var btn = miss > 0
-    ? '<button class="primary" id="btnFetch"' + (BR.ready ? "" : " disabled") + '>Fetch &amp; calculate ' + miss + " ticket" + (miss > 1 ? "s" : "") + "</button>"
-    : (n ? '<button class="ghost" id="btnRefetch"' + (BR.ready ? "" : " disabled") + ">Re-fetch all from Jira</button>" : "");
-  el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt"><b>' + n.toLocaleString() + "</b> tickets created " + fd(r.from) + " – " + fd(r.to) + " · status history ready for <b>" + ready.toLocaleString() + "</b>" +
-    (miss > 0 ? " · <b>" + miss.toLocaleString() + "</b> still need it" : "") + '<br><span style="color:var(--muted);font-size:11.5px">Clocks as of ' + fdt(ST.now) + " IST · history is fetched only for this date range and only when you ask." + (miss > 0 && !BR.ready ? " Install / enable the HD Jira Bridge extension to fetch." : "") + "</span>" + fail + "</div>" + pill + btn + "</div>";
+    ? '<button class="primary" id="btnFetch"' + (BR.ready ? "" : " disabled") + '>Fetch &amp; calculate ' + miss.toLocaleString() + " ticket" + (miss > 1 ? "s" : "") + "</button>"
+    : (n ? '<button class="ghost" id="btnRefetch"' + (BR.ready ? "" : " disabled") + ">Re-fetch these from Jira</button>" : "");
+  var all = active && missAll > miss ? '<button class="quiet" id="btnFetchAll"' + (BR.ready ? "" : " disabled") + ">Fetch all " + missAll.toLocaleString() + " in range</button>" : "";
+  el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt">' + head + " · status history ready for <b>" + ready.toLocaleString() + "</b>" + (miss > 0 ? " · <b>" + miss.toLocaleString() + "</b> still need it" : "") +
+    '<br><span style="color:var(--muted);font-size:11.5px">Working time: ' + esc(calText()) + " · clocks as of " + fdt(ST.now) + " IST" + (miss > 0 && !BR.ready ? " · install / enable the HD Jira Bridge extension to fetch" : "") + "</span>" + tip + fail + warn + "</div>" + pill + all + btn + "</div>";
 }
 function renderProg() {
   var p = ST.prog; if (!p) return; var t = $("progTxt"), f = $("progFill");
-  if (t) t.textContent = p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches");
+  if (t) t.textContent = p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches, checking each result");
   if (f) f.style.width = (p.total ? Math.round(p.done / p.total * 100) : 0) + "%";
 }
 function runFetch(keys) {
@@ -414,11 +447,11 @@ function runFetch(keys) {
   if (!BR.ready) { toast("HD Jira Bridge extension not detected. Install or enable it, then reload.", true); return Promise.resolve(); }
   ST.fetching = true; ST.cancel = false; ST.failed = []; ST.saves = 0; ST.prog = { done: 0, total: keys.length, mode: ST.mode }; renderBar();
   return Hist.fetchHistory(keys, {
-    call: bridgeCall, host: jiraHost(), batch: 100, concurrency: 4, mode: ST.mode === "per-issue" ? "per-issue" : "auto",
+    call: bridgeCall, host: jiraHost(), batch: 50, concurrency: 4, mode: ST.mode === "per-issue" ? "per-issue" : "auto",
     onProgress: function (d, t, m) { ST.prog = { done: d, total: t, mode: m }; renderProg(); },
     shouldCancel: function () { return ST.cancel; },
     onBatch: function (res) {
-      Object.keys(res).forEach(function (k) { var t = ST.byKey[k]; ST.hist.tickets[k] = { updated: t ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, transitions: res[k].transitions }; });
+      Object.keys(res).forEach(function (k) { var t = ST.byKey[k]; ST.hist.tickets[k] = { updated: t ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
       if (++ST.saves % 5 === 0) return HDStore.saveSlaHistory(ST.hist).catch(function () {});
     }
   }).then(function (r) {
@@ -427,7 +460,8 @@ function runFetch(keys) {
     Object.keys(r.results).forEach(function (k) { delete ST.failedSet[k]; });
     if (r.cancelled) toast("Cancelled — what was fetched is saved.");
     else if (r.failed.length) toast(r.failed.length + " ticket(s) could not be fetched. See the bar above.", true);
-    else toast("History fetched for " + Object.keys(r.results).length + " tickets.");
+    else if (r.suspectCount) toast("Fetched, but " + r.suspectCount + " ticket(s) show no status changes even after checking — marked unverified.", true);
+    else toast("History fetched for " + Object.keys(r.results).length + " tickets" + (r.verifiedCount ? " (" + r.verifiedCount + " double-checked one by one)" : "") + ".");
   }).catch(function (e) {
     toast(String(e && e.message) === "EXTENSION_NOT_FOUND" ? "Extension not detected." : "Fetch failed: " + (e && e.message), true);
   }).then(function () {
@@ -438,77 +472,95 @@ function runFetch(keys) {
 }
 
 /* ═════════ overview ═════════ */
+/* SLA % = met ÷ (met + missed + open tickets already over target).
+   Open tickets still inside their target are undecided and are left out until they resolve or breach. */
 function stats(v) {
-  var s = { n: v.length, hist: 0, open: 0, breached: 0, risk: 0, paused: 0, met: 0, missed: 0, sumEl: 0, nEl: 0, pausedMin: 0, pausedTix: 0 };
+  var s = { n: v.length, hist: 0, open: 0, openBreached: 0, risk: 0, met: 0, missed: 0, sumEl: 0, nEl: 0, by: { hd: { n: 0, br: 0, risk: 0 }, engg: { n: 0, br: 0, risk: 0 }, client: { n: 0, br: 0, risk: 0 } } };
   v.forEach(function (x) {
     var r = x.r; if (!r) return; s.hist++;
-    if (!r.isClosed) { s.open++; if (x.b === "breached") s.breached++; else if (x.b === "warning" || x.b === "danger") s.risk++; if (r.isPaused) s.paused++; }
-    else { if (x.b === "met") s.met++; else if (x.b === "missed") s.missed++; s.sumEl += r.elapsedMin; s.nEl++; }
-    if (r.pausedMin > 0) { s.pausedMin += r.pausedMin; s.pausedTix++; }
+    if (r.isClosed) { if (x.b === "met") s.met++; else if (x.b === "missed") s.missed++; s.sumEl += r.elapsedMin; s.nEl++; }
+    else { s.open++; var h = s.by[r.currentKind] || s.by.hd; h.n++; if (x.b === "breached") { s.openBreached++; h.br++; } else if (x.b === "warning" || x.b === "danger") { s.risk++; h.risk++; } }
   });
-  s.comp = pct(s.met, s.met + s.missed); return s;
+  s.bad = s.missed + s.openBreached; s.decided = s.met + s.bad; s.comp = pct(s.met, s.decided); return s;
 }
 function kpi(label, val, sub, acc, res) {
   return '<' + (res != null ? 'button data-kpires="' + res + '"' : "div") + ' class="kpi' + (res != null ? " clk" : "") + '" style="--acc:' + acc + '"><span class="kv">' + val + '</span><span class="kl">' + label + "</span>" + (sub ? '<span class="ks">' + sub + "</span>" : "") + "</" + (res != null ? "button" : "div") + ">";
 }
 function unmappedInfo(v) {
   var m = {};
-  v.forEach(function (x) { if (!x.r) return; x.r.segs.forEach(function (s) { if (!s.mapped && s.kind !== "closed") { var o = m[s.status] || (m[s.status] = { status: s.status, tix: {}, min: 0 }); o.tix[x.t.key] = 1; o.min += s.bizMin; } }); });
+  v.forEach(function (x) { if (!x.r) return; x.r.segs.forEach(function (sg) { if (!sg.mapped && sg.kind !== "closed") { var o = m[sg.status] || (m[sg.status] = { status: sg.status, tix: {}, min: 0 }); o.tix[x.t.key] = 1; o.min += sg.bizMin; } }); });
   return Object.keys(m).map(function (k) { return { status: k, tickets: Object.keys(m[k].tix).length, min: m[k].min }; }).sort(function (a, b) { return b.tickets - a.tickets; });
+}
+function monthKey(ms) { var d = new Date(ms + 330 * 60000); return d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1); }
+function weekKey(ms) { var d = new Date(ms + 330 * 60000), dd = (d.getUTCDay() + 6) % 7; return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dd)).toISOString().slice(0, 10); }
+function perKey(ms) { return ST.trendBy === "week" ? weekKey(ms) : monthKey(ms); }
+function perLabel(k) { return ST.trendBy === "week" ? "Week of " + fd(Date.parse(k + "T00:00:00+05:30")) : new Date(k + "-01T12:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }); }
+function cls(p) { var g = ST.cfg.goalPct; return p == null ? "n" : p >= g ? "g" : p >= g - 15 ? "a" : "r"; }
+function slaBar(p) { return '<div class="slabar" title="' + (p == null ? "no decided tickets" : p + "% (goal " + ST.cfg.goalPct + "%)") + '"><i class="' + cls(p) + '" style="width:' + (p == null ? 0 : p) + '%"></i><b style="left:' + ST.cfg.goalPct + '%"></b></div>'; }
+function togg(attr, cur, opts) { return '<div class="tog" role="group">' + opts.map(function (o) { return '<button data-' + attr + '="' + o[0] + '" class="' + (cur === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>"; }
+
+function trendPanel(v) {
+  var pm = {}, s = stats(v);
+  v.forEach(function (x) {
+    if (!x.r) return; var k = perKey(x.t.created), o = pm[k] || (pm[k] = { n: 0, met: 0, missed: 0, ob: 0, run: 0 });
+    o.n++; if (x.b === "met") o.met++; else if (x.b === "missed") o.missed++; else if (x.b === "breached") o.ob++; else if (!x.r.isClosed) o.run++;
+  });
+  var rows = Object.keys(pm).sort().map(function (k) {
+    var o = pm[k], dec = o.met + o.missed + o.ob, p = pct(o.met, dec);
+    return "<tr><td style=\"white-space:nowrap\"><b>" + perLabel(k) + '</b></td><td class="num">' + o.n + '</td><td class="num">' + o.met + '</td><td class="num" style="color:' + (o.missed ? "var(--rose)" : "inherit") + '">' + o.missed + '</td><td class="num" style="color:' + (o.ob ? "var(--rose)" : "inherit") + '">' + o.ob + '</td><td class="num" style="color:var(--faint)">' + o.run + '</td><td style="width:32%">' + slaBar(p) + '</td><td class="num bigpct" style="color:' + (p == null ? "var(--faint)" : p >= ST.cfg.goalPct ? "var(--green)" : p >= ST.cfg.goalPct - 15 ? "var(--amber)" : "var(--rose)") + '">' + pctTxt(p) + "</td></tr>";
+  }).join("");
+  var excl = s.n - s.hist;
+  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; tickets still inside their target are not counted until they resolve or breach.' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + '</div><div class="tw"><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Open, over target</th><th class="num">Still running</th><th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+}
+function matrixPanel(v) {
+  var by = ST.matrixBy, keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} };
+  var dimOf = by === "client" ? function (t) { return t.prefix; } : by === "severity" ? function (t) { return t.sev || "none"; } : function (t) { return t.worker || "Unassigned"; };
+  var labelOf = by === "client" ? function (k) { return "<b>" + esc(clientName(k)) + '</b> <span style="color:var(--faint)">' + esc(k) + "</span>"; } : by === "severity" ? function (k) { return "<b>" + (k === "none" ? "Unrated" : Sla.sevName(k)) + "</b>"; } : function (k) { return "<b>" + esc(k) + "</b>"; };
+  function add(o, p, met) { o.n++; if (met) o.met++; var c = o.cells[p] || (o.cells[p] = { n: 0, met: 0 }); c.n++; if (met) c.met++; }
+  v.forEach(function (x) {
+    if (!x.r || !(x.b === "met" || x.b === "missed" || x.b === "breached")) return;
+    var d = dimOf(x.t), p = perKey(x.t.created); periods[p] = 1; add(keys[d] || (keys[d] = { n: 0, met: 0, cells: {} }), p, x.b === "met"); add(all, p, x.b === "met");
+  });
+  var pk = Object.keys(periods).sort(), sevOrder = Sla.SEVERITIES.map(function (z) { return z.id; }).concat(["none"]);
+  var ks = Object.keys(keys).sort(function (a, b) { return by === "severity" ? sevOrder.indexOf(a) - sevOrder.indexOf(b) : keys[b].n - keys[a].n; });
+  var more = ks.length > 15 ? ks.length - 15 : 0; ks = ks.slice(0, 15);
+  function cell(o, p) { var c = o.cells[p]; if (!c) return '<td class="cell n">—</td>'; var pp = Math.round(c.met / c.n * 100); return '<td class="cell ' + cls(pp) + '" title="' + c.met + " of " + c.n + ' met">' + pp + "%<small>" + c.n + "</small></td>"; }
+  var single = pk.length === 1;
+  function tot(o) { if (single) return "";  var pp = o.n ? Math.round(o.met / o.n * 100) : null; return '<td class="cell ' + cls(pp) + '" style="border-left:1.5px solid var(--line2)">' + pctTxt(pp) + "<small>" + o.n + "</small></td>"; }
+  var body = '<tr class="all"><td>All</td>' + pk.map(function (p) { return cell(all, p); }).join("") + tot(all) + "</tr>" + ks.map(function (k) { var o = keys[k]; return "<tr><td>" + labelOf(k) + "</td>" + pk.map(function (p) { return cell(o, p); }).join("") + tot(o) + "</tr>"; }).join("");
+  return '<div class="card panel"><div class="panel-h"><h3>SLA % ' + (by === "client" ? "by client" : by === "severity" ? "by severity" : "by worker") + ', ' + (ST.trendBy === "week" ? "week" : "month") + ' by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("matrix", by, [["client", "Client"], ["severity", "Severity"], ["worker", "Worker"]]) + '</div><div class="sub">Each cell is the SLA % for tickets created that ' + (ST.trendBy === "week" ? "week" : "month") + ' (small number = tickets counted). Green meets the ' + ST.cfg.goalPct + '% goal, amber is within 15 points, red is further off.</div>' +
+    (pk.length ? '<div class="tw"><table class="hm"><thead><tr><th>' + (by === "client" ? "Client" : by === "severity" ? "Severity" : "Worker") + "</th>" + pk.map(function (p) { return "<th>" + perLabel(p) + "</th>"; }).join("") + (single ? "" : "<th>Overall</th>") + "</tr></thead><tbody>" + body + "</tbody></table></div>" + (more ? '<div class="sub" style="margin:8px 0 0">…and ' + more + " more with fewer tickets.</div>" : "") : '<div class="empty" style="padding:22px">No tickets have a decided outcome yet.</div>') + "</div>";
 }
 function renderOverview(v) {
   var s = stats(v), M = $("main");
   if (!ST.scope.length) { M.innerHTML = '<div class="card empty"><b>No tickets created in this date range.</b><br>Pick a wider range above (for example 3M or 4M), or check that the ticket types in Settings match your data.</div>'; return; }
-  if (!s.hist) { M.innerHTML = '<div class="card empty"><b>No status history loaded for these tickets yet.</b><br>Use <b>Fetch &amp; calculate</b> above. The SLA clock needs each ticket’s status changes to know when it was with the client.<br><span style="font-size:12px">' + (v.length ? "" : "No tickets match the filters. ") + "</span></div>"; return; }
-  var h = '<div class="kpis">' +
-    kpi("Tickets in view", s.n.toLocaleString(), s.hist + " with history", "var(--ink2)", "") +
-    kpi("Open now", s.open, "", "var(--engg)", "open") +
-    kpi("Breached (open)", s.breached, "over target and still open", "var(--rose)", "breached") +
-    kpi("At risk", s.risk, "75%+ of target used", "#F59E0B", "risk") +
-    kpi("With client now", s.paused, "clock paused", "#F0A838", "paused") +
-    kpi("SLA met (closed)", pctTxt(s.comp), (s.met + s.missed) ? s.met + " of " + (s.met + s.missed) + " closed" : "no closed tickets", s.comp == null ? "var(--faint)" : s.comp >= 90 ? "var(--green)" : s.comp >= 75 ? "#F59E0B" : "var(--rose)", "closed") +
-    kpi("Avg resolution", s.nEl ? fdur(s.sumEl / s.nEl) : "—", "business time, closed", "var(--hd)") +
-    kpi("Client wait excluded", fdur(s.pausedMin), s.pausedTix + " ticket" + (s.pausedTix === 1 ? "" : "s") + " paused", "#F0A838") + "</div>";
+  if (!s.hist) { M.innerHTML = '<div class="card empty"><b>' + (v.length ? "No status history loaded for these tickets yet." : "No tickets match these filters.") + "</b><br>" + (v.length ? "Use <b>Fetch &amp; calculate</b> above. The SLA clock needs each ticket’s status changes to know when it was with the client.<br><span style=\"font-size:12px\">Tip: filter to one client first if you only need that client.</span>" : "Clear a filter above to see tickets.") + "</div>"; return; }
+  var h = "";
   var um = unmappedInfo(v);
   if (um.length) {
-    h += '<div class="callout"><b>' + um.length + " status" + (um.length > 1 ? "es" : "") + " in ticket history " + (um.length > 1 ? "aren’t" : "isn’t") + " classified in Master Data.</b> Until you decide, the clock treats them as our side (running). Choose who each one belongs to and it applies to every dashboard.<div style='margin-top:8px'>" +
-      um.slice(0, 8).map(function (u) { return '<div class="row"><b style="min-width:210px">' + esc(u.status) + '</b><span style="color:var(--muted);font-size:11.5px;min-width:150px">' + u.tickets + " ticket" + (u.tickets > 1 ? "s" : "") + " · " + fdur(u.min) + '</span><select data-umsel="' + esc(u.status) + '" aria-label="Classify ' + esc(u.status) + '"><option value="">Choose…</option><option value="hd">Help Desk (runs)</option><option value="engg">Engineering (runs)</option><option value="client">Client (paused)</option></select></div>'; }).join("") + (um.length > 8 ? '<div class="row" style="color:var(--muted)">…and ' + (um.length - 8) + " more</div>" : "") + "</div></div>";
+    h += '<div class="callout"><b>' + um.length + " status" + (um.length > 1 ? "es" : "") + " in ticket history " + (um.length > 1 ? "aren’t" : "isn’t") + " classified in Master Data.</b> Until you decide, the clock treats " + (um.length > 1 ? "them" : "it") + " as our side (running). Choose who each belongs to; it applies to every dashboard." +
+      um.slice(0, 6).map(function (u) { return '<div class="row"><b style="min-width:200px">' + esc(u.status) + '</b><span style="color:var(--muted);font-size:11.5px;min-width:140px">' + u.tickets + " ticket" + (u.tickets > 1 ? "s" : "") + " · " + fdur(u.min) + '</span><select data-umsel="' + esc(u.status) + '" aria-label="Classify ' + esc(u.status) + '"><option value="">Choose…</option><option value="hd">Help Desk (runs)</option><option value="engg">Engineering (runs)</option><option value="client">Client (paused)</option></select></div>'; }).join("") + (um.length > 6 ? '<div class="row" style="color:var(--muted)">…and ' + (um.length - 6) + " more</div>" : "") + "</div>";
   }
-  /* severity */
-  var rows = Sla.SEVERITIES.map(function (sv) { return sv.id; }).concat(["none"]).map(function (id) {
-    var sub = v.filter(function (x) { return (x.t.sev || "none") === id && x.r; }); if (!sub.length) return "";
-    var st = stats(sub), tgt = id === "none" ? "—" : ST.cfg.targets.defaults[id] + "h";
-    return "<tr><td>" + sevLabel({ sev: id === "none" ? null : id, priority: "Unrated" }) + '</td><td class="num">' + tgt + '</td><td class="num">' + sub.length + '</td><td class="num">' + st.open + '</td><td class="num" style="color:' + (st.breached ? "var(--rose)" : "inherit") + '">' + st.breached + '</td><td class="num">' + pctTxt(st.comp) + '</td><td class="num">' + (st.nEl ? fdur(st.sumEl / st.nEl) : "—") + "</td></tr>";
-  }).join("");
-  h += '<div class="grid2"><div class="card panel"><h3>By severity</h3><div class="sub">Targets are business hours; the clock pauses while a ticket is with the client.</div><div class="tw"><table><thead><tr><th>Severity</th><th class="num">Target</th><th class="num">Tickets</th><th class="num">Open</th><th class="num">Breached</th><th class="num">SLA met</th><th class="num">Avg closed</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
-  /* clients */
-  var cm = {}; v.forEach(function (x) { if (!x.r) return; var c = cm[x.t.prefix] || (cm[x.t.prefix] = []); c.push(x); });
-  var crow = Object.keys(cm).map(function (p) { var st = stats(cm[p]); return { p: p, st: st, bad: st.breached + st.missed }; }).sort(function (a, b) { return b.bad - a.bad || b.st.n - a.st.n; }).slice(0, 12).map(function (c) {
-    return "<tr><td><b>" + esc(clientName(c.p)) + '</b> <span style="color:var(--faint)">' + esc(c.p) + '</span></td><td class="num">' + c.st.n + '</td><td class="num">' + c.st.open + '</td><td class="num" style="color:' + (c.st.breached ? "var(--rose)" : "inherit") + '">' + c.st.breached + '</td><td class="num">' + pctTxt(c.st.comp) + "</td></tr>";
-  }).join("");
-  h += '<div class="card panel"><h3>By client</h3><div class="sub">Most breaches first. The client comes from the ticket key prefix.</div><div class="tw"><table><thead><tr><th>Client</th><th class="num">Tickets</th><th class="num">Open</th><th class="num">Breached</th><th class="num">Met</th></tr></thead><tbody>' + crow + "</tbody></table></div></div></div>";
-  /* trend */
-  var rg = rangeMs(), weekly = (rg.to - rg.from) / 86400000 <= 75, pm = {};
-  v.forEach(function (x) { if (!x.r) return; var d = new Date(x.t.created + 330 * 60000), k;
-    if (weekly) { var dd = (d.getUTCDay() + 6) % 7; k = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dd)).toISOString().slice(0, 10); } else k = d.getUTCFullYear() + "-" + pad(d.getUTCMonth() + 1);
-    var o = pm[k] || (pm[k] = { met: 0, missed: 0, open: 0, br: 0 });
-    if (x.r.isClosed) { if (x.b === "met") o.met++; else if (x.b === "missed") o.missed++; } else { o.open++; if (x.b === "breached") o.br++; } });
-  var pk = Object.keys(pm).sort(), mx = Math.max.apply(null, pk.map(function (k) { var o = pm[k]; return o.met + o.missed + o.open; }).concat([1]));
-  var tr = pk.map(function (k) { var o = pm[k], tot = o.met + o.missed + o.open, lab = weekly ? "Week of " + fd(Date.parse(k + "T00:00:00+05:30")) : new Date(k + "-01T12:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
-    return '<tr><td style="white-space:nowrap">' + lab + '</td><td style="width:55%"><div class="hb" style="width:' + Math.max(8, tot / mx * 100) + '%" title="' + o.met + " met, " + o.missed + " missed, " + o.open + ' open"><i style="width:' + o.met / tot * 100 + '%;background:#22A05A"></i><i style="width:' + o.missed / tot * 100 + '%;background:var(--rose)"></i><i style="width:' + o.open / tot * 100 + '%;background:#B8C2CF"></i></div></td><td class="num">' + tot + '</td><td class="num">' + pctTxt(pct(o.met, o.met + o.missed)) + "</td></tr>"; }).join("");
-  h += '<div class="card panel"><div class="panel-h"><h3>' + (weekly ? "Week by week" : "Month by month") + '</h3><div class="legend"><span style="--c:#22A05A">Met</span><span style="--c:var(--rose)">Missed</span><span style="--c:#B8C2CF">Still open</span></div></div><div class="sub">Grouped by the week/month the ticket was created.</div><div class="tw"><table><thead><tr><th>Created</th><th>Outcome</th><th class="num">Tickets</th><th class="num">Met</th></tr></thead><tbody>' + tr + "</tbody></table></div></div>";
-  /* attention + owners */
+  var goal = ST.cfg.goalPct, compAcc = s.comp == null ? "var(--faint)" : s.comp >= goal ? "var(--green)" : s.comp >= goal - 15 ? "#F59E0B" : "var(--rose)";
+  h += '<div class="kpis">' +
+    kpi("SLA met", pctTxt(s.comp), s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet", compAcc) +
+    kpi("Breached, still open", s.openBreached, "already over their target", "var(--rose)", "openbreached") +
+    kpi("At risk", s.risk, ST.cfg.warnPct + "%+ of target used", "#F59E0B", "risk") +
+    kpi("Open now", s.open, "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n, "var(--engg)", "open") +
+    kpi("Avg time to resolve", s.nEl ? fdur(s.sumEl / s.nEl) : "—", s.nEl + " closed · working time", "var(--hd)", "closed") + "</div>";
+  h += trendPanel(v) + matrixPanel(v);
+  /* who holds the open tickets */
+  var hold = ["hd", "engg", "client"].map(function (k) {
+    var o = s.by[k]; return "<tr><td>" + kchip(k) + '</td><td class="num">' + o.n + '</td><td class="num" style="color:' + (o.br ? "var(--rose)" : "inherit") + '">' + o.br + '</td><td class="num">' + o.risk + '</td><td class="num">' + (o.n - o.br - o.risk) + "</td></tr>"; }).join("");
   var att = v.filter(function (x) { return x.r && !x.r.isClosed && (x.b === "breached" || x.b === "danger" || x.b === "warning"); }).sort(function (a, b) { return (b.r.pct || 0) - (a.r.pct || 0); }).slice(0, 10);
-  var arow = att.map(function (x) { return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell">' + esc(x.t.summary) + "</td><td>" + esc(x.t.worker || "—") + "</td><td>" + chip(x.b) + '</td><td class="num" style="color:' + (x.b === "breached" ? "var(--rose)" : "inherit") + '">' + (x.r.remainingMin < 0 ? "+" + fdur(-x.r.remainingMin) : x.r.remainingMin === 0 ? "at limit" : fdur(x.r.remainingMin) + " left") + "</td></tr>"; }).join("");
-  var om = {}; v.forEach(function (x) { if (!x.r || x.r.isClosed) return; var w = x.t.worker || "Unassigned", o = om[w] || (om[w] = { w: w, breached: 0, risk: 0, ok: 0, paused: 0, n: 0 }); o.n++; if (x.r.isPaused) o.paused++; else if (x.b === "breached") o.breached++; else if (x.b === "danger" || x.b === "warning") o.risk++; else o.ok++; });
-  var orow = Object.keys(om).map(function (k) { return om[k]; }).sort(function (a, b) { return (b.breached * 3 + b.risk) - (a.breached * 3 + a.risk) || b.n - a.n; }).slice(0, 12).map(function (o) {
-    return "<tr><td>" + esc(o.w) + '</td><td style="width:50%"><div class="hb"><i style="width:' + o.breached / o.n * 100 + '%;background:var(--rose)"></i><i style="width:' + o.risk / o.n * 100 + '%;background:#F59E0B"></i><i style="width:' + o.ok / o.n * 100 + '%;background:#22A05A"></i><i style="width:' + o.paused / o.n * 100 + '%;background:#F0A838;opacity:.55"></i></div></td><td class="num">' + o.n + "</td></tr>"; }).join("");
-  h += '<div class="grid2"><div class="card panel"><h3>Needs attention</h3><div class="sub">Open tickets closest to, or past, their target.</div>' + (att.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Summary</th><th>Worker</th><th>State</th><th class="num">Remaining</th></tr></thead><tbody>' + arow + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is at risk right now.</div>') + "</div>" +
-    '<div class="card panel"><div class="panel-h"><h3>Open work by current worker</h3></div><div class="legend"><span style="--c:var(--rose)">Breached</span><span style="--c:#F59E0B">At risk</span><span style="--c:#22A05A">On track</span><span style="--c:#F0A838">With client</span></div>' + (orow ? '<div class="tw"><table><thead><tr><th>Worker</th><th>Health</th><th class="num">Open</th></tr></thead><tbody>' + orow + "</tbody></table></div>" : '<div class="empty" style="padding:22px">No open tickets.</div>') + "</div></div>";
+  var arow = att.map(function (x) { return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell">' + esc(x.t.summary) + "</td><td>" + kchip(x.r.currentKind) + "</td><td>" + chip(x.b) + '</td><td class="num" style="color:' + (x.b === "breached" ? "var(--rose)" : "inherit") + '">' + (x.r.remainingMin < 0 ? "+" + fdur(-x.r.remainingMin) : x.r.remainingMin === 0 ? "at limit" : fdur(x.r.remainingMin) + " left") + "</td></tr>"; }).join("");
+  h += '<div class="grid2"><div class="card panel"><h3>Who has the open tickets</h3><div class="sub">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused.</div><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Over target</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' + hold + "</tbody></table></div></div>" +
+    '<div class="card panel"><h3>Needs attention</h3><div class="sub">Open tickets closest to, or past, their target.</div>' + (att.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Summary</th><th>Held by</th><th>State</th><th class="num">Remaining</th></tr></thead><tbody>' + arow + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is at risk right now.</div>') + "</div></div>";
   M.innerHTML = h;
 }
 
 /* ═════════ tickets tab ═════════ */
+function histSuspect(t) { var e = histFor(t); return !!(e && e.suspect); }
 function sortVal(x, k) {
   var r = x.r;
   switch (k) {
@@ -527,11 +579,11 @@ function renderTickets(v) {
   var pg = v.slice((ST.page - 1) * ST.PAGE, ST.page * ST.PAGE);
   var body = pg.map(function (x) {
     var t = x.t, r = x.r;
-    return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td>" + esc(t.prefix) + "</td><td>" + sevLabel(t) + "</td><td>" + esc(t.status) + (r && r.isPaused ? ' <span class="chip2 k-client">with client</span>' : "") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + fd(t.created) +
+    return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td>" + esc(t.prefix) + "</td><td>" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + fd(t.created) +
       '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + '</td><td class="num">' + (r && r.pausedMin ? fdur(r.pausedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + chip(x.b) + "</td></tr>";
   }).join("");
-  M.innerHTML = '<div class="card panel"><div class="panel-h"><h3>' + v.length.toLocaleString() + ' tickets</h3><button class="ghost" id="btnExport">Export to Excel</button></div><div class="sub">Click a ticket for its full status timeline and how its clock was counted.</div>' +
-    (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + th("Ticket", "key") + "<th>Summary</th>" + th("Client", "client") + th("Severity", "sev") + "<th>Status</th>" + th("Worker", "worker") + th("Created", "created", 1) + th("Target", "target", 1) + th("Counted", "elapsed", 1) + th("Client wait excl.", "paused", 1) + th("Used", "pct") + "<th>Result</th></tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
+  M.innerHTML = '<div class="card panel"><div class="panel-h"><h3>' + v.length.toLocaleString() + (v.length === 1 ? ' ticket' : ' tickets') + '</h3><button class="ghost" id="btnExport">Export to Excel</button></div><div class="sub">Click a ticket for its full status timeline and how its clock was counted.</div>' +
+    (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + th("Ticket", "key") + "<th>Summary</th>" + th("Client", "client") + th("Severity", "sev") + "<th>Status</th><th>Held by</th>" + th("Worker", "worker") + th("Created", "created", 1) + th("Target", "target", 1) + th("Counted", "elapsed", 1) + th("Client wait excl.", "paused", 1) + th("Used", "pct") + "<th>Result</th></tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
 }
 function exportXlsx() {
   var v = view(), rows = v.map(function (x) { var t = x.t, r = x.r; return { Ticket: t.key, Summary: t.summary, Client: t.prefix, Project: t.project, Type: t.type, Severity: t.sev ? Sla.sevName(t.sev) : (t.priority || ""), Status: t.status, "Current worker": t.worker, "SVM in charge": t.svm, Created: new Date(t.created).toISOString(),
@@ -552,17 +604,25 @@ function renderDetail() {
   if (!r) {
     h += '<div class="empty"><b>No status history for this ticket yet.</b><br>The clock needs its status changes to work out time with the client.<br><br><button class="primary" id="btnFetchOne"' + (BR.ready && !ST.fetching ? "" : " disabled") + ">" + (ST.fetching ? "Fetching…" : "Load history for this ticket") + "</button>" + (BR.ready ? "" : '<div style="margin-top:8px;font-size:12px">Extension not detected.</div>') + "</div></div></div>";
   } else {
-    var tot = r.segs.reduce(function (a, s) { return a + Math.max(s.calMin, 0); }, 0) || 1;
-    h += '<div class="kpis" style="margin-bottom:6px">' + kpi("Counted", fdur(r.elapsedMin), "of " + (r.targetMin != null ? fdur(r.targetMin) : "no target"), r.level === "none" ? "var(--faint)" : "var(--sla)") +
-      kpi(r.remainingMin != null && r.remainingMin < 0 ? "Over target by" : "Remaining", r.remainingMin == null ? "—" : r.remainingMin === 0 ? "At limit" : fdur(Math.abs(r.remainingMin)), r.pct != null ? Math.round(r.pct) + "% used" : "", r.remainingMin != null && r.remainingMin < 0 ? "var(--rose)" : "var(--green)") +
-      kpi("Client wait excluded", fdur(r.pausedMin), r.clientRounds + " time" + (r.clientRounds === 1 ? "" : "s") + " with client", "#F0A838") +
-      kpi("Help Desk time", fdur(r.hdMin), "Engineering " + fdur(r.enggMin), "var(--hd)") + (r.reopens ? kpi("Reopened", r.reopens + "×", "closed time not counted", "var(--engg)") : "") + "</div>";
-    h += '<div class="sr">' + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "The clock counted <b>" + fdur(r.elapsedMin) + "</b> of business time" + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
-      (r.pausedMin > 0 ? "<b>" + fdur(r.pausedMin) + "</b> spent with the client was <b>not</b> counted. " : "This ticket has not been with the client. ") + (r.unmapped.length ? '<span style="color:var(--amber)">Status(es) not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</span>" : "") + "</div>";
-    h += '<div class="legend"><span style="--c:var(--hd2)">Help Desk</span><span style="--c:var(--engg)">Engineering</span><span style="--c:#F0A838">Client (paused)</span><span style="--c:#B8C2CF">Closed</span></div><div class="tl" aria-hidden="true">' +
-      r.segs.map(function (s) { return '<i class="k-' + s.kind + ' bgc" style="width:' + Math.max(0.8, s.calMin / tot * 100) + '%" title="' + esc(s.status + " · " + KN[s.kind]) + '"></i>'; }).join("") + "</div>";
-    h += '<div class="tw"><table><thead><tr><th>Status</th><th>Held by</th><th>From</th><th>To</th><th class="num">Business time</th><th>Clock</th><th class="num">Counted so far</th></tr></thead><tbody>' +
-      r.segs.map(function (s) { return "<tr><td><b>" + esc(s.status) + "</b>" + (s.mapped ? "" : ' <span class="chip2 a">unmapped</span>') + "</td><td>" + kchip(s.kind) + "</td><td>" + fdt(s.start) + "</td><td>" + (s.open ? "now" : fdt(s.end)) + '</td><td class="num">' + fdur(s.bizMin) + "</td><td>" + (s.counted ? "▶ counted" : s.kind === "client" ? "⏸ paused" : "■ stopped") + '</td><td class="num">' + fdur(s.elapsedAfter) + "</td></tr>"; }).join("") + "</tbody></table></div>";
+    var tot = r.segs.reduce(function (a, sg) { return a + Math.max(sg.calMin, 0); }, 0) || 1, dayNote = ST.cal.dayMin < 1440 ? " (1 working day = " + fcal(ST.cal.dayMin).replace(/ 0m$/, "") + ")" : "";
+    var e = histFor(t);
+    h += '<div class="kpis" style="margin-bottom:6px">' + kpi("Working time counted", fdur(r.elapsedMin), "of " + (r.targetMin != null ? fdur(r.targetMin) + " target" : "no target"), r.level === "none" ? "var(--faint)" : "var(--sla)") +
+      kpi(r.remainingMin != null && r.remainingMin < 0 ? "Over target by" : "Remaining", r.remainingMin == null ? "—" : r.remainingMin === 0 ? "At limit" : fdur(Math.abs(r.remainingMin)), r.pct != null ? Math.round(r.pct) + "% used" : "", r.remainingMin != null && r.remainingMin <= 0 ? "var(--rose)" : "var(--green)") +
+      kpi("Not counted (with client)", fdur(r.pausedMin), r.clientRounds + " time" + (r.clientRounds === 1 ? "" : "s") + " with client", "#F0A838") +
+      kpi("Age since created", fcal(r.ageCalMin), "calendar time, incl. weekends", "var(--ink2)") + "</div>";
+    h += '<div class="sr">' + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "Created <b>" + fcal(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(calText()) + "), which came to <b>" + fdur(r.elapsedMin) + "</b>" + dayNote + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
+      (r.pausedMin > 0 ? "<b>" + fdur(r.pausedMin) + "</b> of working time was spent with the client and was <b>not</b> counted. " : "This ticket has not been with the client. ") +
+      (e && e.suspect ? '<br><span style="color:var(--amber)"><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</span> ' : "") +
+      (r.unmapped.length ? '<br><span style="color:var(--amber)">Status(es) not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</span>" : "") + "</div>";
+    /* who had it */
+    var kinds = [["hd", "Help Desk"], ["engg", "Engineering"], ["client", "Client"], ["closed", "Closed"]].filter(function (k) { return r.byKind[k[0]].cal > 0.5; });
+    h += '<h3 style="font-size:13px;margin:4px 0 6px">Who had this ticket</h3><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Working time</th><th class="num">Calendar time</th><th>Share of the ticket’s life</th><th>Counts towards SLA?</th></tr></thead><tbody>' +
+      kinds.map(function (k) { var o = r.byKind[k[0]], counted = k[0] === "hd" || k[0] === "engg";
+        return "<tr><td>" + kchip(k[0]) + '</td><td class="num">' + (k[0] === "closed" ? "—" : fdur(o.biz)) + '</td><td class="num">' + fcal(o.cal) + '</td><td><div class="hb" style="min-width:160px"><i class="k-' + k[0] + ' bgc" style="width:' + Math.max(1, o.cal / tot * 100) + '%"></i></div></td><td>' + (counted ? "Yes — counted" : k[0] === "client" ? "No — clock paused" : "No — clock stopped") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+    h += '<h3 style="font-size:13px;margin:16px 0 6px">Status by status (' + r.segs.length + ' step' + (r.segs.length === 1 ? "" : "s") + ')</h3><div class="legend"><span style="--c:var(--hd2)">Help Desk</span><span style="--c:var(--engg)">Engineering</span><span style="--c:#F0A838">Client (paused)</span><span style="--c:#B8C2CF">Closed</span></div><div class="tl" aria-hidden="true">' +
+      r.segs.map(function (sg) { return '<i class="k-' + sg.kind + ' bgc" style="width:' + Math.max(0.8, sg.calMin / tot * 100) + '%" title="' + esc(sg.status + " · " + KN[sg.kind]) + '"></i>'; }).join("") + "</div>";
+    h += '<div class="tw"><table><thead><tr><th>Status</th><th>Held by</th><th>From</th><th>To</th><th class="num">Calendar</th><th class="num">Working time</th><th>Clock</th><th class="num">Counted so far</th></tr></thead><tbody>' +
+      r.segs.map(function (sg) { return "<tr><td><b>" + esc(sg.status) + "</b>" + (sg.mapped ? "" : ' <span class="chip2 a">unmapped</span>') + "</td><td>" + kchip(sg.kind) + "</td><td>" + fdt(sg.start) + "</td><td>" + (sg.open ? "now" : fdt(sg.end)) + '</td><td class="num">' + fcal(sg.calMin) + '</td><td class="num">' + (sg.kind === "closed" ? "—" : fdur(sg.bizMin)) + "</td><td>" + (sg.counted ? "▶ counted" : sg.kind === "client" ? "⏸ paused" : "■ stopped") + '</td><td class="num">' + fdur(sg.elapsedAfter) + "</td></tr>"; }).join("") + "</tbody></table></div>";
     h += "</div></div>";
   }
   overlay("detail", h);
@@ -600,12 +660,14 @@ function renderSettings() {
     (used.length ? '<div class="tw"><table><thead><tr><th>Client</th>' + order.map(function (s) { return "<th>" + s.name + "</th>"; }).join("") + "<th></th></tr></thead><tbody>" + used.map(function (p) { return "<tr><td><b>" + esc(clientName(p)) + '</b> <span style="color:var(--faint)">' + esc(p) + "</span></td>" + order.map(function (s) { var v = d.targets.clients[p][s.id]; return '<td><input type="number" min="0" step="0.5" style="width:80px" data-d="cli:' + esc(p) + ":" + s.id + '" value="' + (v != null ? esc(v) : "") + '" placeholder="' + esc(d.targets.defaults[s.id]) + '" aria-label="' + esc(p + " " + s.name) + '"></td>'; }).join("") + '<td><button class="quiet" data-rmcli="' + esc(p) + '">Remove</button></td></tr>'; }).join("") + "</tbody></table></div>" : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">No exceptions — every client uses the defaults.</div>') +
     '<div class="frow" style="margin-top:10px"><select id="addCliSel" aria-label="Client to add"><option value="">Add a client exception…</option>' + free.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCli">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Business calendar</h3><p class="h">Which hours count towards a target, evaluated in IST. Default is 24 hours, Monday to Friday, which matches the old SLA Manager.</p><div class="frow"><div class="fld"><label>Day starts</label><input type="text" data-d="bs" value="' + esc(d.businessStart) + '" style="width:80px" placeholder="00:00" aria-label="Day starts"></div><div class="fld"><label>Day ends</label><input type="text" data-d="be" value="' + esc(d.businessEnd) + '" style="width:80px" placeholder="24:00" aria-label="Day ends"></div><div class="fld"><label>Working days</label><div class="daychips">' + days.map(function (n, i) { return '<label><input type="checkbox" data-wd="' + i + '"' + (d.workDays.indexOf(i) > -1 ? " checked" : "") + "> " + n + "</label>"; }).join("") + '</div></div></div><div class="fld" style="margin-top:14px"><label>Holidays — one per line: 2026-01-26 Republic Day</label><textarea id="holTxt" rows="4" style="width:min(420px,100%)" aria-label="Holidays">' + esc(d._hol) + "</textarea></div></div>";
-  h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Critical from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div></div></div>';
+  h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Critical from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div><div class="fld"><label>SLA goal</label><input type="number" min="1" max="100" data-d="goal" value="' + esc(d.goalPct) + '"> %</div></div><p class="h" style="margin:10px 0 0">The goal only sets the colours on the SLA % views (green at or above it, amber within 15 points, red below).</p></div>';
   h += '<div class="frow" style="margin-bottom:18px"><button class="primary" id="saveCfg">Save settings</button><button class="ghost" id="resetDraft">Discard changes</button></div>';
   var hn = Object.keys(ST.hist.tickets).length;
   h += '<div class="card set-sec"><h3>Which statuses pause the clock</h3><p class="h">This module uses the same Status → Help Desk / Engineering / Client list as every other dashboard (Master Data, the gear on the launcher). Anything classified <b>Client</b> pauses the clock; <b>Closed</b> stops it. Statuses that appear only in ticket history are offered for classification on the Overview page. <a href="index.html">Open the launcher</a> to review the full list.</p></div>' +
     '<div class="card set-sec"><h3>History cache</h3><p class="h">Status history stored in this browser for <b>' + hn.toLocaleString() + '</b> tickets. It survives new uploads and is refreshed automatically for any ticket that changed in Jira.</p><div class="frow"><button class="ghost" id="btnProbe"' + (BR.ready ? "" : " disabled") + '>Test history access</button><button class="ghost" id="btnClearHist">Clear history cache</button></div>' +
-    (ST.probe ? '<div class="sr" style="margin-top:12px">' + ST.probe.steps.map(function (s) { return (s.ok ? "✓ " : "✗ ") + "<b>" + esc(s.name) + "</b>: " + esc(s.detail); }).join("<br>") + (ST.probe.mode ? "<br><br>Will use: <b>" + (ST.probe.mode === "bulk" ? "fast batch mode" : "one ticket at a time (slower, always works)") + "</b>" : "") + "</div>" : "") + "</div>";
+    (ST.probe ? '<div class="sr" style="margin-top:12px">' + ST.probe.steps.map(function (st) { return (st.ok ? "✓ " : "✗ ") + "<b>" + esc(st.name) + "</b>: " + esc(st.detail); }).join("<br>") + "</div>" +
+      (ST.probe.rows.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Current status</th><th class="num">Status changes (fast search)</th><th class="num">Status changes (ticket history)</th><th>Last change lands on current status?</th></tr></thead><tbody>' + ST.probe.rows.map(function (r) { return "<tr><td>" + keyLink(r.key) + "</td><td>" + esc(r.status) + '</td><td class="num">' + (r.fast == null ? "not returned" : r.fast) + '</td><td class="num">' + r.full + "</td><td>" + (r.consistent ? "✓ yes" : "✗ no") + "</td></tr>"; }).join("") + "</tbody></table></div>" : "") +
+      '<div class="sr"><b>Result:</b> ' + (ST.probe.mode === "batch" ? "the fast search returns the same history as each ticket’s own history. Fetching will run in batches, and every result is still double-checked." : ST.probe.mode === "per-issue" ? "the fast search is missing or incomplete history, so fetching will check tickets one at a time. It is slower but correct." : "no status history could be read for these tickets. Compare one of them with its History tab in Jira and send me this table.") + "</div>" : "") + "</div>";
   M.innerHTML = h;
 }
 function readDraftInput(el) {
@@ -614,11 +676,12 @@ function readDraftInput(el) {
   if (p.indexOf("def:") === 0) d.targets.defaults[p.slice(4)] = n == null || isNaN(n) ? 0 : n;
   else if (p.indexOf("cli:") === 0) { var parts = p.split(":"), c = d.targets.clients[parts[1]] || (d.targets.clients[parts[1]] = {}); if (n == null || isNaN(n) || n <= 0) delete c[parts[2]]; else c[parts[2]] = n; }
   else if (p === "bs") d.businessStart = v; else if (p === "be") d.businessEnd = v;
-  else if (p === "warn") d.warnPct = n; else if (p === "danger") d.dangerPct = n;
+  else if (p === "warn") d.warnPct = n; else if (p === "danger") d.dangerPct = n; else if (p === "goal") d.goalPct = n;
 }
 function saveSettings() {
   var d = ST.draft, err = null;
   if (!(d.warnPct > 0 && d.dangerPct > d.warnPct && d.dangerPct < 100)) err = "Warning levels must satisfy 0 < At risk < Critical < 100.";
+  if (!(d.goalPct >= 1 && d.goalPct <= 100)) err = "The SLA goal must be between 1 and 100.";
   if (!/^\d{1,2}:\d{2}$/.test(d.businessStart) || !/^\d{1,2}:\d{2}$/.test(d.businessEnd)) err = "Enter the day start/end as HH:MM (for example 09:00 and 18:00, or 24:00 for midnight).";
   if (!d.workDays.length) err = "Choose at least one working day.";
   if (!d.issueTypes.length) err = "Include at least one ticket type.";
@@ -658,6 +721,9 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-preset]"))) { ST.ui.preset = x.dataset.preset; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
   if ((x = q("[data-res]"))) { ST.f.result = x.dataset.res; ST.page = 1; buildFilters(); renderAll(); return; }
   if ((x = q("[data-tab]"))) { ST.tab = x.dataset.tab; if (ST.tab === "settings") ST.draft = null; renderAll(); return; }
+  if ((x = q("[data-trend]"))) { ST.trendBy = x.dataset.trend; renderAll(); return; }
+  if ((x = q("[data-matrix]"))) { ST.matrixBy = x.dataset.matrix; renderAll(); return; }
+  if (q("#btnFetchAll")) { runFetch(missingKeys(false, true)); return; }
   if ((x = q("[data-kpires]"))) { ST.f.result = x.dataset.kpires; ST.tab = "tickets"; ST.page = 1; buildFilters(); renderAll(); window.scrollTo(0, 0); return; }
   if ((x = q("[data-sort]"))) { var sk = x.dataset.sort; ST.sort = { key: sk, dir: ST.sort.key === sk && ST.sort.dir === "desc" ? "asc" : "desc" }; renderAll(); return; }
   if ((x = q("[data-open]"))) { if (t.closest("a")) return; openDetail(x.dataset.open); return; }
@@ -676,11 +742,13 @@ document.addEventListener("click", function (e) {
   if (q("#resetDraft")) { ST.draft = null; renderSettings(); return; }
   if (q("#addCli")) { var s = $("addCliSel").value; if (s) { ST.draft.targets.clients[s] = {}; ST.draft._hol = $("holTxt").value; renderSettings(); } return; }
   if ((x = q("[data-rmcli]"))) { delete ST.draft.targets.clients[x.dataset.rmcli]; ST.draft._hol = $("holTxt").value; renderSettings(); return; }
-  if (q("#btnClearHist")) { if (confirm("Clear all cached status history? You can fetch it again at any time.")) { HDStore.clearSlaHistory().then(function () { ST.hist = { tickets: {} }; recompute(); renderAll(); toast("History cache cleared."); }); } return; }
+  if (q("#btnClearHist")) { if (confirm("Clear all cached status history? You can fetch it again at any time.")) { HDStore.clearSlaHistory().then(function () { ST.hist = { v: HIST_VER, tickets: {} }; recompute(); renderAll(); toast("History cache cleared."); }); } return; }
   if (q("#btnProbe")) {
-    var keys = ST.scope.slice().sort(function (a, b) { return b.created - a.created; }).slice(0, 3).map(function (tk) { return tk.key; }); if (!keys.length) { toast("No tickets in the current range to test with.", true); return; }
+    var pool = ST.scope.slice().sort(function (a, b) { return b.created - a.created; }), pick = pool.filter(function (tk) { return tk.status !== "Open"; }).slice(0, 3);
+    if (pick.length < 3) pick = pick.concat(pool.filter(function (tk) { return pick.indexOf(tk) < 0; }).slice(0, 3 - pick.length));
+    if (!pick.length) { toast("No tickets in the current range to test with.", true); return; }
     x = $("btnProbe"); x.disabled = true; x.textContent = "Testing…";
-    Hist.probe(bridgeCall, jiraHost(), keys).then(function (rep) { ST.probe = rep; if (rep.mode === "per-issue") ST.mode = "per-issue"; else if (rep.mode === "bulk") ST.mode = "auto"; renderSettings(); });
+    Hist.probe(bridgeCall, jiraHost(), pick.map(function (tk) { return tk.key; })).then(function (rep) { ST.probe = rep; if (rep.mode === "per-issue") ST.mode = "per-issue"; else if (rep.mode === "batch") ST.mode = "auto"; renderSettings(); });
     return;
   }
 });
@@ -724,7 +792,11 @@ function boot() {
     return Promise.all([HDStore.loadSlaConfig(), HDStore.loadSlaHistory()]);
   }).then(function (a) {
     ST.cfg = Sla.mergeConfig(a[0]); ST.cal = Sla.makeCalendar(ST.cfg); ST.hist = a[1];
+    var stale = 0;
+    if (ST.hist.v !== HIST_VER) { stale = Object.keys(ST.hist.tickets || {}).length; ST.hist = { v: HIST_VER, tickets: {} }; if (stale) HDStore.clearSlaHistory(); }
+    ST.hist.v = HIST_VER;
     recompute(); buildOptions(); buildFilters(); renderAll();
+    if (stale) toast("Cleared " + stale.toLocaleString() + " status histories saved by an earlier version — they may have been incomplete. Fetch again to recalculate.", true);
   }).catch(function (e) { if (e !== "redirect") fatal(e && e.message ? e.message : String(e)); });
 }
 boot();
