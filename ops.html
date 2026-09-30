@@ -54,7 +54,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .landing .lbtn { display: inline-flex; align-items: center; gap: 8px; background: var(--em); color: #fff; padding: 11px 22px; border-radius: 10px; font-family: var(--disp); font-weight: 600; font-size: 13.5px }
 .wrap { max-width: 1440px; margin: 0 auto; padding: 16px 22px 60px }
 
-.topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap }
+.topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; position: relative; z-index: 300 }  /* lift above later .up sections so the Request Type dropdown is never covered */
 .topbar h1 { font-size: 20px; font-weight: 700; letter-spacing: -.4px; display: flex; align-items: center; gap: 10px; white-space: nowrap }
 .topbar h1 .accent { color: var(--em) }
 .topbar .spacer { flex: 1 }
@@ -951,6 +951,13 @@ document.addEventListener('click', function(){ mselCloseAll(); });
       || wb.SheetNames[1] || wb.SheetNames[0];
   }
 
+  /* Default Request Type = Incident + Service Request (only those present in the data).
+     Users can still tick "Change" etc.; "Clear" / "Select all" behave as before. */
+  function defaultIssueTypes(list){
+    var want=["incident","service request"], out=[];
+    (list||[]).forEach(function(n){ if(want.indexOf(String(n).trim().toLowerCase())>-1) out.push(n); });
+    return out;
+  }
   function applyIssueTypeFilter() {
     TK = F.issueType.length ? ALL_TK.filter(function(t){return F.issueType.indexOf(t.issueType)>-1;}) : ALL_TK.slice();
   }
@@ -971,6 +978,7 @@ document.addEventListener('click', function(){ mselCloseAll(); });
     initCols(rows);
     ALL_TK = parseTickets(rows);
     TK = ALL_TK.slice();
+    (function(){ var t={}; ALL_TK.forEach(function(x){ if(x.issueType) t[x.issueType]=1; }); F.issueType = defaultIssueTypes(Object.keys(t)); })();
 
     el("landing").classList.add("hidden");
     el("app").classList.remove("hidden");
@@ -984,8 +992,7 @@ document.addEventListener('click', function(){ mselCloseAll(); });
     }
 
     buildIssueTypeMsel();
-    renderStats();
-    renderClients();
+    renderAll();   // applies the default Incident + Service Request filter on first paint
   }
 
   if (HS) {
