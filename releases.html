@@ -239,6 +239,8 @@ td:has(>.jkey){white-space:nowrap;min-width:92px}
 .msel-dd .msel-search{border:none;border-bottom:1px solid var(--line);padding:9px 12px;font-size:12px;color:var(--ink);font-family:inherit;outline:none;width:100%;background:var(--paper,#F6F8FA);box-sizing:border-box}
 .msel-dd .msel-actions{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--paper,#F6F8FA)}
 .msel-dd .msel-actions button{background:none;border:1px solid var(--line);color:var(--muted,#6B7A90);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
+.msel-dd .msel-actions .msel-ok{margin-left:auto;background:var(--vi,#7C3AED);border-color:var(--vi,#7C3AED);color:#fff;font-weight:700}
+.msel-dd .msel-actions .msel-ok:hover{color:#fff;filter:brightness(1.1)}
 .msel-dd .msel-actions button:hover{color:var(--ink);border-color:var(--line2)}
 .msel-dd .msel-list{overflow-y:auto;flex:1;padding:4px 0}
 .msel-dd .msel-opt{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--ink);transition:background .1s}
@@ -329,6 +331,7 @@ function mselHTML(id){
       '<div class="msel-actions">' +
         '<button data-msel-all="'+id+'">Select all</button>' +
         '<button data-msel-none="'+id+'">Clear</button>' +
+        '<button data-msel-ok="'+id+'" class="msel-ok">Apply</button>' +
       '</div>' +
       '<div class="msel-list" id="'+id+'-list"></div>' +
     '</div></div>';
@@ -414,6 +417,10 @@ function mselBind(){
       mselRenderList(id); mselUpdateBtn(id);
       inst.onChange([]);
     };
+  });
+  /* Apply = close the dropdown, which re-renders with the current selection */
+  document.querySelectorAll('[data-msel-ok]').forEach(function(btn){
+    btn.onclick=function(e){ e.stopPropagation(); mselCloseAll(); };
   });
   /* Option toggle */
   document.querySelectorAll('.msel-list').forEach(function(list){
@@ -1117,7 +1124,7 @@ function expTable(rows,showRel,sortable){
       '<td>'+esc(t.worker||"—")+'</td>'+
       '<td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
       (showRel?'<td class="mono" style="font-size:10px">'+(t.releaseStr?esc(t.releaseStr):'<span class="exp-norel">not assigned</span>')+'</td>':'')+
-      '<td class="mono" style="font-size:11px">'+fmtD(t.created)+' <span class="exp-age'+(age!=null&&age>=30?' old':'')+'">· '+(age==null?"—":age+"d")+'</span></td>'+
+      '<td class="mono" style="font-size:11px;white-space:nowrap">'+fmtD(t.created)+' <span class="exp-age'+(age!=null&&age>=30?' old':'')+'">· '+(age==null?"—":age+"d")+'</span></td>'+
     '</tr>';
   });
   return h+'</tbody></table></div>';
