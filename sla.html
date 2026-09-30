@@ -188,6 +188,12 @@ select,input[type=number],input[type=text],input[type=time],textarea{font-family
 .rm-opt input{margin-top:3px}.rm-opt.on{border-color:var(--sla);background:var(--sla-bg)}
 .rm-msg{margin-top:12px;padding:11px 14px;border-radius:10px;font-size:12.5px;line-height:1.55}
 .rm-msg.ok{background:var(--green-bg);border:1px solid var(--green-soft);color:var(--ink2)}.rm-msg.bad{background:var(--rose-bg);border:1px solid var(--rose-soft);color:var(--ink2)}
+span.dr{cursor:pointer;border-radius:6px;padding:1px 6px;margin:0 -6px;font-weight:700;display:inline-block;transition:background .12s}
+span.dr:hover,span.dr:focus-visible{background:var(--sla-soft);color:#B4400A;text-decoration:underline}
+span.dr.bar{display:block;padding:7px 0;margin:-7px 0;border-radius:8px}span.dr.bar:hover{background:transparent;text-decoration:none;outline:2px solid var(--ink);outline-offset:1px}
+td.dr{cursor:pointer}td.dr:hover,td.dr:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+.hm td:first-child span.dr,.hm th span.dr{font-weight:inherit}
+.kpi.clk:focus-visible{outline:2px solid var(--sla);outline-offset:2px}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -435,16 +441,16 @@ function renderBar() {
   var miss = missingKeys(false).length, bad = sc.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
   var missAll = active ? missingKeys(false, true).length : miss;
   var sus = sc.filter(function (t) { var e = histFor(t); return e && e.suspect; }).length;
-  var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + bad.length + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
+  var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + drNum(bad.length, ["bar", "bad"]) + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
   var warn = sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + sus + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "";
-  var head = active ? "<b>" + n.toLocaleString() + "</b> " + (n === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : "<b>" + n.toLocaleString() + "</b> " + (n === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
+  var head = active ? drNum(n, ["bar", "all"], "", n.toLocaleString()) + " " + (n === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(n, ["bar", "all"], "", n.toLocaleString()) + " " + (n === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
   var tip = !active && miss > 40 ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
   var pill = '<span class="pill ' + (BR.ready ? "ok" : "") + '"><i></i>' + (BR.ready ? "Extension connected" : "Extension not detected") + "</span>";
   var btn = miss > 0
     ? '<button class="primary" id="btnFetch"' + (BR.ready ? "" : " disabled") + '>Fetch &amp; calculate ' + miss.toLocaleString() + " ticket" + (miss > 1 ? "s" : "") + "</button>"
     : (n ? '<button class="ghost" id="btnRefetch"' + (BR.ready ? "" : " disabled") + ">Re-fetch these from Jira</button>" : "");
   var all = active && missAll > miss ? '<button class="quiet" id="btnFetchAll"' + (BR.ready ? "" : " disabled") + ">Fetch all " + missAll.toLocaleString() + " in range</button>" : "";
-  el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt">' + head + " · status history ready for <b>" + ready.toLocaleString() + "</b>" + (miss > 0 ? " · <b>" + miss.toLocaleString() + "</b> still need it" : "") +
+  el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt">' + head + " · status history ready for " + drNum(ready, ["bar", "ready"], "", ready.toLocaleString()) + (miss > 0 ? " · " + drNum(miss, ["bar", "miss"], "", miss.toLocaleString()) + " still need it" : "") +
     '<br><span style="color:var(--muted);font-size:11.5px">Working time: ' + esc(calText()) + " · clocks as of " + fdt(ST.now) + " IST" + (miss > 0 && !BR.ready ? " · install / enable the HD Jira Bridge extension to fetch" : "") + "</span>" + tip + fail + warn + "</div>" + pill + all + btn + "</div>";
 }
 function renderProg() {
@@ -477,8 +483,77 @@ function runFetch(keys) {
   }).then(function () {
     return HDStore.saveSlaHistory(ST.hist).catch(function () {});
   }).then(function () {
-    ST.fetching = false; recompute(); renderAll(); if (ST.detail) renderDetail();
+    ST.fetching = false; recompute(); renderAll(); if (ST.detail) renderDetail(); if (ST.dr && $("drill")) renderDrill();
   });
+}
+
+/* ═════════ drill-down: every number opens the tickets behind it ═════════
+   Each clickable number carries a spec like "tr|2026-09|missed". drillList() turns a spec back into the
+   exact tickets, using the SAME predicates that produced the number, so the count and the list can't drift. */
+function isDecided(x) { return !!(x.r && (x.b === "met" || x.b === "missed" || x.b === "breached")); }
+function isOpenX(x) { return !!(x.r && !x.r.isClosed); }
+function trendCat(x, cat) {
+  switch (cat) {
+    case "all": return true; case "met": return x.b === "met"; case "missed": return x.b === "missed"; case "ob": return x.b === "breached";
+    case "run": return !isDecided(x) && !x.r.isClosed; case "dec": return isDecided(x);
+  } return false;
+}
+function holdCat(x, kind, cat) {
+  if (!isOpenX(x) || x.r.currentKind !== kind) return false;
+  switch (cat) { case "open": return true; case "ob": return x.b === "breached"; case "risk": return x.b === "warning" || x.b === "danger"; case "within": return !(x.b === "breached" || x.b === "warning" || x.b === "danger"); }
+  return false;
+}
+function kpiCat(x, c) {
+  switch (c) { case "sla": return isDecided(x); case "ob": return x.b === "breached"; case "risk": return x.b === "warning" || x.b === "danger"; case "open": return isOpenX(x); case "closed": return !!(x.r && x.r.isClosed); }
+  return false;
+}
+function dimFn(by) { return by === "client" ? function (t) { return t.prefix; } : by === "severity" ? function (t) { return t.sev || "none"; } : function (t) { return t.worker || "Unassigned"; }; }
+function dimLabelText(by, k) { return by === "client" ? clientName(k) + " (" + k + ")" : by === "severity" ? (k === "none" ? "Unrated" : Sla.sevName(k)) : k; }
+function enc(parts) { return parts.map(function (x) { return encodeURIComponent(String(x)); }).join("|"); }
+function drAttr(parts, n) { return ' data-dr="' + esc(enc(parts)) + '" data-n="' + n + '" role="button" tabindex="0" title="Show the ' + n + " ticket" + (n === 1 ? "" : "s") + '"'; }
+/* a number that opens its tickets (plain text when there are none) */
+function drNum(n, parts, style, txt) { var t = txt != null ? txt : n; return n > 0 ? '<span class="dr"' + drAttr(parts, n) + (style ? ' style="' + style + '"' : "") + ">" + t + "</span>" : (style ? '<span style="' + style + '">' + t + "</span>" : String(t)); }
+var CATL = { all: "All tickets with history", met: "Met", missed: "Missed (closed over target)", ob: "Open and already over target", run: "Still running (inside target)", dec: "Decided tickets" };
+function periodOfKey(k) { return perLabel(k); }
+function drillList(spec) {
+  var p = spec.split("|").map(decodeURIComponent), v = view(), r = { title: "", sub: "", list: [], tab: null };
+  switch (p[0]) {
+    case "kpi": {
+      r.list = v.filter(function (x) { return kpiCat(x, p[1]); });
+      var T = { sla: ["SLA met — the tickets behind the percentage", "Met + missed + open tickets already over target. Open tickets still inside their target are not counted yet."], ob: ["Breached, still open", "Open tickets that have already used up their target."], risk: ["At risk", ST.cfg.warnPct + "% or more of the target used, not yet breached."], open: ["Open tickets", "Everything with history that is not closed."], closed: ["Closed tickets", "Used for the average time to resolve (working time)."] }[p[1]] || ["Tickets", ""];
+      r.title = T[0]; r.sub = T[1]; r.tab = { ob: "openbreached", risk: "risk", open: "open", closed: "closed" }[p[1]] || null; break;
+    }
+    case "tr": r.list = v.filter(function (x) { return x.r && perKey(x.t.created) === p[1] && trendCat(x, p[2]); }); r.title = perLabel(p[1]) + " · " + (CATL[p[2]] || p[2]); r.sub = "Tickets created in " + perLabel(p[1]) + (p[2] === "dec" ? ". These are the tickets the SLA % is worked out from: met ÷ (met + missed + open and already over target)." : "."); break;
+    case "mx": {
+      var f = dimFn(p[1]); r.list = v.filter(function (x) { return isDecided(x) && (p[2] === "*" || String(f(x.t)) === p[2]) && (p[3] === "*" || perKey(x.t.created) === p[3]); });
+      r.title = (p[2] === "*" ? "All" : dimLabelText(p[1], p[2])) + " · " + (p[3] === "*" ? "all periods" : perLabel(p[3])); r.sub = "Decided tickets (met, missed, or open and already over target) — the ones this SLA % is worked out from."; break;
+    }
+    case "hd": { r.list = v.filter(function (x) { return holdCat(x, p[1], p[2]); }); var KL = { hd: "Help Desk", engg: "Engineering", client: "Client" }, CL = { open: "open tickets", ob: "open and over target", risk: "at risk", within: "within target" }; r.title = KL[p[1]] + " · " + CL[p[2]]; r.sub = "Open tickets currently held by " + KL[p[1]] + "."; break; }
+    case "bar": {
+      var sc = fetchScope().map(function (t) { var rr = getResult(t); return { t: t, r: rr, b: bucketOf(rr) }; });
+      if (p[1] === "all") { r.list = sc; r.title = "Tickets matching your filters"; r.sub = "Created in the selected date range."; }
+      else if (p[1] === "ready") { r.list = sc.filter(function (x) { return x.r; }); r.title = "Status history ready"; r.sub = "Their SLA clock is calculated."; }
+      else if (p[1] === "miss") { r.list = sc.filter(function (x) { return !x.r && !ST.failedSet[x.t.key]; }); r.title = "Still need history"; r.sub = "Use Fetch & calculate to get them."; }
+      else { r.list = sc.filter(function (x) { return !x.r && ST.failedSet[x.t.key]; }); var rs = {}; r.list.forEach(function (x) { var w = ST.failedSet[x.t.key]; rs[w] = (rs[w] || 0) + 1; }); r.title = "Could not be fetched"; r.sub = Object.keys(rs).map(function (w) { return rs[w] + " × " + w; }).join("; "); }
+      break;
+    }
+  }
+  return r;
+}
+function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: { key: "pct", dir: "desc" } }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function mixChips(list) {
+  var m = {}; list.forEach(function (x) { m[x.b] = (m[x.b] || 0) + 1; });
+  return ["met", "missed", "breached", "danger", "warning", "safe", "none", "nohist"].filter(function (b) { return m[b]; }).map(function (b) { return m[b] + " " + chip(b); }).join(" &nbsp; ");
+}
+function renderDrill() {
+  var d = ST.dr; if (!d) return; var r = drillList(d.spec), s = d.sort, dir = s.dir === "asc" ? 1 : -1;
+  var list = r.list.slice().sort(function (a, b) { var x = sortVal(a, s.key), y = sortVal(b, s.key); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+  var pages = Math.max(1, Math.ceil(list.length / 15)); if (d.page > pages) d.page = pages;
+  var pg = list.slice((d.page - 1) * 15, d.page * 15);
+  var h = '<div class="modal" style="width:min(1240px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:18px">' + esc(r.title) + ' <span class="chip2 x" id="drCount">' + list.length.toLocaleString() + " ticket" + (list.length === 1 ? "" : "s") + '</span></h2><div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(r.sub) + '</div></div>' +
+    (r.tab ? '<button class="ghost" id="drTab" data-rs="' + r.tab + '">Show in Tickets tab</button>' : "") + '<button class="ghost" id="drExport">Export to Excel</button><button class="x" data-closedrill aria-label="Close">✕</button></div><div class="mb">' +
+    (list.length ? '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">' + mixChips(list) + '</div><div class="tw"><table><thead><tr>' + ticketHead("dr") + "</tr></thead><tbody>" + pg.map(ticketRowHtml).join("") + '</tbody></table></div><div class="pager"><button id="drPrev"' + (d.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + d.page + " of " + pages + '</span><button id="drNext"' + (d.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets.</div>') + "</div></div>";
+  overlay("drill", h);
 }
 
 /* ═════════ overview ═════════ */
@@ -493,8 +568,9 @@ function stats(v) {
   });
   s.bad = s.missed + s.openBreached; s.decided = s.met + s.bad; s.comp = pct(s.met, s.decided); return s;
 }
-function kpi(label, val, sub, acc, res) {
-  return '<' + (res != null ? 'button data-kpires="' + res + '"' : "div") + ' class="kpi' + (res != null ? " clk" : "") + '" style="--acc:' + acc + '"><span class="kv">' + val + '</span><span class="kl">' + label + "</span>" + (sub ? '<span class="ks">' + sub + "</span>" : "") + "</" + (res != null ? "button" : "div") + ">";
+function kpi(label, val, sub, acc, spec, n) {
+  var click = spec != null && n > 0;
+  return "<" + (click ? "button" : "div") + ' class="kpi' + (click ? " clk" : "") + '" style="--acc:' + acc + '"' + (click ? ' data-dr="' + esc(enc(["kpi", spec])) + '" data-n="' + n + '" title="Show the ' + n + " ticket" + (n === 1 ? "" : "s") + '"' : "") + '><span class="kv">' + val + '</span><span class="kl">' + label + "</span>" + (sub ? '<span class="ks">' + sub + "</span>" : "") + "</" + (click ? "button" : "div") + ">";
 }
 function unmappedInfo(v) {
   var m = {};
@@ -506,21 +582,20 @@ function weekKey(ms) { var d = new Date(ms + 330 * 60000), dd = (d.getUTCDay() +
 function perKey(ms) { return ST.trendBy === "week" ? weekKey(ms) : monthKey(ms); }
 function perLabel(k) { return ST.trendBy === "week" ? "Week of " + fd(Date.parse(k + "T00:00:00+05:30")) : new Date(k + "-01T12:00:00Z").toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }); }
 function cls(p) { var g = ST.cfg.goalPct; return p == null ? "n" : p >= g ? "g" : p >= g - 15 ? "a" : "r"; }
-function slaBar(p) { return '<div class="slabar" title="' + (p == null ? "no decided tickets" : p + "% (goal " + ST.cfg.goalPct + "%)") + '"><i class="' + cls(p) + '" style="width:' + (p == null ? 0 : p) + '%"></i><b style="left:' + ST.cfg.goalPct + '%"></b></div>'; }
+function slaBar(p, parts, n) { var bar = '<div class="slabar" title="' + (p == null ? "no decided tickets" : p + "% (goal " + ST.cfg.goalPct + "%)") + '"><i class="' + cls(p) + '" style="width:' + (p == null ? 0 : p) + '%"></i><b style="left:' + ST.cfg.goalPct + '%"></b></div>'; return parts && n > 0 ? '<span class="dr bar"' + drAttr(parts, n) + ">" + bar + "</span>" : bar; }
 function togg(attr, cur, opts) { return '<div class="tog" role="group">' + opts.map(function (o) { return '<button data-' + attr + '="' + o[0] + '" class="' + (cur === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>"; }
 
 function trendPanel(v) {
-  var pm = {}, s = stats(v);
-  v.forEach(function (x) {
-    if (!x.r) return; var k = perKey(x.t.created), o = pm[k] || (pm[k] = { n: 0, met: 0, missed: 0, ob: 0, run: 0 });
-    o.n++; if (x.b === "met") o.met++; else if (x.b === "missed") o.missed++; else if (x.b === "breached") o.ob++; else if (!x.r.isClosed) o.run++;
-  });
-  var rows = Object.keys(pm).sort().map(function (k) {
-    var o = pm[k], dec = o.met + o.missed + o.ob, p = pct(o.met, dec);
-    return "<tr><td style=\"white-space:nowrap\"><b>" + perLabel(k) + '</b></td><td class="num">' + o.n + '</td><td class="num">' + o.met + '</td><td class="num" style="color:' + (o.missed ? "var(--rose)" : "inherit") + '">' + o.missed + '</td><td class="num" style="color:' + (o.ob ? "var(--rose)" : "inherit") + '">' + o.ob + '</td><td class="num" style="color:var(--faint)">' + o.run + '</td><td style="width:32%">' + slaBar(p) + '</td><td class="num bigpct" style="color:' + (p == null ? "var(--faint)" : p >= ST.cfg.goalPct ? "var(--green)" : p >= ST.cfg.goalPct - 15 ? "var(--amber)" : "var(--rose)") + '">' + pctTxt(p) + "</td></tr>";
+  var groups = {}, s = stats(v);
+  v.forEach(function (x) { if (!x.r) return; (groups[perKey(x.t.created)] || (groups[perKey(x.t.created)] = [])).push(x); });
+  var rows = Object.keys(groups).sort().map(function (k) {
+    var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; };
+    var n = g.length, met = c("met"), missed = c("missed"), ob = c("ob"), run = c("run"), dec = met + missed + ob, p = pct(met, dec);
+    var pc = p == null ? "var(--faint)" : p >= ST.cfg.goalPct ? "var(--green)" : p >= ST.cfg.goalPct - 15 ? "var(--amber)" : "var(--rose)", T = function (cat) { return ["tr", k, cat]; };
+    return "<tr><td style=\"white-space:nowrap\"><b>" + drNum(n, T("all"), "", perLabel(k)) + '</b></td><td class="num">' + drNum(n, T("all")) + '</td><td class="num">' + drNum(met, T("met")) + '</td><td class="num">' + drNum(missed, T("missed"), missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(ob, T("ob"), ob ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(run, T("run"), "color:var(--faint)") + '</td><td style="width:32%">' + slaBar(p, T("dec"), dec) + '</td><td class="num bigpct" style="color:' + pc + '">' + drNum(dec, T("dec"), "", pctTxt(p)) + "</td></tr>";
   }).join("");
   var excl = s.n - s.hist;
-  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; tickets still inside their target are not counted until they resolve or breach.' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + '</div><div class="tw"><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Open, over target</th><th class="num">Still running</th><th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; tickets still inside their target are not counted until they resolve or breach. <b>Click any number, bar or percentage to see its tickets.</b>' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + '</div><div class="tw"><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Open, over target</th><th class="num">Still running</th><th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
 }
 function matrixPanel(v) {
   var by = ST.matrixBy, keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} };
@@ -534,12 +609,12 @@ function matrixPanel(v) {
   var pk = Object.keys(periods).sort(), sevOrder = Sla.SEVERITIES.map(function (z) { return z.id; }).concat(["none"]);
   var ks = Object.keys(keys).sort(function (a, b) { return by === "severity" ? sevOrder.indexOf(a) - sevOrder.indexOf(b) : keys[b].n - keys[a].n; });
   var more = ks.length > 15 ? ks.length - 15 : 0; ks = ks.slice(0, 15);
-  function cell(o, p) { var c = o.cells[p]; if (!c) return '<td class="cell n">—</td>'; var pp = Math.round(c.met / c.n * 100); return '<td class="cell ' + cls(pp) + '" title="' + c.met + " of " + c.n + ' met">' + pp + "%<small>" + c.n + "</small></td>"; }
+  function cell(o, p, key) { var c = o.cells[p]; if (!c) return '<td class="cell n">—</td>'; var pp = Math.round(c.met / c.n * 100); return '<td class="cell dr ' + cls(pp) + '"' + drAttr(["mx", by, key, p], c.n).replace(/ title="[^"]*"/, "") + ' title="' + c.met + " of " + c.n + ' met — click to see the tickets">' + pp + "%<small>" + c.n + "</small></td>"; }
   var single = pk.length === 1;
-  function tot(o) { if (single) return "";  var pp = o.n ? Math.round(o.met / o.n * 100) : null; return '<td class="cell ' + cls(pp) + '" style="border-left:1.5px solid var(--line2)">' + pctTxt(pp) + "<small>" + o.n + "</small></td>"; }
-  var body = '<tr class="all"><td>All</td>' + pk.map(function (p) { return cell(all, p); }).join("") + tot(all) + "</tr>" + ks.map(function (k) { var o = keys[k]; return "<tr><td>" + labelOf(k) + "</td>" + pk.map(function (p) { return cell(o, p); }).join("") + tot(o) + "</tr>"; }).join("");
-  return '<div class="card panel"><div class="panel-h"><h3>SLA % ' + (by === "client" ? "by client" : by === "severity" ? "by severity" : "by worker") + ', ' + (ST.trendBy === "week" ? "week" : "month") + ' by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("matrix", by, [["client", "Client"], ["severity", "Severity"], ["worker", "Worker"]]) + '</div><div class="sub">Each cell is the SLA % for tickets created that ' + (ST.trendBy === "week" ? "week" : "month") + ' (small number = tickets counted). Green meets the ' + ST.cfg.goalPct + '% goal, amber is within 15 points, red is further off.</div>' +
-    (pk.length ? '<div class="tw"><table class="hm"><thead><tr><th>' + (by === "client" ? "Client" : by === "severity" ? "Severity" : "Worker") + "</th>" + pk.map(function (p) { return "<th>" + perLabel(p) + "</th>"; }).join("") + (single ? "" : "<th>Overall</th>") + "</tr></thead><tbody>" + body + "</tbody></table></div>" + (more ? '<div class="sub" style="margin:8px 0 0">…and ' + more + " more with fewer tickets.</div>" : "") : '<div class="empty" style="padding:22px">No tickets have a decided outcome yet.</div>') + "</div>";
+  function tot(o, key) { if (single) return "";  var pp = o.n ? Math.round(o.met / o.n * 100) : null; return '<td class="cell dr ' + cls(pp) + '"' + drAttr(["mx", by, key, "*"], o.n).replace(/ title="[^"]*"/, "") + ' title="' + o.met + " of " + o.n + ' met — click to see the tickets" style="border-left:1.5px solid var(--line2)">' + pctTxt(pp) + "<small>" + o.n + "</small></td>"; }
+  var body = '<tr class="all"><td>' + drNum(all.n, ["mx", by, "*", "*"], "", "All") + "</td>" + pk.map(function (p) { return cell(all, p, "*"); }).join("") + tot(all, "*") + "</tr>" + ks.map(function (k) { var o = keys[k]; return "<tr><td>" + (o.n > 0 ? '<span class="dr"' + drAttr(["mx", by, k, "*"], o.n) + ">" + labelOf(k) + "</span>" : labelOf(k)) + "</td>" + pk.map(function (p) { return cell(o, p, k); }).join("") + tot(o, k) + "</tr>"; }).join("");
+  return '<div class="card panel"><div class="panel-h"><h3>SLA % ' + (by === "client" ? "by client" : by === "severity" ? "by severity" : "by worker") + ', ' + (ST.trendBy === "week" ? "week" : "month") + ' by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("matrix", by, [["client", "Client"], ["severity", "Severity"], ["worker", "Worker"]]) + '</div><div class="sub">Each cell is the SLA % for tickets created that ' + (ST.trendBy === "week" ? "week" : "month") + ' (small number = tickets counted; <b>click a cell, row or column</b> to see them). Green meets the ' + ST.cfg.goalPct + '% goal, amber is within 15 points, red is further off.</div>' +
+    (pk.length ? '<div class="tw"><table class="hm"><thead><tr><th>' + (by === "client" ? "Client" : by === "severity" ? "Severity" : "Worker") + "</th>" + pk.map(function (p) { var n = all.cells[p] ? all.cells[p].n : 0; return "<th>" + drNum(n, ["mx", by, "*", p], "", perLabel(p)) + "</th>"; }).join("") + (single ? "" : "<th>Overall</th>") + "</tr></thead><tbody>" + body + "</tbody></table></div>" + (more ? '<div class="sub" style="margin:8px 0 0">…and ' + more + " more with fewer tickets.</div>" : "") : '<div class="empty" style="padding:22px">No tickets have a decided outcome yet.</div>') + "</div>";
 }
 function renderOverview(v) {
   var s = stats(v), M = $("main");
@@ -553,15 +628,15 @@ function renderOverview(v) {
   }
   var goal = ST.cfg.goalPct, compAcc = s.comp == null ? "var(--faint)" : s.comp >= goal ? "var(--green)" : s.comp >= goal - 15 ? "#F59E0B" : "var(--rose)";
   h += '<div class="kpis">' +
-    kpi("SLA met", pctTxt(s.comp), s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet", compAcc) +
-    kpi("Breached, still open", s.openBreached, "already over their target", "var(--rose)", "openbreached") +
-    kpi("At risk", s.risk, ST.cfg.warnPct + "%+ of target used", "#F59E0B", "risk") +
-    kpi("Open now", s.open, "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n, "var(--engg)", "open") +
-    kpi("Avg time to resolve", s.nEl ? fdur(s.sumEl / s.nEl) : "—", s.nEl + " closed · working time", "var(--hd)", "closed") + "</div>";
+    kpi("SLA met", pctTxt(s.comp), s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet", compAcc, "sla", s.decided) +
+    kpi("Breached, still open", s.openBreached, "already over their target", "var(--rose)", "ob", s.openBreached) +
+    kpi("At risk", s.risk, ST.cfg.warnPct + "%+ of target used", "#F59E0B", "risk", s.risk) +
+    kpi("Open now", s.open, "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n, "var(--engg)", "open", s.open) +
+    kpi("Avg time to resolve", s.nEl ? fdur(s.sumEl / s.nEl) : "—", s.nEl + " closed · working time", "var(--hd)", "closed", s.nEl) + "</div>";
   h += trendPanel(v) + matrixPanel(v);
   /* who holds the open tickets */
   var hold = ["hd", "engg", "client"].map(function (k) {
-    var o = s.by[k]; return "<tr><td>" + kchip(k) + '</td><td class="num">' + o.n + '</td><td class="num" style="color:' + (o.br ? "var(--rose)" : "inherit") + '">' + o.br + '</td><td class="num">' + o.risk + '</td><td class="num">' + (o.n - o.br - o.risk) + "</td></tr>"; }).join("");
+    var o = s.by[k], H = function (cat) { return ["hd", k, cat]; }; return "<tr><td>" + kchip(k) + '</td><td class="num">' + drNum(o.n, H("open")) + '</td><td class="num">' + drNum(o.br, H("ob"), o.br ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.risk, H("risk")) + '</td><td class="num">' + drNum(o.n - o.br - o.risk, H("within")) + "</td></tr>"; }).join("");
   var att = v.filter(function (x) { return x.r && !x.r.isClosed && (x.b === "breached" || x.b === "danger" || x.b === "warning"); }).sort(function (a, b) { return (b.r.pct || 0) - (a.r.pct || 0); }).slice(0, 10);
   var arow = att.map(function (x) { return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell">' + esc(x.t.summary) + "</td><td>" + kchip(x.r.currentKind) + "</td><td>" + chip(x.b) + "</td><td>" + breakCell(x) + "</td><td>" + remindCell(x) + "</td></tr>"; }).join("");
   h += '<div class="grid2"><div class="card panel"><h3>Who has the open tickets</h3><div class="sub">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused.</div><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Over target</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' + hold + "</tbody></table></div></div>" +
@@ -602,33 +677,36 @@ function sortVal(x, k) {
     case "breach": { var bi = binfoOf(x); if (!bi) return 9e15; if (bi.state === "breached" || bi.state === "missed") return bi.breachedAt == null ? 0 : bi.breachedAt; if (bi.state === "running") return bi.breachAt == null ? 9e15 : bi.breachAt; if (bi.state === "paused") return 8e15; return 9e15; }
   } return 0;
 }
-function th(label, k, num) { var on = ST.sort.key === k; return '<th class="sort' + (num ? " num" : "") + '" data-sort="' + k + '" aria-sort="' + (on ? (ST.sort.dir === "asc" ? "ascending" : "descending") : "none") + '">' + label + (on ? (ST.sort.dir === "asc" ? " ▲" : " ▼") : "") + "</th>"; }
+function th(label, k, num, mode) { var dr = mode === "dr", cur = dr ? ST.dr.sort : ST.sort, on = cur.key === k; return '<th class="sort' + (num ? " num" : "") + '" ' + (dr ? "data-drsort" : "data-sort") + '="' + k + '" aria-sort="' + (on ? (cur.dir === "asc" ? "ascending" : "descending") : "none") + '">' + label + (on ? (cur.dir === "asc" ? " ▲" : " ▼") : "") + "</th>"; }
+function ticketHead(mode) { return th("Ticket", "key", 0, mode) + "<th>Summary</th>" + th("Severity", "sev", 0, mode) + "<th>Status</th><th>Held by</th>" + th("Worker", "worker", 0, mode) + th("Target", "target", 1, mode) + th("Counted", "elapsed", 1, mode) + th("Used", "pct", 0, mode) + th("Breaks at", "breach", 0, mode) + "<th>Result</th><th></th>"; }
+function ticketRowHtml(x) {
+  var t = x.t, r = x.r;
+  return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
+}
 function renderTickets(v) {
   var M = $("main");
   var s = ST.sort, d = s.dir === "asc" ? 1 : -1;
   v = v.slice().sort(function (a, b) { var x = sortVal(a, s.key), y = sortVal(b, s.key); return (x < y ? -1 : x > y ? 1 : 0) * d; });
   var pages = Math.max(1, Math.ceil(v.length / ST.PAGE)); if (ST.page > pages) ST.page = pages;
   var pg = v.slice((ST.page - 1) * ST.PAGE, ST.page * ST.PAGE);
-  var body = pg.map(function (x) {
-    var t = x.t, r = x.r;
-    return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
-  }).join("");
+  var body = pg.map(ticketRowHtml).join("");
   M.innerHTML = '<div class="card panel"><div class="panel-h"><h3>' + v.length.toLocaleString() + (v.length === 1 ? ' ticket' : ' tickets') + '</h3><button class="ghost" id="btnExport">Export to Excel</button></div><div class="sub">Click a ticket for its full status timeline. <b>Breaks at</b> is the exact time the target runs out on your working calendar; 🔔 Remind previews and sends it as an internal note. Created date and client-wait time are in each ticket’s detail.</div>' +
-    (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + th("Ticket", "key") + "<th>Summary</th>" + th("Severity", "sev") + "<th>Status</th><th>Held by</th>" + th("Worker", "worker") + th("Target", "target", 1) + th("Counted", "elapsed", 1) + th("Used", "pct") + th("Breaks at", "breach") + "<th>Result</th><th></th></tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
+    (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + ticketHead() + "</tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
 }
-function exportXlsx() {
-  var v = view(), rows = v.map(function (x) { var t = x.t, r = x.r; return { Ticket: t.key, Summary: t.summary, Client: t.prefix, Project: t.project, Type: t.type, Severity: t.sev ? Sla.sevName(t.sev) : (t.priority || ""), Status: t.status, "Current worker": t.worker, "SVM in charge": t.svm, Created: new Date(t.created).toISOString(),
+function exportXlsx() { exportList(view(), "SLA"); }
+function exportList(v, name) {
+  var rows = v.map(function (x) { var t = x.t, r = x.r; return { Ticket: t.key, Summary: t.summary, Client: t.prefix, Project: t.project, Type: t.type, Severity: t.sev ? Sla.sevName(t.sev) : (t.priority || ""), Status: t.status, "Current worker": t.worker, "SVM in charge": t.svm, Created: new Date(t.created).toISOString(),
     "Target (h)": r && r.targetMin != null ? +(r.targetMin / 60).toFixed(2) : "", "Counted (h)": r ? +(r.elapsedMin / 60).toFixed(2) : "", "Help Desk (h)": r ? +(r.hdMin / 60).toFixed(2) : "", "Engineering (h)": r ? +(r.enggMin / 60).toFixed(2) : "", "Client wait excluded (h)": r ? +(r.pausedMin / 60).toFixed(2) : "",
     "Breach state": (function () { var bi = binfoOf(x); return bi ? bi.state : ""; })(), "Breaks at (IST)": (function () { var bi = binfoOf(x); return bi && bi.breachAt ? fdtw(bi.breachAt) : ""; })(), "Breached at (IST)": (function () { var bi = binfoOf(x); return bi && bi.breachedAt ? fdtw(bi.breachedAt) : ""; })(), "Times with client": r ? r.clientRounds : "", Reopened: r ? r.reopens : "", Closed: r ? (r.isClosed ? "Yes" : "No") : "", Result: BK[x.b][0] }; });
   if (!rows.length) { toast("Nothing to export.", true); return; }
-  if (window.XLSX) { var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "SLA"); XLSX.writeFile(wb, "SLA_" + new Date().toISOString().slice(0, 10) + ".xlsx"); return; }
+  if (window.XLSX) { var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "SLA"); XLSX.writeFile(wb, name + "_" + new Date().toISOString().slice(0, 10) + ".xlsx"); return; }
   var cols = Object.keys(rows[0]), csv = [cols.join(",")].concat(rows.map(function (r) { return cols.map(function (c) { return '"' + String(r[c]).replace(/"/g, '""') + '"'; }).join(","); })).join("\n");
-  var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "SLA.csv"; a.click();
+  var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = name + ".csv"; a.click();
 }
 
 /* ═════════ ticket detail ═════════ */
 function overlay(id, html) { var o = $(id); if (!o) { o = document.createElement("div"); o.id = id; o.className = "ov"; document.body.appendChild(o); } o.innerHTML = html; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); return o; }
-function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } }
+function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } if (id === "drill") ST.dr = null; }
 function renderDetail() {
   var t = ST.byKey[ST.detail]; if (!t) return;
   var r = getResult(t), b = bucketOf(r), h = '<div class="modal"><div class="mh"><div style="flex:1;min-width:0"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="font-size:20px">' + keyLink(t.key) + "</h2>" + chip(b) + (r && r.isPaused ? kchip("client") + ' <span style="font-size:11.5px;color:var(--muted)">clock paused</span>' : "") + '</div><div style="font-size:14px;margin-top:6px;font-weight:500">' + esc(t.summary) + '</div><div style="font-size:11.5px;color:var(--muted);margin-top:5px">' + esc(clientName(t.prefix)) + " · " + esc(t.type) + " · " + esc(t.priority || "No priority") + " · worker " + esc(t.worker || "—") + " · SVM " + esc(t.svm || "—") + " · created " + fdt(t.created) + '</div></div>' + (r && !r.isClosed && r.targetMin != null ? '<button class="primary" data-remind="' + esc(t.key) + '">🔔 Send SLA reminder</button>' : "") + '<button class="x" data-closedetail aria-label="Close">✕</button></div><div class="mb">';
@@ -778,7 +856,7 @@ function sendRemind() {
   var m = buildSlaMessage(t, L, rm.extra);
   postSlaNote(rm.key, m.adf, rm.mode).then(function (res) {
     rm.status = "done"; rm.res = res; noteSet(rm.key, { commentId: res.id, at: Date.now() });
-    rmStatusHtml(); if (ST.tab !== "settings") renderAll();
+    rmStatusHtml(); if (ST.tab !== "settings") renderAll(); if (ST.dr && $("drill")) renderDrill();
   }, function (e) { rm.status = "error"; rm.err = String(e && e.message || e); rmStatusHtml(); });
 }
 function copyRemind() {
@@ -882,9 +960,15 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-trend]"))) { ST.trendBy = x.dataset.trend; renderAll(); return; }
   if ((x = q("[data-matrix]"))) { ST.matrixBy = x.dataset.matrix; renderAll(); return; }
   if (q("#btnFetchAll")) { runFetch(missingKeys(false, true)); return; }
-  if ((x = q("[data-kpires]"))) { ST.f.result = x.dataset.kpires; ST.tab = "tickets"; ST.page = 1; buildFilters(); renderAll(); window.scrollTo(0, 0); return; }
   if ((x = q("[data-sort]"))) { var sk = x.dataset.sort; ST.sort = { key: sk, dir: ST.sort.key === sk && ST.sort.dir === "desc" ? "asc" : "desc" }; renderAll(); return; }
   if ((x = q("[data-remind]"))) { openRemind(x.dataset.remind); return; }
+  if ((x = q("[data-dr]"))) { openDrill(x.dataset.dr); return; }
+  if (q("[data-closedrill]") || t.id === "drill") { closeOv("drill"); return; }
+  if ((x = q("[data-drsort]"))) { var dk = x.dataset.drsort; ST.dr.sort = { key: dk, dir: ST.dr.sort.key === dk && ST.dr.sort.dir === "desc" ? "asc" : "desc" }; ST.dr.page = 1; renderDrill(); return; }
+  if (q("#drPrev")) { ST.dr.page--; renderDrill(); return; }
+  if (q("#drNext")) { ST.dr.page++; renderDrill(); return; }
+  if (q("#drExport")) { exportList(drillList(ST.dr.spec).list, "SLA_selection"); return; }
+  if ((x = q("#drTab"))) { ST.f.result = x.dataset.rs; closeOv("drill"); ST.tab = "tickets"; ST.page = 1; buildFilters(); renderAll(); window.scrollTo(0, 0); return; }
   if (q("[data-closeremind]") || t.id === "remind") { closeOv("remind"); return; }
   if (q("#rmSend")) { sendRemind(); return; }
   if (q("#rmCopy")) { copyRemind(); return; }
@@ -933,10 +1017,12 @@ document.addEventListener("change", function (e) {
 document.addEventListener("keydown", function (e) {
   if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); if (ST.cfg) openSearch(); return; }
   if (e.key === "Escape") {
-    var openDd = document.querySelector(".ms-dd.open");
-    if ($("remind")) closeOv("remind"); else if ($("search")) closeOv("search"); else if ($("detail")) closeOv("detail"); else if (openDd) openDd.classList.remove("open");
+    var openDd = document.querySelector(".ms-dd.open"), ovs = document.querySelectorAll(".ov");
+    if (ovs.length) closeOv(ovs[ovs.length - 1].id);            // close whichever window is on top
+    else if (openDd) openDd.classList.remove("open");
     return;
   }
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-dr]")) { e.preventDefault(); openDrill(e.target.dataset.dr); return; }
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open]")) { e.preventDefault(); openDetail(e.target.dataset.open); }
 });
 
