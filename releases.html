@@ -157,7 +157,8 @@ tbody tr:hover{background:var(--vi-bg)}
 tbody tr.detail-row{background:var(--paper)}
 .dcell{cursor:pointer;transition:background .12s;border-radius:4px}
 .dcell:hover{background:var(--vi-soft)!important}
-.jkey{font-family:var(--mono);font-weight:700;font-size:11.5px;color:var(--vi)}
+.jkey{font-family:var(--mono);font-weight:700;font-size:11.5px;color:var(--vi);white-space:nowrap}
+td:has(>.jkey){white-space:nowrap;min-width:92px}
 .badge{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;display:inline-block}
 .badge.df{background:var(--df-soft);color:var(--df)}
 .badge.bf{background:var(--bf-soft);color:var(--bf)}
@@ -252,8 +253,8 @@ tbody tr.detail-row{background:var(--paper)}
 @media(max-width:680px){.ogrid{grid-template-columns:1fr}.blbl{min-width:80px;max-width:100px}}
 
 /* ── EXPECTED RELEASES TAB ── */
-.exp-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px}
-.exp-bar .fcell{min-width:230px}
+.exp-bar{position:relative;z-index:30;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px}
+.exp-bar .fcell{min-width:min(230px,100%)}
 .exp-bar .sp{flex:1}
 .exp-seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
 .exp-seg button{background:var(--paper);border:0;padding:7px 13px;font-size:11.5px;font-weight:600;color:var(--ink2)}
@@ -581,11 +582,12 @@ function sortTickets(arr,col,dir){
 function render(){
   applyFilters();
   var app=el("app");
-  if(!RAW.length){renderLanding(BLOB?"loaded-no-releases":"");return;}
+  if(!RAW.length&&!NOREL.length){renderLanding(BLOB?"loaded-no-releases":"");return;}
 
-  var projs=distinctSorted(RAW,"project");
-  var svms=distinctSorted(RAW,"svm");
-  var itypes=distinctSorted(RAW,"issueType");
+  var SRC=S.tab==="expected"?RAW.concat(NOREL):RAW;   // Expected tab also lists tickets with no release no.
+  var projs=distinctSorted(SRC,"project");
+  var svms=distinctSorted(SRC,"svm");
+  var itypes=distinctSorted(SRC,"issueType");
   var _itMselId=mselCreate("itMsel","All request types",itypes,S.issueType,function(sel){S.issueType=sel;},function(){S.page=0;S.kpiFilter="";render();});
 
   var h='<header class="top">'+
@@ -1649,7 +1651,7 @@ function bindAll(){
 /* Default Request Type filter = Incident + Service Request (only those present in the data). */
 function defaultIssueTypes(){
   var want=["incident","service request"], seen={}, out=[];
-  RAW.forEach(function(t){ if(t.issueType && !seen[t.issueType]){ seen[t.issueType]=1; if(want.indexOf(t.issueType.toLowerCase())>-1) out.push(t.issueType); } });
+  RAW.concat(NOREL).forEach(function(t){ if(t.issueType && !seen[t.issueType]){ seen[t.issueType]=1; if(want.indexOf(t.issueType.toLowerCase())>-1) out.push(t.issueType); } });
   return out;
 }
 function boot(){
