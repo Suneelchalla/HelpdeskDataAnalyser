@@ -45,13 +45,17 @@
          soon     → open and not yet breached (running, or paused with the client)
          breached → open and already over target
        Blank line = new paragraph, line break stays a line break, **text** is bold, {placeholders} are filled in.
-       The "SLA reminder · HD SLA Tracker — <state>" heading and the "Last updated…" footer are added automatically. */
+       Only the "SLA reminder · HD SLA Tracker — <state>" heading is added automatically. */
     templates: {
-      soon: "Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n\nRegards,\nSVM Help Desk",
-      breached: "Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n\nRegards,\nSVM Help Desk"
+      soon: "Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n**{remaining}**\n\nRegards,\nSVM Help Desk",
+      breached: "Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n**{remaining}**\n\nRegards,\nSVM Help Desk"
     }
   };
 
+  /* Earlier default wordings. Settings saves the whole config, so an unedited copy of an old default can sit in
+     someone's browser; it is replaced by the current default instead of overriding it. */
+  var LEGACY_TEMPLATES = { soon: ["Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n\nRegards,\nSVM Help Desk"], breached: ["Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n\nRegards,\nSVM Help Desk"] };
+  function isLegacy(k, v) { var n = String(v).replace(/\r\n/g, "\n").trim(); return LEGACY_TEMPLATES[k].some(function (x) { return x.trim() === n; }); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   /* Merge a saved config over the defaults so new keys always exist. */
   function mergeConfig(saved) {
@@ -60,7 +64,7 @@
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
-    if (saved.templates) ["soon", "breached"].forEach(function (k) { if (typeof saved.templates[k] === "string" && saved.templates[k].trim()) c.templates[k] = saved.templates[k]; });
+    if (saved.templates) ["soon", "breached"].forEach(function (k) { var v = saved.templates[k]; if (typeof v === "string" && v.trim() && !isLegacy(k, v)) c.templates[k] = v; });
     if (saved.targets) {
       if (saved.targets.defaults) Object.keys(saved.targets.defaults).forEach(function (k) { c.targets.defaults[k] = saved.targets.defaults[k]; });
       if (saved.targets.clients) c.targets.clients = clone(saved.targets.clients);
