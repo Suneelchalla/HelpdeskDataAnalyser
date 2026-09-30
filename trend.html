@@ -2695,7 +2695,7 @@ function handleUpload(e){
     if(window.HDStore){ HDStore.clearRows(); HDStore.saveRows(rows); }
     ED={ work:[], filters:{}, blankFilters:{}, search:"", sortCol:null, sortDir:"asc", page:0, dirty:false, seq:0 };
     // reset view state on new upload
-    S.svm=[]; S.cw=[]; S.rc=[]; S.issue=[]; S.proj=[]; S.from=""; S.to=""; S.dlabel="All time"; S._excFilter=null; S.pendAction="";
+    S.svm=[]; S.cw=[]; S.rc=[]; S.issue=defaultIssueTypes(); S.proj=[]; S.from=""; S.to=""; S.dlabel="All time"; S._excFilter=null; S.pendAction="";
     S.tab="perf"; S.tRc="__CLAR__"; S.tStatus="Closed"; S.pivot="hdworker"; S.pIssue=""; S.pRc=""; S.pStatus=""; S._pivFor=null; S.weekA=""; S.weekB=""; S.sortCol="total"; S.sortDir="desc"; S.dType="";
     render();
     // footer
@@ -2757,9 +2757,17 @@ renderMain=function(){
 };
 
 /* Rebuild the normalized model from the current raw rows. */
+/* Default Request Type filter = Incident + Service Request (only those present in the data).
+   Applied once on first load; users can untick them or add Change etc. */
+function defaultIssueTypes(){
+  var want=["incident","service request"], seen={}, out=[];
+  RAW.forEach(function(t){ if(t.issue && !seen[t.issue]){ seen[t.issue]=1; if(want.indexOf(t.issue.toLowerCase())>-1) out.push(t.issue); } });
+  return out;
+}
 function rebuildFromRows(rawRows){
   RAW_ROWS = rawRows;
   RAW = normalize(rawRows).filter(function(t){return t.key;});
+  if(!S._issueInit){ S.issue = defaultIssueTypes(); S._issueInit = true; }
   computeResolvedSpan();   // refresh data-currency span for partial-week detection
 }
 
