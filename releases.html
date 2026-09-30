@@ -1214,7 +1214,7 @@ function processUpload(file){
   FILENAME=file.name; BLOB=file;
   readFile(file).then(function(rows){
     RAW=normalize(rows);
-    S={tab:"overview",search:"",proj:"",svm:"",fixType:"",status:"",from:"",to:"",sortCol:"created",sortDir:"desc",page:0,kpiFilter:""};
+    S={tab:"overview",search:"",proj:"",svm:"",fixType:"",status:"",issueType:defaultIssueTypes(),from:"",to:"",sortCol:"created",sortDir:"desc",page:0,kpiFilter:""};
     render();
   }).catch(function(err){alert("Could not read file: "+err.message);});
 }
@@ -1249,7 +1249,7 @@ function bindAll(){
   var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
   var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
   var rb=el("resetBtn");if(rb)rb.onclick=function(){
-    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType=[];S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
 
   // KPI clicks → single-click opens drill modal directly
   document.querySelectorAll("[data-kpi]").forEach(function(k){
@@ -1381,6 +1381,12 @@ function bindAll(){
 }
 
 /* ── BOOT ── */
+/* Default Request Type filter = Incident + Service Request (only those present in the data). */
+function defaultIssueTypes(){
+  var want=["incident","service request"], seen={}, out=[];
+  RAW.forEach(function(t){ if(t.issueType && !seen[t.issueType]){ seen[t.issueType]=1; if(want.indexOf(t.issueType.toLowerCase())>-1) out.push(t.issueType); } });
+  return out;
+}
 function boot(){
   if(!window.HDStore){renderLanding();return;}
   HDStore.loadConfig().then(function(cfg){
@@ -1394,6 +1400,7 @@ function boot(){
         var source=(edited&&edited.length)?Promise.resolve(edited):readFile(rec.blob);
         source.then(function(rows){
           RAW=normalize(rows);
+          S.issueType=defaultIssueTypes();
           render();
         }).catch(function(err){alert("Could not read stored file: "+err.message);renderLanding();});
       });
