@@ -39,6 +39,7 @@
     },
     warnPct: 75,
     dangerPct: 90,
+    goalPct: 90,                        // SLA % the team aims for (colours only)
     issueTypes: ["Incident", "Service Request"]
   };
 
@@ -46,7 +47,7 @@
   /* Merge a saved config over the defaults so new keys always exist. */
   function mergeConfig(saved) {
     var c = clone(DEFAULT_CONFIG); saved = saved || {};
-    ["businessStart", "businessEnd", "warnPct", "dangerPct"].forEach(function (k) { if (saved[k] != null) c[k] = saved[k]; });
+    ["businessStart", "businessEnd", "warnPct", "dangerPct", "goalPct"].forEach(function (k) { if (saved[k] != null) c[k] = saved[k]; });
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
@@ -84,7 +85,7 @@
     var hol = {};
     (cfg.holidays || []).forEach(function (h) { var d = typeof h === "string" ? h : h && h.date; if (d) hol[String(d).slice(0, 10)] = 1; });
     var wd = {}; (cfg.workDays || [1, 2, 3, 4, 5]).forEach(function (d) { wd[d] = 1; });
-    return { tz: 330, startMin: start, endMin: end, workDays: wd, holidays: hol };
+    return { tz: 330, startMin: start, endMin: end, dayMin: end - start, workDays: wd, holidays: hol };
   }
   /* Business minutes between two instants (ms). */
   function bizMinutes(a, b, cal) {
@@ -146,10 +147,12 @@
     raw.push({ status: cur, start: curStart, end: Math.max(now, curStart), open: true });
 
     var elapsed = 0, paused = 0, hd = 0, engg = 0, unmappedMin = 0, clientRounds = 0, reopens = 0;
+    var byKind = { hd: { biz: 0, cal: 0 }, engg: { biz: 0, cal: 0 }, client: { biz: 0, cal: 0 }, closed: { biz: 0, cal: 0 } };
     var unmapped = {}, segs = [], prevKind = null, prevStatus = null;
     for (i = 0; i < raw.length; i++) {
       var s = raw[i], c = classify(s.status), mins = bizMinutes(s.start, s.end, cal);
       var counted = c.kind === "hd" || c.kind === "engg";
+      byKind[c.kind].biz += mins; byKind[c.kind].cal += (s.end - s.start) / MIN;
       if (counted) { elapsed += mins; if (c.kind === "engg") engg += mins; else hd += mins; }
       else if (c.kind === "client") paused += mins;
       if (!c.mapped && c.kind !== "closed") { unmapped[s.status] = 1; unmappedMin += mins; }
@@ -166,7 +169,7 @@
     var closedAt = null;
     if (isClosed) closedAt = last.start;
     return {
-      segs: segs, elapsedMin: elapsed, pausedMin: paused, hdMin: hd, enggMin: engg,
+      segs: segs, byKind: byKind, ageCalMin: (Math.max(now, created) - created) / MIN, elapsedMin: elapsed, pausedMin: paused, hdMin: hd, enggMin: engg,
       unmappedMin: unmappedMin, unmapped: Object.keys(unmapped),
       clientRounds: clientRounds, reopens: reopens,
       isClosed: isClosed, closedAt: closedAt,
@@ -189,9 +192,13 @@
   }
 
   /* ─────────── formatting ─────────── */
-  function fmtDur(m) {
+  /* dayMin = length of one "day" in minutes. Working-time figures pass the calendar's
+     working-day length (e.g. 480 for a 9–17 day) so "1d" always means one working day;
+     calendar figures use the default 1440. */
+  function fmtDur(m, dayMin) {
     if (m == null || isNaN(m)) return "—";
-    var neg = m < 0, a = Math.abs(Math.round(m)), d = Math.floor(a / 1440), h = Math.floor((a % 1440) / 60), mn = a % 60, s = neg ? "-" : "";
+    var D = dayMin > 0 && dayMin < 1440 ? dayMin : 1440;
+    var neg = m < 0, a = Math.abs(Math.round(m)), d = Math.floor(a / D), h = Math.floor((a % D) / 60), mn = a % 60, s = neg ? "-" : "";
     if (d > 0) s += d + "d ";
     if (h > 0 || d > 0) s += h + "h ";
     s += mn + "m";
