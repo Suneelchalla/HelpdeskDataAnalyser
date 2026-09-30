@@ -789,25 +789,31 @@ function safeTxt(v) { return String(v == null ? "" : v).replace(/\*\*/g, "* *");
 /* Fill the ticket's template (About to breach / Breached) with its CURRENT numbers and turn it into plain text + Jira rich text. */
 function buildSlaMessage(t, L, extra) {
   var r = L.r, bi = L.bi, kind = tplKind(bi), label = TPL_LABEL[kind];
-  var who = [t.worker, t.svm].map(function (x) { return String(x || "").trim(); }).filter(function (x) { return x && !GENERIC[x.toLowerCase()]; })[0] || "Team";
+  var svmName = String(t.svm || "").trim(), who = svmName && !GENERIC[svmName.toLowerCase()] ? svmName : "Team";      // always the SVM In Charge, never the current worker
   var held = { hd: "Help Desk", engg: "Engineering", client: "Client" }[r.currentKind] || "—";
   var used = Math.round(r.pct) + "% of the " + fdur(r.targetMin) + " target used";
-  var situation, ask, breachTime = "", timeLeft = "", breachedAt = "", overBy = "";
+  var situation, ask, remaining, strip, breachTime = "", timeLeft = "", breachedAt = "", overBy = "";
   if (bi.state === "breached") {
     breachedAt = fdtw(bi.breachedAt) + " IST"; breachTime = breachedAt; overBy = fdur(bi.overByMin);
-    situation = "**SLA breached on " + breachedAt + "** — now " + overBy + " over the " + fdur(r.targetMin) + " target and still open.";
-    ask = "Kindly prioritise this ticket and post an update immediately.";
+    situation = "**SLA breached on " + breachedAt + "** — the " + fdur(r.targetMin) + " target is used up and the ticket is still open.";
+    ask = "Kindly post an update on this ticket immediately.";
+    remaining = "Over target by " + overBy + " — please prioritise.";
+    strip = "SLA breached on " + breachedAt + " — now " + overBy + " over the " + fdur(r.targetMin) + " target and still open.";
   } else if (bi.state === "paused") {
     breachTime = fdtw(bi.ifResumedAt) + " IST"; timeLeft = fdur(bi.remainingMin);
-    situation = "The SLA clock is currently **paused** because the ticket is with the client (" + safeTxt(r.currentStatus) + "). " + timeLeft + " of working time is left (" + used + "). If it came back to us now it would breach on **" + breachTime + "**.";
+    situation = "The SLA clock is currently **paused** because the ticket is with the client (" + safeTxt(r.currentStatus) + "). If it came back to us now it would breach on **" + breachTime + "** (" + used + ").";
     ask = "Kindly follow up with the client for the required response so the ticket can move forward.";
+    remaining = "Time remaining once it returns: " + timeLeft + " — please prioritise.";
+    strip = "The SLA clock is currently paused because the ticket is with the client (" + r.currentStatus + "). " + timeLeft + " of working time is left (" + used + "). If it came back to us now it would breach on " + breachTime + ".";
   } else {
     breachTime = fdtw(bi.breachAt) + " IST"; timeLeft = fdur(bi.remainingMin);
-    situation = "Breach time: **" + breachTime + "** — " + timeLeft + " of working time left (" + used + ").";
+    situation = "Breach time: **" + breachTime + "** (" + used + ").";
     ask = "Kindly action this ticket before the breach time.";
+    remaining = "Time remaining: " + timeLeft + " — please prioritise.";
+    strip = "Breach time: " + breachTime + " — " + timeLeft + " of working time left (" + used + ").";
   }
-  var vals = { name: safeTxt(who), key: t.key, summary: safeTxt(String(t.summary || "").replace(/\s+/g, " ").trim()), severity: t.sev ? Sla.sevName(t.sev) : safeTxt(t.priority || "Unrated"), heldBy: held, status: safeTxt(r.currentStatus),
-    created: fdt(t.created), age: fcal(r.ageCalMin), used: fdur(r.elapsedMin), target: fdur(r.targetMin), pct: Math.round(r.pct) + "%", timeLeft: timeLeft, breachTime: breachTime, breachedAt: breachedAt, overBy: overBy, situation: situation, ask: ask, extra: safeTxt(extra || "").trim() };
+  var vals = { name: safeTxt(who), svm: safeTxt(t.svm || ""), worker: safeTxt(t.worker || ""), key: t.key, summary: safeTxt(String(t.summary || "").replace(/\s+/g, " ").trim()), severity: t.sev ? Sla.sevName(t.sev) : safeTxt(t.priority || "Unrated"), heldBy: held, status: safeTxt(r.currentStatus),
+    created: fdt(t.created), age: fcal(r.ageCalMin), used: fdur(r.elapsedMin), target: fdur(r.targetMin), pct: Math.round(r.pct) + "%", timeLeft: timeLeft, breachTime: breachTime, breachedAt: breachedAt, overBy: overBy, situation: situation, ask: ask, remaining: remaining, extra: safeTxt(extra || "").trim() };
   var tpl = (ST.cfg.templates && ST.cfg.templates[kind]) || Sla.DEFAULT_CONFIG.templates[kind];
   var filled = tpl.replace(/\{(\w+)\}/g, function (m, k) { return Object.prototype.hasOwnProperty.call(vals, k) ? vals[k] : m; });
   var b = function (x) { return { t: x, b: 1 }; }, n = function (x) { return { t: x }; }, BR = { br: 1 };
@@ -815,10 +821,9 @@ function buildSlaMessage(t, L, extra) {
     var out = []; par.split("\n").forEach(function (line, i) { if (i) out.push(BR); line.split("**").forEach(function (seg, j) { if (seg !== "") out.push(j % 2 ? b(seg) : n(seg)); }); }); return out;
   }
   var paras = [[b(SLA_MARK + " — " + label)]].concat(filled.split(/\n{2,}/).map(function (x) { return x.replace(/^\n+|\n+$/g, ""); }).filter(function (x) { return x.trim() !== ""; }).map(runsOf));
-  paras.push([n("Last updated " + fdt(L.now) + " IST · working time: " + calText() + ". This note is refreshed in place by HD SLA Tracker.")]);
   var text = paras.map(function (p) { return p.map(function (x) { return x.br ? "\n" : x.t; }).join(""); }).join("\n\n");
   var adf = { type: "doc", version: 1, content: paras.map(function (p) { return { type: "paragraph", content: p.map(function (x) { return x.br ? { type: "hardBreak" } : (x.b ? { type: "text", text: x.t, marks: [{ type: "strong" }] } : { type: "text", text: x.t }); }) }; }) };
-  return { text: text, adf: adf, headline: situation.replace(/\*\*/g, ""), kind: kind, label: label };
+  return { text: text, adf: adf, headline: strip, kind: kind, label: label };
 }
 function adfText(nd) { if (!nd) return ""; if (nd.text) return nd.text; return (nd.content || []).map(adfText).join(" "); }
 function noteUrl(key) { return "/rest/api/3/issue/" + encodeURIComponent(key) + "/comment"; }
@@ -978,8 +983,8 @@ function renderSettings() {
     '<div class="frow" style="margin-top:10px"><select id="addCliSel" aria-label="Client to add"><option value="">Add a client exception…</option>' + free.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCli">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Business calendar</h3><p class="h">Which hours count towards a target, evaluated in IST. Default is 24 hours, Monday to Friday, which matches the old SLA Manager.</p><div class="frow"><div class="fld"><label>Day starts</label><input type="text" data-d="bs" value="' + esc(d.businessStart) + '" style="width:80px" placeholder="00:00" aria-label="Day starts"></div><div class="fld"><label>Day ends</label><input type="text" data-d="be" value="' + esc(d.businessEnd) + '" style="width:80px" placeholder="24:00" aria-label="Day ends"></div><div class="fld"><label>Working days</label><div class="daychips">' + days.map(function (n, i) { return '<label><input type="checkbox" data-wd="' + i + '"' + (d.workDays.indexOf(i) > -1 ? " checked" : "") + "> " + n + "</label>"; }).join("") + '</div></div></div><div class="fld" style="margin-top:14px"><label>Holidays — one per line: 2026-01-26 Republic Day</label><textarea id="holTxt" rows="4" style="width:min(420px,100%)" aria-label="Holidays">' + esc(d._hol) + "</textarea></div></div>";
   h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Critical from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div><div class="fld"><label>SLA goal</label><input type="number" min="1" max="100" data-d="goal" value="' + esc(d.goalPct) + '"> %</div></div><p class="h" style="margin:10px 0 0">The goal only sets the colours on the SLA % views (green at or above it, amber within 15 points, red below).</p></div>';
-  var phs = ["name", "key", "summary", "severity", "heldBy", "status", "created", "age", "used", "target", "pct", "timeLeft", "breachTime", "breachedAt", "overBy", "situation", "ask", "extra"];
-  h += '<div class="card set-sec"><h3>Reminder templates</h3><p class="h">The wording posted to Jira as an internal note. Each ticket gets one of two templates automatically: <b>About to breach</b> for open tickets that have not breached yet (including tickets waiting with the client), and <b>Breached</b> for open tickets already over target. A blank line starts a new paragraph and <b>**text**</b> makes it bold. The heading and the “Last updated” line are added for you.</p><div style="margin-bottom:10px;line-height:2">Placeholders: ' + phs.map(function (x) { return '<span class="phl">{' + x + "}</span>"; }).join("") + '</div>' +
+  var phs = ["name", "svm", "worker", "key", "summary", "severity", "heldBy", "status", "created", "age", "used", "target", "pct", "timeLeft", "breachTime", "breachedAt", "overBy", "situation", "ask", "remaining", "extra"];
+  h += '<div class="card set-sec"><h3>Reminder templates</h3><p class="h">The wording posted to Jira as an internal note. Each ticket gets one of two templates automatically: <b>About to breach</b> for open tickets that have not breached yet (including tickets waiting with the client), and <b>Breached</b> for open tickets already over target. A blank line starts a new paragraph and <b>**text**</b> makes it bold. Only the heading is added for you; <b>{remaining}</b> is the closing “time remaining — please prioritise” line.</p><div style="margin-bottom:10px;line-height:2"><b>{name}</b> is always the ticket’s SVM In Charge (the reminder is addressed to them, not to the current worker). Placeholders: ' + phs.map(function (x) { return '<span class="phl">{' + x + "}</span>"; }).join("") + '</div>' +
     [["soon", "About to breach"], ["breached", "Breached"]].map(function (k) { var v = d.templates[k[0]] || "";
       return '<div class="fld" style="margin-bottom:14px"><label for="tpl-' + k[0] + '">' + k[1] + " template</label><textarea class=\"tplta\" id=\"tpl-" + k[0] + '" data-tpl="' + k[0] + '" rows="12">' + esc(v) + '</textarea><div style="display:flex;gap:10px;align-items:center;margin-top:4px"><button class="quiet" data-tplreset="' + k[0] + '">Reset to default</button>' + (v.indexOf("{situation}") < 0 ? '<span class="warnline" style="margin:0">Tip: add {situation} so the message states the breach time.</span>' : "") + "</div></div>"; }).join("") + "</div>";
   h += '<div class="frow" style="margin-bottom:18px"><button class="primary" id="saveCfg">Save settings</button><button class="ghost" id="resetDraft">Discard changes</button></div>';
