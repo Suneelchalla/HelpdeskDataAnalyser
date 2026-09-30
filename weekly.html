@@ -152,7 +152,13 @@ select{appearance:none;background:var(--paper);border:1px solid var(--line);bord
 .modal{background:#fff;border-radius:var(--r2);box-shadow:0 24px 60px rgba(16,24,40,.3);width:min(1000px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .modal .mhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line)}
 .modal .mhead .mt{font-family:var(--disp);font-weight:700;font-size:15px;color:var(--ink)}
-.modal .mhead button{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);width:30px;height:30px;border-radius:8px;font-size:14px}
+.modal .mhead #mclose{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);width:30px;height:30px;border-radius:8px;font-size:14px;flex-shrink:0}
+.modal .mhead #mexp{white-space:nowrap;flex-shrink:0;width:auto;height:auto}
+.modal .ttable td.sum{max-width:240px}
+.modal .msec{font-family:var(--disp);font-weight:700;font-size:12.5px;color:var(--ink);margin:12px 2px 6px;display:flex;align-items:center;gap:8px}
+.modal .msec .cnt{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+.kpi[data-kpi]:hover{border-color:var(--line2);box-shadow:var(--sh2)}
+.kpi .val [data-kpi]{cursor:pointer;border-bottom:1px dashed currentColor}
 .modal .mbody{overflow:auto;padding:6px 14px 14px}
 .modal .mtools{display:flex;gap:8px;padding:8px 4px;align-items:center}
 
@@ -749,6 +755,23 @@ function openModal(title,tix){
   var ex=el("mexp"); if(ex) ex.onclick=function(){ exportFullCSV(tix,(title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full"); };
 }
 function closeModal(){ var o=el("ovl"); if(o) o.remove(); }
+/* Modal with several titled ticket lists (used by Net Backlog Δ: new vs resolved). */
+function openModalSections(title,secs){
+  closeModal();
+  var all=[]; secs.forEach(function(s){ s.tix.forEach(function(t){ if(all.indexOf(t)<0) all.push(t); }); });
+  var cols=MODAL_COLS.slice(); if(cols.indexOf("created")<0) cols.splice(cols.indexOf("age"),0,"created");
+  var ov=document.createElement("div"); ov.className="ovl noprint"; ov.id="ovl";
+  ov.innerHTML='<div class="modal"><div class="mhead"><span class="mt">'+esc(title)+'</span>'+
+    '<button id="mexp" class="btn" style="margin-left:auto;padding:7px 14px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data</button>'+
+    '<button id="mclose" title="Close (Esc)">\u2715</button></div>'+
+    '<div class="mbody">'+secs.map(function(s){
+      return '<div class="msec">'+esc(s.label)+'<span class="cnt">'+s.tix.length+' ticket'+(s.tix.length!==1?'s':'')+'</span></div>'+ticketTable(s.tix,cols);
+    }).join("")+'</div></div>';
+  ov.addEventListener("click",function(e){ if(e.target===ov) closeModal(); });
+  document.body.appendChild(ov);
+  var b=el("mclose"); if(b) b.onclick=closeModal;
+  var ex=el("mexp"); if(ex) ex.onclick=function(){ exportFullCSV(all,(title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full"); };
+}
 document.addEventListener("keydown",function(e){ if(e.key==="Escape") closeModal(); });
 function openModalNote(title,html){
   closeModal();
@@ -893,9 +916,9 @@ function render(){
           '<div class="kpi hl" data-kpi="open" style="cursor:pointer"><div class="lab">Open Tickets</div><div class="val" style="color:var(--client)">'+K.open+'</div><div class="hint">not yet closed · click to list</div></div>'+
           '<div class="kpi hl2" data-kpi="svm" style="cursor:pointer"><div class="lab">SVM — Action</div><div class="val" style="color:var(--hd)">'+K.svm+'</div><div class="hint">on our side · click to list</div></div>'+
           '<div class="kpi" data-kpi="client" style="cursor:pointer"><div class="lab">Client — Waiting</div><div class="val" style="color:var(--client2)">'+K.client+'</div><div class="hint">waiting on your team · click to list</div></div>'+
-          '<div class="kpi"><div class="lab">SVM % · Client %</div><div class="val sm"><span style="color:var(--hd)">'+K.svmPct+'%</span> · <span style="color:var(--client2)">'+K.clientPct+'%</span></div><div class="hint">who acts next, share of open</div></div>'+
-          '<div class="kpi"><div class="lab">Resolved This Week</div><div class="val" style="color:var(--hd)">'+resLast+'</div><div class="hint">closed in '+wkLabel(lastWk)+'</div></div>'+
-          '<div class="kpi"><div class="lab">Net Backlog Δ</div><div class="val sm"><span style="color:'+(netChange>0?'var(--client)':netChange<0?'var(--hd)':'var(--muted)')+'">'+(netChange>0?'+':'')+netChange+'</span></div><div class="hint">new − resolved this week</div></div>'+
+          '<div class="kpi"><div class="lab">SVM % · Client %</div><div class="val sm"><span data-kpi="svm" style="color:var(--hd)" title="List SVM tickets">'+K.svmPct+'%</span> · <span data-kpi="client" style="color:var(--client2)" title="List Client tickets">'+K.clientPct+'%</span></div><div class="hint">who acts next · click a % to list</div></div>'+
+          '<div class="kpi" data-kpi="resolved" style="cursor:pointer"><div class="lab">Resolved This Week</div><div class="val" style="color:var(--hd)">'+resLast+'</div><div class="hint">closed in '+wkLabel(lastWk)+' · click to list</div></div>'+
+          '<div class="kpi" data-kpi="net" style="cursor:pointer"><div class="lab">Net Backlog Δ</div><div class="val sm"><span style="color:'+(netChange>0?'var(--client)':netChange<0?'var(--hd)':'var(--muted)')+'">'+(netChange>0?'+':'')+netChange+'</span></div><div class="hint">new − resolved this week · click to list</div></div>'+
         '</div>'+
 
         /* Row 1: inflow / resolved / svm-open WoW */
@@ -1030,6 +1053,17 @@ function bindDrill(){
     if(k==="open") openModal("Open tickets — "+S.client, openL);
     else if(k==="svm") openModal("Pending with SVM — "+S.client, openL.filter(function(t){return naKey(t)==="svm";}));
     else if(k==="client") openModal("Pending with Client — "+S.client, openL.filter(function(t){return naKey(t)==="client";}));
+    else if(k==="resolved"){
+      var rw=lastWeeks(WEEKS_BACK), lw=rw[rw.length-1];
+      openModal("Resolved in "+wkLabel(lw)+" — "+S.client, ct.filter(function(t){return wkKey(t.resolved)===lw;}));
+    }
+    else if(k==="net"){
+      var nw=lastWeeks(WEEKS_BACK), lk=nw[nw.length-1];
+      openModalSections("Net backlog change · "+wkLabel(lk)+" — "+S.client, [
+        {label:"New — created in "+wkLabel(lk), tix:ct.filter(function(t){return wkKey(t.created)===lk;})},
+        {label:"Resolved in "+wkLabel(lk), tix:ct.filter(function(t){return wkKey(t.resolved)===lk;})}
+      ]);
+    }
   }; });
 
   // Inflow segments (created that week + priority)
