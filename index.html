@@ -28,19 +28,20 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-html{font-size:14px}
+html{font-size:clamp(12.5px,min(1vw,1.65vh),18px)}
 body{
   background:
-    radial-gradient(780px 520px at 8% -8%, #E3EEFF 0%, transparent 58%),
-    radial-gradient(820px 560px at 104% 110%, #DCF5EF 0%, transparent 58%),
+    radial-gradient(60rem 38rem at 6% -10%, #DDEBFF 0%, transparent 60%),
+    radial-gradient(56rem 40rem at 104% 112%, #D5F3EA 0%, transparent 60%),
     var(--bg);
   font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;
-  overflow:auto;
+  overflow:hidden;
 }
 ::selection{background:var(--ink);color:#fff}
 a{text-decoration:none;color:inherit}
 button{cursor:pointer;font-family:inherit;transition:transform .16s,background .18s,border-color .18s,color .18s,box-shadow .2s}
 button:active{transform:translateY(1px)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 input[type=file]{display:none}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
@@ -49,201 +50,235 @@ input[type=file]{display:none}
 .statsbg svg{position:absolute;inset:0;width:100%;height:100%}
 .grid line{stroke:#2563EB;stroke-width:1;opacity:.05}
 .wave-area{fill:url(#wgrad);opacity:.5}
-.wave-line{fill:none;stroke:#2563EB;stroke-width:2;opacity:.14}
-.wave2-line{fill:none;stroke:#0F766E;stroke-width:2;opacity:.12}
+.wave-line{fill:none;stroke:#2563EB;stroke-width:2;opacity:.13}
+.wave2-line{fill:none;stroke:#0F766E;stroke-width:2;opacity:.11}
 .wave-g,.wave2-g{will-change:transform}
 .wave-g{animation:drift 26s linear infinite}
 .wave2-g{animation:drift 38s linear infinite}
 @keyframes drift{to{transform:translateX(-33.333%)}}
-/* rising/falling bar row */
-.bars{position:absolute;left:0;right:0;bottom:0;height:34vh;display:flex;align-items:flex-end;gap:2.2vw;padding:0 4vw;opacity:.5}
+.bars{position:absolute;left:0;right:0;bottom:0;height:26vh;display:flex;align-items:flex-end;gap:2.2vw;padding:0 4vw;opacity:.42}
 .bars i{flex:1;border-radius:6px 6px 0 0;transform-origin:bottom;background:linear-gradient(180deg,rgba(37,99,235,.16),rgba(37,99,235,.03));animation:barp 6s ease-in-out infinite}
 .bars i:nth-child(even){background:linear-gradient(180deg,rgba(15,118,110,.15),rgba(15,118,110,.03))}
 @keyframes barp{0%,100%{transform:scaleY(.28)}50%{transform:scaleY(1)}}
-/* slow pulse rings, top-right, like a live signal */
-.ping{position:absolute;top:16%;right:9%;width:14px;height:14px;border-radius:50%;background:var(--teal);opacity:.5}
+.ping{position:absolute;top:13%;right:6%;width:12px;height:12px;border-radius:50%;background:var(--teal);opacity:.5}
 .ping::before,.ping::after{content:"";position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--teal);animation:ping 3.4s ease-out infinite}
 .ping::after{animation-delay:1.7s}
 @keyframes ping{0%{transform:scale(1);opacity:.5}100%{transform:scale(6.5);opacity:0}}
+.aurora{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;will-change:transform}
+.aurora.a{width:36vw;height:36vw;left:-9vw;top:-15vw;background:#C7DBFF;animation:floatA 24s ease-in-out infinite}
+.aurora.b{width:32vw;height:32vw;right:-8vw;bottom:-13vw;background:#B7EBDB;animation:floatB 28s ease-in-out infinite}
+@keyframes floatA{50%{transform:translate(6vw,4vw)}}
+@keyframes floatB{50%{transform:translate(-5vw,-3vw)}}
 
-/* ══════ shell ══════ */
-.shell{position:relative;z-index:1;min-height:100vh;max-width:1240px;margin:0 auto;padding:22px 30px 18px;display:flex;flex-direction:column}
+/* ══════ shell: one screen, no scrolling ══════ */
+.shell{position:relative;z-index:1;height:100vh;height:100dvh;max-width:1760px;margin:0 auto;
+  padding:clamp(10px,1.7vh,22px) clamp(14px,2.2vw,36px) clamp(8px,1.3vh,16px);display:flex;flex-direction:column;gap:clamp(8px,1.3vh,16px)}
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .rise{animation:rise .55s cubic-bezier(.22,1,.36,1) both}
 .d1{animation-delay:.07s}.d2{animation-delay:.14s}.d3{animation-delay:.21s}
 .hidden{display:none!important}
 
 /* rail */
-.rail{display:flex;align-items:center;gap:12px;flex-shrink:0}
-.mk{display:flex;gap:4px;align-items:flex-end;height:24px}
-.mk i{display:block;width:7px;border-radius:2px}
-.brand{font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:-.2px}
+.rail{display:flex;align-items:center;gap:.8rem;flex-shrink:0}
+.mk{display:flex;gap:4px;align-items:flex-end;height:1.7rem}
+.mk i{display:block;width:.5rem;border-radius:2px;transform-origin:bottom;animation:mkpulse 3.2s ease-in-out infinite}
+.mk i:nth-child(2){animation-delay:.25s}.mk i:nth-child(3){animation-delay:.5s}.mk i:nth-child(4){animation-delay:.75s}
+@keyframes mkpulse{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.72)}}
+.brand{font-family:var(--disp);font-weight:700;font-size:1.15rem;letter-spacing:-.2px}
 .rail .spacer{flex:1}
-.statuspill{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.4px;color:var(--muted);background:var(--card);border:1px solid var(--line);padding:7px 13px;border-radius:999px;text-transform:uppercase;box-shadow:var(--sh);transition:all .3s}
-.statuspill .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:all .3s}
+.statuspill{display:inline-flex;align-items:center;gap:.55rem;font-family:var(--mono);font-size:.78rem;font-weight:600;letter-spacing:.4px;color:var(--muted);background:var(--card);border:1px solid var(--line);padding:.5rem .95rem;border-radius:99px;text-transform:uppercase;transition:all .3s}
+.statuspill .dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--faint);transition:all .3s}
 .statuspill.live{color:var(--teal);border-color:var(--teal-line);background:var(--teal-soft)}
 .statuspill.live .dot{background:var(--teal);box-shadow:0 0 10px var(--teal-glow);animation:beat 1.8s ease-in-out infinite}
 @keyframes beat{0%,100%{opacity:1}50%{opacity:.35}}
+.gearbtn{width:2.45rem;height:2.45rem;border-radius:.7rem;background:var(--card);border:1px solid var(--line);color:var(--ink2);display:inline-flex;align-items:center;justify-content:center;font-size:1.15rem;box-shadow:var(--sh);margin-right:.2rem}
+.gearbtn:hover{border-color:var(--muted);color:var(--ink);transform:rotate(45deg)}
 
-/* main split */
-.main{flex:1;min-height:0;display:grid;grid-template-columns:0.72fr 1.6fr;gap:34px;align-items:start}
-
-/* left — hero */
-.eyebrow{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:2.4px}
-h1{font-family:var(--disp);font-weight:700;font-size:clamp(32px,3.6vw,50px);line-height:.98;letter-spacing:-1.6px;margin:14px 0 0;color:var(--ink)}
-h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.lead{color:var(--ink2);font-size:13.5px;line-height:1.6;margin-top:16px;max-width:400px}
-.lead b.b{color:var(--blue);font-weight:600} .lead b.t{color:var(--teal);font-weight:600}
-
-/* right — stage: source + wires + two lenses */
-.stage{position:relative}
+/* stage = band + cards + the wires drawn behind them */
+.stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(11px,1.9vh,22px);padding-top:clamp(2px,.8vh,10px)}
 #wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
-#wires path{fill:none;stroke-linecap:round}
-.track{stroke:var(--line2);stroke-width:1.5;stroke-dasharray:2 8;opacity:.9}
-.flow{stroke-width:2.6;opacity:0;transition:opacity .5s .2s;stroke-dasharray:5 16}
-.stage.live .track{stroke-dasharray:none;opacity:.4}
-.stage.live .flow{opacity:1;animation:march 1.1s linear infinite}
-.flow.fu{stroke:var(--blue);filter:drop-shadow(0 0 4px var(--blue-glow))}
-.flow.tr{stroke:var(--teal);filter:drop-shadow(0 0 4px var(--teal-glow))}
-.flow.wr{stroke:var(--amber);filter:drop-shadow(0 0 4px rgba(180,83,9,.35))}
-.flow.ch{stroke:var(--violet);filter:drop-shadow(0 0 4px var(--violet-glow))}
-.flow.re{stroke:var(--rose);filter:drop-shadow(0 0 4px var(--rose-glow))}
-.flow.cl{stroke:#0891B2;filter:drop-shadow(0 0 4px rgba(8,145,178,.35))}
-.flow.op{stroke:#059669;filter:drop-shadow(0 0 4px rgba(5,150,105,.35))}
-.flow.sl{stroke:#EA580C;filter:drop-shadow(0 0 4px rgba(234,88,12,.35))}
-@keyframes march{to{stroke-dashoffset:-42}}
+#wires path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+#wires .track{stroke:var(--line2);stroke-width:1.5;stroke-dasharray:1.5 7;opacity:.95}
+#wires .flow{stroke-width:2.6;opacity:0;stroke-dasharray:.1 15;transition:opacity .6s .35s}
+#wires .port{fill:var(--card);stroke:var(--line2);stroke-width:1.6;transition:stroke .4s,fill .4s}
+.stage.live #wires .track{stroke-dasharray:none;opacity:.5}
+.stage.live #wires .flow{opacity:1;animation:march 1.3s linear infinite}
+.stage.live #wires .port{fill:var(--pc,#fff);stroke:var(--pc,var(--line2))}
+@keyframes march{to{stroke-dashoffset:-15.1}}
 
-.source{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--sh);overflow:hidden}
-.srclabel{display:flex;align-items:center;gap:9px;padding:11px 18px;border-bottom:1px solid var(--line)}
-.srclabel .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1.3px;color:var(--faint);text-transform:uppercase}
+/* band: hero (left) + source (right) */
+.band{position:relative;z-index:2;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.34fr);gap:clamp(14px,2.6vw,44px);align-items:center;flex-shrink:0}
+.eyebrow{font-family:var(--mono);font-size:.8rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:2.2px}
+h1{font-family:var(--disp);font-weight:700;font-size:3.5rem;line-height:.98;letter-spacing:-.06em;margin:.45rem 0 0;color:var(--ink)}
+h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal) 70%,var(--blue) 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 9s ease-in-out infinite}
+@keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.lead{color:var(--ink2);font-size:1.02rem;line-height:1.5;margin-top:.75rem;max-width:30rem}
+
+/* source panel */
+.source{position:relative;background:var(--card);border:1px solid var(--line);border-radius:1.15rem;box-shadow:var(--sh);overflow:hidden;min-height:7.4rem;display:flex;flex-direction:column;transition:box-shadow .4s,border-color .4s}
+.stage.live .source{border-color:var(--teal-line);box-shadow:0 10px 30px rgba(15,118,110,.14)}
+.srclabel{display:flex;align-items:center;gap:.6rem;padding:.5rem 1.05rem;border-bottom:1px solid var(--line)}
+.srclabel .tag{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:1.3px;color:var(--faint);text-transform:uppercase}
 .srclabel .line{flex:1;height:1px;background:var(--line)}
-
-.dz{margin:10px;border:1.5px dashed var(--line2);border-radius:13px;padding:14px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:radial-gradient(360px 130px at 50% 0%,rgba(37,99,235,.05),transparent 70%)}
-.dz:hover,.dz.over{border-color:var(--blue);background:radial-gradient(360px 160px at 50% 0%,rgba(37,99,235,.1),transparent 70%)}
-.dz .ic{width:36px;height:36px;margin:0 auto 6px;border-radius:10px;background:var(--blue-soft);border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center}
-.dz .ic svg{width:18px;height:18px}
-.dz .t{font-family:var(--disp);font-weight:600;font-size:13.5px;color:var(--ink)}
-.dz .s{font-size:10.5px;color:var(--muted);margin-top:2px}
-.dz .btn{margin-top:10px;background:var(--ink);color:#fff;border:none;padding:9px 20px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:12px}
+#empty,#fetching,#loaded{flex:1;display:flex;align-items:center}
+#empty{padding:.6rem;gap:.7rem}
+.dz{flex:1.45;display:flex;align-items:center;gap:.85rem;border:1.5px dashed var(--line2);border-radius:.9rem;padding:.65rem .9rem;cursor:pointer;transition:border-color .2s,background .2s;background:radial-gradient(20rem 8rem at 50% 0%,rgba(37,99,235,.05),transparent 70%)}
+.dz:hover,.dz.over{border-color:var(--blue);background:radial-gradient(20rem 9rem at 50% 0%,rgba(37,99,235,.11),transparent 70%)}
+.dz .ic{width:2.5rem;height:2.5rem;flex-shrink:0;border-radius:.7rem;background:var(--blue-soft);border:1px solid var(--blue-line);display:flex;align-items:center;justify-content:center;animation:bob 3.2s ease-in-out infinite}
+.dz .ic svg{width:1.2rem;height:1.2rem}
+@keyframes bob{50%{transform:translateY(-3px)}}
+.dz .txt{flex:1;min-width:0}
+.dz .t{font-family:var(--disp);font-weight:600;font-size:.98rem;color:var(--ink)}
+.dz .s{font-size:.76rem;color:var(--muted);margin-top:.15rem;line-height:1.35}
+.dz .btn{flex-shrink:0;background:var(--ink);color:#fff;border:none;padding:.6rem 1rem;border-radius:.65rem;font-family:var(--disp);font-weight:600;font-size:.86rem;white-space:nowrap}
 .dz .btn:hover{background:#1c2740}
 .dz .btn:disabled{opacity:.6;cursor:default}
+.dz-or{display:flex;flex-direction:column;align-items:center;gap:.35rem;color:var(--faint);font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:1.4px;align-self:stretch;justify-content:center}
+.dz-or::before,.dz-or::after{content:"";flex:1;width:1px;background:var(--line)}
+.jira-col{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:.3rem}
+.jira-row{display:flex;gap:.45rem;align-items:center}
+.jira-btn{flex:1;background:linear-gradient(135deg,#0F766E,#12897E);color:#fff;border:none;padding:.72rem 1rem;border-radius:.65rem;font-family:var(--disp);font-weight:600;font-size:.92rem;display:flex;align-items:center;justify-content:center;gap:.45rem;box-shadow:0 4px 14px rgba(15,118,110,.26)}
+.jira-btn:hover{box-shadow:0 8px 22px rgba(15,118,110,.4);transform:translateY(-1px)}
+.jira-btn:disabled{opacity:.55;cursor:default;transform:none}
+.jira-setup{width:2.4rem;height:2.4rem;border-radius:.65rem;background:var(--paper);border:1px solid var(--line2);color:var(--ink2);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;box-shadow:var(--sh)}
+.jira-setup:hover{border-color:var(--muted);color:var(--ink)}
+.jira-hint{text-align:center;font-size:.7rem;color:var(--faint);line-height:1.35;min-height:1em}
+.jira-hint a{color:var(--teal);font-weight:600;cursor:pointer}
+.jira-hint a:hover{text-decoration:underline}
+.jira-connected{display:inline-flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--teal);letter-spacing:.3px}
+.jira-connected i{width:.42rem;height:.42rem;border-radius:50%;background:var(--teal)}
 
-.filerow{display:flex;align-items:center;gap:13px;padding:15px 18px}
-.filerow .fic{width:44px;height:44px;border-radius:12px;background:var(--teal-soft);border:1px solid var(--teal-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.filerow .fic svg{width:21px;height:21px}
-.filerow .fname{font-weight:600;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.filerow .fmeta{font-size:11.5px;color:var(--ink2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.jira-progress{flex:1;display:flex;align-items:center;gap:.9rem;padding:.6rem 1.05rem}
+.jira-progress .pbolt{font-size:1.7rem;animation:zap 1s ease-in-out infinite}
+@keyframes zap{50%{transform:scale(1.18) rotate(-6deg)}}
+.jira-progress .pmain{flex:1;min-width:0}
+.jira-progress .prow{display:flex;align-items:baseline;gap:.7rem}
+.jira-progress .ptxt{font-family:var(--mono);font-size:1.1rem;color:var(--teal);font-weight:700}
+.jira-progress .pmsg{font-size:.82rem;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jira-progress .pbar{height:.4rem;background:var(--line);border-radius:9px;overflow:hidden;margin-top:.45rem}
+.jira-progress .pfill{height:100%;background:linear-gradient(90deg,var(--teal),var(--blue),var(--teal));background-size:200% 100%;animation:flowbar 1.4s linear infinite;border-radius:9px;width:0%;transition:width .3s}
+@keyframes flowbar{to{background-position:-200% 0}}
+
+.filerow{flex:1;display:flex;align-items:center;gap:.9rem;padding:.6rem 1.05rem}
+.filerow .fic{width:2.8rem;height:2.8rem;border-radius:.8rem;background:var(--teal-soft);border:1px solid var(--teal-line);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.filerow .fic svg{width:1.35rem;height:1.35rem}
+.filerow .fname{font-weight:600;font-size:1rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filerow .fmeta{font-size:.8rem;color:var(--ink2);margin-top:.2rem;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;line-height:1.35}
 .filerow .fmeta .num{font-family:var(--mono);color:var(--teal);font-weight:700}
 .filerow .fmeta .sep{color:var(--faint)} .filerow .fmeta .rng{font-family:var(--mono);color:var(--ink)}
-.ghost{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:8px 14px;border-radius:9px;font-size:12px;font-weight:600;white-space:nowrap}
+.filerow .acts{display:flex;gap:.45rem;flex-shrink:0}
+.ghost{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:.55rem .9rem;border-radius:.65rem;font-size:.82rem;font-weight:600;white-space:nowrap}
 .ghost:hover{border-color:var(--muted);color:var(--ink)}
 
-.fork{height:36px}
+/* cards: 4 × 2, sized by the screen so nothing scrolls */
+.cards{position:relative;z-index:2;flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:clamp(11px,1.9vh,22px) clamp(11px,1.3vw,22px)}
+.card{--c:#2563EB;--cs:#EFF4FF;--cl:#CFE0FF;--g:rgba(37,99,235,.28);
+  position:relative;display:flex;flex-direction:column;border-radius:1.1rem;padding:.95rem 1.15rem .85rem;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);isolation:isolate;min-height:0;
+  animation:cardin .6s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0)*55ms + .2s);
+  transition:transform .25s cubic-bezier(.22,1,.36,1),box-shadow .25s,border-color .25s,opacity .4s,filter .4s}
+.card.fu{--c:#2563EB;--cs:#EFF4FF;--cl:#CFE0FF;--g:rgba(37,99,235,.30)}
+.card.tr{--c:#0F766E;--cs:#E9F9F4;--cl:#BCEBE2;--g:rgba(15,118,110,.30)}
+.card.wr{--c:#B45309;--cs:#FEF3E2;--cl:#F5D9A8;--g:rgba(180,83,9,.28)}
+.card.ch{--c:#7C3AED;--cs:#F3EFFF;--cl:#DDD0FA;--g:rgba(124,58,237,.30)}
+.card.re{--c:#E11D48;--cs:#FFEEF3;--cl:#FBD0DA;--g:rgba(225,29,72,.28)}
+.card.cl{--c:#0891B2;--cs:#ECFEFF;--cl:#A5F3FC;--g:rgba(8,145,178,.30)}
+.card.op{--c:#059669;--cs:#ECFDF5;--cl:#A7F3D0;--g:rgba(5,150,105,.28)}
+.card.sl{--c:#EA580C;--cs:#FFF3E8;--cl:#FDBA8C;--g:rgba(234,88,12,.30)}
+@keyframes cardin{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .4s,box-shadow .4s}
+/* a small illustration in the card's colour fills whatever height is free, and steps aside when there is none */
+.viz{position:relative;flex:1 1 0;min-height:0;margin:0;color:var(--c);overflow:hidden;container-type:size;container-name:viz}
+.viz svg{position:absolute;left:0;top:.5rem;width:100%;height:calc(100% - .7rem);overflow:visible}
+.cards.locked .viz{color:#94A3B8;opacity:.55}
+.cards:not(.locked) .viz svg{animation:wipe 1.1s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0)*85ms + .25s)}
+@keyframes wipe{from{clip-path:inset(-10% 100% -10% 0)}to{clip-path:inset(-10% -2% -10% 0)}}
+@container viz (max-height: 2.5rem){ .viz svg{display:none} }
+/* each card drops optional parts in order when its own height is short, so nothing can ever overflow */
+.card{container-type:size;container-name:card}
+@container card (max-height: 11.3rem){ .cards.locked .feat{display:none} }
+@container card (max-height: 9.6rem){ .feat{display:none} }
+@container card (max-height: 7.8rem){ .card p{min-height:0;-webkit-line-clamp:2} }
+/* cursor spotlight */
+.card .spot{position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity .25s;pointer-events:none;background:radial-gradient(15rem 9rem at var(--mx,50%) var(--my,0%),var(--cs),transparent 72%)}
+.card .top{display:flex;align-items:center;gap:.65rem;flex-shrink:0}
+.card .badge{position:relative;width:2.65rem;height:2.65rem;flex-shrink:0;border-radius:.75rem;display:flex;align-items:center;justify-content:center;font-size:1.3rem;border:1px solid var(--line);background:var(--paper);transition:background .4s,border-color .4s,transform .3s}
+.card .kb{position:absolute;right:-.3rem;bottom:-.3rem;min-width:1.05rem;height:1.05rem;border-radius:.35rem;background:var(--ink);color:#fff;font-family:var(--mono);font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;opacity:0;transform:scale(.6);transition:opacity .3s,transform .3s}
+.card h2{flex:1;min-width:0;font-family:var(--disp);font-size:1.2rem;font-weight:700;letter-spacing:-.02em;line-height:1.12;color:var(--ink)}
+.card .go{font-family:var(--disp);font-size:.8rem;font-weight:600;display:inline-flex;align-items:center;gap:.3rem;color:var(--faint);flex-shrink:0;white-space:nowrap}
+.card .go .ar{transition:transform .25s}
+.card p{font-size:.94rem;color:var(--ink2);line-height:1.5;margin-top:.6rem;min-height:4.23rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex-shrink:0}
+.card .feat{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:auto;padding-top:.55rem;box-sizing:content-box;height:1.4rem;overflow:hidden;flex-shrink:0}
+.card .feat span{box-sizing:border-box;height:1.4rem;display:inline-flex;align-items:center;font-family:var(--mono);font-size:.7rem;font-weight:500;color:var(--ink2);background:var(--paper);border:1px solid var(--line);padding:0 .6rem;border-radius:.4rem;letter-spacing:.2px;white-space:nowrap}
+.card .lock{display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.7rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;padding-top:.45rem;flex-shrink:0}
 
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;position:relative;z-index:2}
-.card{position:relative;display:block;border-radius:18px;padding:16px 18px 14px;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);transition:transform .2s,box-shadow .25s,border-color .2s,opacity .35s,filter .35s}
-.card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .35s,box-shadow .35s}
-.card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
-.card .badge{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid var(--line);background:var(--paper)}
-.card .go{font-family:var(--disp);font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--faint)}
-.card .go .ar{transition:transform .2s}
-.card h2{font-family:var(--disp);font-size:16px;font-weight:700;letter-spacing:-.3px;color:var(--ink)}
-.card p{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:6px}
-.card .feat{display:flex;flex-wrap:wrap;gap:5px;margin-top:14px}
-.card .feat span{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--ink2);background:var(--paper);border:1px solid var(--line);padding:4px 9px;border-radius:6px;letter-spacing:.2px}
-.card .lock{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;margin-top:12px}
-
-.cards.locked .card{opacity:.5;filter:grayscale(.55) brightness(1.01);pointer-events:none}
-.cards.locked .card .go,.cards.locked .card .feat{display:none}
+.cards.locked .card{opacity:.55;filter:grayscale(.55) brightness(1.01);pointer-events:none;animation:cardin .6s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0)*55ms + .2s)}
+.cards.locked .card .go{display:none}
 .cards:not(.locked) .card .lock{display:none}
-
-.cards:not(.locked) .card.fu{border-color:var(--blue-line)}
-.cards:not(.locked) .card.fu::after{background:var(--blue);box-shadow:0 0 14px var(--blue-glow)}
-.cards:not(.locked) .card.fu .badge{background:var(--blue-soft);border-color:var(--blue-line)}
-.cards:not(.locked) .card.fu .go{color:var(--blue)}
-.cards:not(.locked) .card.tr{border-color:var(--teal-line)}
-.cards:not(.locked) .card.tr::after{background:var(--teal);box-shadow:0 0 14px var(--teal-glow)}
-.cards:not(.locked) .card.tr .badge{background:var(--teal-soft);border-color:var(--teal-line)}
-.cards:not(.locked) .card.tr .go{color:var(--teal)}
-.cards:not(.locked) .card.wr{border-color:#F5D9A8}
-.cards:not(.locked) .card.wr::after{background:var(--amber);box-shadow:0 0 14px rgba(180,83,9,.3)}
-.cards:not(.locked) .card.wr .badge{background:#FEF3E2;border-color:#F5D9A8}
-.cards:not(.locked) .card.wr .go{color:var(--amber)}
-.cards:not(.locked) .card.ch{border-color:var(--violet-line)}
-.cards:not(.locked) .card.ch::after{background:var(--violet);box-shadow:0 0 14px var(--violet-glow)}
-.cards:not(.locked) .card.ch .badge{background:var(--violet-soft);border-color:var(--violet-line)}
-.cards:not(.locked) .card.ch .go{color:var(--violet)}
-.cards:not(.locked) .card.re{border-color:var(--rose-line)}
-.cards:not(.locked) .card.re::after{background:var(--rose);box-shadow:0 0 14px var(--rose-glow)}
-.cards:not(.locked) .card.re .badge{background:var(--rose-soft);border-color:var(--rose-line)}
-.cards:not(.locked) .card.re .go{color:var(--rose)}
-.cards:not(.locked) .card.cl{border-color:#A5F3FC}
-.cards:not(.locked) .card.cl::after{background:#0891B2;box-shadow:0 0 14px rgba(8,145,178,.3)}
-.cards:not(.locked) .card.cl .badge{background:#ECFEFF;border-color:#A5F3FC}
-.cards:not(.locked) .card.cl .go{color:#0891B2}
-.cards:not(.locked) .card.op{border-color:#A7F3D0}
-.cards:not(.locked) .card.op::after{background:#059669;box-shadow:0 0 14px rgba(5,150,105,.3)}
-.cards:not(.locked) .card.op .badge{background:#ECFDF5;border-color:#A7F3D0}
-.cards:not(.locked) .card.op .go{color:#059669}
-.cards:not(.locked) .card.sl{border-color:#FDBA8C}
-.cards:not(.locked) .card.sl::after{background:#EA580C;box-shadow:0 0 14px rgba(234,88,12,.3)}
-.cards:not(.locked) .card.sl .badge{background:#FFF3E8;border-color:#FDBA8C}
-.cards:not(.locked) .card.sl .go{color:#EA580C}
-.cards:not(.locked) .card:hover{transform:translateY(-4px);box-shadow:var(--sh2)}
+/* data arrives: each card powers on in turn */
+.cards:not(.locked) .card{border-color:var(--cl);background:radial-gradient(17rem 9rem at 100% 100%,var(--cs),transparent 72%),var(--card);animation:poweron .9s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0)*85ms)}
+@keyframes poweron{0%{opacity:.45;filter:grayscale(.7);transform:translateY(8px) scale(.985);box-shadow:var(--sh)}55%{box-shadow:0 0 0 4px var(--cs),0 12px 30px var(--g)}100%{opacity:1;filter:none;transform:none;box-shadow:var(--sh)}}
+.cards:not(.locked) .card::after{background:var(--c);box-shadow:0 0 14px var(--g)}
+.cards:not(.locked) .card .badge{background:var(--cs);border-color:var(--cl)}
+.cards:not(.locked) .card .go{color:var(--c)}
+.cards:not(.locked) .card .kb{opacity:.9;transform:none}
+.cards:not(.locked) .card:hover,.cards:not(.locked) .card:focus-visible{transform:translateY(-4px);box-shadow:0 18px 36px var(--g),0 3px 8px rgba(16,24,40,.06);border-color:var(--c)}
+.cards:not(.locked) .card:hover .spot,.cards:not(.locked) .card:focus-visible .spot{opacity:1}
 .cards:not(.locked) .card:hover .go .ar{transform:translateX(4px)}
+.cards:not(.locked) .card:hover .badge{transform:scale(1.07) rotate(-3deg)}
+.card:focus-visible{outline:2px solid var(--c);outline-offset:3px}
 
 /* bottom strip */
-.strip{flex-shrink:0;display:flex;align-items:center;gap:14px;margin-top:6px;position:relative}
-.strip .note{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.3px}
+.strip{flex-shrink:0;display:flex;align-items:center;gap:.9rem;position:relative}
+.strip .note{font-family:var(--mono);font-size:.74rem;color:var(--faint);letter-spacing:.3px}
+.strip .note b{color:var(--muted);font-weight:600}
 .strip .spacer{flex:1}
-.qbtn{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line2);color:var(--ink2);padding:8px 13px;border-radius:9px;font-size:11.5px;font-weight:600;box-shadow:var(--sh)}
+.qbtn{display:inline-flex;align-items:center;gap:.4rem;background:var(--card);border:1px solid var(--line2);color:var(--ink2);padding:.5rem .85rem;border-radius:.65rem;font-size:.8rem;font-weight:600;box-shadow:var(--sh)}
 .qbtn:hover{border-color:var(--muted);color:var(--ink)}
 .qbtn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
 .qbtn.primary:hover{background:#1c2740}
 .qbtn.done{background:var(--teal-soft);border-color:var(--teal-line);color:var(--teal)}
-/* query popover (absolute — never adds scroll) */
-.qpop{position:absolute;right:0;bottom:46px;width:min(560px,86vw);background:#0F172A;border:1px solid #1E293B;border-radius:13px;padding:15px 16px;box-shadow:0 24px 60px rgba(16,24,40,.28);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .22s,transform .22s;z-index:5}
+.qpop{position:absolute;right:0;bottom:calc(100% + .6rem);width:min(560px,86vw);background:#0F172A;border:1px solid #1E293B;border-radius:13px;padding:15px 16px;box-shadow:0 24px 60px rgba(16,24,40,.28);opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .2s,transform .2s;z-index:30}
 .qpop.open{opacity:1;transform:none;pointer-events:auto}
 .qcode{font-family:var(--mono);font-size:11px;line-height:1.8;color:#CBD5E1;white-space:pre-wrap;word-break:break-word}
 .qcode .k{color:#60A5FA}.qcode .o{color:#F472B6}.qcode .v{color:#34D399}.qcode .n{color:#FBBF24}
 .qpoptip{font-family:var(--mono);font-size:9.5px;color:#64748B;margin-top:10px;letter-spacing:.3px}
 
-@media (max-width:900px){
+/* show a fifth tag and a longer description when the screen is tall */
+@media (min-height:720px){ .card p{-webkit-line-clamp:4} .card .feat{height:3.1rem} }
+@media (max-width:1000px){ .card p{min-height:0} }
+/* narrower screens: smaller arrows, two-row hero */
+@media (max-width:1320px){ .card .go .gt{display:none} }
+@media (max-width:1180px){ .band{grid-template-columns:1fr} h1{font-size:2.4rem} .lead{display:none} }
+/* tablets and phones, or very short windows: stack and allow scrolling */
+@media (max-width:1000px), (max-height:540px){
   body{overflow:auto}
   .shell{height:auto;min-height:100vh}
-  .main{grid-template-columns:1fr;gap:26px}
-  .fork{height:40px}
+  .stage{flex:none}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(10.5rem,auto)}
+  #wires{display:none}
+  .card{container-type:normal}.viz{display:none}
+  .band{grid-template-columns:1fr}
+  .lead{display:block}
 }
-@media (max-height:660px) and (min-width:901px){
-  body{overflow:auto}.shell{height:auto;min-height:100vh}
+@media (max-width:640px){
+  html{font-size:14px}
+  .cards{grid-template-columns:1fr}
+  #empty{flex-direction:column;align-items:stretch}
+  .dz-or{flex-direction:row}.dz-or::before,.dz-or::after{width:auto;height:1px}
+  .filerow{flex-wrap:wrap}
+  .strip{flex-wrap:wrap}
+  .brand{white-space:nowrap;font-size:1rem}
+  .statuspill{white-space:nowrap;font-size:.62rem;padding:.4rem .65rem;letter-spacing:.2px}
+  .gearbtn{flex-shrink:0}
 }
-@media (max-width:560px){ .cards{grid-template-columns:1fr} .filerow{flex-wrap:wrap} }
 @media (prefers-reduced-motion:reduce){
-  .rise{animation:none}
-  .wave-g,.wave2-g,.bars i,.ping::before,.ping::after{animation:none}
-  .stage.live .flow{animation:none;stroke-dasharray:none}
+  .rise,.card,.cards:not(.locked) .card,.cards.locked .card{animation:none}
+  .viz svg,.wave-g,.wave2-g,.bars i,.ping::before,.ping::after,.aurora.a,.aurora.b,.mk i,.dz .ic,h1 .two,.jira-progress .pbolt,.jira-progress .pfill{animation:none}
+  .stage.live #wires .flow{animation:none}
   .statuspill.live .dot{animation:none}
 }
 
-/* ══════ Jira Live Fetch ══════ */
-.dz-or{display:flex;align-items:center;gap:12px;margin:8px 14px 0;color:var(--faint);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:1.6px}
-.dz-or::before,.dz-or::after{content:"";flex:1;height:1px;background:var(--line)}
-.jira-row{margin:6px 10px 0;display:flex;gap:7px;align-items:center}
-.jira-btn{flex:1;background:linear-gradient(135deg,#0F766E,#12897E);color:#fff;border:none;padding:10px 16px;border-radius:9px;font-family:var(--disp);font-weight:600;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:7px;box-shadow:0 4px 14px rgba(15,118,110,.28)}
-.jira-btn:hover{box-shadow:0 6px 18px rgba(15,118,110,.38)}
-.jira-btn:disabled{opacity:.55;cursor:default;transform:none}
-.jira-setup{width:38px;height:38px;border-radius:9px;background:var(--paper);border:1px solid var(--line2);color:var(--ink2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;box-shadow:var(--sh)}
-.jira-setup:hover{border-color:var(--muted);color:var(--ink)}
-.jira-hint{text-align:center;font-size:9.5px;color:var(--faint);margin:4px 14px 10px;line-height:1.4}
-.jira-hint a{color:var(--teal);font-weight:600;cursor:pointer}
-.jira-hint a:hover{text-decoration:underline}
-.jira-connected{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;font-weight:600;color:var(--teal);letter-spacing:.3px}
-.jira-connected i{width:6px;height:6px;border-radius:50%;background:var(--teal)}
-.jira-progress{margin:10px;text-align:center}
-.jira-progress .pbar{height:5px;background:var(--line);border-radius:9px;overflow:hidden;margin:8px 0}
-.jira-progress .pfill{height:100%;background:linear-gradient(90deg,var(--teal),var(--blue));border-radius:9px;width:0%;transition:width .3s}
-.jira-progress .ptxt{font-family:var(--mono);font-size:10.5px;color:var(--teal);font-weight:600}
-.jira-progress .pmsg{font-size:11px;color:var(--ink2);margin-top:4px}
+/* (Jira fetch widget styles: see the source panel above) */
 /* Jira setup modal */
 .js-ov{position:fixed;inset:0;z-index:1001;background:rgba(15,23,42,.48);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:24px}
 .js-ov.open{display:flex}
@@ -275,9 +310,6 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 .js-jql:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,118,110,.12)}
 
 /* ══════ Master Data module (settings) ══════ */
-.gearbtn{width:34px;height:34px;border-radius:9px;background:var(--card);border:1px solid var(--line);color:var(--ink2);
-  display:inline-flex;align-items:center;justify-content:center;font-size:16px;box-shadow:var(--sh);margin-right:10px}
-.gearbtn:hover{border-color:var(--muted);color:var(--ink)}
 .md-ov{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.44);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
   display:none;align-items:center;justify-content:center;padding:24px}
 .md-ov.open{display:flex}
@@ -330,12 +362,6 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
 .md-chip .r{font-family:var(--mono);font-size:10px;font-weight:700;background:#FEF3E2;color:var(--amber);border-radius:20px;padding:1px 7px}
 .md-chip.on .r{background:#F5D9A8;color:#7c3d06}
 
-/* ═══ RESPONSIVE SCALING — auto-adjust for large desktop monitors ═══ */
-@media (min-width: 1921px) and (min-height: 900px) { body { zoom: 1.18; } }
-@media (min-width: 2200px) and (min-height: 1000px) { body { zoom: 1.3; } }
-@media (min-width: 2560px) { body { zoom: 1.42; } }
-@media (min-width: 3200px) { body { zoom: 1.65; } }
-@media (min-width: 3840px) { body { zoom: 1.9; } }
 </style>
 </head>
 <body>
@@ -354,6 +380,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
     <g class="wave2-g"><path class="wave2-line" id="wLine2"></path></g>
   </svg>
   <div class="bars" id="bgbars"></div>
+  <div class="aurora a"></div><div class="aurora b"></div>
   <div class="ping"></div>
 </div>
 
@@ -369,40 +396,20 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
     </span>
     <span class="brand">HD Dashboards</span>
     <span class="spacer"></span>
-    <button class="gearbtn" id="gearBtn" title="Master data validation (Status / Group / Stage mapping)">⚙️</button>
+    <button class="gearbtn" id="gearBtn" title="Master data validation (Status / Group / Stage mapping)" aria-label="Master data validation">⚙️</button>
     <span class="statuspill" id="status"><span class="dot"></span><span id="statustext">No source file</span></span>
   </div>
 
-  <!-- main split -->
-  <div class="main">
+  <!-- stage: hero + source on top, the eight dashboards below, wires behind -->
+  <div class="stage rise d1" id="stage">
+    <svg id="wires" preserveAspectRatio="none" aria-hidden="true"></svg>
 
-    <!-- left hero -->
-    <div class="rise d1">
-      <div class="eyebrow">SVM Help Desk · analytics</div>
-      <h1>One export.<br><span class="two">Eight lenses.</span></h1>
-      <p class="lead">Fetch live from Jira or drop an export — one source powers every dashboard: the <b class="b">Follow-up Tracker</b> for daily triage, the <b class="t">HD Trend Tracker</b> for the bigger picture, the <b style="color:var(--amber);font-weight:600">Weekly Report</b> for client-ready summaries, the <b style="color:var(--violet);font-weight:600">Change Tracker</b> for the change pipeline, the <b style="color:var(--rose);font-weight:600">Release Tracker</b> for delivery, the <b style="color:#0891B2;font-weight:600">Clarification Module</b> for similar-ticket matching, the <b style="color:#059669;font-weight:600">Operations Intelligence</b> cockpit for team leads, and the <b style="color:#EA580C;font-weight:600">SLA Tracker</b> for resolution SLA that ignores time spent with the client. Right-click a card to open it in its own tab.</p>
-    </div>
-
-    <!-- right stage -->
-    <div class="stage rise d2" id="stage">
-      <svg id="wires" preserveAspectRatio="none">
-        <path class="track" id="trackFU"></path>
-        <path class="track" id="trackTR"></path>
-        <path class="track" id="trackWR"></path>
-        <path class="track" id="trackCH"></path>
-        <path class="track" id="trackRE"></path>
-        <path class="flow fu" id="flowFU"></path>
-        <path class="flow tr" id="flowTR"></path>
-        <path class="flow wr" id="flowWR"></path>
-        <path class="flow ch" id="flowCH"></path>
-        <path class="flow re" id="flowRE"></path>
-        <path class="track" id="trackCL"></path>
-        <path class="flow cl" id="flowCL"></path>
-        <path class="track" id="trackOP"></path>
-        <path class="flow op" id="flowOP"></path>
-        <path class="track" id="trackSL"></path>
-        <path class="flow sl" id="flowSL"></path>
-      </svg>
+    <div class="band">
+      <div class="hero">
+        <div class="eyebrow">SVM Help Desk · analytics</div>
+        <h1>One export.<br><span class="two">Eight lenses.</span></h1>
+        <p class="lead">Fetch live from Jira or drop an export — one source powers every dashboard below.</p>
+      </div>
 
       <div class="source" id="sourceNode">
         <div class="srclabel"><span class="tag">Source file</span><span class="line"></span></div>
@@ -414,25 +421,30 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
                 <path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>
               </svg>
             </div>
-            <div class="t">Drop your Jira .xlsx here</div>
-            <div class="s">Exported from Jira · read in your browser, stored on this device</div>
+            <div class="txt">
+              <div class="t">Drop your Jira .xlsx here</div>
+              <div class="s">Read in your browser · stored on this device</div>
+            </div>
             <button class="btn" id="chooseBtn">Choose Excel file</button>
           </div>
           <div class="dz-or">or</div>
-          <div class="jira-row">
-            <button class="jira-btn" id="jiraFetchBtn">⚡ Fetch from Jira</button>
-            <button class="jira-setup" id="jiraSetupBtn2" title="Jira connection settings">⚙</button>
+          <div class="jira-col">
+            <div class="jira-row">
+              <button class="jira-btn" id="jiraFetchBtn">⚡ Fetch from Jira</button>
+              <button class="jira-setup" id="jiraSetupBtn2" title="Jira connection settings" aria-label="Jira connection settings">⚙</button>
+            </div>
+            <div class="jira-hint" id="jiraHint"></div>
           </div>
-          <div class="jira-hint" id="jiraHint"></div>
         </div>
 
         <div id="fetching" class="hidden">
           <div class="jira-progress">
-            <div style="font-size:22px;margin-bottom:6px">⚡</div>
-            <div class="ptxt" id="fetchPct">0 %</div>
-            <div class="pbar"><div class="pfill" id="fetchFill"></div></div>
-            <div class="pmsg" id="fetchMsg">Connecting to Jira…</div>
-            <button class="ghost" id="fetchCancel" style="margin-top:12px">Cancel</button>
+            <div class="pbolt">⚡</div>
+            <div class="pmain">
+              <div class="prow"><span class="ptxt" id="fetchPct">0 %</span><span class="pmsg" id="fetchMsg">Connecting to Jira…</span></div>
+              <div class="pbar"><div class="pfill" id="fetchFill"></div></div>
+            </div>
+            <button class="ghost" id="fetchCancel">Cancel</button>
           </div>
         </div>
 
@@ -452,79 +464,87 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 45%,var(--teal)
                 <span id="fdaterange" style="display:none">created <span class="rng" id="fcmin">—</span> → <span class="rng" id="fcmax">—</span> <span class="sep">·</span> resolved <span class="rng" id="frmin">—</span> → <span class="rng" id="frmax">—</span></span>
               </div>
             </div>
-            <button class="ghost" id="refreshBtn" style="display:none">⟳ Refresh</button>
-            <button class="ghost" id="fullBtn" style="display:none" title="Re-pull the entire history from Jira">Full</button>
-            <button class="ghost" id="changeBtn">Change file</button>
+            <div class="acts">
+              <button class="ghost" id="refreshBtn" style="display:none">⟳ Refresh</button>
+              <button class="ghost" id="fullBtn" style="display:none" title="Re-pull the entire history from Jira">Full</button>
+              <button class="ghost" id="changeBtn">Change file</button>
+            </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <div class="fork"></div>
-
-      <div class="cards locked" id="cards">
-        <a class="card fu" id="cardFU" href="followup.html">
-          <div class="top"><div class="badge">📌</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>Follow-up Tracker</h2>
-          <p>Daily triage: what needs action, what's waiting on the client, what's with engineering — plus SLA, aging, and data gaps.</p>
+    <div class="cards locked" id="cards">
+        <a class="card fu" id="cardFU" href="followup.html" style="--i:0" data-g="📌">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">📌<span class="kb" aria-hidden="true">1</span></div><h2>Follow-up Tracker</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Daily triage — what needs action, what's waiting on the client, what's with engineering.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><rect x="0" y="4" width="196" height="9" rx="4.5" opacity=".9"/><rect x="0" y="18" width="142" height="9" rx="4.5" opacity=".5"/><rect x="0" y="32" width="214" height="9" rx="4.5" opacity=".28"/><rect x="214" y="4" width="46" height="9" rx="4.5" opacity=".22"/><rect x="160" y="18" width="100" height="9" rx="4.5" opacity=".14"/></svg></div>
           <div class="feat"><span>HD action queue</span><span>SLA</span><span>Aging</span><span>Per-worker</span><span>Data gaps</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card tr" id="cardTR" href="trend.html">
-          <div class="top"><div class="badge">📈</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>HD Trend Tracker</h2>
-          <p>The bigger picture: HD resolved alone vs. escalated to engineering, month by month and week by week, with pivots.</p>
+        <a class="card tr" id="cardTR" href="trend.html" style="--i:1" data-g="📈">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">📈<span class="kb" aria-hidden="true">2</span></div><h2>HD Trend Tracker</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>The bigger picture — HD-resolved vs escalated to engineering, month by month and week by week.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><polygon points="0,44 0,34 30,28 60,31 90,20 120,24 150,12 180,16 210,6 260,10 260,44" opacity=".1"/><polyline points="0,34 30,28 60,31 90,20 120,24 150,12 180,16 210,6 260,10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><polyline points="0,39 40,37 80,33 120,35 160,29 200,27 260,22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/></svg></div>
           <div class="feat"><span>HD vs Engg</span><span>Trends</span><span>Week on week</span><span>Pivots</span><span>Pending</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card wr" id="cardWR" href="weekly.html">
-          <div class="top"><div class="badge">🗓️</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>Weekly Report</h2>
-          <p>Client-ready weekly report: per-client KPIs, inflow, resolved, SVM vs client, activity stages — print or save as PDF.</p>
+        <a class="card wr" id="cardWR" href="weekly.html" style="--i:2" data-g="🗓️">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">🗓️<span class="kb" aria-hidden="true">3</span></div><h2>Weekly Report</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Client-ready weekly report — per-client KPIs, inflow, resolved and activity stages. Print or save as PDF.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><rect x="0.0" y="26" width="14" height="18" rx="3" opacity="0.25"/><rect x="21.5" y="18" width="14" height="26" rx="3" opacity="0.31"/><rect x="43.0" y="30" width="14" height="14" rx="3" opacity="0.37"/><rect x="64.5" y="14" width="14" height="30" rx="3" opacity="0.43"/><rect x="86.0" y="22" width="14" height="22" rx="3" opacity="0.49"/><rect x="107.5" y="10" width="14" height="34" rx="3" opacity="0.55"/><rect x="129.0" y="24" width="14" height="20" rx="3" opacity="0.61"/><rect x="150.5" y="16" width="14" height="28" rx="3" opacity="0.67"/><rect x="172.0" y="8" width="14" height="36" rx="3" opacity="0.73"/><rect x="193.5" y="20" width="14" height="24" rx="3" opacity="0.79"/><rect x="215.0" y="12" width="14" height="32" rx="3" opacity="0.85"/><rect x="236.5" y="4" width="14" height="40" rx="3" opacity="0.91"/></svg></div>
           <div class="feat"><span>Per client</span><span>SVM vs Client</span><span>Stages</span><span>Print / PDF</span><span>Weekly</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card ch" id="cardCH" href="change.html">
-          <div class="top"><div class="badge">🔀</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>Change Tracker</h2>
-          <p>Change-request pipeline: aging of open changes, monthly created / delivered / closed, effort mix and an estimated backlog — with pivots.</p>
+        <a class="card ch" id="cardCH" href="change.html" style="--i:3" data-g="🔀">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">🔀<span class="kb" aria-hidden="true">4</span></div><h2>Change Tracker</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Change pipeline — aging of open changes, monthly created / delivered / closed and an estimated backlog.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><polygon points="0,5 38,5 50,22 38,39 0,39 12,22" opacity="0.2"/><polygon points="52,5 90,5 102,22 90,39 52,39 64,22" opacity="0.33"/><polygon points="104,5 142,5 154,22 142,39 104,39 116,22" opacity="0.5"/><polygon points="156,5 194,5 206,22 194,39 156,39 168,22" opacity="0.72"/><polygon points="208,5 246,5 258,22 246,39 208,39 220,22" opacity="0.95"/></svg></div>
           <div class="feat"><span>Pipeline</span><span>Aging</span><span>Backlog</span><span>Effort mix</span><span>Pivots</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card re" id="cardRE" href="releases.html">
-          <div class="top"><div class="badge">🚀</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>Release Tracker</h2>
-          <p>Delivery view: fix-type distribution, releases by project and SVM in charge, created vs closed and monthly / weekly release trends.</p>
+        <a class="card re" id="cardRE" href="releases.html" style="--i:4" data-g="🚀">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">🚀<span class="kb" aria-hidden="true">5</span></div><h2>Release Tracker</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Delivery view — fix types, releases by project and SVM in charge, created vs closed, monthly and weekly.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><rect x="0" y="34" width="28" height="10" rx="4" opacity="0.22"/><rect x="37" y="28" width="28" height="16" rx="4" opacity="0.33"/><rect x="74" y="22" width="28" height="22" rx="4" opacity="0.44"/><rect x="111" y="15" width="28" height="29" rx="4" opacity="0.55"/><rect x="148" y="8" width="28" height="36" rx="4" opacity="0.66"/><rect x="185" y="1" width="28" height="43" rx="4" opacity="0.77"/><rect x="222" y="0" width="28" height="44" rx="4" opacity="0.88"/></svg></div>
           <div class="feat"><span>Fix types</span><span>By project</span><span>Created vs closed</span><span>Monthly</span><span>Weekly</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card cl" id="cardCL" href="clarify.html">
-          <div class="top"><div class="badge">🔎</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>Clarification Module</h2>
-          <p>Similar-ticket matching: finds past cases for new issues, links incidents to changes, and surfaces root causes and solutions — clustered by theme.</p>
+        <a class="card cl" id="cardCL" href="clarify.html" style="--i:5" data-g="🔎">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">🔎<span class="kb" aria-hidden="true">6</span></div><h2>Clarification Module</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Similar-ticket matching — past cases for new issues, incidents linked to changes, root causes and solutions.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><g stroke="currentColor" stroke-width="1.6" opacity=".4"><line x1="20" y1="22" x2="70" y2="8"/><line x1="20" y1="22" x2="70" y2="36"/><line x1="70" y1="8" x2="130" y2="22"/><line x1="70" y1="36" x2="130" y2="22"/><line x1="130" y1="22" x2="190" y2="10"/><line x1="130" y1="22" x2="190" y2="34"/><line x1="190" y1="10" x2="240" y2="22"/><line x1="190" y1="34" x2="240" y2="22"/></g><g><circle cx="20" cy="22" r="5.5"/><circle cx="70" cy="8" r="4.5" opacity=".7"/><circle cx="70" cy="36" r="4.5" opacity=".7"/><circle cx="130" cy="22" r="7"/><circle cx="190" cy="10" r="4.5" opacity=".7"/><circle cx="190" cy="34" r="4.5" opacity=".7"/><circle cx="240" cy="22" r="5.5"/></g></svg></div>
           <div class="feat"><span>Similarity</span><span>Clusters</span><span>Inc↔Change</span><span>Search</span><span>Solutions</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card op" id="cardOP" href="ops.html">
-          <div class="top"><div class="badge">📊</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>Operations Intelligence</h2>
-          <p>Client profiles, workload heatmap, SLA breach monitor, silent ticket detection, and resolution quality — the team lead's cockpit.</p>
+        <a class="card op" id="cardOP" href="ops.html" style="--i:6" data-g="📊">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">📊<span class="kb" aria-hidden="true">7</span></div><h2>Operations Intelligence</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Team-lead cockpit — client profiles, workload heatmap, SLA breach monitor, silent tickets and quality.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><rect x="0" y="0" width="16" height="11" rx="2.5" opacity="0.1"/><rect x="20" y="0" width="16" height="11" rx="2.5" opacity="0.8"/><rect x="40" y="0" width="16" height="11" rx="2.5" opacity="0.65"/><rect x="60" y="0" width="16" height="11" rx="2.5" opacity="0.45"/><rect x="80" y="0" width="16" height="11" rx="2.5" opacity="0.55"/><rect x="100" y="0" width="16" height="11" rx="2.5" opacity="0.5"/><rect x="120" y="0" width="16" height="11" rx="2.5" opacity="0.15"/><rect x="140" y="0" width="16" height="11" rx="2.5" opacity="0.2"/><rect x="160" y="0" width="16" height="11" rx="2.5" opacity="0.3"/><rect x="180" y="0" width="16" height="11" rx="2.5" opacity="0.25"/><rect x="200" y="0" width="16" height="11" rx="2.5" opacity="0.35"/><rect x="220" y="0" width="16" height="11" rx="2.5" opacity="0.9"/><rect x="240" y="0" width="16" height="11" rx="2.5" opacity="0.7"/><rect x="0" y="15" width="16" height="11" rx="2.5" opacity="0.15"/><rect x="20" y="15" width="16" height="11" rx="2.5" opacity="0.45"/><rect x="40" y="15" width="16" height="11" rx="2.5" opacity="0.1"/><rect x="60" y="15" width="16" height="11" rx="2.5" opacity="0.35"/><rect x="80" y="15" width="16" height="11" rx="2.5" opacity="0.2"/><rect x="100" y="15" width="16" height="11" rx="2.5" opacity="0.55"/><rect x="120" y="15" width="16" height="11" rx="2.5" opacity="0.8"/><rect x="140" y="15" width="16" height="11" rx="2.5" opacity="0.9"/><rect x="160" y="15" width="16" height="11" rx="2.5" opacity="0.3"/><rect x="180" y="15" width="16" height="11" rx="2.5" opacity="0.5"/><rect x="200" y="15" width="16" height="11" rx="2.5" opacity="0.65"/><rect x="220" y="15" width="16" height="11" rx="2.5" opacity="0.7"/><rect x="240" y="15" width="16" height="11" rx="2.5" opacity="0.25"/><rect x="0" y="30" width="16" height="11" rx="2.5" opacity="0.7"/><rect x="20" y="30" width="16" height="11" rx="2.5" opacity="0.5"/><rect x="40" y="30" width="16" height="11" rx="2.5" opacity="0.9"/><rect x="60" y="30" width="16" height="11" rx="2.5" opacity="0.55"/><rect x="80" y="30" width="16" height="11" rx="2.5" opacity="0.35"/><rect x="100" y="30" width="16" height="11" rx="2.5" opacity="0.45"/><rect x="120" y="30" width="16" height="11" rx="2.5" opacity="0.25"/><rect x="140" y="30" width="16" height="11" rx="2.5" opacity="0.65"/><rect x="160" y="30" width="16" height="11" rx="2.5" opacity="0.3"/><rect x="180" y="30" width="16" height="11" rx="2.5" opacity="0.8"/><rect x="200" y="30" width="16" height="11" rx="2.5" opacity="0.2"/><rect x="220" y="30" width="16" height="11" rx="2.5" opacity="0.1"/><rect x="240" y="30" width="16" height="11" rx="2.5" opacity="0.15"/></svg></div>
           <div class="feat"><span>Client intel</span><span>Workload</span><span>Silent tickets</span><span>Aging</span><span>Quality</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-        <a class="card sl" id="cardSL" href="sla.html">
-          <div class="top"><div class="badge">⏱️</div><span class="go">Open <span class="ar">→</span></span></div>
-          <h2>SLA Tracker</h2>
-          <p>Resolution SLA per ticket from its real status history — the clock pauses while a ticket is with the client and resumes when it returns.</p>
+        <a class="card sl" id="cardSL" href="sla.html" style="--i:7" data-g="⏱️">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">⏱️<span class="kb" aria-hidden="true">8</span></div><h2>SLA Tracker</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Resolution SLA from each ticket's real status history — the clock pauses while it's with the client.</p>
+          <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><defs><pattern id="slhatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="currentColor" opacity=".35"/></pattern></defs><rect x="0" y="16" width="74" height="12" rx="4"/><rect x="80" y="16" width="70" height="12" rx="4" fill="url(#slhatch)" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".8"/><rect x="156" y="16" width="64" height="12" rx="4"/><line x1="240" y1="6" x2="240" y2="40" stroke="currentColor" stroke-width="2"/><polygon points="240,6 258,12 240,18"/><text x="80" y="11" font-size="7" font-family="monospace" fill="currentColor" opacity=".7">client</text></svg></div>
           <div class="feat"><span>Client pause</span><span>Breaches</span><span>Per client</span><span>Timeline</span><span>Search</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
-      </div>
     </div>
   </div>
 
   <!-- bottom strip -->
   <div class="strip rise d3">
-    <span class="note">Files stay on your device — nothing is uploaded to a server.</span>
+    <span class="note">Files stay on your device — nothing is uploaded to a server. <b>· Press 1–8 to open a dashboard</b></span>
     <span class="spacer"></span>
     <button class="qbtn" id="qview">🔎 View export query</button>
     <button class="qbtn primary" id="qcopy">⧉ Copy JQL</button>
@@ -817,25 +837,41 @@ function buildBackdrop(){
   buildBars();
 }
 
-/* ── connective wires ── */
+/* ── circuit-board wiring ──
+   A trunk drops from the source panel into a bus above the first row of cards; from there it runs down the centre
+   gutter to a second bus above row two. Each card gets a coloured stub and a port dot. Everything lives in the
+   gaps between cards, so it never sits under (or over) any text. */
+var WIRE_COLORS={cardFU:"#2563EB",cardTR:"#0F766E",cardWR:"#B45309",cardCH:"#7C3AED",cardRE:"#E11D48",cardCL:"#0891B2",cardOP:"#059669",cardSL:"#EA580C"};
 function drawWires(){
-  var stage=el("stage"),src=el("sourceNode"),fu=el("cardFU"),tr=el("cardTR"),wr=el("cardWR"),ch=el("cardCH"),re=el("cardRE"),cl=el("cardCL"),op=el("cardOP"),sl=el("cardSL"),svg=el("wires");
-  if(!stage||!src||!fu||!tr) return;
-  var sr=stage.getBoundingClientRect();
+  var stage=el("stage"),src=el("sourceNode"),svg=el("wires"),box=el("cards"),band=document.querySelector(".band");
+  if(!stage||!src||!svg||!box||!band) return;
+  if(getComputedStyle(svg).display==="none"){ svg.innerHTML=""; return; }
+  var sr=stage.getBoundingClientRect(); if(!sr.width||!sr.height) return;
   svg.setAttribute("viewBox","0 0 "+sr.width+" "+sr.height);
-  var s=src.getBoundingClientRect();
-  var sx=(s.left+s.width/2)-sr.left, sy=s.bottom-sr.top;
-  function pathTo(r){ var cx=(r.left+r.width/2)-sr.left, cy=r.top-sr.top, m=(sy+cy)/2;
-    return "M "+sx+" "+sy+" C "+sx+" "+m+", "+cx+" "+m+", "+cx+" "+cy; }
-  var pFU=pathTo(fu.getBoundingClientRect()),pTR=pathTo(tr.getBoundingClientRect());
-  el("trackFU").setAttribute("d",pFU); el("flowFU").setAttribute("d",pFU);
-  el("trackTR").setAttribute("d",pTR); el("flowTR").setAttribute("d",pTR);
-  if(wr){ var pWR=pathTo(wr.getBoundingClientRect()); el("trackWR").setAttribute("d",pWR); el("flowWR").setAttribute("d",pWR); }
-  if(ch){ var pCH=pathTo(ch.getBoundingClientRect()); el("trackCH").setAttribute("d",pCH); el("flowCH").setAttribute("d",pCH); }
-  if(re){ var pRE=pathTo(re.getBoundingClientRect()); el("trackRE").setAttribute("d",pRE); el("flowRE").setAttribute("d",pRE); }
-  if(cl){ var pCL=pathTo(cl.getBoundingClientRect()); el("trackCL").setAttribute("d",pCL); el("flowCL").setAttribute("d",pCL); }
-  if(op){ var pOP=pathTo(op.getBoundingClientRect()); el("trackOP").setAttribute("d",pOP); el("flowOP").setAttribute("d",pOP); }
-  if(sl){ var pSL=pathTo(sl.getBoundingClientRect()); el("trackSL").setAttribute("d",pSL); el("flowSL").setAttribute("d",pSL); }
+  /* positions come from layout (offsetLeft/Top), not getBoundingClientRect, so a card that is mid-animation
+     (power-on, hover lift) can never pull the wires out of line */
+  var cr=box.getBoundingClientRect(), ox=cr.left-sr.left, oy=cr.top-sr.top;
+  var items=[].slice.call(box.querySelectorAll(".card")).map(function(c){
+    return {id:c.id,x:ox+c.offsetLeft,r:ox+c.offsetLeft+c.offsetWidth,cx:ox+c.offsetLeft+c.offsetWidth/2,y:oy+c.offsetTop,b:oy+c.offsetTop+c.offsetHeight}; });
+  if(!items.length) return;
+  var rows=[]; items.forEach(function(it){ var w=rows.filter(function(q){return Math.abs(q.y-it.y)<6;})[0]; if(!w){ w={y:it.y,items:[]}; rows.push(w);} w.items.push(it); });
+  rows.sort(function(a,b){return a.y-b.y;}); rows.forEach(function(w){ w.items.sort(function(a,b){return a.x-b.x;}); w.b=Math.max.apply(null,w.items.map(function(i){return i.b;})); });
+  var br=band.getBoundingClientRect(), bandBottom=band.offsetTop+band.offsetHeight;                       // the hero text never sits below this line
+  var s=src.getBoundingClientRect(), sx=s.left+s.width/2-sr.left, sy=band.offsetTop+src.offsetTop+src.offsetHeight;
+  var tracks="", flows="", ports="";
+  function add(d,color){ tracks+='<path class="track" d="'+d+'"/>'; flows+='<path class="flow" d="'+d+'"'+(color?' style="stroke:'+color+';filter:drop-shadow(0 0 3px '+color+')"':' style="stroke:#14B8A6"')+'/>'; }
+  var busY=[]; rows.forEach(function(w,k){ var prev=k?rows[k-1].b:bandBottom; busY.push(prev+(w.y-prev)/2); });
+  add("M "+sx+" "+sy+" V "+busY[0]);                                                                        // trunk: source panel → first bus
+  var mid=Math.floor(rows[0].items.length/2), gx=rows[0].items.length>1?(rows[0].items[mid-1].r+rows[0].items[mid].x)/2:rows[0].items[0].cx;
+  rows.forEach(function(w,k){
+    var xs=w.items.map(function(i){return i.cx;}); xs.push(k===0?sx:gx);
+    add("M "+Math.min.apply(null,xs)+" "+busY[k]+" H "+Math.max.apply(null,xs));
+    if(k>0) add("M "+gx+" "+busY[k-1]+" V "+busY[k]);                                                       // link down the centre gutter
+    w.items.forEach(function(it){ var col=WIRE_COLORS[it.id]||"#14B8A6";
+      add("M "+it.cx+" "+busY[k]+" V "+it.y, col);
+      ports+='<circle class="port" cx="'+it.cx+'" cy="'+(it.y-1)+'" r="3.4" style="--pc:'+col+'"/>'; });
+  });
+  svg.innerHTML=tracks+flows+ports;
 }
 function relayout(){ buildBackdrop(); drawWires(); }
 window.addEventListener("resize", relayout);
@@ -957,6 +993,29 @@ if(HS){
     else { drawWires(); }
   });
 } else { drawWires(); }
+
+/* ── additions: keep wires in step with layout, keyboard shortcuts, card spotlight, accessibility ── */
+(function(){
+  var stage=el("stage"), src=el("sourceNode"), cards=el("cards");
+  if(window.ResizeObserver){ var ro=new ResizeObserver(function(){ requestAnimationFrame(drawWires); }); if(stage)ro.observe(stage); if(src)ro.observe(src); }
+  // the page already listens for "hd-bridge-ready" to refresh the Jira hint, but nothing ever sent it, so the hint kept saying
+  // "Install the extension" even when it was connected. Send it when the extension announces itself.
+  window.addEventListener("message",function(e){ if(e.data&&e.data.type==="HD_BRIDGE_READY") setTimeout(function(){ window.dispatchEvent(new Event("hd-bridge-ready")); },0); });
+  // locked cards are not keyboard targets
+  function sync(){ var lk=cards.classList.contains("locked"); [].forEach.call(cards.querySelectorAll(".card"),function(c){ c.setAttribute("aria-disabled",lk?"true":"false"); c.tabIndex=lk?-1:0; }); }
+  sync(); if(window.MutationObserver) new MutationObserver(sync).observe(cards,{attributes:true,attributeFilter:["class"]});
+  // 1–8 open the dashboards (only when they are unlocked, and never while typing or while a dialog is open)
+  document.addEventListener("keydown",function(e){
+    if(e.ctrlKey||e.metaKey||e.altKey||e.shiftKey) return;
+    var t=e.target; if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable)) return;
+    if(document.querySelector(".md-ov.open,.js-ov.open")) return;
+    if(cards.classList.contains("locked")) return;
+    var n=parseInt(e.key,10); if(!(n>=1&&n<=8)) return;
+    var c=cards.querySelectorAll(".card")[n-1]; if(c){ e.preventDefault(); location.href=c.getAttribute("href"); }
+  });
+  // soft spotlight that follows the pointer inside a card
+  cards.addEventListener("pointermove",function(e){ var c=e.target.closest?e.target.closest(".card"):null; if(!c) return; var r=c.getBoundingClientRect(); c.style.setProperty("--mx",(e.clientX-r.left)+"px"); c.style.setProperty("--my",(e.clientY-r.top)+"px"); });
+})();
 </script>
 
 <!-- ══════════════════════ Master Data validation module ══════════════════════
