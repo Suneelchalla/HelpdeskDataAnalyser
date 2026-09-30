@@ -2491,20 +2491,20 @@ function App(){
 
         {/* KPIs — triage-focused */}
         <div className="fu fu2" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:10}}>
-          <KPI icon="📂" label="Open (total)" value={st.n.toLocaleString()} color="var(--blue)" bgColor="var(--blue-bg)" sub="All not-closed"
-            onClick={function(){openAllModal();}}/>
+          <KPI icon="🔧" label="Engg Followup" value={st.eng.length} color="var(--violet)" bgColor="var(--violet-bg)" sub="Follow up with dev"
+            onClick={function(){openEnggModal();}}/>
           <KPI icon="🎯" label="HD Action" value={st.hd.length} color="var(--cyan)" bgColor="var(--cyan-bg)" sub="Your action needed"
             onClick={function(){openCatModal("hd");}}/>
           <KPI icon="💬" label="Client Followup" value={st.cl.length} color="var(--amber)" bgColor="var(--amber-bg)" sub="Chase if stale"
             onClick={function(){openClientModal();}}/>
-          <KPI icon="🔧" label="Engg Followup" value={st.eng.length} color="var(--violet)" bgColor="var(--violet-bg)" sub="Follow up with dev"
-            onClick={function(){openEnggModal();}}/>
           <KPI icon="⏸️" label="On-Hold" value={st.hold.length} color="#64748B" bgColor="#F1F5F9" sub="Parked — review reason"
             onClick={function(){openHoldModal();}}/>
           <KPI icon="🧾" label="Invoice Pending" value={st.inv.length} color="#0891B2" bgColor="#ECFEFF" sub="Yet to raise"
             onClick={function(){openInvoiceModal();}}/>
           <KPI icon="🔴" label="Danger 90+" value={st.dng} color="var(--rose)" bgColor="var(--rose-bg)" sub="Stale — decide or close"
             onClick={function(){openDangerModal();}}/>
+          <KPI icon="📂" label="Open (total)" value={st.n.toLocaleString()} color="var(--blue)" bgColor="var(--blue-bg)" sub="All not-closed"
+            onClick={function(){openAllModal();}}/>
         </div>
 
         {/* ── Daily Report Actions ── */}
