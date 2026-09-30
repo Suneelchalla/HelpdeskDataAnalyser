@@ -205,6 +205,30 @@ tr.picked td{background:var(--sla-bg)}
 #drill .ghost.sm[data-remind]{font-size:0;padding:4px 9px}#drill .ghost.sm[data-remind]::before{content:"🔔";font-size:13px}
 .calrow{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--paper)}
 .calrow .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+#reportov{background:#CDD3DC;padding:18px 14px 40px;flex-direction:column;align-items:center;justify-content:flex-start}
+.rp-toolbar{position:sticky;top:0;z-index:5;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh2);padding:10px 14px;margin:0 auto 14px;width:min(1180px,100%);display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px}
+.rp-toolbar label.ck{display:flex;gap:6px;align-items:center;font-weight:600;cursor:pointer}.rp-toolbar .sp{flex:1}
+.paper{background:#fff;color:#111A2B;width:min(1180px,100%);margin:0 auto;padding:30px 36px;box-shadow:var(--sh3);font-size:12px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.paper *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.paper h1{font-size:23px;letter-spacing:-.4px}.paper .rp-sub{color:var(--muted);font-size:12px;margin-top:3px}
+.paper h2{font-size:14px;margin:20px 0 7px;padding-bottom:4px;border-bottom:1.5px solid var(--ink);break-after:avoid}
+.paper .rp-note{color:var(--muted);font-size:10.5px;margin:0 0 7px;line-height:1.5}
+.rp-filters{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 18px;margin:12px 0 4px;padding:9px 12px;background:var(--paper);border:1px solid var(--line);border-radius:8px}
+.rp-filters div{font-size:11px}.rp-filters b{color:var(--muted);font-weight:600;margin-right:5px}
+.rp-warn{margin:10px 0 0;padding:8px 12px;border:1px solid #F5D9A8;background:var(--amber-bg);border-radius:8px;font-size:11px}
+.rp-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+.rp-k{border:1px solid var(--line2);border-left:4px solid var(--acc,var(--line2));border-radius:8px;padding:8px 10px;break-inside:avoid}
+.rp-k .v{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-1px;line-height:1.1}.rp-k .l{font-size:10.5px;font-weight:600;margin-top:3px}.rp-k .s{font-size:9.5px;color:var(--muted);margin-top:1px}
+.paper table{font-size:10.5px}.paper th{position:static;background:#EEF1F5;color:#3E4C63;padding:5px 7px}.paper td{padding:5px 7px;vertical-align:top}.paper tr{break-inside:avoid}.paper thead{display:table-header-group}
+.paper .sevdot{margin-right:4px}.paper td.cell{min-width:58px}
+.rp-foot{margin-top:22px;padding-top:8px;border-top:1px solid var(--line2);font-size:10px;color:var(--muted);line-height:1.55}
+@media print{
+  body.printing-report{background:#fff!important}
+  body.printing-report > *:not(#reportov){display:none!important}
+  body.printing-report #reportov{position:static!important;display:block!important;background:#fff!important;padding:0!important;overflow:visible!important}
+  body.printing-report .rp-toolbar,body.printing-report .toast{display:none!important}
+  body.printing-report .paper{box-shadow:none!important;width:auto!important;padding:0!important;margin:0!important}
+}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -215,6 +239,7 @@ tr.picked td{background:var(--sla-bg)}
     <div class="logo"><span class="bar"><i style="height:14px;background:#F59E0B"></i><i style="height:22px;background:var(--sla)"></i><i style="height:11px;background:#FDBA74"></i><i style="height:18px;background:#C2410C"></i></span><b>HD SLA Tracker</b></div>
     <nav class="tabs" id="tabs" aria-label="Sections"></nav>
     <div class="hrow" style="gap:8px">
+      <button class="ghost" id="btnReport" title="Build a printable report of what is on screen and save it as a PDF">🖨 PDF report</button>
       <button class="ghost" id="btnSearch" title="Search any ticket">Search ticket <kbd>Ctrl+K</kbd></button>
       <button class="ghost" id="btnBack">← Launcher</button>
     </div>
@@ -394,7 +419,9 @@ function applyFilters(list, skipResult) {
     return true;
   });
 }
-function view() { return applyFilters(ST.scope).map(function (t) { var r = getResult(t); return { t: t, r: r, b: bucketOf(r) }; }); }
+/* view(true) = the filtered population WITHOUT the Result chip. Every SLA figure is worked out from this, because a chip such as
+   "Open" or "Breached / missed" would remove the met tickets and force the SLA % to 0. The chip only narrows the Tickets list. */
+function view(skipResult) { return applyFilters(ST.scope, !!skipResult).map(function (t) { var r = getResult(t); return { t: t, r: r, b: bucketOf(r) }; }); }
 function recompute() { ST.results = {}; ST.now = Date.now(); ST.scope = scope(); }
 
 /* ═════════ small ui helpers ═════════ */
@@ -442,7 +469,7 @@ function buildFilters() {
     '<div class="grp"><label>Created</label><div class="seg" role="group" aria-label="Created within">' + presets.map(function (p) { return '<button data-preset="' + p[0] + '" class="' + (u.preset === p[0] ? "on" : "") + '">' + p[1] + "</button>"; }).join("") + "</div>" +
     (u.preset === "custom" ? '<input type="date" id="rFrom" value="' + esc(u.from) + '" aria-label="From"><input type="date" id="rTo" value="' + esc(u.to) + '" aria-label="To">' : "") + "</div>" +
     msel("client", "Client") + msel("sev", "Severity") + msel("type", "Type") + msel("svm", "SVM in charge") + msel("worker", "Worker") +
-    '<div class="chips" role="group" aria-label="Result">' + resChips.map(function (c) { return '<button class="chip' + (ST.f.result === c[0] ? " on" : "") + '" data-res="' + c[0] + '">' + c[1] + "</button>"; }).join("") + "</div>";
+    '<div class="chips" id="resChips" role="group" aria-label="Result">' + resChips.map(function (c) { return '<button class="chip' + (ST.f.result === c[0] ? " on" : "") + '" data-res="' + c[0] + '">' + c[1] + "</button>"; }).join("") + "</div>";
   ["client", "sev", "type", "svm", "worker"].forEach(msList);
 }
 function renderTabs() {
@@ -542,10 +569,10 @@ function enc(parts) { return parts.map(function (x) { return encodeURIComponent(
 function drAttr(parts, n) { return ' data-dr="' + esc(enc(parts)) + '" data-n="' + n + '" role="button" tabindex="0" title="Show the ' + n + " ticket" + (n === 1 ? "" : "s") + '"'; }
 /* a number that opens its tickets (plain text when there are none) */
 function drNum(n, parts, style, txt) { var t = txt != null ? txt : n; return n > 0 ? '<span class="dr"' + drAttr(parts, n) + (style ? ' style="' + style + '"' : "") + ">" + t + "</span>" : (style ? '<span style="' + style + '">' + t + "</span>" : String(t)); }
-var CATL = { all: "All tickets with history", met: "Met", missed: "Missed (closed over target)", ob: "Open and already over target", run: "Still running (inside target)", dec: "Decided tickets" };
+var CATL = { all: "All tickets with history", met: "Met", missed: "Missed (closed over target)", ob: "Breached (still open)", run: "Open, within target", dec: "Decided tickets" };
 function periodOfKey(k) { return perLabel(k); }
 function drillList(spec) {
-  var p = spec.split("|").map(decodeURIComponent), v = view(), r = { title: "", sub: "", list: [], tab: null };
+  var p = spec.split("|").map(decodeURIComponent), v = view(true), r = { title: "", sub: "", list: [], tab: null };
   switch (p[0]) {
     case "kpi": {
       r.list = v.filter(function (x) { return kpiCat(x, p[1]); });
@@ -636,10 +663,10 @@ function trendPanel(v) {
     var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; };
     var n = g.length, met = c("met"), missed = c("missed"), ob = c("ob"), run = c("run"), dec = met + missed + ob, p = pct(met, dec);
     var pc = p == null ? "var(--faint)" : p >= ST.cfg.goalPct ? "var(--green)" : p >= ST.cfg.goalPct - 15 ? "var(--amber)" : "var(--rose)", T = function (cat) { return ["tr", k, cat]; };
-    return "<tr><td style=\"white-space:nowrap\"><b>" + drNum(n, T("all"), "", perLabel(k)) + '</b></td><td class="num">' + drNum(n, T("all")) + '</td><td class="num">' + drNum(met, T("met")) + '</td><td class="num">' + drNum(missed, T("missed"), missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(ob, T("ob"), ob ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(run, T("run"), "color:var(--faint)") + '</td><td style="width:32%">' + slaBar(p, T("dec"), dec) + '</td><td class="num bigpct" style="color:' + pc + '">' + drNum(dec, T("dec"), "", pctTxt(p)) + "</td></tr>";
+    return "<tr><td style=\"white-space:nowrap\"><b>" + drNum(n, T("all"), "", perLabel(k)) + '</b></td><td class="num">' + drNum(n, T("all")) + '</td><td class="num">' + drNum(met, T("met")) + '</td><td class="num">' + drNum(missed, T("missed"), missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(ob, T("ob"), ob ? "color:var(--rose)" : "") + '</td><td class="num"><b>' + drNum(dec, T("dec")) + '</b></td><td class="num">' + drNum(run, T("run"), "color:var(--faint)") + '</td><td style="width:28%">' + slaBar(p, T("dec"), dec) + '</td><td class="num bigpct" style="color:' + pc + '">' + drNum(dec, T("dec"), "", pctTxt(p)) + "</td></tr>";
   }).join("");
   var excl = s.n - s.hist;
-  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; tickets still inside their target are not counted until they resolve or breach. <b>Click any number, bar or percentage to see its tickets.</b>' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + '</div><div class="tw"><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Open, over target</th><th class="num">Still running</th><th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach. <b>Met + Missed + Breached = Decided</b>, and SLA % = Met ÷ Decided. <b>Click any number, bar or percentage to see its tickets.</b>' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + '</div><div class="tw"><table><thead><tr><th>Created in</th><th class="num" title="Tickets created in this period that have status history">Tickets</th><th class="num" title="Closed within their target">Met</th><th class="num" title="Closed, but after their target had run out">Missed</th><th class="num" title="Still open and already past their target">Breached (open)</th><th class="num" title="Met + Missed + Breached: the tickets SLA % is worked out from">Decided</th><th class="num" title="Still open and inside their target. The clock may be running, or paused while the ticket is with the client">Open, within target</th><th title="SLA % against your goal; the dark tick is the goal">vs goal</th><th class="num" title="Met ÷ Decided">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
 }
 function matrixPanel(v) {
   var by = ST.matrixBy, keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} };
@@ -683,7 +710,7 @@ function renderOverview(v) {
     var o = s.by[k], H = function (cat) { return ["hd", k, cat]; }; return "<tr><td>" + kchip(k) + '</td><td class="num">' + drNum(o.n, H("open")) + '</td><td class="num">' + drNum(o.br, H("ob"), o.br ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.risk, H("risk")) + '</td><td class="num">' + drNum(o.n - o.br - o.risk, H("within")) + "</td></tr>"; }).join("");
   var att = v.filter(function (x) { return x.r && !x.r.isClosed && (x.b === "breached" || x.b === "danger" || x.b === "warning"); }).sort(function (a, b) { return (b.r.pct || 0) - (a.r.pct || 0); }).slice(0, 10);
   var arow = att.map(function (x) { return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell">' + esc(x.t.summary) + "</td><td>" + kchip(x.r.currentKind) + "</td><td>" + chip(x.b) + "</td><td>" + breakCell(x) + "</td><td>" + remindCell(x) + "</td></tr>"; }).join("");
-  h += '<div class="grid2"><div class="card panel"><h3>Who has the open tickets</h3><div class="sub">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused.</div><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Over target</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' + hold + "</tbody></table></div></div>" +
+  h += '<div class="grid2"><div class="card panel"><h3>Who has the open tickets</h3><div class="sub">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused, so they can be “within target” for a long time.</div><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Breached</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' + hold + "</tbody></table></div></div>" +
     '<div class="card panel"><h3>Needs attention</h3><div class="sub">Open tickets closest to, or past, their target, with the exact time each one breaks.</div>' + (att.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Summary</th><th>Held by</th><th>State</th><th>Breaks at</th><th></th></tr></thead><tbody>' + arow + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is at risk right now.</div>') + "</div></div>";
   M.innerHTML = h;
 }
@@ -752,7 +779,7 @@ function exportList(v, name) {
 
 /* ═════════ ticket detail ═════════ */
 function overlay(id, html) { var o = $(id); if (!o) { o = document.createElement("div"); o.id = id; o.className = "ov"; document.body.appendChild(o); } o.innerHTML = html; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); return o; }
-function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } if (id === "drill") ST.dr = null; if (id === "bulk") ST.bk = null; }
+function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } if (id === "drill") ST.dr = null; if (id === "bulk") ST.bk = null; if (id === "reportov") closeReport(); }
 function renderDetail() { var t = ST.byKey[ST.detail]; if (t) withCal(t, renderDetailInner); }
 function renderDetailInner() {
   var t = ST.byKey[ST.detail]; if (!t) return;
@@ -975,6 +1002,113 @@ function runBulk() {
   function finish() { bk.phase = "done"; renderBulk(); renderAll(); if (ST.dr && $("drill")) renderDrill(); }
 }
 
+/* ═════════ PDF report (what is on screen, as a printable document) ═════════
+   Built from the same filtered tickets as the Overview and Tickets tabs, so it always matches the screen.
+   "Save as PDF" goes through the browser's print dialog (same as the Weekly Report). */
+var RES_LABEL = { "": "All", open: "Open", closed: "Closed", breached: "Breached / missed", openbreached: "Breached, still open", risk: "At risk", paused: "With client", nohist: "No history" };
+function rpFilterLines() {
+  var f = ST.f, r = rangeMs(), L = [], lab = function (k, v) { var o = (ST.opts[k] || []).filter(function (x) { return x.v === v; })[0]; return o ? o.l : v; };
+  L.push(["Created", fd(r.from) + " – " + fd(r.to) + (ST.ui.preset === "custom" ? "" : " (last " + parseInt(ST.ui.preset, 10) + " month" + (parseInt(ST.ui.preset, 10) > 1 ? "s" : "") + ")")]);
+  L.push(["Ticket types", ST.cfg.issueTypes.join(", ")]);
+  [["client", "Client"], ["sev", "Severity"], ["type", "Type"], ["svm", "SVM in charge"], ["worker", "Worker"]].forEach(function (k) {
+    if (f[k[0]].length) { var names = f[k[0]].map(function (v) { return lab(k[0], v); }); L.push([k[1], names.slice(0, 6).join(", ") + (names.length > 6 ? " +" + (names.length - 6) + " more" : "")]); }
+  });
+  if (f.result && ST.tab === "tickets") L.push(["Ticket list shows", RES_LABEL[f.result] || f.result]);
+  return L;
+}
+function rpFileName() {
+  var cl = ST.f.client.length ? ST.f.client.slice(0, 3).join("-") : "All clients", r = rangeMs();
+  return ("SLA Report - " + cl + " - " + new Date(r.from + 330 * 60000).toISOString().slice(0, 10) + " to " + new Date(r.to + 330 * 60000).toISOString().slice(0, 10)).replace(/[\\\/:*?"<>|]/g, "-");
+}
+function rpTrend(v) {
+  var groups = {}; v.forEach(function (x) { if (!x.r) return; (groups[perKey(x.t.created)] || (groups[perKey(x.t.created)] = [])).push(x); });
+  var rows = Object.keys(groups).sort().map(function (k) {
+    var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; };
+    var met = c("met"), missed = c("missed"), ob = c("ob"), run = c("run"), dec = met + missed + ob, p = pct(met, dec);
+    return "<tr><td><b>" + perLabel(k) + '</b></td><td class="num">' + g.length + '</td><td class="num">' + met + '</td><td class="num">' + missed + '</td><td class="num">' + ob + '</td><td class="num"><b>' + dec + '</b></td><td class="num">' + run + '</td><td style="width:26%">'  + slaBar(p) + '</td><td class="num"><b>' + pctTxt(p) + "</b></td></tr>"; }).join("");
+  return '<h2>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h2><div class="rp-note">Grouped by when the ticket was created. Decided = Met + Missed + Breached (open); SLA % = Met ÷ Decided. The dark tick marks the ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach.</div><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Breached (open)</th><th class="num">Decided</th><th class="num">Open, within target</th><th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table>";
+}
+function rpMatrix(v, by) {
+  var keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} }, f = dimFn(by);
+  function add(o, p, met) { o.n++; if (met) o.met++; var c = o.cells[p] || (o.cells[p] = { n: 0, met: 0 }); c.n++; if (met) c.met++; }
+  v.forEach(function (x) { if (!isDecided(x)) return; var d = f(x.t), p = perKey(x.t.created); periods[p] = 1; add(keys[d] || (keys[d] = { n: 0, met: 0, cells: {} }), p, x.b === "met"); add(all, p, x.b === "met"); });
+  var pk = Object.keys(periods).sort(), sevOrder = Sla.SEVERITIES.map(function (z) { return z.id; }).concat(["none"]);
+  var ks = Object.keys(keys).sort(function (a, b) { return by === "severity" ? sevOrder.indexOf(a) - sevOrder.indexOf(b) : keys[b].n - keys[a].n; }), more = ks.length > 25 ? ks.length - 25 : 0; ks = ks.slice(0, 25);
+  var single = pk.length === 1;
+  function cell(o, p) { var c = o.cells[p]; if (!c) return '<td class="cell n">—</td>'; var pp = Math.round(c.met / c.n * 100); return '<td class="cell ' + cls(pp) + '">' + pp + "%<small>" + c.n + "</small></td>"; }
+  function tot(o) { if (single) return ""; var pp = o.n ? Math.round(o.met / o.n * 100) : null; return '<td class="cell ' + cls(pp) + '" style="border-left:1.5px solid var(--line2)">' + pctTxt(pp) + "<small>" + o.n + "</small></td>"; }
+  var name = by === "client" ? "Client" : by === "severity" ? "Severity" : "Worker";
+  var lab = by === "client" ? function (k) { return "<b>" + esc(clientName(k)) + '</b> <span style="color:var(--faint)">' + esc(k) + "</span>"; } : by === "severity" ? function (k) { return "<b>" + (k === "none" ? "Unrated" : Sla.sevName(k)) + "</b>"; } : function (k) { return "<b>" + esc(k) + "</b>"; };
+  if (!pk.length) return "<h2>SLA % by " + name.toLowerCase() + '</h2><div class="rp-note">No tickets have a decided outcome yet.</div>';
+  return "<h2>SLA % by " + name.toLowerCase() + ", " + (ST.trendBy === "week" ? "week" : "month") + ' by ' + (ST.trendBy === "week" ? "week" : "month") + '</h2><div class="rp-note">Each cell is the SLA % for tickets created in that ' + (ST.trendBy === "week" ? "week" : "month") + " (small number = tickets counted). Green meets the " + ST.cfg.goalPct + "% goal, amber is within 15 points, red is further off.</div>" +
+    '<table class="hm"><thead><tr><th>' + name + "</th>" + pk.map(function (p) { return "<th>" + perLabel(p) + "</th>"; }).join("") + (single ? "" : "<th>Overall</th>") + '</tr></thead><tbody><tr class="all"><td>All</td>' + pk.map(function (p) { return cell(all, p); }).join("") + tot(all) + "</tr>" +
+    ks.map(function (k) { var o = keys[k]; return "<tr><td>" + lab(k) + "</td>" + pk.map(function (p) { return cell(o, p); }).join("") + tot(o) + "</tr>"; }).join("") + "</tbody></table>" + (more ? '<div class="rp-note" style="margin-top:4px">…and ' + more + " more with fewer tickets.</div>" : "");
+}
+function rpHolders(s) {
+  return '<h2>Who has the open tickets</h2><div class="rp-note">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused.</div><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Breached</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' +
+    ["hd", "engg", "client"].map(function (k) { var o = s.by[k]; return "<tr><td>" + kchip(k) + '</td><td class="num">' + o.n + '</td><td class="num">' + o.br + '</td><td class="num">' + o.risk + '</td><td class="num">' + (o.n - o.br - o.risk) + "</td></tr>"; }).join("") + "</tbody></table>";
+}
+function rpRows(list, withAt) {
+  return list.map(function (x) { return withCal(x.t, function () {
+    var t = x.t, r = x.r, bi = binfoOf(x), when = !bi ? "—" : bi.state === "running" ? fdtw(bi.breachAt) : bi.state === "paused" ? "Paused · " + fdur(bi.remainingMin) + " left" : (bi.state === "breached" || bi.state === "missed") ? (bi.state === "breached" ? "Breached " : "Missed ") + fdtw(bi.breachedAt) : "—";
+    return '<tr><td><b class="key">' + esc(t.key) + '</b></td><td style="min-width:150px">' + esc(t.summary) + "</td><td>" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? " <i>(unverified)</i>" : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.svm || "—") + "</td>" +
+      '<td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) + (r.pct != null ? " (" + Math.round(r.pct) + "%)" : "") : "—") + "</td><td>" + when + "</td><td>" + chip(x.b) + "</td></tr>"; }); }).join("");
+}
+var RP_HEAD = "<th>Ticket</th><th>Summary</th><th>Severity</th><th>Status</th><th>Held by</th><th>SVM in charge</th><th class=\"num\">Target</th><th class=\"num\">Counted (used)</th><th>Breaks at / breached</th><th>Result</th>";
+function reportHtml(v, o, vl) {
+  vl = vl || v;
+  var s = stats(v), goal = ST.cfg.goalPct, compC = s.comp == null ? "var(--faint)" : s.comp >= goal ? "var(--green)" : s.comp >= goal - 15 ? "#F59E0B" : "var(--rose)";
+  var noHist = v.filter(function (x) { return !x.r; }).length, sus = v.filter(function (x) { return x.r && histSuspect(x.t); }).length;
+  var h = '<h1>SLA Report</h1><div class="rp-sub">HD SLA Tracker · generated ' + fdt(Date.now()) + " IST · " + s.n.toLocaleString() + " ticket" + (s.n === 1 ? "" : "s") + " in this view</div>" +
+    '<div class="rp-filters">' + rpFilterLines().map(function (l) { return "<div><b>" + esc(l[0]) + "</b> " + esc(l[1]) + "</div>"; }).join("") + '<div><b>Working time</b> ' + esc(calBar()) + "</div></div>";
+  if (noHist || sus) h += '<div class="rp-warn">' + (noHist ? "<b>" + noHist + " ticket" + (noHist > 1 ? "s" : "") + "</b> in this view " + (noHist > 1 ? "have" : "has") + " no status history yet and " + (noHist > 1 ? "are" : "is") + " <b>not included</b> in any figure below. " : "") + (sus ? "<b>" + sus + "</b> ticket" + (sus > 1 ? "s are" : " is") + " marked unverified: Jira returned no status changes for " + (sus > 1 ? "them" : "it") + "." : "") + "</div>";
+  if (o.summary) {
+    var K = function (acc, val, lab, sub) { return '<div class="rp-k" style="--acc:' + acc + '"><div class="v">' + val + '</div><div class="l">' + lab + '</div><div class="s">' + sub + "</div></div>"; };
+    h += '<div class="rp-kpis">' + K(compC, pctTxt(s.comp), "SLA met", s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet") + K("var(--rose)", s.openBreached, "Breached, still open", "over their target") + K("#F59E0B", s.risk, "At risk", ST.cfg.warnPct + "%+ of target used") +
+      K("var(--engg)", s.open, "Open now", "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n) + K("var(--hd)", s.nEl ? fdur(s.sumEl / s.nEl) : "—", "Avg time to resolve", s.nEl + " closed · working time") + K("var(--ink2)", s.hist.toLocaleString(), "Tickets counted", "of " + s.n.toLocaleString() + " in view") + "</div>";
+  }
+  if (o.trend) h += rpTrend(v);
+  if (o.matrix) h += rpMatrix(v, o.matrixBy);
+  if (o.holders) h += rpHolders(s);
+  if (o.attention) {
+    var att = v.filter(function (x) { return x.r && !x.r.isClosed && (x.b === "breached" || x.b === "danger" || x.b === "warning"); }).sort(function (a, b) { return (b.b === "breached") - (a.b === "breached") || (b.r.pct || 0) - (a.r.pct || 0); });
+    h += "<h2>Breached and at-risk open tickets (" + att.length + ")</h2>" + (att.length ? '<div class="rp-note">Most urgent first. Breach times are exact, on each client’s working calendar.</div><table><thead><tr>' + RP_HEAD + "</tr></thead><tbody>" + rpRows(att) + "</tbody></table>" : '<div class="rp-note">Nothing is over target or at risk in this view.</div>');
+  }
+  if (o.all) {
+    var all = vl.slice().sort(function (a, b) { return (b.r ? b.r.pct || 0 : -1) - (a.r ? a.r.pct || 0 : -1); }), CAP = 1500, shown = all.slice(0, CAP), chipOn = vl !== v && ST.f.result;
+    h += "<h2>" + (chipOn ? "Tickets shown: " + esc(RES_LABEL[ST.f.result] || ST.f.result) : "All tickets in this view") + " (" + all.length.toLocaleString() + ")</h2>" + (all.length > CAP ? '<div class="rp-note">Showing the first ' + CAP.toLocaleString() + " (most used first). Narrow the filters to see the rest.</div>" : "") + "<table><thead><tr>" + RP_HEAD + "</tr></thead><tbody>" + rpRows(shown) + "</tbody></table>";
+  }
+  h += '<div class="rp-foot"><b>How to read this report.</b> Each ticket’s SLA clock starts when it is created and counts working time while it is with Help Desk or Engineering. It is paused while the ticket is with the client and stops when the ticket is closed. A ticket is <b>met</b> if it closed within its target, <b>missed</b> if it closed over it, and <b>breached</b> if it is still open and already over. “Working time” follows each client’s own calendar (' + esc(calBar()) + "); a day is one working day of that calendar. Targets: " + Sla.SEVERITIES.map(function (z) { return z.name + " " + ST.cfg.targets.defaults[z.id] + "h"; }).join(", ") + (Object.keys(ST.cfg.targets.clients).length ? " (with exceptions for " + Object.keys(ST.cfg.targets.clients).join(", ") + ")" : "") + ".</div>";
+  return h;
+}
+function rpViews() { var all = view(true); return { all: all, list: ST.tab === "tickets" ? view() : all }; }     // SLA figures: no chip. Ticket list: the chip you had on the Tickets tab
+function openReport() {
+  var vs = rpViews(), v = vs.all; if (!v.some(function (x) { return x.r; })) { toast("Nothing to report yet — fetch status history for these tickets first.", true); return; }
+  ST.rp = { orient: "landscape", summary: 1, trend: 1, matrix: 1, matrixBy: ST.matrixBy, holders: 1, attention: 1, all: vs.list.length <= 200 ? 1 : 0 };
+  var o = ST.rp;
+  var tb = '<div class="rp-toolbar" role="group" aria-label="Report options"><b style="font-size:13px">🖨 PDF report</b>' +
+    [["summary", "Summary"], ["trend", "SLA % by month"], ["matrix", "Heatmap"], ["holders", "Who has open tickets"], ["attention", "Breached & at-risk tickets"], ["all", "Ticket list (" + vs.list.length.toLocaleString() + ")"]].map(function (k) { return '<label class="ck"><input type="checkbox" data-rp="' + k[0] + '"' + (o[k[0]] ? " checked" : "") + "> " + k[1] + "</label>"; }).join("") +
+    '<label class="ck">Heatmap by <select data-rpsel="matrixBy" aria-label="Heatmap by"><option value="client">Client</option><option value="severity">Severity</option><option value="worker">Worker</option></select></label>' +
+    '<label class="ck">Page <select data-rpsel="orient" aria-label="Page orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label><span class="sp"></span>' +
+    '<button class="ghost" data-closereport>Close</button><button class="primary" id="rpPrint">Print / Save as PDF</button></div>';
+  overlay("reportov", tb + '<div class="paper" id="rpPaper"></div>');
+  $("reportov").querySelector('[data-rpsel="matrixBy"]').value = o.matrixBy;
+  document.body.classList.add("printing-report"); renderReportBody();
+  var x = $("rpPrint"); if (x) x.focus();
+}
+function renderReportBody() {
+  var o = ST.rp; if (!o || !$("rpPaper")) return; var st = $("rpPageStyle");
+  if (!st) { st = document.createElement("style"); st.id = "rpPageStyle"; document.head.appendChild(st); }
+  st.textContent = "@media print{@page{size:A4 " + o.orient + ";margin:11mm 10mm 13mm;@bottom-center{content:\"Page \" counter(page) \" of \" counter(pages);font-size:9px;color:#6B7A90}}}";
+  var vs = rpViews(); $("rpPaper").innerHTML = reportHtml(vs.all, o, vs.list);
+}
+function closeReport() { var o = $("reportov"); if (o) o.remove(); document.body.classList.remove("printing-report"); var st = $("rpPageStyle"); if (st) st.remove(); ST.rp = null; }
+function printReport() {
+  var old = document.title; document.title = rpFileName();
+  var back = function () { document.title = old; window.removeEventListener("afterprint", back); }; window.addEventListener("afterprint", back);
+  window.print();
+}
+
 /* ═════════ global search ═════════ */
 function openSearch() {
   overlay("search", '<div class="modal" style="width:min(720px,100%)"><div class="search-in"><span aria-hidden="true">🔍</span><input id="sq" placeholder="Ticket number, summary, worker or client…" autocomplete="off" aria-label="Search tickets"><button class="ghost" data-closesearch>Esc</button></div><div id="sres" style="max-height:60vh;overflow:auto"><div class="empty" style="padding:26px">Type a ticket number such as <b>SWIPHX-1234</b>. Searches all loaded tickets, not just the date range.</div></div></div>');
@@ -1063,9 +1197,10 @@ function saveSettings() {
 /* ═════════ render ═════════ */
 function renderAll() {
   $("filters").style.display = ST.tab === "settings" ? "none" : "";
+  var rc = $("resChips"); if (rc) rc.style.display = ST.tab === "tickets" ? "" : "none";          // Result chips narrow the ticket list only
   renderTabs(); renderBar();
   if (ST.tab === "settings") { renderSettings(); return; }
-  var v = view();
+  var v = view(ST.tab !== "tickets");
   if (ST.tab === "tickets") renderTickets(v); else renderOverview(v);
 }
 
@@ -1115,6 +1250,9 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-open]"))) { if (t.closest("a")) return; openDetail(x.dataset.open); return; }
   if (q("[data-closedetail]") || t.id === "detail") { closeOv("detail"); return; }
   if (q("[data-closesearch]") || t.id === "search") { closeOv("search"); return; }
+  if (q("#btnReport")) { openReport(); return; }
+  if (q("[data-closereport]")) { closeReport(); return; }
+  if (q("#rpPrint")) { printReport(); return; }
   if (q("#btnSearch")) { openSearch(); return; }
   if (q("#btnBack")) { location.href = "index.html"; return; }
   if (q("#btnFetch")) { runFetch(missingKeys(false)); return; }
@@ -1155,6 +1293,8 @@ document.addEventListener("input", function (e) {
 document.addEventListener("change", function (e) {
   var t = e.target;
   if (t.id === "bkSkip" && ST.bk) { ST.bk.skip = t.checked; renderBulk(); return; }
+  if (t.dataset && t.dataset.rp && ST.rp) { ST.rp[t.dataset.rp] = t.checked ? 1 : 0; renderReportBody(); return; }
+  if (t.dataset && t.dataset.rpsel && ST.rp) { ST.rp[t.dataset.rpsel] = t.value; renderReportBody(); return; }
   if (t.name === "bkMode" && ST.bk) { ST.bk.mode = t.value; renderBulk(); return; }
   if (t.name === "rmMode" && ST.rm) { ST.rm.mode = t.value; document.querySelectorAll(".rm-opt").forEach(function (o) { o.classList.toggle("on", o.querySelector("input").checked); }); return; }
   if (t.id === "rFrom" || t.id === "rTo") { ST.ui.from = ($("rFrom") || {}).value || ""; ST.ui.to = ($("rTo") || {}).value || ""; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
