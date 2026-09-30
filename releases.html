@@ -250,6 +250,40 @@ tbody tr.detail-row{background:var(--paper)}
 
 @media(max-width:1200px){.hrow1{flex-wrap:wrap}.filters{flex-wrap:wrap}}
 @media(max-width:680px){.ogrid{grid-template-columns:1fr}.blbl{min-width:80px;max-width:100px}}
+
+/* ── EXPECTED RELEASES TAB ── */
+.exp-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px}
+.exp-bar .fcell{min-width:230px}
+.exp-bar .sp{flex:1}
+.exp-seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+.exp-seg button{background:var(--paper);border:0;padding:7px 13px;font-size:11.5px;font-weight:600;color:var(--ink2)}
+.exp-seg button.on{background:var(--vi);color:#fff}
+.exp-btn{background:var(--paper);border:1px solid var(--line2);color:var(--ink2);padding:7px 12px;border-radius:9px;font-size:11.5px;font-weight:600}
+.exp-btn:hover{border-color:var(--vi-line);color:var(--vi)}
+.exp-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:1100px){.exp-kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){.exp-kpis{grid-template-columns:repeat(2,1fr)}}
+.exp-kpi{padding:13px 15px;border-left:3px solid var(--line2)}
+.exp-kpi.click{cursor:pointer;transition:box-shadow .2s,transform .15s}
+.exp-kpi.click:hover{box-shadow:var(--sh2);transform:translateY(-1px)}
+.exp-kpi.act{background:var(--vi-bg);box-shadow:0 0 0 2px var(--vi-line)}
+.exp-kpi .l{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.6px}
+.exp-kpi .v{font-size:24px;font-weight:700;margin-top:4px;font-family:var(--mono)}
+.exp-kpi .s{font-size:10.5px;color:var(--muted);margin-top:2px}
+.exp-grp{margin-bottom:12px;overflow:hidden}
+.exp-grp>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px}
+.exp-grp>summary::-webkit-details-marker{display:none}
+.exp-grp>summary:before{content:"▸";color:var(--faint);font-size:12px;transition:transform .15s}
+.exp-grp[open]>summary:before{transform:rotate(90deg)}
+.exp-grp>summary:hover{background:var(--vi-bg)}
+.exp-grp .rel{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink)}
+.exp-grp .n{font-size:11px;color:var(--muted);font-weight:600}
+.exp-grp .chips{display:flex;gap:5px;flex-wrap:wrap;margin-left:auto}
+.exp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.exp-age{font-family:var(--mono);font-size:11px}
+.exp-age.old{color:var(--bf);font-weight:700}
+.exp-note{padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--ink2);background:var(--wa-bg);border:1px solid var(--wa-soft);border-radius:var(--r)}
+.exp-empty{text-align:center;padding:46px 20px;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
@@ -404,6 +438,7 @@ var JIRA="https://svmhelpdesk.atlassian.net/browse/";
 var S={
   tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", issueType:[], from:"", to:"",
   sortCol:"created", sortDir:"desc", page:0,
+  expStatus:[], expView:"release", expSortCol:"created", expSortDir:"asc",  // Expected Releases tab (local)
   kpiFilter:""  // active KPI highlight
 };
 
@@ -538,6 +573,7 @@ function render(){
       '<div class="tabs" id="tabs">'+
         '<button class="'+(S.tab==="overview"?"on":"")+'" data-tab="overview">Overview</button>'+
         '<button class="'+(S.tab==="releases"?"on":"")+'" data-tab="releases">Releases</button>'+
+        '<button class="'+(S.tab==="expected"?"on":"")+'" data-tab="expected">Expected Releases <span class="cnt">'+expPool().length+'</span></button>'+
         '<button class="'+(S.tab==="tickets"?"on":"")+'" data-tab="tickets">Tickets <span class="cnt">'+FILTERED.length+'</span></button>'+
         '<button class="'+(S.tab==="trend"?"on":"")+'" data-tab="trend">Trend</button>'+
       '</div>'+
@@ -573,6 +609,7 @@ function render(){
   var cl=FILTERED.filter(function(t){return t.closed;}).length;
   var op=total-cl;
 
+  if(S.tab!=="expected"){
   h+='<div class="kpis up">';
   h+=kpiCard("total","Total Releases",total,"","📦","");
   h+=kpiCard("df","Data Fixes",df,pct(df,total),"🛠️","border-left-color:var(--df)");
@@ -581,9 +618,11 @@ function render(){
   h+=kpiCard("closed","Closed",cl,pct(cl,total),"✅","border-left-color:var(--green)");
   h+=kpiCard("open","Outstanding",op,pct(op,total),"🔵","border-left-color:var(--vi)");
   h+='</div>';
+  }
 
   if(S.tab==="overview") h+=renderOverview();
   else if(S.tab==="releases") h+=renderReleases();
+  else if(S.tab==="expected") h+=renderExpecting();
   else if(S.tab==="tickets") h+=renderTickets();
   else if(S.tab==="trend") h+=renderTrend();
 
@@ -977,6 +1016,203 @@ function renderTickets(){
   return h;
 }
 
+
+/* ══════════════ EXPECTED RELEASES TAB ══════════════
+   Tickets that are on the way to a release: outstanding release tickets whose status
+   is past the analysis stage. Scope = the GLOBAL filters (request type, project, SVM,
+   fix type, dates, search) — so the local Status list only offers statuses that exist
+   in what the global filter currently lets through (e.g. Incident + Service Request).
+   To change what counts as "not ready" / "already released", edit EXP_EXCLUDE below.
+   To regroup statuses into pipeline stages, edit EXP_STAGES. (Matching is case-insensitive.) */
+var EXP_EXCLUDE=[
+  /* early stage — not ready to release */
+  "open","acknowledged","analysis & study","technical analysis","assign hd (wfc)","re-open review","user request",
+  /* already released / done */
+  "closed","completed","resolved","resolved with clarification","delivered","published",
+  "confirmation","get confirmation","release move to production","db script delivered","invoice yet to raise"
+];
+var EXP_STAGES=[
+  {id:"build", label:"Fix & Testing", color:"#DC2626", st:["development in progress","testing in progress","team lead review & approval","svm hotfix testing","review","impact study","db script request"]},
+  {id:"prep",  label:"Release Prep & Approval", color:"#D97706", st:["release plan (uat or hot fix)","release plan (production)","release kit prep.","poc release approval","project lead approval","approval db admin","db admin approval","script release","assign to svm deployment team"]},
+  {id:"client",label:"Client Approval & Deploy", color:"#0D9488", st:["release in progress","client release approval","client release approval (prod)","client hotfix testing","client deployment (prod)","client approval (db script)"]}
+];
+function expKey(s){return String(s||"").trim().toLowerCase();}
+function expStageOf(status){
+  var k=expKey(status);
+  for(var i=0;i<EXP_STAGES.length;i++){ if(EXP_STAGES[i].st.indexOf(k)>-1) return EXP_STAGES[i]; }
+  return null;
+}
+function expOrder(status){
+  var k=expKey(status), off=0;
+  for(var i=0;i<EXP_STAGES.length;i++){ var ix=EXP_STAGES[i].st.indexOf(k); if(ix>-1) return off+ix; off+=EXP_STAGES[i].st.length; }
+  return 999;
+}
+function expAge(t){ return t.created?Math.max(0,Math.floor((Date.now()-t.created.getTime())/86400000)):null; }
+function expPool(){
+  return FILTERED.filter(function(t){ return !t.closed && EXP_EXCLUDE.indexOf(expKey(t.status))<0; });
+}
+function expCompute(){
+  var pool=expPool(), counts={};
+  pool.forEach(function(t){ counts[t.status]=(counts[t.status]||0)+1; });
+  var opts=Object.keys(counts).sort(function(a,b){ return expOrder(a)-expOrder(b)||counts[b]-counts[a]||a.localeCompare(b); });
+  S.expStatus=S.expStatus.filter(function(x){ return opts.indexOf(x)>-1; });   // drop statuses no longer in scope
+  var list=S.expStatus.length?pool.filter(function(t){ return S.expStatus.indexOf(t.status)>-1; }):pool;
+  return {pool:pool,list:list,opts:opts,counts:counts};
+}
+function expStatusBadge(t){
+  var st=expStageOf(t.status), c=st?st.color:"#9AA7B8";
+  return '<span class="badge open" title="'+esc(st?st.label:"Other")+'"><i class="exp-dot" style="background:'+c+'"></i>'+esc(t.status)+'</span>';
+}
+function expTable(rows,showRel,sortable){
+  var cols=[
+    {k:"key",l:"Key"},{k:"summary",l:"Summary"},{k:"fixType",l:"Fix Type"},{k:"status",l:"Status"},
+    {k:"project",l:"Project"},{k:"svm",l:"SVM In Charge"},{k:"worker",l:"Current Worker"},{k:"priority",l:"Priority"}
+  ];
+  if(showRel) cols.push({k:"releaseStr",l:"Release No"});
+  cols.push({k:"created",l:"Created · Age"});
+  var h='<div class="tbl-wrap" style="border:0;border-radius:0"><table><thead><tr>';
+  cols.forEach(function(c){
+    var arr=(sortable&&S.expSortCol===c.k)?(S.expSortDir==="asc"?" ▲":" ▼"):"";
+    h+='<th'+(sortable?' data-esort="'+c.k+'"':' class="static"')+'>'+c.l+(sortable?'<span class="arr">'+arr+'</span>':'')+'</th>';
+  });
+  h+='</tr></thead><tbody>';
+  rows.forEach(function(t){
+    var ftC=t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa", age=expAge(t);
+    h+='<tr>'+
+      '<td><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
+      '<td class="trunc" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td>'+
+      '<td><span class="badge '+ftC+'">'+esc(t.fixType)+'</span></td>'+
+      '<td>'+expStatusBadge(t)+'</td>'+
+      '<td>'+esc(t.project)+'</td>'+
+      '<td>'+esc(t.svm||"—")+'</td>'+
+      '<td>'+esc(t.worker||"—")+'</td>'+
+      '<td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
+      (showRel?'<td class="mono" style="font-size:10px">'+esc(t.releaseStr||"—")+'</td>':'')+
+      '<td class="mono" style="font-size:11px">'+fmtD(t.created)+' <span class="exp-age'+(age!=null&&age>=30?' old':'')+'">· '+(age==null?"—":age+"d")+'</span></td>'+
+    '</tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+function renderExpecting(){
+  var c=expCompute(), pool=c.pool, list=c.list;
+  var mid=mselCreate("expMsel","All ready statuses",c.opts,S.expStatus,
+    function(sel){ S.expStatus=sel; },
+    function(){ S.page=0; render(); });
+
+  /* KPI strip */
+  var rels={}, ageSum=0, ageN=0;
+  list.forEach(function(t){ if(t.releaseStr) rels[t.releaseStr]=1; var a=expAge(t); if(a!=null){ageSum+=a;ageN++;} });
+  var h='<div class="exp-kpis up">'+
+    '<div class="card exp-kpi" style="border-left-color:var(--vi)"><div class="l">Expected tickets</div><div class="v">'+fmtN(list.length)+'</div><div class="s">'+(S.expStatus.length?'of '+fmtN(pool.length)+' ready':'ready to release')+'</div></div>'+
+    '<div class="card exp-kpi" style="border-left-color:var(--vi2)"><div class="l">Release numbers</div><div class="v">'+fmtN(Object.keys(rels).length)+'</div><div class="s">distinct</div></div>'+
+    '<div class="card exp-kpi" style="border-left-color:var(--faint)"><div class="l">Avg ticket age</div><div class="v">'+(ageN?Math.round(ageSum/ageN):"—")+'<span style="font-size:12px;color:var(--muted)"> d</span></div><div class="s">since created</div></div>';
+  EXP_STAGES.forEach(function(st){
+    var sts=c.opts.filter(function(o){ return expStageOf(o)===st; });
+    var n=pool.filter(function(t){ return sts.indexOf(t.status)>-1; }).length;
+    var act=S.expStatus.length&&sts.length&&S.expStatus.length===sts.length&&sts.every(function(x){ return S.expStatus.indexOf(x)>-1; });
+    h+='<div class="card exp-kpi click'+(act?' act':'')+'" data-estage="'+st.id+'" style="border-left-color:'+st.color+'"><div class="l">'+esc(st.label)+'</div><div class="v">'+fmtN(n)+'</div><div class="s">'+(act?'click to clear':'click to filter')+'</div></div>';
+  });
+  h+='</div>';
+
+  /* toolbar */
+  h+='<div class="card exp-bar up d1">'+
+    '<div class="fcell"><span class="flabel">Status (ready to release)</span>'+mselHTML(mid)+'</div>'+
+    '<div class="fcell"><span class="flabel">View</span><div class="exp-seg">'+
+      '<button data-eview="release" class="'+(S.expView==="release"?"on":"")+'">By release no.</button>'+
+      '<button data-eview="list" class="'+(S.expView==="list"?"on":"")+'">Flat list</button></div></div>'+
+    '<div class="sp"></div>'+
+    (S.expView==="release"?'<button class="exp-btn" id="expExpand">Expand all</button><button class="exp-btn" id="expCollapse">Collapse all</button>':'')+
+    '<button class="exp-btn" id="expCsv">⬇ Export CSV</button>'+
+  '</div>';
+
+  if(S.status==="closed") h+='<div class="exp-note">The global <b>Status = Closed</b> filter is on, so nothing can be "expected". Set it to All or Outstanding.</div>';
+  if(!list.length){
+    return h+'<div class="card exp-empty">No tickets are ready to release with the current filters.</div>';
+  }
+
+  if(S.expView==="list"){
+    var sorted=sortTickets(list,S.expSortCol,S.expSortDir);
+    var pages=Math.max(1,Math.ceil(sorted.length/PAGE_SIZE));
+    if(S.page>=pages) S.page=pages-1;
+    var st0=S.page*PAGE_SIZE;
+    h+='<div class="card up d2" style="overflow:hidden">'+expTable(sorted.slice(st0,st0+PAGE_SIZE),true,true)+
+      '<div class="paging"><span>Showing '+(st0+1)+'–'+Math.min(st0+PAGE_SIZE,sorted.length)+' of '+sorted.length+'</span><div style="display:flex;gap:6px">'+
+      '<button data-epg="first" '+(S.page===0?'disabled':'')+'>« First</button>'+
+      '<button data-epg="prev" '+(S.page===0?'disabled':'')+'>‹ Prev</button>'+
+      '<span class="mono" style="padding:5px 8px;font-size:11px">'+(S.page+1)+' / '+pages+'</span>'+
+      '<button data-epg="next" '+(S.page>=pages-1?'disabled':'')+'>Next ›</button>'+
+      '<button data-epg="last" '+(S.page>=pages-1?'disabled':'')+'>Last »</button></div></div></div>';
+    return h;
+  }
+
+  /* grouped by release number */
+  var groups={};
+  list.forEach(function(t){ var k=t.releaseStr||"(no release no.)"; (groups[k]=groups[k]||[]).push(t); });
+  var keys=Object.keys(groups).sort(function(a,b){ return groups[b].length-groups[a].length||a.localeCompare(b); });
+  var openAll=list.length<=60;
+  keys.forEach(function(k){
+    var rows=sortTickets(groups[k],"created","asc"), sc={}, ft={df:0,bf:0,wa:0}, oldest=0;
+    rows.forEach(function(t){
+      sc[t.status]=(sc[t.status]||0)+1;
+      ft[t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa"]++;
+      var a=expAge(t); if(a!=null&&a>oldest) oldest=a;
+    });
+    var chips=Object.keys(sc).sort(function(a,b){ return expOrder(a)-expOrder(b); }).map(function(s){
+      var stg=expStageOf(s);
+      return '<span class="pill"><i class="exp-dot" style="background:'+(stg?stg.color:"#9AA7B8")+'"></i>'+esc(s)+' · '+sc[s]+'</span>';
+    }).join('');
+    h+='<details class="card exp-grp up d2"'+(openAll?' open':'')+'><summary>'+
+      '<span class="rel">'+esc(k)+'</span><span class="n">'+rows.length+' ticket'+(rows.length>1?'s':'')+' · oldest '+oldest+'d</span>'+
+      (ft.df?'<span class="badge df">DF '+ft.df+'</span>':'')+(ft.bf?'<span class="badge bf">BF '+ft.bf+'</span>':'')+(ft.wa?'<span class="badge wa">WA '+ft.wa+'</span>':'')+
+      '<span class="chips">'+chips+'</span></summary>'+expTable(rows,false,false)+'</details>';
+  });
+  return h;
+}
+function expCsvCell(v){ v=String(v==null?"":v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function expIso(d){ return d?d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"):""; }
+function exportExpecting(){
+  var list=sortTickets(expCompute().list,"releaseStr","asc");
+  var head=["Key","Summary","Issue Type","Fix Type","Status","Stage","Project","SVM In Charge","Current Worker","Priority","Release No","Root Cause","Type of Fix","Created","Age (days)","Jira Link"];
+  var out=[head.map(expCsvCell).join(",")];
+  list.forEach(function(t){
+    var stg=expStageOf(t.status);
+    out.push([t.key,t.summary,t.issueType,t.fixType,t.status,stg?stg.label:"Other",t.project,t.svm,t.worker,t.priority,t.releaseStr,t.rootCause,t.typeOfFix,expIso(t.created),expAge(t),JIRA+t.key].map(expCsvCell).join(","));
+  });
+  var blob=new Blob(["\ufeff"+out.join("\r\n")],{type:"text/csv;charset=utf-8"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="expected-releases-"+expIso(new Date())+".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); },1000);
+}
+function bindExpecting(){
+  document.querySelectorAll("[data-estage]").forEach(function(k){
+    k.onclick=function(){
+      var st=EXP_STAGES.filter(function(x){ return x.id===k.dataset.estage; })[0];
+      var sts=expCompute().opts.filter(function(o){ return expStageOf(o)===st; });
+      var same=S.expStatus.length===sts.length&&sts.every(function(x){ return S.expStatus.indexOf(x)>-1; });
+      S.expStatus=same?[]:sts; S.page=0; render();
+    };
+  });
+  document.querySelectorAll("[data-eview]").forEach(function(b){ b.onclick=function(){ S.expView=b.dataset.eview; S.page=0; render(); }; });
+  var ex=el("expExpand"); if(ex) ex.onclick=function(){ document.querySelectorAll(".exp-grp").forEach(function(d){ d.open=true; }); };
+  var co=el("expCollapse"); if(co) co.onclick=function(){ document.querySelectorAll(".exp-grp").forEach(function(d){ d.open=false; }); };
+  var cv=el("expCsv"); if(cv) cv.onclick=exportExpecting;
+  document.querySelectorAll("[data-esort]").forEach(function(th){
+    th.onclick=function(){
+      var c=th.dataset.esort;
+      if(S.expSortCol===c){ S.expSortDir=S.expSortDir==="asc"?"desc":"asc"; } else { S.expSortCol=c; S.expSortDir="asc"; }
+      render();
+    };
+  });
+  document.querySelectorAll("[data-epg]").forEach(function(b){
+    b.onclick=function(){
+      var pages=Math.max(1,Math.ceil(expCompute().list.length/PAGE_SIZE)), g=b.dataset.epg;
+      if(g==="first")S.page=0; else if(g==="prev")S.page=Math.max(0,S.page-1); else if(g==="next")S.page=Math.min(pages-1,S.page+1); else S.page=pages-1;
+      render();
+    };
+  });
+}
+
 /* ── TREND TAB ── */
 function renderTrend(){
   // monthly buckets
@@ -1249,7 +1485,7 @@ function bindAll(){
   var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
   var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
   var rb=el("resetBtn");if(rb)rb.onclick=function(){
-    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.page=0;render();};
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.expStatus=[];S.page=0;render();};
 
   // KPI clicks → single-click opens drill modal directly
   document.querySelectorAll("[data-kpi]").forEach(function(k){
@@ -1351,6 +1587,8 @@ function bindAll(){
       render();
     };
   });
+
+  bindExpecting();
 
   // modal close
   el("modalClose").onclick=closeModal;
