@@ -102,6 +102,24 @@
     return total;
   }
 
+  /* The instant at which `minutes` of business time have passed, counting from `start`.
+     Skips non-working days, holidays and hours outside the working window.
+     Returns ms, or null if the calendar has no working time at all. */
+  function advanceBiz(start, minutes, cal) {
+    if (!(minutes > 0)) return start;
+    var off = cal.tz * MIN, l = start + off, need = minutes, d = Math.floor(l / DAY);
+    for (var i = 0; i < 4000; i++, d++) {
+      var ds = d * DAY, dt = new Date(ds);
+      if (!cal.workDays[dt.getUTCDay()] || cal.holidays[dt.toISOString().slice(0, 10)]) continue;
+      var ws = Math.max(l, ds + cal.startMin * MIN), we = ds + cal.endMin * MIN;
+      if (we <= ws) continue;
+      var avail = (we - ws) / MIN;
+      if (need <= avail) return ws + need * MIN - off;
+      need -= avail;
+    }
+    return null;
+  }
+
   /* ─────────── severity / client / target ─────────── */
   function normSev(priority) {
     var s = String(priority == null ? "" : priority).toLowerCase().replace(/[^a-z]/g, "");
@@ -182,6 +200,30 @@
     };
   }
 
+  /* When does (or did) this ticket breach?
+       running  → breachAt: the clock is running, this is when the remaining working time runs out
+       paused   → with the client: the clock is stopped. remainingMin is what is left; ifResumedAt is the
+                  earliest it could breach if it came back to us right now
+       breached → breachedAt: the instant the counted time crossed the target (open or closed)
+       met / none → nothing to warn about */
+  function breachInfo(r, cal, now) {
+    if (r.targetMin == null) return { state: "none" };
+    var target = r.targetMin;
+    if (r.elapsedMin >= target) {
+      var before = 0, at = null;
+      for (var i = 0; i < r.segs.length; i++) {
+        var sg = r.segs[i]; if (!sg.counted) continue;
+        if (before + sg.bizMin >= target) { at = advanceBiz(sg.start, target - before, cal); break; }
+        before += sg.bizMin;
+      }
+      return { state: r.isClosed ? "missed" : "breached", breachedAt: at, overByMin: r.elapsedMin - target };
+    }
+    if (r.isClosed) return { state: "met" };
+    var rem = target - r.elapsedMin;
+    if (r.isPaused) return { state: "paused", remainingMin: rem, ifResumedAt: advanceBiz(now, rem, cal) };
+    return { state: "running", remainingMin: rem, breachAt: advanceBiz(now, rem, cal) };
+  }
+
   /* Result bucket used by filters/KPIs:
        open tickets  → safe | warning | danger | breached | none
        closed tickets→ met | missed | none */
@@ -209,6 +251,7 @@
     DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig,
     parseTs: parseTs, makeCalendar: makeCalendar, bizMinutes: bizMinutes,
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
-    targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur
+    targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
+    advanceBiz: advanceBiz, breachInfo: breachInfo
   };
 });
