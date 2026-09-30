@@ -151,7 +151,7 @@ select,input[type=number],input[type=text],input[type=time],textarea{font-family
 .modal{background:var(--card);border-radius:20px;box-shadow:var(--sh3);width:min(980px,100%);animation:pop .18s ease-out}
 @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
 .mh{display:flex;gap:12px;align-items:flex-start;padding:18px 22px 12px;border-bottom:1px solid var(--line)}
-.mh .x{margin-left:0;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--paper);font-size:15px;color:var(--ink2)}
+.mh button.x{margin-left:0;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--paper);font-size:15px;color:var(--ink2)}
 .mb{padding:16px 22px 22px}
 .tl{display:flex;height:22px;border-radius:7px;overflow:hidden;gap:2px;margin:4px 0 6px}
 .tl i{display:block;min-width:4px;border-radius:3px}
@@ -194,6 +194,15 @@ span.dr.bar{display:block;padding:7px 0;margin:-7px 0;border-radius:8px}span.dr.
 td.dr{cursor:pointer}td.dr:hover,td.dr:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
 .hm td:first-child span.dr,.hm th span.dr{font-weight:inherit}
 .kpi.clk:focus-visible{outline:2px solid var(--sla);outline-offset:2px}
+.rm-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;background:var(--sla-bg);font-size:12px}
+.rm-bar b{margin-right:4px}.rm-bar .sp{flex:1}
+td.selc,th.selc{width:34px;text-align:center}td.selc input,th.selc input{width:16px;height:16px;accent-color:var(--sla);cursor:pointer}
+tr.picked td{background:var(--sla-bg)}
+.tplta{width:100%;font-family:var(--mono);font-size:12px;line-height:1.55;padding:10px 12px;border:1px solid var(--line2);border-radius:9px;resize:vertical}
+.phl{font-family:var(--mono);font-size:11px;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:1px 5px;margin:0 2px;white-space:nowrap;display:inline-block}
+.bkrow{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+#drill td,#drill th{padding:7px 8px}#drill .ell{max-width:170px}
+#drill .ghost.sm[data-remind]{font-size:0;padding:4px 9px}#drill .ghost.sm[data-remind]::before{content:"🔔";font-size:13px}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -540,7 +549,21 @@ function drillList(spec) {
   }
   return r;
 }
-function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: { key: "pct", dir: "desc" } }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function grpOf(x) { return x.b === "breached" ? "breached" : (x.b === "warning" || x.b === "danger") ? "soon" : "ok"; }
+function drToolbar(list) {
+  var el = list.filter(canRemind); if (!el.length) return "";
+  var nb = el.filter(function (x) { return grpOf(x) === "breached"; }).length, ns = el.filter(function (x) { return grpOf(x) === "soon"; }).length;
+  return '<div class="rm-bar" role="group" aria-label="Send SLA reminders"><b>🔔 Send SLA reminders</b><span style="color:var(--muted)">Select tickets, then send. Each gets the template that fits its state.</span><span class="sp"></span>' +
+    (nb ? '<button class="ghost sm" data-drsel="breached">Breached (' + nb + ")</button>" : "") + (ns ? '<button class="ghost sm" data-drsel="soon">About to breach (' + ns + ")</button>" : "") +
+    '<button class="ghost sm" data-drsel="all">All open (' + el.length + ')</button><button class="ghost sm" data-drsel="none">Clear</button><span id="drSelN" style="font-weight:700"></span><button class="primary" id="drSend" disabled>Send reminders</button></div>';
+}
+function drSelUpdate() {
+  var d = ST.dr; if (!d || !$("drSelN")) return; var n = Object.keys(d.sel).length;
+  $("drSelN").textContent = n ? n + " selected" : ""; var b = $("drSend"); b.disabled = !n || !BR.ready; b.textContent = n ? "Send reminders (" + n + ")" : "Send reminders";
+  b.title = BR.ready ? "" : "Extension not detected — posting to Jira needs the HD Jira Bridge extension.";
+  document.querySelectorAll("#drill input[data-sel]").forEach(function (c) { c.checked = !!d.sel[c.dataset.sel]; c.closest("tr").classList.toggle("picked", !!d.sel[c.dataset.sel]); });
+}
 function mixChips(list) {
   var m = {}; list.forEach(function (x) { m[x.b] = (m[x.b] || 0) + 1; });
   return ["met", "missed", "breached", "danger", "warning", "safe", "none", "nohist"].filter(function (b) { return m[b]; }).map(function (b) { return m[b] + " " + chip(b); }).join(" &nbsp; ");
@@ -549,11 +572,12 @@ function renderDrill() {
   var d = ST.dr; if (!d) return; var r = drillList(d.spec), s = d.sort, dir = s.dir === "asc" ? 1 : -1;
   var list = r.list.slice().sort(function (a, b) { var x = sortVal(a, s.key), y = sortVal(b, s.key); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
   var pages = Math.max(1, Math.ceil(list.length / 15)); if (d.page > pages) d.page = pages;
-  var pg = list.slice((d.page - 1) * 15, d.page * 15);
-  var h = '<div class="modal" style="width:min(1240px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:18px">' + esc(r.title) + ' <span class="chip2 x" id="drCount">' + list.length.toLocaleString() + " ticket" + (list.length === 1 ? "" : "s") + '</span></h2><div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(r.sub) + '</div></div>' +
+  var pg = list.slice((d.page - 1) * 15, d.page * 15), elig = list.some(canRemind);
+  Object.keys(d.sel).forEach(function (k) { if (!list.some(function (x) { return x.t.key === k && canRemind(x); })) delete d.sel[k]; });    // selection only ever holds tickets that are in this list and can be reminded
+  var h = '<div class="modal" style="width:min(1400px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + esc(r.title) + ' <span class="chip2 x" id="drCount">' + list.length.toLocaleString() + " ticket" + (list.length === 1 ? "" : "s") + '</span></h2><div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(r.sub) + '</div></div>' +
     (r.tab ? '<button class="ghost" id="drTab" data-rs="' + r.tab + '">Show in Tickets tab</button>' : "") + '<button class="ghost" id="drExport">Export to Excel</button><button class="x" data-closedrill aria-label="Close">✕</button></div><div class="mb">' +
-    (list.length ? '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">' + mixChips(list) + '</div><div class="tw"><table><thead><tr>' + ticketHead("dr") + "</tr></thead><tbody>" + pg.map(ticketRowHtml).join("") + '</tbody></table></div><div class="pager"><button id="drPrev"' + (d.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + d.page + " of " + pages + '</span><button id="drNext"' + (d.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets.</div>') + "</div></div>";
-  overlay("drill", h);
+    (list.length ? '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">' + mixChips(list) + "</div>" + drToolbar(list) + '<div class="tw"><table><thead><tr>' + ticketHead("dr", elig) + "</tr></thead><tbody>" + pg.map(function (x) { return ticketRowHtml(x, elig ? d.sel : null); }).join("") + '</tbody></table></div><div class="pager"><button id="drPrev"' + (d.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + d.page + " of " + pages + '</span><button id="drNext"' + (d.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets.</div>') + "</div></div>";
+  overlay("drill", h); drSelUpdate();
 }
 
 /* ═════════ overview ═════════ */
@@ -678,10 +702,10 @@ function sortVal(x, k) {
   } return 0;
 }
 function th(label, k, num, mode) { var dr = mode === "dr", cur = dr ? ST.dr.sort : ST.sort, on = cur.key === k; return '<th class="sort' + (num ? " num" : "") + '" ' + (dr ? "data-drsort" : "data-sort") + '="' + k + '" aria-sort="' + (on ? (cur.dir === "asc" ? "ascending" : "descending") : "none") + '">' + label + (on ? (cur.dir === "asc" ? " ▲" : " ▼") : "") + "</th>"; }
-function ticketHead(mode) { return th("Ticket", "key", 0, mode) + "<th>Summary</th>" + th("Severity", "sev", 0, mode) + "<th>Status</th><th>Held by</th>" + th("Worker", "worker", 0, mode) + th("Target", "target", 1, mode) + th("Counted", "elapsed", 1, mode) + th("Used", "pct", 0, mode) + th("Breaks at", "breach", 0, mode) + "<th>Result</th><th></th>"; }
-function ticketRowHtml(x) {
-  var t = x.t, r = x.r;
-  return '<tr class="row-click" tabindex="0" data-open="' + esc(t.key) + '"><td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
+function ticketHead(mode, selectable) { return (selectable ? '<th class="selc"><input type="checkbox" id="drSelPage" aria-label="Select every reminder-eligible ticket on this page" title="Select this page"></th>' : "") + th("Ticket", "key", 0, mode) + "<th>Summary</th>" + th("Severity", "sev", 0, mode) + "<th>Status</th><th>Held by</th>" + th("Worker", "worker", 0, mode) + th("Target", "target", 1, mode) + th("Counted", "elapsed", 1, mode) + th("Used", "pct", 0, mode) + th("Breaks at", "breach", 0, mode) + "<th>Result</th><th></th>"; }
+function ticketRowHtml(x, sel) {
+  var t = x.t, r = x.r, picked = sel && sel[t.key];
+  return '<tr class="row-click' + (picked ? " picked" : "") + '" tabindex="0" data-open="' + esc(t.key) + '">' + (sel ? '<td class="selc">' + (canRemind(x) ? '<input type="checkbox" data-sel="' + esc(t.key) + '"' + (picked ? " checked" : "") + ' aria-label="Select ' + esc(t.key) + ' for a reminder">' : "") + "</td>" : "") + '<td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
 }
 function renderTickets(v) {
   var M = $("main");
@@ -689,7 +713,7 @@ function renderTickets(v) {
   v = v.slice().sort(function (a, b) { var x = sortVal(a, s.key), y = sortVal(b, s.key); return (x < y ? -1 : x > y ? 1 : 0) * d; });
   var pages = Math.max(1, Math.ceil(v.length / ST.PAGE)); if (ST.page > pages) ST.page = pages;
   var pg = v.slice((ST.page - 1) * ST.PAGE, ST.page * ST.PAGE);
-  var body = pg.map(ticketRowHtml).join("");
+  var body = pg.map(function (x) { return ticketRowHtml(x); }).join("");
   M.innerHTML = '<div class="card panel"><div class="panel-h"><h3>' + v.length.toLocaleString() + (v.length === 1 ? ' ticket' : ' tickets') + '</h3><button class="ghost" id="btnExport">Export to Excel</button></div><div class="sub">Click a ticket for its full status timeline. <b>Breaks at</b> is the exact time the target runs out on your working calendar; 🔔 Remind previews and sends it as an internal note. Created date and client-wait time are in each ticket’s detail.</div>' +
     (v.length ? '<div class="tw" style="max-height:none"><table><thead><tr>' + ticketHead() + "</tr></thead><tbody>" + body + '</tbody></table></div><div class="pager"><button id="pgPrev"' + (ST.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + ST.page + " of " + pages + '</span><button id="pgNext"' + (ST.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets match these filters.</div>') + "</div>";
 }
@@ -706,7 +730,7 @@ function exportList(v, name) {
 
 /* ═════════ ticket detail ═════════ */
 function overlay(id, html) { var o = $(id); if (!o) { o = document.createElement("div"); o.id = id; o.className = "ov"; document.body.appendChild(o); } o.innerHTML = html; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); return o; }
-function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } if (id === "drill") ST.dr = null; }
+function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } if (id === "drill") ST.dr = null; if (id === "bulk") ST.bk = null; }
 function renderDetail() {
   var t = ST.byKey[ST.detail]; if (!t) return;
   var r = getResult(t), b = bucketOf(r), h = '<div class="modal"><div class="mh"><div style="flex:1;min-width:0"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="font-size:20px">' + keyLink(t.key) + "</h2>" + chip(b) + (r && r.isPaused ? kchip("client") + ' <span style="font-size:11.5px;color:var(--muted)">clock paused</span>' : "") + '</div><div style="font-size:14px;margin-top:6px;font-weight:500">' + esc(t.summary) + '</div><div style="font-size:11.5px;color:var(--muted);margin-top:5px">' + esc(clientName(t.prefix)) + " · " + esc(t.type) + " · " + esc(t.priority || "No priority") + " · worker " + esc(t.worker || "—") + " · SVM " + esc(t.svm || "—") + " · created " + fdt(t.created) + '</div></div>' + (r && !r.isClosed && r.targetMin != null ? '<button class="primary" data-remind="' + esc(t.key) + '">🔔 Send SLA reminder</button>' : "") + '<button class="x" data-closedetail aria-label="Close">✕</button></div><div class="mb">';
@@ -759,34 +783,42 @@ function liveOf(t) {
   var r = Sla.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: ST.cfg, cal: ST.cal, now: now, classify: classify });
   return { r: r, bi: Sla.breachInfo(r, ST.cal, now), now: now, e: e };
 }
+var TPL_LABEL = { soon: "About to breach", breached: "Breached" };
+function tplKind(bi) { return bi.state === "breached" ? "breached" : "soon"; }
+function safeTxt(v) { return String(v == null ? "" : v).replace(/\*\*/g, "* *"); }      // Jira/user text must not inject bold markup
+/* Fill the ticket's template (About to breach / Breached) with its CURRENT numbers and turn it into plain text + Jira rich text. */
 function buildSlaMessage(t, L, extra) {
-  var r = L.r, bi = L.bi, b = function (x) { return { t: x, b: 1 }; }, n = function (x) { return { t: x }; }, BR = { br: 1 };
+  var r = L.r, bi = L.bi, kind = tplKind(bi), label = TPL_LABEL[kind];
   var who = [t.worker, t.svm].map(function (x) { return String(x || "").trim(); }).filter(function (x) { return x && !GENERIC[x.toLowerCase()]; })[0] || "Team";
-  var holder = { hd: "Help Desk", engg: "Engineering", client: "the client" }[r.currentKind] || "us";
+  var held = { hd: "Help Desk", engg: "Engineering", client: "Client" }[r.currentKind] || "—";
   var used = Math.round(r.pct) + "% of the " + fdur(r.targetMin) + " target used";
-  var head, ask;
+  var situation, ask, breachTime = "", timeLeft = "", breachedAt = "", overBy = "";
   if (bi.state === "breached") {
-    head = [b("SLA breached on " + fdtw(bi.breachedAt) + " IST"), n(" — now " + fdur(bi.overByMin) + " over the " + fdur(r.targetMin) + " target and still open.")];
+    breachedAt = fdtw(bi.breachedAt) + " IST"; breachTime = breachedAt; overBy = fdur(bi.overByMin);
+    situation = "**SLA breached on " + breachedAt + "** — now " + overBy + " over the " + fdur(r.targetMin) + " target and still open.";
     ask = "Kindly prioritise this ticket and post an update immediately.";
   } else if (bi.state === "paused") {
-    head = [n("The SLA clock is currently "), b("paused"), n(" because the ticket is with the client (" + r.currentStatus + "). " + fdur(bi.remainingMin) + " of working time is left (" + used + "). If it came back to us now it would breach on "), b(fdtw(bi.ifResumedAt) + " IST"), n(".")];
+    breachTime = fdtw(bi.ifResumedAt) + " IST"; timeLeft = fdur(bi.remainingMin);
+    situation = "The SLA clock is currently **paused** because the ticket is with the client (" + safeTxt(r.currentStatus) + "). " + timeLeft + " of working time is left (" + used + "). If it came back to us now it would breach on **" + breachTime + "**.";
     ask = "Kindly follow up with the client for the required response so the ticket can move forward.";
   } else {
-    head = [n("Breach time: "), b(fdtw(bi.breachAt) + " IST"), n(" — " + fdur(bi.remainingMin) + " of working time left (" + used + ").")];
+    breachTime = fdtw(bi.breachAt) + " IST"; timeLeft = fdur(bi.remainingMin);
+    situation = "Breach time: **" + breachTime + "** — " + timeLeft + " of working time left (" + used + ").";
     ask = "Kindly action this ticket before the breach time.";
   }
-  var paras = [
-    [b(SLA_MARK)],
-    [n("Dear " + who + ",")],
-    [n("This is an SLA reminder for ticket " + t.key + ' - "' + String(t.summary || "").replace(/\s+/g, " ").trim() + '".')],
-    head,
-    [n("Severity: " + (t.sev ? Sla.sevName(t.sev) : (t.priority || "Unrated")) + " · Held by: " + ({ hd: "Help Desk", engg: "Engineering", client: "Client" }[r.currentKind] || "—") + " (" + r.currentStatus + ")"), BR, n("Created: " + fdt(t.created) + " (" + fcal(r.ageCalMin) + " ago) · Working time used: " + fdur(r.elapsedMin))]
-  ];
-  if (extra && extra.trim()) paras.push([n(extra.trim())]);
-  paras.push([b(ask)], [n("Regards,"), BR, n("SVM Help Desk")], [n("Last updated " + fdt(L.now) + " IST · working time: " + calText() + ". This note is refreshed in place by HD SLA Tracker.")]);
+  var vals = { name: safeTxt(who), key: t.key, summary: safeTxt(String(t.summary || "").replace(/\s+/g, " ").trim()), severity: t.sev ? Sla.sevName(t.sev) : safeTxt(t.priority || "Unrated"), heldBy: held, status: safeTxt(r.currentStatus),
+    created: fdt(t.created), age: fcal(r.ageCalMin), used: fdur(r.elapsedMin), target: fdur(r.targetMin), pct: Math.round(r.pct) + "%", timeLeft: timeLeft, breachTime: breachTime, breachedAt: breachedAt, overBy: overBy, situation: situation, ask: ask, extra: safeTxt(extra || "").trim() };
+  var tpl = (ST.cfg.templates && ST.cfg.templates[kind]) || Sla.DEFAULT_CONFIG.templates[kind];
+  var filled = tpl.replace(/\{(\w+)\}/g, function (m, k) { return Object.prototype.hasOwnProperty.call(vals, k) ? vals[k] : m; });
+  var b = function (x) { return { t: x, b: 1 }; }, n = function (x) { return { t: x }; }, BR = { br: 1 };
+  function runsOf(par) {                                        // "a **b** c\nnext" → runs with bold and line breaks
+    var out = []; par.split("\n").forEach(function (line, i) { if (i) out.push(BR); line.split("**").forEach(function (seg, j) { if (seg !== "") out.push(j % 2 ? b(seg) : n(seg)); }); }); return out;
+  }
+  var paras = [[b(SLA_MARK + " — " + label)]].concat(filled.split(/\n{2,}/).map(function (x) { return x.replace(/^\n+|\n+$/g, ""); }).filter(function (x) { return x.trim() !== ""; }).map(runsOf));
+  paras.push([n("Last updated " + fdt(L.now) + " IST · working time: " + calText() + ". This note is refreshed in place by HD SLA Tracker.")]);
   var text = paras.map(function (p) { return p.map(function (x) { return x.br ? "\n" : x.t; }).join(""); }).join("\n\n");
   var adf = { type: "doc", version: 1, content: paras.map(function (p) { return { type: "paragraph", content: p.map(function (x) { return x.br ? { type: "hardBreak" } : (x.b ? { type: "text", text: x.t, marks: [{ type: "strong" }] } : { type: "text", text: x.t }); }) }; }) };
-  return { text: text, adf: adf, headline: head.map(function (x) { return x.t; }).join("") };
+  return { text: text, adf: adf, headline: situation.replace(/\*\*/g, ""), kind: kind, label: label };
 }
 function adfText(nd) { if (!nd) return ""; if (nd.text) return nd.text; return (nd.content || []).map(adfText).join(" "); }
 function noteUrl(key) { return "/rest/api/3/issue/" + encodeURIComponent(key) + "/comment"; }
@@ -840,7 +872,7 @@ function refreshRemind() {
   var m = buildSlaMessage(t, L, rm.extra), bi = L.bi;
   $("rmPre").textContent = m.text;
   var tag = bi.state === "breached" ? chip("breached") : bi.state === "paused" ? kchip("client") : chip(Sla.bucket(L.r));
-  $("rmHead").innerHTML = tag + '<span>' + esc(m.headline) + "</span>";
+  $("rmHead").innerHTML = tag + '<span class="chip2 x" title="Chosen automatically from the ticket’s state. Edit the wording in Settings → Reminder templates.">Template: ' + m.label + "</span><span>" + esc(m.headline) + "</span>";
 }
 function rmStatusHtml() {
   var el = $("rmStatus"), rm = ST.rm; if (!el || !rm) return; var send = $("rmSend");
@@ -863,6 +895,55 @@ function copyRemind() {
   var rm = ST.rm, t = ST.byKey[rm.key], L = liveOf(t); if (!L) return; var text = buildSlaMessage(t, L, rm.extra).text;
   function fallback() { var ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("Message copied."); } catch (e) { toast("Could not copy — select the text and copy it manually.", true); } ta.remove(); }
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast("Message copied."); }, fallback); else fallback();
+}
+
+/* ═════════ bulk reminders (from a ticket list) ═════════ */
+var BULK_MAX = 100, RECENT_MIN = 60;
+function bulkPlan(bk) {
+  var out = { rows: [], skipped: [], ready: [], soon: 0, breached: 0 }, notes = notesGet();
+  bk.keys.forEach(function (k) {
+    var t = ST.byKey[k], L = t && liveOf(t);
+    if (!L || L.r.isClosed || L.r.targetMin == null) { out.skipped.push({ key: k, why: "closed or no target" }); return; }
+    var n = notes[k]; if (bk.skip && n && Date.now() - n.at < RECENT_MIN * 60000) { out.skipped.push({ key: k, why: "reminded " + agoText(n.at) }); return; }
+    var kind = tplKind(L.bi); out.ready.push(k); out[kind]++;
+  });
+  return out;
+}
+function openBulk() {
+  var d = ST.dr; if (!d) return; var keys = Object.keys(d.sel); if (!keys.length) return;
+  ST.bk = { keys: keys, mode: "update", skip: true, extra: "", phase: "confirm", results: [], cancel: false, done: 0, todo: [] }; renderBulk();
+}
+function renderBulk() {
+  var bk = ST.bk; if (!bk) return; var pl = bulkPlan(bk), h = '<div class="modal" style="width:min(680px,100%)"><div class="mh"><div style="flex:1"><h2 style="font-size:17px">🔔 Send SLA reminders</h2></div><button class="x" data-closebulk aria-label="Close">✕</button></div><div class="mb">';
+  if (bk.phase === "confirm") {
+    var tooMany = pl.ready.length > BULK_MAX;
+    h += '<div class="rm-head"><span><b>' + pl.ready.length + "</b> ticket" + (pl.ready.length === 1 ? "" : "s") + " will be reminded: " + (pl.breached ? '<b>' + pl.breached + "</b> with the <b>Breached</b> template" : "") + (pl.breached && pl.soon ? " · " : "") + (pl.soon ? '<b>' + pl.soon + "</b> with the <b>About to breach</b> template" : "") + (pl.ready.length ? "" : "none") + "</span></div>" +
+      '<label class="rm-opt' + (bk.skip ? " on" : "") + '" style="margin-bottom:8px"><input type="checkbox" id="bkSkip"' + (bk.skip ? " checked" : "") + '><span>Skip tickets already reminded in the last ' + RECENT_MIN + ' minutes' + (pl.skipped.length ? ' <span style="color:var(--muted)">(' + pl.skipped.length + " skipped now)</span>" : "") + "</span></label>" +
+      '<div style="display:grid;gap:8px;margin-bottom:10px"><label class="rm-opt ' + (bk.mode === "update" ? "on" : "") + '"><input type="radio" name="bkMode" value="update"' + (bk.mode === "update" ? " checked" : "") + '><span><b>Update each ticket’s SLA note</b> (recommended)<br><span style="color:var(--muted)">Edits the existing note in place, or adds it the first time.</span></span></label>' +
+      '<label class="rm-opt ' + (bk.mode === "new" ? "on" : "") + '"><input type="radio" name="bkMode" value="new"' + (bk.mode === "new" ? " checked" : "") + '><span><b>Add a new internal note to each</b><br><span style="color:var(--muted)">Notifies watchers, but adds another note every time.</span></span></label></div>' +
+      '<div class="fld"><label for="bkExtra">Add one line to every message (optional)</label><input type="text" id="bkExtra" maxlength="240" style="width:100%" value="' + esc(bk.extra) + '"></div>' +
+      '<div class="rm-msg bad" style="margin-top:12px">This posts <b>internal</b> notes on ' + pl.ready.length + " ticket" + (pl.ready.length === 1 ? "" : "s") + " in Jira, as you. The client cannot see internal notes." + (tooMany ? " <b>Select at most " + BULK_MAX + " tickets at a time.</b>" : "") + '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="ghost" data-closebulk>Cancel</button><button class="primary" id="bkGo"' + (pl.ready.length && !tooMany ? "" : " disabled") + '>📨 Send ' + pl.ready.length + " reminder" + (pl.ready.length === 1 ? "" : "s") + "</button></div>";
+  } else {
+    var total = bk.todo.length, w = total ? Math.round(bk.done / total * 100) : 0, ok = bk.results.filter(function (r) { return r.ok; }), bad = bk.results.filter(function (r) { return !r.ok; });
+    h += (bk.phase === "running" ? '<div style="font-weight:700;margin-bottom:6px">Sending… ' + bk.done + " of " + total + '</div><div class="pbar" style="max-width:none"><i style="width:' + w + '%"></i></div><div style="display:flex;justify-content:flex-end;margin-top:14px"><button class="ghost" id="bkStop">Stop after this one</button></div>'
+      : '<div class="rm-msg ' + (bad.length ? "bad" : "ok") + '" role="status"><b>' + ok.length + " of " + total + " reminder" + (total === 1 ? "" : "s") + " sent.</b>" + (bk.cancelled ? " Stopped early." : "") + (bk.aborted ? " Stopped after 3 failures in a row." : "") + (ok.filter(function (r) { return r.action === "updated"; }).length ? " " + ok.filter(function (r) { return r.action === "updated"; }).length + " existing note(s) updated." : "") + "</div>" +
+        (bad.length ? '<div style="margin-top:10px;font-size:12.5px"><b>Not sent</b>' + bad.map(function (r) { return '<div class="bkrow"><span class="key">' + esc(r.key) + '</span><span style="color:var(--rose)">' + esc(r.msg) + "</span></div>"; }).join("") + "</div>" : "") +
+        '<div style="margin-top:10px;font-size:12.5px"><b>Sent</b>' + ok.map(function (r) { return '<div class="bkrow"><span class="key">' + esc(r.key) + '</span><span class="chip2 x">' + esc(TPL_LABEL[r.kind]) + '</span><span style="color:var(--muted)">' + (r.action === "updated" ? "note updated" : "note added") + "</span></div>"; }).join("") + '</div><div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="primary" data-closebulk>Done</button></div>');
+  }
+  overlay("bulk", h + "</div></div>");
+}
+function runBulk() {
+  var bk = ST.bk, pl = bulkPlan(bk); bk.todo = pl.ready.slice(0, BULK_MAX); bk.phase = "running"; bk.done = 0; bk.results = []; var fails = 0, i = 0; renderBulk();
+  (function next() {
+    if (bk.cancel) { bk.cancelled = true; return finish(); } if (fails >= 3) { bk.aborted = true; return finish(); } if (i >= bk.todo.length) return finish();
+    var key = bk.todo[i++], t = ST.byKey[key], L = liveOf(t);
+    if (!L || L.r.isClosed) { bk.results.push({ key: key, ok: false, msg: "closed or no history" }); bk.done++; return next(); }
+    var m = buildSlaMessage(t, L, bk.extra);
+    postSlaNote(key, m.adf, bk.mode).then(function (res) { fails = 0; noteSet(key, { commentId: res.id, at: Date.now() }); bk.results.push({ key: key, ok: true, action: res.action, kind: m.kind }); },
+      function (e) { fails++; bk.results.push({ key: key, ok: false, msg: String(e && e.message || e) }); }).then(function () { bk.done++; renderBulk(); next(); });
+  })();
+  function finish() { bk.phase = "done"; renderBulk(); renderAll(); if (ST.dr && $("drill")) renderDrill(); }
 }
 
 /* ═════════ global search ═════════ */
@@ -897,6 +978,10 @@ function renderSettings() {
     '<div class="frow" style="margin-top:10px"><select id="addCliSel" aria-label="Client to add"><option value="">Add a client exception…</option>' + free.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCli">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Business calendar</h3><p class="h">Which hours count towards a target, evaluated in IST. Default is 24 hours, Monday to Friday, which matches the old SLA Manager.</p><div class="frow"><div class="fld"><label>Day starts</label><input type="text" data-d="bs" value="' + esc(d.businessStart) + '" style="width:80px" placeholder="00:00" aria-label="Day starts"></div><div class="fld"><label>Day ends</label><input type="text" data-d="be" value="' + esc(d.businessEnd) + '" style="width:80px" placeholder="24:00" aria-label="Day ends"></div><div class="fld"><label>Working days</label><div class="daychips">' + days.map(function (n, i) { return '<label><input type="checkbox" data-wd="' + i + '"' + (d.workDays.indexOf(i) > -1 ? " checked" : "") + "> " + n + "</label>"; }).join("") + '</div></div></div><div class="fld" style="margin-top:14px"><label>Holidays — one per line: 2026-01-26 Republic Day</label><textarea id="holTxt" rows="4" style="width:min(420px,100%)" aria-label="Holidays">' + esc(d._hol) + "</textarea></div></div>";
   h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Critical from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div><div class="fld"><label>SLA goal</label><input type="number" min="1" max="100" data-d="goal" value="' + esc(d.goalPct) + '"> %</div></div><p class="h" style="margin:10px 0 0">The goal only sets the colours on the SLA % views (green at or above it, amber within 15 points, red below).</p></div>';
+  var phs = ["name", "key", "summary", "severity", "heldBy", "status", "created", "age", "used", "target", "pct", "timeLeft", "breachTime", "breachedAt", "overBy", "situation", "ask", "extra"];
+  h += '<div class="card set-sec"><h3>Reminder templates</h3><p class="h">The wording posted to Jira as an internal note. Each ticket gets one of two templates automatically: <b>About to breach</b> for open tickets that have not breached yet (including tickets waiting with the client), and <b>Breached</b> for open tickets already over target. A blank line starts a new paragraph and <b>**text**</b> makes it bold. The heading and the “Last updated” line are added for you.</p><div style="margin-bottom:10px;line-height:2">Placeholders: ' + phs.map(function (x) { return '<span class="phl">{' + x + "}</span>"; }).join("") + '</div>' +
+    [["soon", "About to breach"], ["breached", "Breached"]].map(function (k) { var v = d.templates[k[0]] || "";
+      return '<div class="fld" style="margin-bottom:14px"><label for="tpl-' + k[0] + '">' + k[1] + " template</label><textarea class=\"tplta\" id=\"tpl-" + k[0] + '" data-tpl="' + k[0] + '" rows="12">' + esc(v) + '</textarea><div style="display:flex;gap:10px;align-items:center;margin-top:4px"><button class="quiet" data-tplreset="' + k[0] + '">Reset to default</button>' + (v.indexOf("{situation}") < 0 ? '<span class="warnline" style="margin:0">Tip: add {situation} so the message states the breach time.</span>' : "") + "</div></div>"; }).join("") + "</div>";
   h += '<div class="frow" style="margin-bottom:18px"><button class="primary" id="saveCfg">Save settings</button><button class="ghost" id="resetDraft">Discard changes</button></div>';
   var hn = Object.keys(ST.hist.tickets).length;
   h += '<div class="card set-sec"><h3>Which statuses pause the clock</h3><p class="h">This module uses the same Status → Help Desk / Engineering / Client list as every other dashboard (Master Data, the gear on the launcher). Anything classified <b>Client</b> pauses the clock; <b>Closed</b> stops it. Statuses that appear only in ticket history are offered for classification on the Overview page. <a href="index.html">Open the launcher</a> to review the full list.</p></div>' +
@@ -920,6 +1005,7 @@ function saveSettings() {
   if (!(d.goalPct >= 1 && d.goalPct <= 100)) err = "The SLA goal must be between 1 and 100.";
   if (!/^\d{1,2}:\d{2}$/.test(d.businessStart) || !/^\d{1,2}:\d{2}$/.test(d.businessEnd)) err = "Enter the day start/end as HH:MM (for example 09:00 and 18:00, or 24:00 for midnight).";
   if (!d.workDays.length) err = "Choose at least one working day.";
+  if (!String(d.templates.soon || "").trim() || !String(d.templates.breached || "").trim()) err = "Each reminder template needs some text.";
   if (!d.issueTypes.length) err = "Include at least one ticket type.";
   var hol = [], bad = null;
   ($("holTxt").value || "").split("\n").forEach(function (l) { l = l.trim(); if (!l) return; var m = /^(\d{4}-\d{2}-\d{2})\s*(.*)$/.exec(l); if (!m) { bad = l; return; } hol.push({ date: m[1], name: m[2] }); });
@@ -961,6 +1047,18 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-matrix]"))) { ST.matrixBy = x.dataset.matrix; renderAll(); return; }
   if (q("#btnFetchAll")) { runFetch(missingKeys(false, true)); return; }
   if ((x = q("[data-sort]"))) { var sk = x.dataset.sort; ST.sort = { key: sk, dir: ST.sort.key === sk && ST.sort.dir === "desc" ? "asc" : "desc" }; renderAll(); return; }
+  if ((x = q("input[data-sel]"))) { if (t.checked) ST.dr.sel[x.dataset.sel] = 1; else delete ST.dr.sel[x.dataset.sel]; drSelUpdate(); return; }
+  if (q("#drSelPage")) { var on = t.checked, ks = [...document.querySelectorAll("#drill input[data-sel]")].map(function (c) { return c.dataset.sel; }); ks.forEach(function (k) { if (on) ST.dr.sel[k] = 1; else delete ST.dr.sel[k]; }); drSelUpdate(); return; }
+  if (q(".selc")) return;
+  if ((x = q("[data-drsel]"))) {
+    var mode = x.dataset.drsel, all = drillList(ST.dr.spec).list.filter(canRemind); ST.dr.sel = {};
+    if (mode !== "none") all.filter(function (y) { return mode === "all" || grpOf(y) === mode; }).forEach(function (y) { ST.dr.sel[y.t.key] = 1; });
+    renderDrill(); return;
+  }
+  if (q("#drSend")) { openBulk(); return; }
+  if (q("[data-closebulk]") || t.id === "bulk") { if (ST.bk && ST.bk.phase === "running") return; closeOv("bulk"); return; }
+  if (q("#bkGo")) { runBulk(); return; }
+  if (q("#bkStop")) { ST.bk.cancel = true; return; }
   if ((x = q("[data-remind]"))) { openRemind(x.dataset.remind); return; }
   if ((x = q("[data-dr]"))) { openDrill(x.dataset.dr); return; }
   if (q("[data-closedrill]") || t.id === "drill") { closeOv("drill"); return; }
@@ -985,6 +1083,7 @@ document.addEventListener("click", function (e) {
   if (q("#pgPrev")) { ST.page--; renderAll(); window.scrollTo(0, 0); return; }
   if (q("#pgNext")) { ST.page++; renderAll(); window.scrollTo(0, 0); return; }
   if (q("#saveCfg")) { saveSettings(); return; }
+  if ((x = q("[data-tplreset]"))) { ST.draft.templates[x.dataset.tplreset] = Sla.DEFAULT_CONFIG.templates[x.dataset.tplreset]; ST.draft._hol = $("holTxt").value; renderSettings(); toast("Template reset to the default (not saved until you click Save settings)."); return; }
   if (q("#resetDraft")) { ST.draft = null; renderSettings(); return; }
   if (q("#addCli")) { var s = $("addCliSel").value; if (s) { ST.draft.targets.clients[s] = {}; ST.draft._hol = $("holTxt").value; renderSettings(); } return; }
   if ((x = q("[data-rmcli]"))) { delete ST.draft.targets.clients[x.dataset.rmcli]; ST.draft._hol = $("holTxt").value; renderSettings(); return; }
@@ -1003,10 +1102,14 @@ document.addEventListener("input", function (e) {
   if (t.dataset && t.dataset.mss) { msList(t.dataset.mss); return; }
   if (t.id === "sq") return;
   if (t.id === "rmExtra" && ST.rm) { ST.rm.extra = t.value; ST.rm.status = "idle"; refreshRemind(); rmStatusHtml(); return; }
+  if (t.dataset && t.dataset.tpl && ST.draft) { ST.draft.templates[t.dataset.tpl] = t.value; return; }
+  if (t.id === "bkExtra" && ST.bk) { ST.bk.extra = t.value; return; }
   if (t.dataset && t.dataset.d && ST.draft) readDraftInput(t);
 });
 document.addEventListener("change", function (e) {
   var t = e.target;
+  if (t.id === "bkSkip" && ST.bk) { ST.bk.skip = t.checked; renderBulk(); return; }
+  if (t.name === "bkMode" && ST.bk) { ST.bk.mode = t.value; renderBulk(); return; }
   if (t.name === "rmMode" && ST.rm) { ST.rm.mode = t.value; document.querySelectorAll(".rm-opt").forEach(function (o) { o.classList.toggle("on", o.querySelector("input").checked); }); return; }
   if (t.id === "rFrom" || t.id === "rTo") { ST.ui.from = ($("rFrom") || {}).value || ""; ST.ui.to = ($("rTo") || {}).value || ""; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
   if (t.dataset && t.dataset.umsel) { if (t.value) setStatusOverride(t.dataset.umsel, t.value); return; }
