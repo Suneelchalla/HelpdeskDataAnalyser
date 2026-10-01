@@ -729,7 +729,7 @@ function pendingModel(v) {
   var all = pend.slice().sort(byPn);
   var cnt = function (st) { return pend.filter(function (x) { return x.r.currentKind === "hd" && x.t.status === st; }).length; };
   return { types: types, rows: rows, pend: pend, first: all[0] || null, client: v.filter(function (x) { return classify(x.t.status).kind === "client"; }).length,
-    nohist: v.filter(function (x) { return !x.r && isSvmStatus(x.t); }).length, onhold: cnt("On-Hold"), invoice: cnt("Invoice Yet to Raise"),
+    nohist: v.filter(function (x) { return !x.r && isSvmStatus(x.t); }).length, clientHold: v.filter(function (x) { return x.t.status === "On-Hold" && classify(x.t.status).kind === "client"; }).length, onhold: cnt("On-Hold"), invoice: cnt("Invoice Yet to Raise"),
     n: function (state, type, holder) { return pend.filter(function (x) { return pnMatch(x, state, type, holder); }).length; } };
 }
 var PN_META = { ready: { l: "Ready to breach", c: "#F59E0B" }, breached: { l: "Breached", c: "var(--rose)" }, notyet: { l: "Not yet breached", c: "#22A05A" }, notarget: { l: "No SLA target", c: "var(--faint)" }, all: { l: "Total SVM pending", c: "var(--ink)" } };
@@ -754,7 +754,7 @@ function pendingPanel(v) {
     (all ? '<div class="tw"><table><thead><tr>' + head + "</tr></thead><tbody>" + shown.map(row).join("") + total + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is pending with Help Desk or Engineering in this view.</div>') +
     '<div class="pnfoot">' + (m.nohist ? '<div style="color:var(--amber);margin-bottom:.35rem"><b>⚠ ' + drNum(m.nohist, ["pn", "nohist", "*", "*"], "", m.nohist.toLocaleString()) + " open ticket" + (m.nohist === 1 ? "" : "s") + " with Help Desk or Engineering " + (m.nohist === 1 ? "has" : "have") + " no status history yet</b>, so " + (m.nohist === 1 ? "it" : "they") + " can’t be placed in the rows above. Use <b>Fetch &amp; calculate</b>.</div>" : "") +
     (m.onhold || m.invoice ? '<div style="margin-bottom:.35rem">Help Desk includes ' + [m.onhold ? "<b>" + m.onhold + "</b> On-Hold" : "", m.invoice ? "<b>" + m.invoice + "</b> Invoice-yet-to-raise" : ""].filter(Boolean).join(" and ") + " ticket" + (m.onhold + m.invoice === 1 ? "" : "s") + " (the Follow-up Tracker lists those separately).</div>" : "") +
-    (m.client ? drNum(m.client, ["pn", "client", "*", "*"], "", m.client.toLocaleString()) + " more open ticket" + (m.client === 1 ? " is" : "s are") + " <b>waiting with the client</b> (clock paused) and not counted here." : "No open tickets are waiting with the client.") + "</div></div>";
+    (m.client ? drNum(m.client, ["pn", "client", "*", "*"], "", m.client.toLocaleString()) + " more open ticket" + (m.client === 1 ? " is" : "s are") + " <b>waiting with the client</b> (clock paused)" + (m.clientHold ? ", including <b>" + m.clientHold + "</b> On-Hold (the Follow-up Tracker lists those separately)," : "") + " and not counted here." : "No open tickets are waiting with the client.") + "</div></div>";
 }
 function matrixPanel(v) {
   var by = ST.matrixBy, keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} };
