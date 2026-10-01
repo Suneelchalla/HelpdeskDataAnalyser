@@ -430,7 +430,19 @@ function applyFilters(list, skipResult) {
 /* view(true) = the filtered population WITHOUT the Result chip. Every SLA figure is worked out from this, because a chip such as
    "Open" or "Breached / missed" would remove the met tickets and force the SLA % to 0. The chip only narrows the Tickets list. */
 function view(skipResult) { return applyFilters(ST.scope, !!skipResult).map(function (t) { var r = getResult(t); return { t: t, r: r, b: bucketOf(r) }; }); }
-function recompute() { ST.results = {}; ST.now = Date.now(); ST.scope = scope(); }
+function recompute() {
+  ST.results = {}; ST.now = Date.now(); ST.scope = scope();
+  /* The SVM pending table is an "as of now" view, so it is NOT limited by the Created range: every open ticket of the included
+     types counts, however old. pendAll = all of them; pendFetch = the ones held by Help Desk/Engineering (by current status) that
+     need status history to be placed; scopeKeys lets us tell which of those fall outside the selected range. */
+  var types = {}; ST.cfg.issueTypes.forEach(function (t) { types[t.toLowerCase()] = 1; });
+  ST.pendAll = ST.tickets.filter(function (t) { return types[t.type.toLowerCase()] && classify(t.status).kind !== "closed"; });
+  ST.pendFetch = ST.pendAll.filter(function (t) { var k = classify(t.status).kind; return k === "hd" || k === "engg"; });
+  ST.scopeKeys = {}; ST.scope.forEach(function (t) { ST.scopeKeys[t.key] = 1; });
+}
+function pendingView() { return applyFilters(ST.pendAll, true).map(function (t) { var r = getResult(t); return { t: t, r: r, b: bucketOf(r) }; }); }
+/* open Help Desk / Engineering tickets that sit outside the selected Created range (they still need fetching for the pending table) */
+function olderPend(filtered) { var l = ST.pendFetch.filter(function (t) { return !ST.scopeKeys[t.key]; }); return filtered ? applyFilters(l, true) : l; }
 
 /* ═════════ small ui helpers ═════════ */
 var BK = { safe: ["On track", "g"], warning: ["At risk", "a"], danger: ["Critical", "o"], breached: ["Breached", "r"], met: ["Met", "g2"], missed: ["Missed", "r2"], none: ["No target", "x"], nohist: ["No history", "x"] };
@@ -489,10 +501,10 @@ function renderTabs() {
 function filtersActive() { var f = ST.f; return !!(f.client.length || f.sev.length || f.type.length || f.svm.length || f.worker.length); }
 /* What "Fetch" acts on: tickets in the date range that ALSO match the filters (client, severity, …).
    The Result chips are ignored here because they depend on history that isn't fetched yet. */
-function fetchScope() { return applyFilters(ST.scope, true); }
+function fetchScope() { return applyFilters(ST.scope, true).concat(olderPend(true)); }
 function missingKeys(force, allInRange) {
   if (force) ST.failedSet = {};
-  return (allInRange ? ST.scope : fetchScope()).filter(function (t) { return force || (!histFor(t) && !ST.failedSet[t.key]); }).map(function (t) { return t.key; });
+  return (allInRange ? ST.scope.concat(olderPend(false)) : fetchScope()).filter(function (t) { return force || (!histFor(t) && !ST.failedSet[t.key]); }).map(function (t) { return t.key; });
 }
 function renderBar() {
   var el = $("bar"), r = rangeMs();
@@ -508,6 +520,7 @@ function renderBar() {
   var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + drNum(bad.length, ["bar", "bad"]) + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
   var warn = sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + sus + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "";
   var head = active ? drNum(n, ["bar", "all"], "", n.toLocaleString()) + " " + (n === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(n, ["bar", "all"], "", n.toLocaleString()) + " " + (n === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
+  var older = olderPend(true).length; if (older) head += ' <span style="color:var(--muted)">· includes <b>' + older + "</b> older open ticket" + (older === 1 ? "" : "s") + " with Help Desk or Engineering, for the SVM pending table</span>";
   var tip = !active && miss > 40 ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
   var pill = '<span class="pill ' + (BR.ready ? "ok" : "") + '"><i></i>' + (BR.ready ? "Extension connected" : "Extension not detected") + "</span>";
   var btn = miss > 0
@@ -563,6 +576,7 @@ function trendCat(x, cat) {
   } return false;
 }
 /* SVM-pending = open tickets currently held by Help Desk or Engineering (our side). Tickets waiting on the client are paused and not ours. */
+function isSvmStatus(t) { var k = classify(t.status).kind; return k === "hd" || k === "engg"; }
 function isSvmPending(x) { return !!(x.r && !x.r.isClosed && (x.r.currentKind === "hd" || x.r.currentKind === "engg")); }
 /* where a pending ticket stands against its target: ready to breach (≥ the At-risk %) · breached · not yet breached · no target */
 function pnState(x) { var b = x.b; return b === "breached" ? "breached" : (b === "warning" || b === "danger") ? "ready" : b === "safe" ? "notyet" : "notarget"; }
@@ -592,7 +606,7 @@ function drNum(n, parts, style, txt) { var t = txt != null ? txt : n; return n >
 var CATL = { all: "All tickets with history", met: "Met", missed: "Missed (closed over target)", ob: "Breached (still open)", run: "Open, within target", dec: "Decided tickets" };
 function periodOfKey(k) { return perLabel(k); }
 function drillList(spec) {
-  var p = spec.split("|").map(decodeURIComponent), v = view(true), r = { title: "", sub: "", list: [], tab: null };
+  var p = spec.split("|").map(decodeURIComponent), v = p[0] === "pn" ? pendingView() : view(true), r = { title: "", sub: "", list: [], tab: null };
   switch (p[0]) {
     case "kpi": {
       r.list = v.filter(function (x) { return kpiCat(x, p[1]); });
@@ -607,6 +621,8 @@ function drillList(spec) {
       r.title = (p[2] === "*" ? "All" : dimLabelText(p[1], p[2])) + " · " + (p[3] === "*" ? "all periods" : perLabel(p[3])); r.sub = "Decided tickets (met, missed, or open and already over target) — the ones this SLA % is worked out from."; break;
     }
     case "pn": {
+      if (p[1] === "client") { r.list = v.filter(function (x) { return classify(x.t.status).kind === "client"; }); r.title = "SVM pending · Waiting with the client"; r.sub = "Open tickets whose current status is a client status, so the SLA clock is paused. Not counted in the table above."; break; }
+      if (p[1] === "nohist") { r.list = v.filter(function (x) { return !x.r && isSvmStatus(x.t); }); r.title = "SVM pending · No status history yet"; r.sub = "These are with Help Desk or Engineering by their current status, but their status history has not been fetched, so their SLA position cannot be worked out yet. Use Fetch & calculate."; break; }
       r.list = v.filter(function (x) { return pnMatch(x, p[1], p[2], p[3]); });
       var SN = { ready: "Ready to breach", breached: "Breached", notyet: "Not yet breached", notarget: "No SLA target", all: "All SVM pending" }, HN = { hd: "Help Desk", engg: "Engineering" };
       r.title = "SVM pending · " + SN[p[1]] + (p[2] !== "*" ? " · " + p[2] : "") + (p[3] !== "*" ? " · " + HN[p[3]] : "");
@@ -625,7 +641,7 @@ function drillList(spec) {
   }
   return r;
 }
-function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: /^pn\|(client|nohist)/.test(spec) ? { key: "key", dir: "asc" } : spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
 function grpOf(x) { return x.b === "breached" ? "breached" : (x.b === "warning" || x.b === "danger") ? "soon" : "ok"; }
 function drToolbar(list) {
   var el = list.filter(canRemind); if (!el.length) return "";
@@ -711,7 +727,9 @@ function pendingModel(v) {
   var pend = v.filter(isSvmPending), byPn = function (a, b) { var x = sortVal(a, "pn"), y = sortVal(b, "pn"); return x < y ? -1 : x > y ? 1 : 0; };
   var rows = ["ready", "breached", "notyet", "notarget"].map(function (k) { var list = pend.filter(function (x) { return pnState(x) === k; }).sort(byPn); return { key: k, list: list, first: list[0] || null }; });
   var all = pend.slice().sort(byPn);
-  return { types: types, rows: rows, pend: pend, first: all[0] || null, client: v.filter(function (x) { return x.r && !x.r.isClosed && x.r.currentKind === "client"; }).length,
+  var cnt = function (st) { return pend.filter(function (x) { return x.r.currentKind === "hd" && x.t.status === st; }).length; };
+  return { types: types, rows: rows, pend: pend, first: all[0] || null, client: v.filter(function (x) { return classify(x.t.status).kind === "client"; }).length,
+    nohist: v.filter(function (x) { return !x.r && isSvmStatus(x.t); }).length, onhold: cnt("On-Hold"), invoice: cnt("Invoice Yet to Raise"),
     n: function (state, type, holder) { return pend.filter(function (x) { return pnMatch(x, state, type, holder); }).length; } };
 }
 var PN_META = { ready: { l: "Ready to breach", c: "#F59E0B" }, breached: { l: "Breached", c: "var(--rose)" }, notyet: { l: "Not yet breached", c: "#22A05A" }, notarget: { l: "No SLA target", c: "var(--faint)" }, all: { l: "Total SVM pending", c: "var(--ink)" } };
@@ -732,9 +750,11 @@ function pendingPanel(v) {
   }
   var all = m.pend.length;
   var total = '<tr class="pntot"><td>' + (all ? '<span class="dr"' + drAttr(["pn", "all", "*", "*"], all) + ">" : "<span>") + 'Total SVM pending</span></td>' + cols.map(function (t) { return '<td class="num">' + drNum(m.n("all", t, "*"), ["pn", "all", t, "*"]) + "</td>"; }).join("") + '<td class="num">' + drNum(all, ["pn", "all", "*", "*"]) + '</td><td class="num">' + drNum(m.n("all", "*", "hd"), ["pn", "all", "*", "hd"]) + '</td><td class="num">' + drNum(m.n("all", "*", "engg"), ["pn", "all", "*", "engg"]) + "</td><td>" + (m.first ? pnFirst({ first: m.first }) : "—") + "</td></tr>";
-  return '<div class="card panel"><div class="panel-h"><h3>SVM pending tickets</h3></div><div class="sub">Open tickets that are with <b>Help Desk or Engineering</b> right now, in order of urgency: <b>ready to breach</b> first, then <b>breached</b>, then <b>not yet breached</b>. <b>Click a number</b> to see those tickets (soonest first), then <b>click a ticket</b> for its full timeline.</div>' +
+  return '<div class="card panel"><div class="panel-h"><h3>SVM pending tickets</h3></div><div class="sub">Every open ticket that is with <b>Help Desk or Engineering</b> right now, <b>whenever it was created</b> (this table is not limited by the Created range), in order of urgency: <b>ready to breach</b> first, then <b>breached</b>, then <b>not yet breached</b>. <b>Click a number</b> to see those tickets (soonest first), then <b>click a ticket</b> for its full timeline.</div>' +
     (all ? '<div class="tw"><table><thead><tr>' + head + "</tr></thead><tbody>" + shown.map(row).join("") + total + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is pending with Help Desk or Engineering in this view.</div>') +
-    '<div class="pnfoot">' + (m.client ? drNum(m.client, ["hd", "client", "open"], "", m.client.toLocaleString()) + " more open ticket" + (m.client === 1 ? " is" : "s are") + " <b>waiting with the client</b> (clock paused) and not counted here." : "No open tickets are waiting with the client.") + "</div></div>";
+    '<div class="pnfoot">' + (m.nohist ? '<div style="color:var(--amber);margin-bottom:.35rem"><b>⚠ ' + drNum(m.nohist, ["pn", "nohist", "*", "*"], "", m.nohist.toLocaleString()) + " open ticket" + (m.nohist === 1 ? "" : "s") + " with Help Desk or Engineering " + (m.nohist === 1 ? "has" : "have") + " no status history yet</b>, so " + (m.nohist === 1 ? "it" : "they") + " can’t be placed in the rows above. Use <b>Fetch &amp; calculate</b>.</div>" : "") +
+    (m.onhold || m.invoice ? '<div style="margin-bottom:.35rem">Help Desk includes ' + [m.onhold ? "<b>" + m.onhold + "</b> On-Hold" : "", m.invoice ? "<b>" + m.invoice + "</b> Invoice-yet-to-raise" : ""].filter(Boolean).join(" and ") + " ticket" + (m.onhold + m.invoice === 1 ? "" : "s") + " (the Follow-up Tracker lists those separately).</div>" : "") +
+    (m.client ? drNum(m.client, ["pn", "client", "*", "*"], "", m.client.toLocaleString()) + " more open ticket" + (m.client === 1 ? " is" : "s are") + " <b>waiting with the client</b> (clock paused) and not counted here." : "No open tickets are waiting with the client.") + "</div></div>";
 }
 function matrixPanel(v) {
   var by = ST.matrixBy, keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} };
@@ -772,7 +792,7 @@ function renderOverview(v) {
     kpi("At risk", s.risk, ST.cfg.warnPct + "%+ of target used", "#F59E0B", "risk", s.risk) +
     kpi("Open now", s.open, "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n, "var(--engg)", "open", s.open) +
     kpi("Avg time to resolve", s.nEl ? fdur(s.sumEl / s.nEl) : "—", s.nEl + " closed · working time", "var(--hd)", "closed", s.nEl) + "</div>";
-  h += pendingPanel(v) + trendPanel(v) + matrixPanel(v);
+  h += pendingPanel(pendingView()) + trendPanel(v) + matrixPanel(v);
   /* who holds the open tickets */
   var hold = ["hd", "engg", "client"].map(function (k) {
     var o = s.by[k], H = function (cat) { return ["hd", k, cat]; }; return "<tr><td>" + kchip(k) + '</td><td class="num">' + drNum(o.n, H("open")) + '</td><td class="num">' + drNum(o.br, H("ob"), o.br ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.risk, H("risk")) + '</td><td class="num">' + drNum(o.n - o.br - o.risk, H("within")) + "</td></tr>"; }).join("");
@@ -1094,7 +1114,7 @@ function rpPending(v) {
   function cells(k) { var tot = k === "all" ? m.pend.length : (m.rows.filter(function (r) { return r.key === k; })[0] || { list: [] }).list.length;
     return cols.map(function (t) { return '<td class="num">' + m.n(k, t, "*") + "</td>"; }).join("") + '<td class="num"><b>' + tot + '</b></td><td class="num">' + m.n(k, "*", "hd") + '</td><td class="num">' + m.n(k, "*", "engg") + "</td>"; }
   function first(f) { if (!f) return "—"; var bi = binfoOf(f); return "<b>" + esc(f.t.key) + "</b>" + (bi ? '<div class="rp-note" style="margin:0">' + (bi.state === "breached" ? "breached " + fdtw(bi.breachedAt) : bi.breachAt ? "breaks " + fdtw(bi.breachAt) : "") + "</div>" : ""); }
-  return '<h2>SVM pending tickets</h2><div class="rp-note">Open tickets with Help Desk or Engineering right now, most urgent first: ready to breach, then breached, then not yet breached. ' + (m.client ? m.client + " more open ticket" + (m.client === 1 ? " is" : "s are") + " waiting with the client (clock paused) and not counted." : "") + "</div>" +
+  return '<h2>SVM pending tickets</h2><div class="rp-note">Open tickets with Help Desk or Engineering right now, most urgent first: ready to breach, then breached, then not yet breached. ' + "Not limited by the Created range. " + (m.nohist ? m.nohist + " open ticket" + (m.nohist === 1 ? " has" : "s have") + " no status history yet and cannot be placed. " : "") + (m.client ? m.client + " more open ticket" + (m.client === 1 ? " is" : "s are") + " waiting with the client (clock paused) and not counted." : "") + "</div>" +
     '<table><thead><tr><th>Where they stand</th>' + cols.map(function (t) { return '<th class="num">' + esc(t) + "</th>"; }).join("") + '<th class="num">Total</th><th class="num">Help Desk</th><th class="num">Engineering</th><th>Most urgent</th></tr></thead><tbody>' +
     shown.map(function (r) { return '<tr><td><i class="pdot" style="background:' + PN_META[r.key].c + '"></i><b>' + PN_META[r.key].l + '</b><div class="rp-note" style="margin:0 0 0 .9rem">' + pnSub(r.key) + "</div></td>" + cells(r.key) + "<td>" + first(r.first) + "</td></tr>"; }).join("") +
     '<tr style="font-weight:700;background:#EEF1F5"><td>Total SVM pending</td>' + cells("all") + "<td>" + first(m.first) + "</td></tr></tbody></table>";
@@ -1146,7 +1166,7 @@ function reportHtml(v, o, vl) {
     h += '<div class="rp-kpis">' + K(compC, pctTxt(s.comp), "SLA met", s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet") + K("var(--rose)", s.openBreached, "Breached, still open", "over their target") + K("#F59E0B", s.risk, "At risk", ST.cfg.warnPct + "%+ of target used") +
       K("var(--engg)", s.open, "Open now", "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n) + K("var(--hd)", s.nEl ? fdur(s.sumEl / s.nEl) : "—", "Avg time to resolve", s.nEl + " closed · working time") + K("var(--ink2)", s.hist.toLocaleString(), "Tickets counted", "of " + s.n.toLocaleString() + " in view") + "</div>";
   }
-  if (o.pending) h += rpPending(v);
+  if (o.pending) h += rpPending(pendingView());
   if (o.trend) h += rpTrend(v);
   if (o.matrix) h += rpMatrix(v, o.matrixBy);
   if (o.holders) h += rpHolders(s);
