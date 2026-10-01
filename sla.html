@@ -229,6 +229,14 @@ tr.picked td{background:var(--sla-bg)}
   body.printing-report .rp-toolbar,body.printing-report .toast{display:none!important}
   body.printing-report .paper{box-shadow:none!important;width:auto!important;padding:0!important;margin:0!important}
 }
+.recon{margin:0 0 .9rem;padding:.6rem .9rem;border:1px dashed var(--line2);border-radius:.6rem;background:var(--paper);font-size:11.5px;color:var(--ink2);line-height:1.6}
+.recon b{color:var(--ink)}
+.pdot{display:inline-block;width:.62rem;height:.62rem;border-radius:3px;margin-right:.5rem;vertical-align:baseline}
+.pnrow td{vertical-align:middle}
+.pnrow .lab{font-weight:700;white-space:nowrap}.pnrow .lab small{display:block;font-weight:500;font-size:10.5px;color:var(--muted);margin:1px 0 0 1.12rem}
+.pntot td{border-top:1.5px solid var(--line2);font-weight:700;background:var(--paper)}
+.pntot .sub2{font-weight:500}
+.pnfoot{margin-top:.7rem;font-size:11.5px;color:var(--muted)}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -551,8 +559,19 @@ function isOpenX(x) { return !!(x.r && !x.r.isClosed); }
 function trendCat(x, cat) {
   switch (cat) {
     case "all": return true; case "met": return x.b === "met"; case "missed": return x.b === "missed"; case "ob": return x.b === "breached";
-    case "run": return !isDecided(x) && !x.r.isClosed; case "dec": return isDecided(x);
+    case "run": return !isDecided(x) && !x.r.isClosed && x.b !== "none"; case "dec": return isDecided(x); case "nt": return x.b === "none";
   } return false;
+}
+/* SVM-pending = open tickets currently held by Help Desk or Engineering (our side). Tickets waiting on the client are paused and not ours. */
+function isSvmPending(x) { return !!(x.r && !x.r.isClosed && (x.r.currentKind === "hd" || x.r.currentKind === "engg")); }
+/* where a pending ticket stands against its target: ready to breach (≥ the At-risk %) · breached · not yet breached · no target */
+function pnState(x) { var b = x.b; return b === "breached" ? "breached" : (b === "warning" || b === "danger") ? "ready" : b === "safe" ? "notyet" : "notarget"; }
+function pnMatch(x, state, type, holder) {
+  if (!isSvmPending(x)) return false;
+  if (state !== "all" && pnState(x) !== state) return false;
+  if (type !== "*" && x.t.type !== type) return false;
+  if (holder !== "*" && x.r.currentKind !== holder) return false;
+  return true;
 }
 function holdCat(x, kind, cat) {
   if (!isOpenX(x) || x.r.currentKind !== kind) return false;
@@ -560,7 +579,8 @@ function holdCat(x, kind, cat) {
   return false;
 }
 function kpiCat(x, c) {
-  switch (c) { case "sla": return isDecided(x); case "ob": return x.b === "breached"; case "risk": return x.b === "warning" || x.b === "danger"; case "open": return isOpenX(x); case "closed": return !!(x.r && x.r.isClosed); }
+  switch (c) { case "sla": return isDecided(x); case "ob": return x.b === "breached"; case "risk": return x.b === "warning" || x.b === "danger"; case "open": return isOpenX(x); case "closed": return !!(x.r && x.r.isClosed);
+    case "within": return !!(x.r && !isDecided(x) && !x.r.isClosed && x.b !== "none"); case "nt": return !!x.r && x.b === "none"; }
   return false;
 }
 function dimFn(by) { return by === "client" ? function (t) { return t.prefix; } : by === "severity" ? function (t) { return t.sev || "none"; } : function (t) { return t.worker || "Unassigned"; }; }
@@ -576,13 +596,22 @@ function drillList(spec) {
   switch (p[0]) {
     case "kpi": {
       r.list = v.filter(function (x) { return kpiCat(x, p[1]); });
-      var T = { sla: ["SLA met — the tickets behind the percentage", "Met + missed + open tickets already over target. Open tickets still inside their target are not counted yet."], ob: ["Breached, still open", "Open tickets that have already used up their target."], risk: ["At risk", ST.cfg.warnPct + "% or more of the target used, not yet breached."], open: ["Open tickets", "Everything with history that is not closed."], closed: ["Closed tickets", "Used for the average time to resolve (working time)."] }[p[1]] || ["Tickets", ""];
+      var T = { sla: ["SLA met — the tickets behind the percentage", "Met + missed + open tickets already over target. Open tickets still inside their target are not counted yet."], ob: ["Breached, still open", "Open tickets that have already used up their target."], risk: ["At risk", ST.cfg.warnPct + "% or more of the target used, not yet breached."], open: ["Open tickets", "Everything with history that is not closed."], closed: ["Closed tickets", "Used for the average time to resolve (working time)."],
+        within: ["Open, within target", "Open tickets still inside their target (the clock may be running, or paused while the ticket is with the client). Their outcome is not known yet, so they are not in the SLA %."],
+        nt: ["No SLA target", "Tickets whose Priority is blank or not Show Stopper / Critical / High / Medium / Low, so no target applies and they cannot be measured."] }[p[1]] || ["Tickets", ""];
       r.title = T[0]; r.sub = T[1]; r.tab = { ob: "openbreached", risk: "risk", open: "open", closed: "closed" }[p[1]] || null; break;
     }
     case "tr": r.list = v.filter(function (x) { return x.r && perKey(x.t.created) === p[1] && trendCat(x, p[2]); }); r.title = perLabel(p[1]) + " · " + (CATL[p[2]] || p[2]); r.sub = "Tickets created in " + perLabel(p[1]) + (p[2] === "dec" ? ". These are the tickets the SLA % is worked out from: met ÷ (met + missed + open and already over target)." : "."); break;
     case "mx": {
       var f = dimFn(p[1]); r.list = v.filter(function (x) { return isDecided(x) && (p[2] === "*" || String(f(x.t)) === p[2]) && (p[3] === "*" || perKey(x.t.created) === p[3]); });
       r.title = (p[2] === "*" ? "All" : dimLabelText(p[1], p[2])) + " · " + (p[3] === "*" ? "all periods" : perLabel(p[3])); r.sub = "Decided tickets (met, missed, or open and already over target) — the ones this SLA % is worked out from."; break;
+    }
+    case "pn": {
+      r.list = v.filter(function (x) { return pnMatch(x, p[1], p[2], p[3]); });
+      var SN = { ready: "Ready to breach", breached: "Breached", notyet: "Not yet breached", notarget: "No SLA target", all: "All SVM pending" }, HN = { hd: "Help Desk", engg: "Engineering" };
+      r.title = "SVM pending · " + SN[p[1]] + (p[2] !== "*" ? " · " + p[2] : "") + (p[3] !== "*" ? " · " + HN[p[3]] : "");
+      r.sub = "Open tickets held by Help Desk or Engineering" + (p[1] === "all" ? ": ready to breach first, then breached, then not yet breached — soonest first." : p[1] === "ready" ? ", " + ST.cfg.warnPct + "% or more of the target used — soonest to breach first." : p[1] === "breached" ? ", already past their target — longest overdue first." : p[1] === "notyet" ? ", under " + ST.cfg.warnPct + "% used — soonest to breach first." : ", with no SLA target.");
+      break;
     }
     case "hd": { r.list = v.filter(function (x) { return holdCat(x, p[1], p[2]); }); var KL = { hd: "Help Desk", engg: "Engineering", client: "Client" }, CL = { open: "open tickets", ob: "open and over target", risk: "at risk", within: "within target" }; r.title = KL[p[1]] + " · " + CL[p[2]]; r.sub = "Open tickets currently held by " + KL[p[1]] + "."; break; }
     case "bar": {
@@ -596,7 +625,7 @@ function drillList(spec) {
   }
   return r;
 }
-function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
 function grpOf(x) { return x.b === "breached" ? "breached" : (x.b === "warning" || x.b === "danger") ? "soon" : "ok"; }
 function drToolbar(list) {
   var el = list.filter(canRemind); if (!el.length) return "";
@@ -659,14 +688,53 @@ function togg(attr, cur, opts) { return '<div class="tog" role="group">' + opts.
 function trendPanel(v) {
   var groups = {}, s = stats(v);
   v.forEach(function (x) { if (!x.r) return; (groups[perKey(x.t.created)] || (groups[perKey(x.t.created)] = [])).push(x); });
-  var rows = Object.keys(groups).sort().map(function (k) {
+  var data = Object.keys(groups).sort().map(function (k) {
     var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; };
-    var n = g.length, met = c("met"), missed = c("missed"), ob = c("ob"), run = c("run"), dec = met + missed + ob, p = pct(met, dec);
-    var pc = p == null ? "var(--faint)" : p >= ST.cfg.goalPct ? "var(--green)" : p >= ST.cfg.goalPct - 15 ? "var(--amber)" : "var(--rose)", T = function (cat) { return ["tr", k, cat]; };
-    return "<tr><td style=\"white-space:nowrap\"><b>" + drNum(n, T("all"), "", perLabel(k)) + '</b></td><td class="num">' + drNum(n, T("all")) + '</td><td class="num">' + drNum(met, T("met")) + '</td><td class="num">' + drNum(missed, T("missed"), missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(ob, T("ob"), ob ? "color:var(--rose)" : "") + '</td><td class="num"><b>' + drNum(dec, T("dec")) + '</b></td><td class="num">' + drNum(run, T("run"), "color:var(--faint)") + '</td><td style="width:28%">' + slaBar(p, T("dec"), dec) + '</td><td class="num bigpct" style="color:' + pc + '">' + drNum(dec, T("dec"), "", pctTxt(p)) + "</td></tr>";
+    var met = c("met"), missed = c("missed"), ob = c("ob"); return { k: k, n: g.length, met: met, missed: missed, ob: ob, run: c("run"), nt: c("nt"), dec: met + missed + ob };
+  });
+  var anyNt = data.some(function (d) { return d.nt > 0; }), sumRun = 0, sumNt = 0; data.forEach(function (d) { sumRun += d.run; sumNt += d.nt; });
+  var rows = data.map(function (d) {
+    var p = pct(d.met, d.dec), k = d.k, T = function (cat) { return ["tr", k, cat]; };
+    var pc = p == null ? "var(--faint)" : p >= ST.cfg.goalPct ? "var(--green)" : p >= ST.cfg.goalPct - 15 ? "var(--amber)" : "var(--rose)";
+    return "<tr><td style=\"white-space:nowrap\"><b>" + drNum(d.n, T("all"), "", perLabel(k)) + '</b></td><td class="num">' + drNum(d.n, T("all")) + '</td><td class="num">' + drNum(d.met, T("met")) + '</td><td class="num">' + drNum(d.missed, T("missed"), d.missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(d.ob, T("ob"), d.ob ? "color:var(--rose)" : "") + '</td><td class="num"><b>' + drNum(d.dec, T("dec")) + '</b></td><td class="num">' + drNum(d.run, T("run"), "color:var(--faint)") + "</td>" + (anyNt ? '<td class="num">' + drNum(d.nt, T("nt"), "color:var(--faint)") + "</td>" : "") + '<td style="width:26%">' + slaBar(p, T("dec"), d.dec) + '</td><td class="num bigpct" style="color:' + pc + '">' + drNum(d.dec, T("dec"), "", pctTxt(p)) + "</td></tr>";
   }).join("");
   var excl = s.n - s.hist;
-  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach. <b>Met + Missed + Breached = Decided</b>, and SLA % = Met ÷ Decided. <b>Click any number, bar or percentage to see its tickets.</b>' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + '</div><div class="tw"><table><thead><tr><th>Created in</th><th class="num" title="Tickets created in this period that have status history">Tickets</th><th class="num" title="Closed within their target">Met</th><th class="num" title="Closed, but after their target had run out">Missed</th><th class="num" title="Still open and already past their target">Breached (open)</th><th class="num" title="Met + Missed + Breached: the tickets SLA % is worked out from">Decided</th><th class="num" title="Still open and inside their target. The clock may be running, or paused while the ticket is with the client">Open, within target</th><th title="SLA % against your goal; the dark tick is the goal">vs goal</th><th class="num" title="Met ÷ Decided">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+  var recon = '<div class="recon">Of <b>' + s.hist.toLocaleString() + "</b> tickets with history: " + drNum(s.decided, ["kpi", "sla"], "", s.decided.toLocaleString()) + " <b>decided</b> (met, missed, or already breached) · " + drNum(sumRun, ["kpi", "within"], "", sumRun.toLocaleString()) + " <b>open and still inside their target</b> (outcome not known yet, so not in the SLA %)" +
+    (sumNt ? " · " + drNum(sumNt, ["kpi", "nt"], "", sumNt.toLocaleString()) + " <b>with no SLA target</b> (Priority is blank or not one of the five severities, so they can’t be measured)" : "") + ".</div>";
+  return '<div class="card panel"><div class="panel-h"><h3>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h3>' + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. <b>SLA %</b> = met ÷ (met + missed + open tickets already over target). The dark tick marks your ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach. <b>Met + Missed + Breached = Decided</b>, and SLA % = Met ÷ Decided. <b>Click any number, bar or percentage to see its tickets.</b>' + (excl ? " " + excl + " ticket" + (excl > 1 ? "s" : "") + " without history are not included." : "") + "</div>" + recon + '<div class="tw"><table><thead><tr><th>Created in</th><th class="num" title="Tickets created in this period that have status history">Tickets</th><th class="num" title="Closed within their target">Met</th><th class="num" title="Closed, but after their target had run out">Missed</th><th class="num" title="Still open and already past their target">Breached (open)</th><th class="num" title="Met + Missed + Breached: the tickets SLA % is worked out from">Decided</th><th class="num" title="Still open and inside their target. The clock may be running, or paused while the ticket is with the client">Open, within target</th>' + (anyNt ? '<th class="num" title="No SLA target applies: the Priority is blank or not one of the five severities">No target</th>' : "") + '<th title="SLA % against your goal; the dark tick is the goal">vs goal</th><th class="num" title="Met ÷ Decided">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>";
+}
+/* ═════ SVM pending tickets: what is open on OUR side, and how close each is to breaching ═════ */
+function pendingModel(v) {
+  var types = [], seen = {}; v.forEach(function (x) { var t = x.t.type; if (t && !seen[t]) { seen[t] = 1; types.push(t); } });
+  var rk = function (t) { var i = ["incident", "service request"].indexOf(t.toLowerCase()); return i < 0 ? 9 : i; };
+  types.sort(function (a, b) { return rk(a) - rk(b) || a.localeCompare(b); });
+  var pend = v.filter(isSvmPending), byPn = function (a, b) { var x = sortVal(a, "pn"), y = sortVal(b, "pn"); return x < y ? -1 : x > y ? 1 : 0; };
+  var rows = ["ready", "breached", "notyet", "notarget"].map(function (k) { var list = pend.filter(function (x) { return pnState(x) === k; }).sort(byPn); return { key: k, list: list, first: list[0] || null }; });
+  var all = pend.slice().sort(byPn);
+  return { types: types, rows: rows, pend: pend, first: all[0] || null, client: v.filter(function (x) { return x.r && !x.r.isClosed && x.r.currentKind === "client"; }).length,
+    n: function (state, type, holder) { return pend.filter(function (x) { return pnMatch(x, state, type, holder); }).length; } };
+}
+var PN_META = { ready: { l: "Ready to breach", c: "#F59E0B" }, breached: { l: "Breached", c: "var(--rose)" }, notyet: { l: "Not yet breached", c: "#22A05A" }, notarget: { l: "No SLA target", c: "var(--faint)" }, all: { l: "Total SVM pending", c: "var(--ink)" } };
+function pnSub(k) { return k === "ready" ? ST.cfg.warnPct + "% or more of the target used" : k === "breached" ? "already past their target" : k === "notyet" ? "under " + ST.cfg.warnPct + "% used" : k === "notarget" ? "Priority not one of the five severities" : ""; }
+function pnFirst(row) {
+  var f = row.first; if (!f) return "—"; var bi = binfoOf(f);
+  var when = !bi ? "" : bi.state === "breached" ? "breached " + fdtw(bi.breachedAt) : bi.breachAt ? "breaks " + fdtw(bi.breachAt) : "";
+  return '<span class="dr" role="button" tabindex="0" data-open="' + esc(f.t.key) + '" title="Open ' + esc(f.t.key) + '"><b class="key">' + esc(f.t.key) + "</b></span>" + (when ? '<div class="sub2">' + when + "</div>" : "");
+}
+function pendingPanel(v) {
+  var m = pendingModel(v), cols = m.types, shown = m.rows.filter(function (r) { return r.key !== "notarget" || r.list.length; });
+  var head = '<th>Where they stand</th>' + cols.map(function (t) { var n = m.n("all", t, "*"); return '<th class="num">' + drNum(n, ["pn", "all", t, "*"], "", esc(t)) + "</th>"; }).join("") + '<th class="num">Total</th><th class="num">Help Desk</th><th class="num">Engineering</th><th>Most urgent</th>';
+  function row(r) {
+    var k = r.key, M = PN_META[k], tot = r.list.length;
+    return '<tr class="pnrow"><td><span class="lab">' + (tot ? '<span class="dr"' + drAttr(["pn", k, "*", "*"], tot) + ">" : "<span>") + '<i class="pdot" style="background:' + M.c + '"></i>' + M.l + "</span><small>" + pnSub(k) + "</small></span></td>" +
+      cols.map(function (t) { return '<td class="num">' + drNum(m.n(k, t, "*"), ["pn", k, t, "*"]) + "</td>"; }).join("") +
+      '<td class="num"><b>' + drNum(tot, ["pn", k, "*", "*"]) + '</b></td><td class="num">' + drNum(m.n(k, "*", "hd"), ["pn", k, "*", "hd"]) + '</td><td class="num">' + drNum(m.n(k, "*", "engg"), ["pn", k, "*", "engg"]) + "</td><td>" + pnFirst(r) + "</td></tr>";
+  }
+  var all = m.pend.length;
+  var total = '<tr class="pntot"><td>' + (all ? '<span class="dr"' + drAttr(["pn", "all", "*", "*"], all) + ">" : "<span>") + 'Total SVM pending</span></td>' + cols.map(function (t) { return '<td class="num">' + drNum(m.n("all", t, "*"), ["pn", "all", t, "*"]) + "</td>"; }).join("") + '<td class="num">' + drNum(all, ["pn", "all", "*", "*"]) + '</td><td class="num">' + drNum(m.n("all", "*", "hd"), ["pn", "all", "*", "hd"]) + '</td><td class="num">' + drNum(m.n("all", "*", "engg"), ["pn", "all", "*", "engg"]) + "</td><td>" + (m.first ? pnFirst({ first: m.first }) : "—") + "</td></tr>";
+  return '<div class="card panel"><div class="panel-h"><h3>SVM pending tickets</h3></div><div class="sub">Open tickets that are with <b>Help Desk or Engineering</b> right now, in order of urgency: <b>ready to breach</b> first, then <b>breached</b>, then <b>not yet breached</b>. <b>Click a number</b> to see those tickets (soonest first), then <b>click a ticket</b> for its full timeline.</div>' +
+    (all ? '<div class="tw"><table><thead><tr>' + head + "</tr></thead><tbody>" + shown.map(row).join("") + total + "</tbody></table></div>" : '<div class="empty" style="padding:22px">Nothing is pending with Help Desk or Engineering in this view.</div>') +
+    '<div class="pnfoot">' + (m.client ? drNum(m.client, ["hd", "client", "open"], "", m.client.toLocaleString()) + " more open ticket" + (m.client === 1 ? " is" : "s are") + " <b>waiting with the client</b> (clock paused) and not counted here." : "No open tickets are waiting with the client.") + "</div></div>";
 }
 function matrixPanel(v) {
   var by = ST.matrixBy, keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} };
@@ -704,7 +772,7 @@ function renderOverview(v) {
     kpi("At risk", s.risk, ST.cfg.warnPct + "%+ of target used", "#F59E0B", "risk", s.risk) +
     kpi("Open now", s.open, "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n, "var(--engg)", "open", s.open) +
     kpi("Avg time to resolve", s.nEl ? fdur(s.sumEl / s.nEl) : "—", s.nEl + " closed · working time", "var(--hd)", "closed", s.nEl) + "</div>";
-  h += trendPanel(v) + matrixPanel(v);
+  h += pendingPanel(v) + trendPanel(v) + matrixPanel(v);
   /* who holds the open tickets */
   var hold = ["hd", "engg", "client"].map(function (k) {
     var o = s.by[k], H = function (cat) { return ["hd", k, cat]; }; return "<tr><td>" + kchip(k) + '</td><td class="num">' + drNum(o.n, H("open")) + '</td><td class="num">' + drNum(o.br, H("ob"), o.br ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.risk, H("risk")) + '</td><td class="num">' + drNum(o.n - o.br - o.risk, H("within")) + "</td></tr>"; }).join("");
@@ -746,6 +814,7 @@ function sortVal(x, k) {
     case "created": return x.t.created; case "target": return r && r.targetMin != null ? r.targetMin : -1;
     case "elapsed": return r ? r.elapsedMin : -1; case "paused": return r ? r.pausedMin : -1; case "pct": return r && r.pct != null ? r.pct : -1;
     case "worker": return x.t.worker || ""; case "client": return x.t.prefix;
+    case "pn": { var rk = { ready: 0, breached: 1, notyet: 2, notarget: 3 }[pnState(x)]; return rk * 1e14 + Math.min(sortVal(x, "breach"), 9e13); }
     case "breach": { var bi = binfoOf(x); if (!bi) return 9e15; if (bi.state === "breached" || bi.state === "missed") return bi.breachedAt == null ? 0 : bi.breachedAt; if (bi.state === "running") return bi.breachAt == null ? 9e15 : bi.breachAt; if (bi.state === "paused") return 8e15; return 9e15; }
   } return 0;
 }
@@ -1020,13 +1089,23 @@ function rpFileName() {
   var cl = ST.f.client.length ? ST.f.client.slice(0, 3).join("-") : "All clients", r = rangeMs();
   return ("SLA Report - " + cl + " - " + new Date(r.from + 330 * 60000).toISOString().slice(0, 10) + " to " + new Date(r.to + 330 * 60000).toISOString().slice(0, 10)).replace(/[\\\/:*?"<>|]/g, "-");
 }
+function rpPending(v) {
+  var m = pendingModel(v), cols = m.types, shown = m.rows.filter(function (r) { return r.key !== "notarget" || r.list.length; });
+  function cells(k) { var tot = k === "all" ? m.pend.length : (m.rows.filter(function (r) { return r.key === k; })[0] || { list: [] }).list.length;
+    return cols.map(function (t) { return '<td class="num">' + m.n(k, t, "*") + "</td>"; }).join("") + '<td class="num"><b>' + tot + '</b></td><td class="num">' + m.n(k, "*", "hd") + '</td><td class="num">' + m.n(k, "*", "engg") + "</td>"; }
+  function first(f) { if (!f) return "—"; var bi = binfoOf(f); return "<b>" + esc(f.t.key) + "</b>" + (bi ? '<div class="rp-note" style="margin:0">' + (bi.state === "breached" ? "breached " + fdtw(bi.breachedAt) : bi.breachAt ? "breaks " + fdtw(bi.breachAt) : "") + "</div>" : ""); }
+  return '<h2>SVM pending tickets</h2><div class="rp-note">Open tickets with Help Desk or Engineering right now, most urgent first: ready to breach, then breached, then not yet breached. ' + (m.client ? m.client + " more open ticket" + (m.client === 1 ? " is" : "s are") + " waiting with the client (clock paused) and not counted." : "") + "</div>" +
+    '<table><thead><tr><th>Where they stand</th>' + cols.map(function (t) { return '<th class="num">' + esc(t) + "</th>"; }).join("") + '<th class="num">Total</th><th class="num">Help Desk</th><th class="num">Engineering</th><th>Most urgent</th></tr></thead><tbody>' +
+    shown.map(function (r) { return '<tr><td><i class="pdot" style="background:' + PN_META[r.key].c + '"></i><b>' + PN_META[r.key].l + '</b><div class="rp-note" style="margin:0 0 0 .9rem">' + pnSub(r.key) + "</div></td>" + cells(r.key) + "<td>" + first(r.first) + "</td></tr>"; }).join("") +
+    '<tr style="font-weight:700;background:#EEF1F5"><td>Total SVM pending</td>' + cells("all") + "<td>" + first(m.first) + "</td></tr></tbody></table>";
+}
 function rpTrend(v) {
   var groups = {}; v.forEach(function (x) { if (!x.r) return; (groups[perKey(x.t.created)] || (groups[perKey(x.t.created)] = [])).push(x); });
-  var rows = Object.keys(groups).sort().map(function (k) {
-    var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; };
-    var met = c("met"), missed = c("missed"), ob = c("ob"), run = c("run"), dec = met + missed + ob, p = pct(met, dec);
-    return "<tr><td><b>" + perLabel(k) + '</b></td><td class="num">' + g.length + '</td><td class="num">' + met + '</td><td class="num">' + missed + '</td><td class="num">' + ob + '</td><td class="num"><b>' + dec + '</b></td><td class="num">' + run + '</td><td style="width:26%">'  + slaBar(p) + '</td><td class="num"><b>' + pctTxt(p) + "</b></td></tr>"; }).join("");
-  return '<h2>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h2><div class="rp-note">Grouped by when the ticket was created. Decided = Met + Missed + Breached (open); SLA % = Met ÷ Decided. The dark tick marks the ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach.</div><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Breached (open)</th><th class="num">Decided</th><th class="num">Open, within target</th><th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  var data = Object.keys(groups).sort().map(function (k) { var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; }; var met = c("met"), missed = c("missed"), ob = c("ob"); return { k: k, n: g.length, met: met, missed: missed, ob: ob, run: c("run"), nt: c("nt"), dec: met + missed + ob }; });
+  var anyNt = data.some(function (d) { return d.nt > 0; });
+  var rows = data.map(function (d) { var p = pct(d.met, d.dec);
+    return "<tr><td><b>" + perLabel(d.k) + '</b></td><td class="num">' + d.n + '</td><td class="num">' + d.met + '</td><td class="num">' + d.missed + '</td><td class="num">' + d.ob + '</td><td class="num"><b>' + d.dec + '</b></td><td class="num">' + d.run + "</td>" + (anyNt ? '<td class="num">' + d.nt + "</td>" : "") + '<td style="width:26%">' + slaBar(p) + '</td><td class="num"><b>' + pctTxt(p) + "</b></td></tr>"; }).join("");
+  return '<h2>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h2><div class="rp-note">Grouped by when the ticket was created. Decided = Met + Missed + Breached (open); SLA % = Met ÷ Decided. The dark tick marks the ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach.' + (anyNt ? " “No target” tickets have a Priority that is blank or not one of the five severities, so they can’t be measured." : "") + '</div><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Breached (open)</th><th class="num">Decided</th><th class="num">Open, within target</th>' + (anyNt ? '<th class="num">No target</th>' : "") + '<th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table>";
 }
 function rpMatrix(v, by) {
   var keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} }, f = dimFn(by);
@@ -1067,6 +1146,7 @@ function reportHtml(v, o, vl) {
     h += '<div class="rp-kpis">' + K(compC, pctTxt(s.comp), "SLA met", s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet") + K("var(--rose)", s.openBreached, "Breached, still open", "over their target") + K("#F59E0B", s.risk, "At risk", ST.cfg.warnPct + "%+ of target used") +
       K("var(--engg)", s.open, "Open now", "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n) + K("var(--hd)", s.nEl ? fdur(s.sumEl / s.nEl) : "—", "Avg time to resolve", s.nEl + " closed · working time") + K("var(--ink2)", s.hist.toLocaleString(), "Tickets counted", "of " + s.n.toLocaleString() + " in view") + "</div>";
   }
+  if (o.pending) h += rpPending(v);
   if (o.trend) h += rpTrend(v);
   if (o.matrix) h += rpMatrix(v, o.matrixBy);
   if (o.holders) h += rpHolders(s);
@@ -1084,10 +1164,10 @@ function reportHtml(v, o, vl) {
 function rpViews() { var all = view(true); return { all: all, list: ST.tab === "tickets" ? view() : all }; }     // SLA figures: no chip. Ticket list: the chip you had on the Tickets tab
 function openReport() {
   var vs = rpViews(), v = vs.all; if (!v.some(function (x) { return x.r; })) { toast("Nothing to report yet — fetch status history for these tickets first.", true); return; }
-  ST.rp = { orient: "landscape", summary: 1, trend: 1, matrix: 1, matrixBy: ST.matrixBy, holders: 1, attention: 1, all: vs.list.length <= 200 ? 1 : 0 };
+  ST.rp = { orient: "landscape", summary: 1, pending: 1, trend: 1, matrix: 1, matrixBy: ST.matrixBy, holders: 1, attention: 1, all: vs.list.length <= 200 ? 1 : 0 };
   var o = ST.rp;
   var tb = '<div class="rp-toolbar" role="group" aria-label="Report options"><b style="font-size:13px">🖨 PDF report</b>' +
-    [["summary", "Summary"], ["trend", "SLA % by month"], ["matrix", "Heatmap"], ["holders", "Who has open tickets"], ["attention", "Breached & at-risk tickets"], ["all", "Ticket list (" + vs.list.length.toLocaleString() + ")"]].map(function (k) { return '<label class="ck"><input type="checkbox" data-rp="' + k[0] + '"' + (o[k[0]] ? " checked" : "") + "> " + k[1] + "</label>"; }).join("") +
+    [["summary", "Summary"], ["pending", "SVM pending"], ["trend", "SLA % by month"], ["matrix", "Heatmap"], ["holders", "Who has open tickets"], ["attention", "Breached & at-risk tickets"], ["all", "Ticket list (" + vs.list.length.toLocaleString() + ")"]].map(function (k) { return '<label class="ck"><input type="checkbox" data-rp="' + k[0] + '"' + (o[k[0]] ? " checked" : "") + "> " + k[1] + "</label>"; }).join("") +
     '<label class="ck">Heatmap by <select data-rpsel="matrixBy" aria-label="Heatmap by"><option value="client">Client</option><option value="severity">Severity</option><option value="worker">Worker</option></select></label>' +
     '<label class="ck">Page <select data-rpsel="orient" aria-label="Page orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label><span class="sp"></span>' +
     '<button class="ghost" data-closereport>Close</button><button class="primary" id="rpPrint">Print / Save as PDF</button></div>';
