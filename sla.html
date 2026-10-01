@@ -514,20 +514,21 @@ function renderBar() {
     return;
   }
   var sc = fetchScope(), n = sc.length, inRange = ST.scope.length, active = filtersActive();
-  var miss = missingKeys(false).length, bad = sc.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
+  var mk = missingKeys(false), miss = mk.length, stale = mk.filter(function (k) { return ST.hist.tickets[k]; }).length, bad = sc.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
   var missAll = active ? missingKeys(false, true).length : miss;
   var sus = sc.filter(function (t) { var e = histFor(t); return e && e.suspect; }).length;
   var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + drNum(bad.length, ["bar", "bad"]) + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
   var warn = sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + sus + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "";
-  var head = active ? drNum(n, ["bar", "all"], "", n.toLocaleString()) + " " + (n === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(n, ["bar", "all"], "", n.toLocaleString()) + " " + (n === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
-  var older = olderPend(true).length; if (older) head += ' <span style="color:var(--muted)">· includes <b>' + older + "</b> older open ticket" + (older === 1 ? "" : "s") + " with Help Desk or Engineering, for the SVM pending table</span>";
+  var older = olderPend(true).length, nIn = n - older;
+  var head = active ? drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
+  if (older) head += " + " + drNum(older, ["bar", "older"], "", older.toLocaleString()) + " <b>older open ticket" + (older === 1 ? "" : "s") + "</b> with Help Desk or Engineering (created before " + fd(r.from) + ", included so the SVM pending table is complete)";
   var tip = !active && miss > 40 ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
   var pill = '<span class="pill ' + (BR.ready ? "ok" : "") + '"><i></i>' + (BR.ready ? "Extension connected" : "Extension not detected") + "</span>";
   var btn = miss > 0
     ? '<button class="primary" id="btnFetch"' + (BR.ready ? "" : " disabled") + '>Fetch &amp; calculate ' + miss.toLocaleString() + " ticket" + (miss > 1 ? "s" : "") + "</button>"
     : (n ? '<button class="ghost" id="btnRefetch"' + (BR.ready ? "" : " disabled") + ">Re-fetch these from Jira</button>" : "");
   var all = active && missAll > miss ? '<button class="quiet" id="btnFetchAll"' + (BR.ready ? "" : " disabled") + ">Fetch all " + missAll.toLocaleString() + " in range</button>" : "";
-  el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt">' + head + " · status history ready for " + drNum(ready, ["bar", "ready"], "", ready.toLocaleString()) + (miss > 0 ? " · " + drNum(miss, ["bar", "miss"], "", miss.toLocaleString()) + " still need it" : "") +
+  el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt">' + head + " · status history ready for " + drNum(ready, ["bar", "ready"], "", ready.toLocaleString()) + " of " + drNum(n, ["bar", "all"], "", n.toLocaleString()) + (miss > 0 ? " · " + drNum(miss, ["bar", "miss"], "", miss.toLocaleString()) + " still need it" + (stale ? ' <span style="color:var(--muted)">(' + (miss - stale).toLocaleString() + " never fetched, " + stale.toLocaleString() + " changed in Jira since they were fetched)</span>" : ' <span style="color:var(--muted)">(never fetched)</span>') : "") +
     '<br><span style="color:var(--muted);font-size:11.5px">Working time: ' + esc(calBar()) + " · clocks as of " + fdt(ST.now) + " IST" + (miss > 0 && !BR.ready ? " · install / enable the HD Jira Bridge extension to fetch" : "") + "</span>" + tip + fail + warn + "</div>" + pill + all + btn + "</div>";
 }
 function renderProg() {
@@ -632,7 +633,9 @@ function drillList(spec) {
     case "hd": { r.list = v.filter(function (x) { return holdCat(x, p[1], p[2]); }); var KL = { hd: "Help Desk", engg: "Engineering", client: "Client" }, CL = { open: "open tickets", ob: "open and over target", risk: "at risk", within: "within target" }; r.title = KL[p[1]] + " · " + CL[p[2]]; r.sub = "Open tickets currently held by " + KL[p[1]] + "."; break; }
     case "bar": {
       var sc = fetchScope().map(function (t) { var rr = getResult(t); return { t: t, r: rr, b: bucketOf(rr) }; });
-      if (p[1] === "all") { r.list = sc; r.title = "Tickets matching your filters"; r.sub = "Created in the selected date range."; }
+      if (p[1] === "all") { r.list = sc; r.title = "Everything Fetch covers"; r.sub = "Tickets created in the selected range that match your filters, plus any older open tickets with Help Desk or Engineering."; }
+      else if (p[1] === "range") { r.list = sc.filter(function (x) { return ST.scopeKeys[x.t.key]; }); r.title = "Tickets created in the selected range"; r.sub = "Created " + fd(rangeMs().from) + " – " + fd(rangeMs().to) + " and matching your filters."; }
+      else if (p[1] === "older") { r.list = sc.filter(function (x) { return !ST.scopeKeys[x.t.key]; }); r.title = "Older open tickets with Help Desk or Engineering"; r.sub = "Created before " + fd(rangeMs().from) + " and still open, held by Help Desk or Engineering by their current status. They are added to the fetch so the SVM pending table (which is not limited by the Created range) is complete."; }
       else if (p[1] === "ready") { r.list = sc.filter(function (x) { return x.r; }); r.title = "Status history ready"; r.sub = "Their SLA clock is calculated."; }
       else if (p[1] === "miss") { r.list = sc.filter(function (x) { return !x.r && !ST.failedSet[x.t.key]; }); r.title = "Still need history"; r.sub = "Use Fetch & calculate to get them."; }
       else { r.list = sc.filter(function (x) { return !x.r && ST.failedSet[x.t.key]; }); var rs = {}; r.list.forEach(function (x) { var w = ST.failedSet[x.t.key]; rs[w] = (rs[w] || 0) + 1; }); r.title = "Could not be fetched"; r.sub = Object.keys(rs).map(function (w) { return rs[w] + " × " + w; }).join("; "); }
