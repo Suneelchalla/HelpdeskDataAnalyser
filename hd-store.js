@@ -279,9 +279,9 @@
    reliable) "Next Action" column; classify3() defaults to "hd", matching the
    Follow-up Tracker's original behaviour. Edit the lists here ONLY. */
 (function () {
-  var HD = ["Acknowledged","Assign HD (WFC)","Clarify","On-Hold","Open","Analysis & Study","Sys/user configuration","Invoice Yet to Raise","Assign HD (UAT)","Assign HD (DB Approval)","Assign HD (Clarification)"];
+  var HD = ["Acknowledged","Assign HD (WFC)","Clarify","Open","Analysis & Study","Sys/user configuration","Invoice Yet to Raise","Assign HD (UAT)","Assign HD (DB Approval)","Assign HD (Clarification)"];
   var ENGG = ["Technical Analysis","Development In Progress","Approval DB Admin","DB Admin Approval","DB Script Request","Impact Study","POC Release Approval","Project Lead Approval","Release Plan (Production)","Release Plan (UAT or Hot Fix)","Review","Script Release","SVM Hotfix Testing","Team Lead Review & Approval","Testing In Progress","Assign to SVM Deployment Team","Release In Progress","Release Kit Prep.","User Request","Workaround Fix","Release Kit Preparation","Re-open Review"];
-  var CLIENT = ["Waiting for customer","Resolved With Clarification","Resolved","Confirmation","Get Confirmation","Completed","DB Script Delivered","Delivered","Release Move to Production","Doubt Clarification","Clarification (Dev)","Published","CLIENT Approval (DB Script)","CLIENT RELEASE APPROVAL","Client Release Approval (PROD)","Client Hotfix Testing","Client Deployment (PROD)","Client Rejected (DB Script)","Script Delivered"];
+  var CLIENT = ["Waiting for customer","Resolved With Clarification","Resolved","Confirmation","Get Confirmation","Completed","DB Script Delivered","Delivered","Release Move to Production","Doubt Clarification","Clarification (Dev)","Published","CLIENT Approval (DB Script)","CLIENT RELEASE APPROVAL","Client Release Approval (PROD)","Client Hotfix Testing","Client Deployment (PROD)","Client Rejected (DB Script)","Script Delivered","On-Hold"];
 
   /* User overrides from the Master Data module: { "<Status>": "hd"|"engg"|"client" }.
      A dashboard calls setOverrides(cfg.statusOverrides) once on load (after reading
