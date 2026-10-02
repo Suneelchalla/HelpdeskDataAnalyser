@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="hd-dashboard" content="launcher">
+<script>
+/* tabbed workspace: if a module inside a tab navigates back to this page, hand control to the parent instead of nesting the launcher */
+if (window.top !== window) { try { window.top.postMessage({ type: "HD_TAB_HOME" }, "*"); } catch (e) {} document.documentElement.style.display = "none"; try { window.stop(); } catch (e) {} }
+</script>
 <title>HD Dashboards</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23101828'/%3E%3Crect x='7' y='9' width='7' height='14' rx='2' fill='%232563EB'/%3E%3Crect x='18' y='9' width='7' height='14' rx='2' fill='%230F766E'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -362,9 +366,35 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal)
 .md-chip .r{font-family:var(--mono);font-size:10px;font-weight:700;background:#FEF3E2;color:var(--amber);border-radius:20px;padding:1px 7px}
 .md-chip.on .r{background:#F5D9A8;color:#7c3d06}
 
+
+/* ═════ tabbed workspace ═════ */
+#tabbar{position:fixed;top:0;left:0;right:0;height:38px;z-index:950;display:none;align-items:flex-end;gap:2px;padding:0 10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line2)}
+body.hastabs #tabbar{display:flex}
+body.hastabs{padding-top:38px}
+body.hastabs .shell{height:calc(100vh - 38px);height:calc(100dvh - 38px)}
+@media (max-width:1000px),(max-height:540px){ body.hastabs .shell{height:auto;min-height:calc(100vh - 38px)} }
+.hdtab{flex:none;display:flex;align-items:center;gap:6px;height:32px;max-width:230px;padding:0 5px 0 12px;border:1px solid transparent;border-bottom:none;border-radius:9px 9px 0 0;font:600 12.5px var(--sans);color:var(--ink2);cursor:pointer;white-space:nowrap;user-select:none}
+.hdtab:hover{background:rgba(37,99,235,.07)}
+.hdtab.on{background:#fff;color:var(--ink);border-color:var(--line2);box-shadow:inset 0 2px 0 var(--blue);height:33px;margin-bottom:-1px}
+.hdtab .tt{overflow:hidden;text-overflow:ellipsis}
+.hdtab .tdot{display:none;flex:none;width:6px;height:6px;border-radius:50%;background:#F59E0B}
+.hdtab.stale .tdot{display:inline-block}
+.hdtab button{flex:none;border:0;background:none;color:var(--muted);width:20px;height:20px;border-radius:5px;cursor:pointer;font:600 12px/1 var(--sans);display:grid;place-items:center}
+.hdtab button:hover{background:rgba(15,23,42,.09);color:var(--ink)}
+#tabFrames .tframe{position:fixed;top:38px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 38px);border:0;background:#fff;z-index:900;visibility:hidden;pointer-events:none}
+#tabFrames .tframe.on{visibility:visible;pointer-events:auto}
+body.intab .shell,body.intab .statsbg{visibility:hidden}
 </style>
 </head>
 <body>
+
+<!-- tabbed workspace: Dashboard tab + one tab per opened module -->
+<div id="tabbar" role="tablist" aria-label="Open dashboards">
+  <div class="hdtab on" id="tabHome" role="tab" aria-selected="true" tabindex="0"><span>🏠</span><span class="tt">Dashboard</span></div>
+  <span id="tabList" style="display:contents"></span>
+</div>
+<div id="tabFrames"></div>
+
 
 <!-- animated live-stats backdrop -->
 <div class="statsbg" aria-hidden="true">
@@ -770,7 +800,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
       el("fetchMsg").textContent=verb+" "+fetched.toLocaleString()+" of "+total.toLocaleString()+" tickets…";
     }, { full: !!opts.full }).then(function(info){
       el("fetching").classList.add("hidden");
-      showLoaded(info.fileName, info);
+      if(window.HDTabs) HDTabs.markStale(); showLoaded(info.fileName, info);
     }).catch(function(err){
       el("fetching").classList.add("hidden");
       if(err.message==="EXTENSION_NOT_FOUND"){ el("empty").classList.remove("hidden"); openSetup(); return; }
@@ -954,7 +984,7 @@ function handleFile(file){
   var btn=el("chooseBtn"); if(btn){btn.textContent="Reading…";btn.disabled=true;}
   countTickets(file).then(function(info){
     if(HS){
-      HS.saveFile(file,file.name).then(function(){ HS.clearRows(); if(HS.clearFetchCache)HS.clearFetchCache(); showLoaded(file.name,info); })
+      HS.saveFile(file,file.name).then(function(){ HS.clearRows(); if(HS.clearFetchCache)HS.clearFetchCache(); if(window.HDTabs)HDTabs.markStale(); showLoaded(file.name,info); })
       .catch(function(err){ alert("Couldn't store the file on this device: "+err.message); if(btn){btn.textContent="Choose Excel file";btn.disabled=false;} });
     } else {
       showLoaded(file.name,info);  // preview fallback (no persistence)
@@ -966,7 +996,7 @@ function handleFile(file){
 el("chooseBtn").onclick=function(){ el("fileinput").click(); };
 el("dz").onclick=function(){ el("fileinput").click(); };
 el("fileinput").onchange=function(e){ handleFile(e.target.files&&e.target.files[0]); e.target.value=""; };
-el("changeBtn").onclick=function(){ if(HS){HS.clearRows();if(HS.clearFetchCache)HS.clearFetchCache();HS.clearFile().then(showEmpty);}else{showEmpty();} };
+el("changeBtn").onclick=function(){ if(window.HDTabs)HDTabs.markStale(); if(HS){HS.clearRows();if(HS.clearFetchCache)HS.clearFetchCache();HS.clearFile().then(showEmpty);}else{showEmpty();} };
 
 var dz=el("dz");
 ["dragenter","dragover"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over");}); });
@@ -1011,7 +1041,7 @@ if(HS){
     if(document.querySelector(".md-ov.open,.js-ov.open")) return;
     if(cards.classList.contains("locked")) return;
     var n=parseInt(e.key,10); if(!(n>=1&&n<=8)) return;
-    var c=cards.querySelectorAll(".card")[n-1]; if(c){ e.preventDefault(); location.href=c.getAttribute("href"); }
+    var c=cards.querySelectorAll(".card")[n-1]; if(c){ e.preventDefault(); if(window.HDTabs) HDTabs.open(c.getAttribute("href")); else location.href=c.getAttribute("href"); }
   });
   // soft spotlight that follows the pointer inside a card
   cards.addEventListener("pointermove",function(e){ var c=e.target.closest?e.target.closest(".card"):null; if(!c) return; var r=c.getBoundingClientRect(); c.style.setProperty("--mx",(e.clientX-r.left)+"px"); c.style.setProperty("--my",(e.clientY-r.top)+"px"); });
@@ -1264,6 +1294,124 @@ if(HS){
   el("mdSave").onclick=save;
   el("mdReset").onclick=resetTab;
   document.querySelectorAll(".md-tab").forEach(function(b){ b.onclick=function(){ MD.tab=b.dataset.mdtab; MD.search=""; render(); }; });
+})();
+</script>
+<script>
+/* ═════ Tabbed workspace — open each dashboard as a tab inside this page ═════ */
+(function(){
+  var MODS={"followup.html":"Follow-up Tracker","trend.html":"HD Trend Tracker","weekly.html":"Weekly Report","change.html":"Change Tracker","releases.html":"Release Tracker","clarify.html":"Clarification Module","ops.html":"Operations Intelligence","sla.html":"SLA Tracker"};
+  var SKEY="hd-tabs", BASE_TITLE=document.title;
+  var cards=document.getElementById("cards"), list=document.getElementById("tabList"), framesBox=document.getElementById("tabFrames"), homeTab=document.getElementById("tabHome");
+  var tabs=[], active="home";
+
+  function find(h){ for(var i=0;i<tabs.length;i++) if(tabs[i].href===h) return tabs[i]; return null; }
+  function iconFor(h){ var c=cards&&cards.querySelector('a.card[href="'+h+'"]'); return (c&&c.getAttribute("data-g"))||"📄"; }
+  function save(){ try{ sessionStorage.setItem(SKEY,JSON.stringify({tabs:tabs.map(function(t){return t.href;}),active:active})); }catch(e){} }
+
+  function makeButton(t){
+    var d=document.createElement("div"); d.className="hdtab"; d.setAttribute("role","tab"); d.tabIndex=0; d.title=t.title;
+    d.innerHTML='<span></span><span class="tt"></span><span class="tdot" title="Data changed — this tab reloads when you open it"></span><button type="button" class="tpop" title="Open in a new browser tab">↗</button><button type="button" class="tx" title="Close tab">✕</button>';
+    d.children[0].textContent=t.icon; d.children[1].textContent=t.title;
+    d.addEventListener("click",function(e){
+      if(e.target.closest(".tx")){ closeTab(t.href); return; }
+      if(e.target.closest(".tpop")){ window.open(t.href,"_blank"); closeTab(t.href,true); return; }
+      activate(t.href);
+    });
+    d.addEventListener("auxclick",function(e){ if(e.button===1){ e.preventDefault(); closeTab(t.href); } });
+    d.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(t.href); } });
+    list.appendChild(d); return d;
+  }
+
+  function hookFrame(t){
+    try{
+      var d=t.frame.contentDocument; if(!d) return;
+      // "← Back to launcher" links inside a module just switch to the Dashboard tab (the module keeps its state)
+      d.addEventListener("click",function(e){
+        var a=e.target.closest&&e.target.closest("a[href]"); if(!a) return;
+        if(/^(\.\/)?index\.html(#.*)?$/.test(a.getAttribute("href")||"")){ e.preventDefault(); activate("home"); }
+      },true);
+    }catch(err){}
+  }
+  function makeFrame(t){
+    var f=document.createElement("iframe"); f.className="tframe"; f.title=t.title;
+    f.addEventListener("load",function(){ hookFrame(t); });
+    f.src=t.href; framesBox.appendChild(f); t.frame=f;
+  }
+  function reload(t){
+    try{ t.frame.contentWindow.location.reload(); }catch(e){ t.frame.src=t.href; }
+  }
+
+  function activate(id){
+    active=id;
+    var t=id==="home"?null:find(id); if(id!=="home"&&!t){ active="home"; t=null; }
+    homeTab.classList.toggle("on",active==="home"); homeTab.setAttribute("aria-selected",active==="home");
+    tabs.forEach(function(x){
+      var on=(x===t); x.btn.classList.toggle("on",on); x.btn.setAttribute("aria-selected",on);
+      if(x.frame) x.frame.classList.toggle("on",on);
+    });
+    if(t){
+      if(!t.frame) makeFrame(t); else if(t.stale) reload(t);
+      t.stale=false; t.btn.classList.remove("stale");
+      t.frame.classList.add("on");
+      try{ t.frame.contentWindow.focus(); }catch(e){}
+    }
+    document.body.classList.toggle("intab",!!t);
+    document.title=t?(t.title+" · "+BASE_TITLE):BASE_TITLE;
+    document.body.classList.toggle("hastabs",tabs.length>0);
+    save();
+    if(!t) requestAnimationFrame(function(){ window.dispatchEvent(new Event("resize")); });
+  }
+
+  function closeTab(h,toHome){
+    var i=tabs.map(function(x){return x.href;}).indexOf(h); if(i<0) return;
+    var t=tabs[i]; if(t.frame) t.frame.remove(); t.btn.remove(); tabs.splice(i,1);
+    if(active===h||toHome){ var nb=toHome?null:(tabs[i]||tabs[i-1]); activate(nb?nb.href:"home"); }
+    else { document.body.classList.toggle("hastabs",tabs.length>0); save(); }
+  }
+
+  function openTab(h){
+    if(!MODS[h]){ location.href=h; return; }
+    var t=find(h);
+    if(!t){ t={href:h,title:MODS[h],icon:iconFor(h),frame:null,stale:false}; t.btn=makeButton(t); tabs.push(t); }
+    activate(h);
+  }
+
+  function markStale(){ tabs.forEach(function(t){ if(t.frame){ t.stale=true; t.btn.classList.add("stale"); } }); }
+
+  homeTab.addEventListener("click",function(){ activate("home"); });
+  homeTab.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate("home"); } });
+
+  // clicking a dashboard card opens it as a tab (Ctrl/Shift/middle-click still opens a real browser tab)
+  if(cards) cards.addEventListener("click",function(e){
+    var a=e.target.closest&&e.target.closest("a.card"); if(!a) return;
+    if(e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0) return;
+    e.preventDefault();
+    if(cards.classList.contains("locked")) return;
+    openTab(a.getAttribute("href"));
+  });
+
+  // a module that navigates back to index.html inside its tab (e.g. "no data loaded") closes its own tab
+  window.addEventListener("message",function(e){
+    if(!e.data||e.data.type!=="HD_TAB_HOME") return;
+    for(var i=0;i<tabs.length;i++) if(tabs[i].frame&&tabs[i].frame.contentWindow===e.source){ closeTab(tabs[i].href,true); return; }
+  });
+
+  // reload open tabs when the data or master-data mapping changes
+  if(window.HDStore&&HDStore.saveConfig&&!HDStore.__tabWrap){
+    var oc=HDStore.saveConfig; HDStore.__tabWrap=true;
+    HDStore.saveConfig=function(){ markStale(); return oc.apply(this,arguments); };
+  }
+
+  window.HDTabs={open:openTab,close:closeTab,activate:activate,markStale:markStale};
+
+  // restore tabs after a page refresh (same browser tab only)
+  try{
+    var st=JSON.parse(sessionStorage.getItem(SKEY)||"null");
+    if(st&&st.tabs&&st.tabs.length){
+      st.tabs.forEach(function(h){ if(MODS[h]&&!find(h)){ var t={href:h,title:MODS[h],icon:iconFor(h),frame:null,stale:false}; t.btn=makeButton(t); tabs.push(t); } });
+      activate(st.active&&find(st.active)?st.active:"home");
+    }
+  }catch(e){}
 })();
 </script>
 </body>
