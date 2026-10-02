@@ -368,15 +368,19 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal)
 
 
 /* ═════ tabbed workspace ═════ */
-#tabbar{position:fixed;top:0;left:0;right:0;height:38px;z-index:950;display:none;align-items:flex-end;gap:2px;padding:0 10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line2)}
+#tabbar{position:fixed;top:0;left:0;right:0;height:38px;z-index:950;display:none;align-items:flex-end;gap:2px;padding:0 10px;overflow:hidden;background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line2)}
 body.hastabs #tabbar{display:flex}
 body.hastabs{padding-top:38px}
 body.hastabs .shell{height:calc(100vh - 38px);height:calc(100dvh - 38px)}
 @media (max-width:1000px),(max-height:540px){ body.hastabs .shell{height:auto;min-height:calc(100vh - 38px)} }
-.hdtab{flex:none;display:flex;align-items:center;gap:6px;height:32px;max-width:230px;padding:0 5px 0 12px;border:1px solid transparent;border-bottom:none;border-radius:9px 9px 0 0;font:600 12.5px var(--sans);color:var(--ink2);cursor:pointer;white-space:nowrap;user-select:none}
+.hdtab{flex:0 1 190px;min-width:46px;max-width:190px;display:flex;align-items:center;gap:6px;height:32px;padding:0 5px 0 12px;overflow:hidden;border:1px solid transparent;border-bottom:none;border-radius:9px 9px 0 0;font:600 12.5px var(--sans);color:var(--ink2);cursor:pointer;white-space:nowrap;user-select:none}
 .hdtab:hover{background:rgba(37,99,235,.07)}
-.hdtab.on{background:#fff;color:var(--ink);border-color:var(--line2);box-shadow:inset 0 2px 0 var(--blue);height:33px;margin-bottom:-1px}
-.hdtab .tt{overflow:hidden;text-overflow:ellipsis}
+.hdtab.on{flex:0 0 auto;min-width:104px;background:#fff;color:var(--ink);border-color:var(--line2);box-shadow:inset 0 2px 0 var(--blue);height:33px;margin-bottom:-1px}
+#tabHome{flex:none;max-width:none}
+.hdtab .tt{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hdtab:not(.on) .tpop{display:none}
+.hdtab:not(.on) .tx{display:none}
+.hdtab:not(.on):hover .tx{display:grid}
 .hdtab .tdot{display:none;flex:none;width:6px;height:6px;border-radius:50%;background:#F59E0B}
 .hdtab.stale .tdot{display:inline-block}
 .hdtab button{flex:none;border:0;background:none;color:var(--muted);width:20px;height:20px;border-radius:5px;cursor:pointer;font:600 12px/1 var(--sans);display:grid;place-items:center}
