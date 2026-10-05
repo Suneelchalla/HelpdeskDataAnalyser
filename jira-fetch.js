@@ -1,6 +1,6 @@
 /* HD Dashboards — Jira Live Fetch (v3 API, extension-only, CSP-safe) */
 (function () {
-  var CFG_KEY = "hd-jira-cfg", PAGE_SIZE = 1000;
+  var CFG_KEY = "hd-jira-cfg", PAGE_SIZE = 250;
 
   /* ══════ Bridge detection via postMessage ══════ */
   var _bridgeReady = false, _seq = 0, _pending = {};
@@ -71,25 +71,42 @@
   }
 
   /* ══════ Paginated search (v3 GET with cursor pagination) ══════ */
+  /* A background Jira tab can be reloaded/slept mid-request ("Frame with ID 0 was removed").
+     Reads are safe to repeat, so retry the SAME page instead of failing the whole fetch. */
+  var RETRY_RE = /Frame with ID|No tab with id|Cannot access contents|Receiving end does not exist|The frame was removed|Jira tab timed out|Request timed out/i;
+  function callRetry(host, path, method, body, n) {
+    n = n || 0;
+    return bridgeCall(host, path, method, body).catch(function (e) {
+      if (n < 3 && RETRY_RE.test(String((e && e.message) || e))) {
+        return new Promise(function (r) { setTimeout(r, 2000 * (n + 1)); })
+          .then(function () { return callRetry(host, path, method, body, n + 1); });
+      }
+      throw e;
+    });
+  }
+
   function search(host, jql, fields, onProgress) {
     var all = [], total = 0;
 
-    /* First: one lightweight call to get the real total count */
-    var countPath = "/rest/api/3/search/jql?jql=" + encodeURIComponent(jql) + "&maxResults=1&fields=key";
-    return bridgeCall(host, countPath, "GET").then(function (countData) {
-      total = countData.total || 0;
-      if (onProgress) onProgress(0, total);
-      return nextPage(null);
-    });
+    /* /search/jql no longer returns a total, so ask the approximate-count endpoint.
+       It is only used for the progress bar — if it fails the fetch carries on without it. */
+    return callRetry(host, "/rest/api/3/search/approximate-count", "POST", { jql: jql })
+      .then(function (c) { total = (c && c.count) || 0; }, function () { total = 0; })
+      .then(function () {
+        if (onProgress) onProgress(0, total);
+        return nextPage(null);
+      });
 
     function nextPage(token) {
       var path = "/rest/api/3/search/jql?jql=" + encodeURIComponent(jql)
         + "&maxResults=" + PAGE_SIZE
         + "&fields=" + fields.join(",")
         + (token ? "&nextPageToken=" + encodeURIComponent(token) : "");
-      return bridgeCall(host, path, "GET").then(function (data) {
+      return callRetry(host, path, "GET", null).then(function (data) {
         all = all.concat(data.issues || []);
-        if (onProgress) onProgress(all.length, total || data.total || all.length);
+        /* unknown total → estimate "one more page to go" so the bar stays below 100% until done */
+        var shownTotal = total > all.length ? total : (data.nextPageToken ? all.length + PAGE_SIZE : all.length);
+        if (onProgress) onProgress(all.length, shownTotal);
         if (data.nextPageToken) return nextPage(data.nextPageToken);
         return all;
       });
