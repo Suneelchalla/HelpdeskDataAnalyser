@@ -434,6 +434,16 @@ var RAW_ROWS=[];
 var FILENAME="";
 var DATA_ASOF=null;  // max created/resolved date
 var SNAPS={};        // captured weekly open-backlog history (survives across uploads)
+var DEFAULT_TYPES=["incident","service request"];   // request types selected by default; Changes etc. are opt-in
+var itInit=false;
+function defaultIssueTypes(){
+  var seen={}; RAW.forEach(function(t){ if(t.issueType) seen[t.issueType]=1; });
+  return Object.keys(seen).filter(function(x){ return DEFAULT_TYPES.indexOf(x.toLowerCase())>-1; }).sort();
+}
+function isDefaultIssueTypes(){
+  var d=defaultIssueTypes(), c=S.issueType.slice().sort();
+  return d.length===c.length && d.every(function(x,i){ return x===c[i]; });
+}
 var S={ client:"", na:"", status:"", issueType:[], cols:DEFAULT_COLS.slice(), colsOpen:false };
 
 /* ═══════════════════════ PARSE ═══════════════════════ */
@@ -794,8 +804,8 @@ function render(){
   var issueTypeList=Object.keys(clientAll.reduce(function(a,t){ if(t.issueType)a[t.issueType]=1; return a; },{})).sort();
   var naHasUnset=clientAll.some(function(t){ return naKey(t)==="unset"; });
   if(S.status && statusList.indexOf(S.status)<0) S.status="";
-  S.issueType=S.issueType.filter(function(it){return issueTypeList.indexOf(it)>-1;});
-  var _itMselId=mselCreate("itMsel","All types",issueTypeList,S.issueType,function(sel){S.issueType=sel;},function(){render();});
+  if(!itInit){ itInit=true; S.issueType=defaultIssueTypes(); }   // first render: Incident + Service Request only
+  var _itMselId=mselCreate("itMsel","All types",issueTypeList,S.issueType.filter(function(it){return issueTypeList.indexOf(it)>-1;}),function(sel){S.issueType=sel;},function(){render();});
   var ct=clientTickets();
   var K=kpis(ct);
   var weeks=lastWeeks(WEEKS_BACK);
@@ -870,7 +880,7 @@ function render(){
       '<select id="stsel"><option value="">All statuses</option>'+statusList.map(function(s){return '<option value="'+esc(s)+'" '+(S.status===s?"selected":"")+'>'+esc(s)+'</option>';}).join("")+'</select>'+
       '<span class="flabel">Request type</span>'+
       mselHTML(_itMselId)+
-      ((S.na||S.status||S.issueType.length)?'<button class="btn" id="clrsel">✕ Clear</button>':'')+
+      ((S.na||S.status||!isDefaultIssueTypes())?'<button class="btn" id="clrsel">✕ Clear</button>':'')+
       '<details class="colpick" '+(S.colsOpen?'open':'')+'>'+
         '<summary class="btn">🧩 Columns ('+S.cols.length+')</summary>'+
         '<div class="colmenu"><div class="colmenu-h">Pending-list columns</div>'+
@@ -972,7 +982,7 @@ function render(){
 
         /* ── Top 5 oldest spotlight tables ── */
         '<div class="sectitle">🔴 Top 5 Oldest — Client Side <span class="sub">longest-open items needing attention</span></div>'+
-        top5OldestHTML(openList, 5)+
+        top5OldestHTML(clientPending, 5)+
 
         '<div class="sectitle">🔴 Top 5 Oldest — SVM Side <span class="sub">longest-open items on our side</span></div>'+
         top5OldestHTML(svmPending, 5)+
@@ -1013,7 +1023,7 @@ function bind(){
   el("nasel").onchange=function(e){ S.na=e.target.value; render(); };
   el("stsel").onchange=function(e){ S.status=e.target.value; render(); };
   mselBind();
-  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; S.issueType=[]; render(); };
+  var clr=el("clrsel"); if(clr) clr.onclick=function(){ S.na=""; S.status=""; S.issueType=defaultIssueTypes(); render(); };
   var rh=el("resethist"); if(rh) rh.onclick=function(){
     if(!confirm("Reset all captured weekly history?\n\nThis clears the week-over-week open-backlog trend for every client and can't be undone. The current export is re-captured as a fresh starting point.")) return;
     if(window.HDStore) window.HDStore.clearSnapshots();
