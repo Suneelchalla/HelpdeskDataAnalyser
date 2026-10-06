@@ -445,12 +445,17 @@ var NOREL=[], EXP_ALL=[];   // NOREL = open tickets with NO release number (used
 var PAGE_SIZE=50;
 var JIRA="https://svmhelpdesk.atlassian.net/browse/";
 
-var S={
-  tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", issueType:[], from:"", to:"",
-  sortCol:"created", sortDir:"desc", page:0,
-  expStatus:[], expView:"release", expSortCol:"created", expSortDir:"asc",  // Expected Releases tab (local)
-  kpiFilter:""  // active KPI highlight
-};
+function newState(){
+  return {
+    tab:"overview", search:"", proj:"", svm:"", fixType:"", status:"", issueType:[], from:"", to:"",
+    rootCause:[], statuses:[],   // multi-selects: Root Cause, and every individual Status (empty = all)
+    sortCol:"created", sortDir:"desc", page:0,
+    expStatus:[], expView:"list", expSortCol:"created", expSortDir:"asc",  // Expected Releases tab (local) — flat list by default
+    kpiFilter:""  // active KPI highlight
+  };
+}
+var S=newState();
+var NO_RC="(Not set)";   // label for tickets with a blank Root Cause
 
 function el(id){return document.getElementById(id);}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(m){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[m];});}
@@ -543,6 +548,8 @@ function passF(t){
     if(S.svm&&t.svm!==S.svm) return false;
     if(S.fixType&&t.fixType!==S.fixType) return false;
     if(S.issueType.length&&S.issueType.indexOf(t.issueType)<0) return false;
+    if(S.rootCause.length&&S.rootCause.indexOf(t.rootCause||NO_RC)<0) return false;
+    if(S.statuses.length&&S.statuses.indexOf(t.status)<0) return false;
     if(S.status==="closed"&&!t.closed) return false;
     if(S.status==="open"&&t.closed) return false;
     if(S.from){var fd=new Date(S.from);if(t.created&&t.created<fd)return false;}
@@ -596,6 +603,11 @@ function render(){
   var svms=distinctSorted(SRC,"svm");
   var itypes=distinctSorted(SRC,"issueType");
   var _itMselId=mselCreate("itMsel","All request types",itypes,S.issueType,function(sel){S.issueType=sel;},function(){S.page=0;S.kpiFilter="";render();});
+  var rcs=distinctSorted(SRC,"rootCause").sort(function(a,b){return a.localeCompare(b);});
+  if(SRC.some(function(t){return !t.rootCause;})) rcs.push(NO_RC);
+  var _rcMselId=mselCreate("rcMsel","All root causes",rcs,S.rootCause,function(sel){S.rootCause=sel;},function(){S.page=0;S.kpiFilter="";render();});
+  var stsAll=distinctSorted(SRC,"status").sort(function(a,b){return a.localeCompare(b);});
+  var _stMselId=mselCreate("stMsel","All statuses",stsAll,S.statuses,function(sel){S.statuses=sel;},function(){S.page=0;S.kpiFilter="";render();});
 
   var h='<header class="top">'+
     '<div class="hrow hrow1">'+
@@ -627,9 +639,11 @@ function render(){
         '<option value="Data Fix"'+(S.fixType==="Data Fix"?' selected':'')+'>Data Fix</option>'+
         '<option value="Bug Fix"'+(S.fixType==="Bug Fix"?' selected':'')+'>Bug Fix</option>'+
         '<option value="Workaround"'+(S.fixType==="Workaround"?' selected':'')+'>Workaround</option></select></div>'+
-      '<div class="fcell"><span class="flabel">Status</span><select class="fsel" id="fStatus"><option value="">All</option>'+
+      '<div class="fcell"><span class="flabel">Open / Closed</span><select class="fsel" id="fStatus"><option value="">All</option>'+
         '<option value="closed"'+(S.status==="closed"?' selected':'')+'>Closed</option>'+
         '<option value="open"'+(S.status==="open"?' selected':'')+'>Outstanding</option></select></div>'+
+      '<div class="fcell"><span class="flabel">Status</span>'+mselHTML(_stMselId)+'</div>'+
+      '<div class="fcell"><span class="flabel">Root Cause</span>'+mselHTML(_rcMselId)+'</div>'+
       '<div class="fcell"><span class="flabel">Request Type</span>'+mselHTML(_itMselId)+'</div>'+
       '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
       '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+
@@ -1161,7 +1175,17 @@ function renderExpecting(){
     '<button class="exp-btn" id="expCsv">⬇ Export CSV</button>'+
   '</div>';
 
-  if(S.status==="closed") h+='<div class="exp-note">The global <b>Status = Closed</b> filter is on, so nothing can be "expected". Set it to All or Outstanding.</div>';
+  if(S.status==="closed") h+='<div class="exp-note">The global <b>Open / Closed = Closed</b> filter is on, so nothing can be "expected". Set it to All or Outstanding.</div>';
+  /* Reconciliation: ready tickets that the GLOBAL filters are hiding, and why. */
+  var poolAll=RAW.concat(NOREL).filter(function(t){ return !t.closed && EXP_EXCLUDE.indexOf(expKey(t.status))<0; });
+  var hidden=poolAll.length-pool.length;
+  if(hidden>0){
+    var byType={}; poolAll.forEach(function(t){ if(S.issueType.length&&S.issueType.indexOf(t.issueType)<0){ var k=t.issueType||"(blank)"; byType[k]=(byType[k]||0)+1; } });
+    var tk=Object.keys(byType).sort(function(a,b){return byType[b]-byType[a];});
+    h+='<div class="exp-note"><b>'+fmtN(hidden)+'</b> more ready ticket'+(hidden>1?'s are':' is')+' hidden by the global filters'+
+      (tk.length?' — by Request Type: '+tk.map(function(k){return esc(k)+' ('+byType[k]+')';}).join(', '):'')+
+      '. Use <b>Reset filters</b> or adjust the filters above to include them.</div>';
+  }
   if(!list.length){
     return h+'<div class="card exp-empty">No tickets are ready to release with the current filters.</div>';
   }
@@ -1486,7 +1510,7 @@ function processUpload(file){
   FILENAME=file.name; BLOB=file;
   readFile(file).then(function(rows){
     RAW=normalize(rows);
-    S={tab:"overview",search:"",proj:"",svm:"",fixType:"",status:"",issueType:defaultIssueTypes(),from:"",to:"",sortCol:"created",sortDir:"desc",page:0,kpiFilter:""};
+    S=newState(); S.issueType=defaultIssueTypes();
     render();
   }).catch(function(err){alert("Could not read file: "+err.message);});
 }
@@ -1521,7 +1545,7 @@ function bindAll(){
   var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
   var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
   var rb=el("resetBtn");if(rb)rb.onclick=function(){
-    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.expStatus=[];S.page=0;render();};
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.rootCause=[];S.statuses=[];S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.expStatus=[];S.page=0;render();};
 
   // KPI clicks → single-click opens drill modal directly
   document.querySelectorAll("[data-kpi]").forEach(function(k){
