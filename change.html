@@ -256,6 +256,39 @@ mark.hl{background:#FEF08A;color:inherit;border-radius:3px;padding:0 1px}
 .mtag.rel{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
 .sortbar{display:flex;align-items:center;gap:8px}
 .sortbar .flabel{margin:0}
+.gsearch .gclear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--muted);font-size:13px}
+.gsearch .gclear:hover{background:var(--paper);color:var(--ink)}
+.gsearch input{padding-right:34px}
+.sr-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.sr-hd h2{font-size:16px;font-weight:700}
+.sr-what{font-size:12px;color:var(--muted);margin-top:2px}
+.sr-what b{color:var(--ink2)}
+.sr-tk{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.sr-note{font-size:12px;color:var(--ink2);background:var(--vi-bg);border:1px solid var(--vi-line);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+.linkbtn{background:none;border:none;color:var(--vi);font-weight:700;font-size:12px;padding:0;text-decoration:underline}
+.sr-card{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh);padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.sr-card:hover,.sr-card:focus{border-color:var(--vi-line);box-shadow:var(--sh2);outline:none}
+.sr-sc{flex:none;width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:13px}
+.sr-sc.hi{background:var(--green-bg);color:var(--green);border:1px solid #A7F3D0}
+.sr-sc.md{background:var(--medium-bg);color:#B45309;border:1px solid var(--medium-soft)}
+.sr-sc.lo{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.sr-main{flex:1;min-width:0}
+.sr-k{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px}
+.sr-k .jkey{font-size:13px}
+.sr-st{color:var(--ink2);font-weight:600}
+.sr-d{color:var(--faint);font-size:11px}
+.sr-s{font-size:13.5px;font-weight:600;color:var(--ink);margin:4px 0 3px;line-height:1.45}
+.sr-m{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted)}
+.sr-sn{font-size:11.5px;color:var(--ink2);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-top:6px;line-height:1.5}
+.sr-rs{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.rt{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.rt-key{background:var(--vi-soft);color:var(--vi);border-color:var(--vi-line)}
+.rt-lnk{background:var(--major-bg);color:#BE1558;border-color:var(--major-soft)}
+.rt-ex,.rt-txt{background:var(--green-bg);color:var(--green);border-color:#A7F3D0}
+.rt-sim{background:var(--minor-bg);color:var(--minor);border-color:var(--minor-soft)}
+.rt-st{background:var(--medium-bg);color:#B45309;border-color:var(--medium-soft)}
+.sr-empty{padding:40px;text-align:center;color:var(--muted)}
+.sr-empty h3{color:var(--ink);font-size:15px;margin:8px 0 4px}
 /* ── TREND CHARTS ── */
 .seg{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
 .seg button{background:none;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:600;color:var(--muted)}
@@ -477,10 +510,194 @@ function hl(text,terms){
 }
 function matchTag(m){ if(!m) return ""; if(m.exact) return '<span class="mtag exact">Exact</span>'; if(m.cov===1) return '<span class="mtag all">All words</span>'; return '<span class="mtag rel">Related</span>'; }
 
+/* ═════════════════ SEARCH (results list, like the Similar Ticket Finder) ═════════════════
+   The box does not filter the dashboard any more; it opens a ranked list of matching changes.
+   • Ticket keys are recognised as keys: "SWIPHX-12360", "swiphx 12360", "12360" or a partial
+     "SWIPHX-123" while typing. The client prefix (SWIPHX) is never searched as a word — on its
+     own it lists that client's changes; with other words it limits the search to that client.
+   • A key on its own shows that ticket first, then changes linked to it, then changes with a
+     similar summary.
+   • Words are matched by stem / prefix / one-letter typo and weighted by rarity (IDF): rare,
+     specific words count far more than common ones like "report" or "change".
+   • The match % is how much of the query (by weight) a ticket covers, with a bonus when the
+     words appear together in the title. Results respect the filters above, with an option to
+     include matches outside them. */
+var SX=null;
+function ensureSX(){
+  if(SX&&SX.raw===RAW) return SX;
+  var df={},pre={},byKey={};
+  RAW.forEach(function(t){
+    var seen={}; for(var f=1;f<t._ix.length;f++) t._ix[f].words.forEach(function(w){seen[w]=1;});
+    Object.keys(seen).forEach(function(w){df[w]=(df[w]||0)+1;});
+    var p=t.key.split("-")[0].toLowerCase(); if(p) pre[p]=(pre[p]||0)+1;
+    byKey[t.key.toLowerCase()]=t;
+  });
+  SX={raw:RAW,df:df,N:RAW.length||1,pre:pre,byKey:byKey}; return SX;
+}
+function idf(q){ return Math.log(1+SX.N/((SX.df[q]||0)+1))+0.2; }
+function keyPrefix(t){ return t.key.split("-")[0].toLowerCase(); }
+function parseSearch(q){
+  var raw=String(q||"").toLowerCase().trim(), keys=[], nums=[], pres=[], words=[];
+  var rest=raw.replace(/([a-z][a-z0-9]*)\s*-\s*(\d+)/g,function(all,p,n){ if(SX.pre[p]){keys.push(p+"-"+n);return " ";} return all; });
+  tokenize(rest).forEach(function(w){
+    if(SX.pre[w]) { if(pres.indexOf(w)<0) pres.push(w); }
+    else if(/^\d+$/.test(w)&&w.length>=3) nums.push(w);
+    else if(!STOP[w]) words.push(w);
+  });
+  if(pres.length&&nums.length){ pres.forEach(function(p){nums.forEach(function(n){keys.push(p+"-"+n);});}); nums=[]; }
+  var seen={}, terms=[]; words.forEach(function(w){var x=stem(w); if(!seen[x]){seen[x]=1;terms.push(x);}});
+  return {raw:raw,keys:keys,nums:nums,pres:pres,words:words,terms:terms,phrase:words.join(" ")};
+}
+function wordBoundary(hay,k){ return new RegExp("(^|[^a-z0-9])"+k.replace(/[-]/g,"\\-")+"($|[^0-9])").test(hay); }
+var FW=[0,1,.85,.6,.45];                      // field weights: key(handled apart), title, module/screen/menu, people/status/release, analysis/description
+function runSearch(q){
+  ensureSX();
+  var P=parseSearch(q), res={}, simFor=null;
+  function add(t,score,reason,cls){ var r=res[t.key]||(res[t.key]={t:t,s:0,rs:[]}); if(score>r.s) r.s=score; if(reason&&!r.rs.some(function(x){return x.t===reason;})) r.rs.push({t:reason,c:cls||""}); }
+  var preOk=function(t){ return !P.pres.length||P.pres.indexOf(keyPrefix(t))>-1; };
+  // ticket keys
+  P.keys.forEach(function(k){
+    var t=SX.byKey[k];
+    if(t){ add(t,100,"Ticket "+t.key,"key"); if(!simFor&&!P.terms.length) simFor=t; }
+    else RAW.forEach(function(x){ if(x.key.toLowerCase().indexOf(k)===0) add(x,82,"Key starts with "+k.toUpperCase(),"key"); });
+    RAW.forEach(function(x){ if(x.linked&&x.key.toLowerCase()!==k&&wordBoundary(x.linked.toLowerCase(),k)) add(x,90,"Linked to "+k.toUpperCase(),"lnk"); });
+    if(t&&t.linked) t.linked.split(/[;,\s]+/).forEach(function(lk){ var o=SX.byKey[lk.trim().toLowerCase()]; if(o&&o!==t) add(o,90,"Linked from "+t.key,"lnk"); });
+  });
+  // bare numbers → ticket numbers
+  P.nums.forEach(function(n){
+    RAW.forEach(function(x){ if(!preOk(x)) return; var num=x.key.split("-")[1]||"";
+      if(num===n){ add(x,98,"Ticket "+x.key,"key"); if(!simFor&&!P.terms.length) simFor=x; }
+      else if(num.indexOf(n)===0) add(x,72,"Number starts with "+n,"key");
+      if(x.linked&&new RegExp("-"+n+"($|[^0-9])").test(x.linked)) add(x,85,"Linked to …-"+n,"lnk"); });
+  });
+  // client prefix on its own → that client's changes
+  if(P.pres.length&&!P.keys.length&&!P.nums.length&&!P.terms.length)
+    RAW.forEach(function(x){ if(preOk(x)) add(x,50,"Client "+x.key.split("-")[0],"cl"); });
+  // words (or, for a single key, the words of its summary → similar changes)
+  var terms=P.terms, phrase=P.phrase, simMode=false;
+  if(!terms.length&&simFor){
+    var cand={}; simFor._ix[1].words.forEach(function(w){ if(w.length>=3&&!STOP[w]&&!/^\d+$/.test(w)&&!SX.pre[w]) cand[w]=1; });
+    terms=Object.keys(cand).sort(function(a,b){return idf(b)-idf(a);}).slice(0,8); phrase=""; simMode=terms.length>=2;
+    if(!simMode) terms=[];
+  }
+  if(terms.length){
+    var W=terms.map(idf), Wsum=W.reduce(function(a,b){return a+b;},0);
+    RAW.forEach(function(t){
+      if(!preOk(t)||t===simFor) return;
+      var got=0,inTitle=0,inStruct=0,inText=0,fuzzy=0,hits=0;
+      terms.forEach(function(q,i){
+        var best=0,where=-1,fz=false;
+        for(var f=1;f<t._ix.length;f++){ var ws=t._ix[f].words,m=0; for(var j=0;j<ws.length&&m<1;j++){var v=termMatch(q,ws[j]); if(v>m)m=v;} if(m*FW[f]>best){best=m*FW[f];where=f;fz=m<.85;} }
+        if(best>=.3){ got+=W[i]*best; hits++; if(where===1)inTitle++; else if(where===2)inStruct++; else if(where===4)inText++; if(fz)fuzzy++; }
+      });
+      var cov=got/Wsum;
+      if(cov<(simMode?.45:terms.length===1?.4:.34)) return;
+      var ph=phrase.length>=4&&P.words.length>=2&&t._ix[1].raw.indexOf(phrase)>-1;
+      var pct=Math.round(Math.min(97,cov*86+(ph?11:0))); if(simMode) pct=Math.round(pct*.82);
+      var rs=[];
+      if(simMode) rs.push(["Similar to "+simFor.key,"sim"]);
+      if(ph) rs.push(["Exact phrase in title","ex"]);
+      else if(inTitle) rs.push([inTitle===terms.length?"All words in title":inTitle+" of "+terms.length+" words in title","txt"]);
+      if(inStruct) rs.push(["Module / screen / menu","st"]);
+      if(inText) rs.push(["In analysis / description","tx2"]);
+      if(fuzzy) rs.push(["Close spelling","fz"]);
+      if(!simMode&&hits<terms.length) rs.push([hits+" of "+terms.length+" words","part"]);
+      rs.forEach(function(r){add(t,pct,r[0],r[1]);});
+      if(!rs.length) add(t,pct);
+    });
+  }
+  var list=Object.keys(res).map(function(k){return res[k];});
+  return {P:P,list:list,terms:terms,simFor:simFor,simMode:simMode};
+}
+function activeFilterNames(){
+  var n=[]; if(S.proj)n.push("Client: "+S.proj); if(S.svm)n.push("SVM: "+S.svm); if(S.comp)n.push("Module: "+S.comp); if(S.stage)n.push("Stage: "+S.stage);
+  if(S.size)n.push("Size: "+S.size); if(S.prio)n.push("Priority: "+S.prio); if(S.owner)n.push("Owner: "+S.owner); if(S.status)n.push("Status: "+S.status);
+  if(S.from||S.to)n.push("Created "+(S.from||"…")+" to "+(S.to||"…")); return n;
+}
+function scCls(v){ return v>=75?"hi":v>=50?"md":"lo"; }
+function snippet(text,terms){
+  text=String(text||"").replace(/\s+/g," ").trim(); if(!text||!terms.length) return "";
+  var low=text.toLowerCase(), at=-1;
+  terms.some(function(q){ var i2=low.search(new RegExp("\\b"+q.replace(/[^a-z0-9]/g,""))); if(i2>-1){at=i2;return true;} return false; });
+  if(at<0) return "";
+  var st=Math.max(0,at-80), en=Math.min(text.length,at+170);
+  return (st?"… ":"")+hl(text.slice(st,en),terms)+(en<text.length?" …":"");
+}
+var SR_LAST=[];
+function searchViewHTML(){
+  var t0=performance.now(), q=S.search.trim(), R=runSearch(q), inF={};
+  FILTERED.forEach(function(t){inF[t.key]=1;});
+  var inside=R.list.filter(function(r){return inF[r.t.key];}), outside=R.list.length-inside.length;
+  var list=S.searchAll?R.list:inside;
+  var sk=S.srSort||"rel";
+  list.sort(function(a,b){
+    if(sk==="new") return (b.t.created||0)-(a.t.created||0);
+    if(sk==="old") return (a.t.created||0)-(b.t.created||0);
+    if(sk==="upd") return (b.t.updated||0)-(a.t.updated||0);
+    return b.s-a.s||(b.t.created||0)-(a.t.created||0);
+  });
+  SR_LAST=list;
+  var ms=Math.round(performance.now()-t0), P=R.P, fl=activeFilterNames();
+  var what=[];
+  if(P.keys.length) what.push("ticket "+P.keys.map(function(k){return "<b>"+esc(k.toUpperCase())+"</b>";}).join(", "));
+  if(P.nums.length) what.push("ticket number "+P.nums.map(function(n){return "<b>"+esc(n)+"</b>";}).join(", "));
+  if(P.pres.length) what.push("client "+P.pres.map(function(p){return "<b>"+esc(p.toUpperCase())+"</b>";}).join(", "));
+  if(P.terms.length) what.push("the words "+P.words.map(function(w){return "<b>"+esc(w)+"</b>";}).join(" "));
+  if(R.simMode) what.push("changes similar to <b>"+esc(R.simFor.key)+"</b>");
+  var h='<div class="sr-hd"><div><h2>Search results</h2><div class="sr-what">Looking for '+(what.length?what.join(" · "):"<b>"+esc(q)+"</b>")+'</div></div>'+
+    '<span class="hspace"></span><span class="sr-tk">'+list.length+' match'+(list.length!==1?'es':'')+' · '+ms+' ms</span>'+
+    '<label class="sortbar"><span class="flabel">Sort</span><select class="fsel" id="srSort">'+
+      [["rel","Best match"],["new","Newest created"],["old","Oldest created"],["upd","Recently updated"]].map(function(o){return '<option value="'+o[0]+'"'+(sk===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select></label>'+
+    (list.length?'<button class="ghost" id="srCsv">⬇ Export CSV</button>':'')+'</div>';
+  if(fl.length) h+='<div class="sr-note">'+(S.searchAll?'Showing matches from <b>all changes</b>, ignoring your filters ('+esc(fl.join(" · "))+'). <button class="linkbtn" id="srScope">Only within filters</button>':
+    'Searching within your filters: '+esc(fl.join(" · "))+'.'+(outside?' <button class="linkbtn" id="srScope">Include '+outside+' more match'+(outside!==1?'es':'')+' outside them</button>':''))+'</div>';
+  if(!list.length){
+    h+='<div class="card sr-empty"><div style="font-size:30px">🔍</div><h3>No changes match “'+esc(q)+'”</h3><p>'+
+      (P.keys.length||P.nums.length?'Check the ticket number — it may not be a Change, or it may be outside the filters.':'Try fewer or different words — a screen name, module or an unusual word from the summary works best.')+'</p></div>';
+    return h;
+  }
+  list.slice(0,S.srLimit||40).forEach(function(r){
+    var t=r.t, sn=R.terms.length?(snippet(t.analysis,R.terms)||snippet(t.desc,R.terms)||snippet(t.solution,R.terms)):"";
+    var showSn=sn&&r.rs.some(function(x){return x.c==="tx2";});
+    h+='<div class="sr-card" data-srkey="'+esc(t.key)+'" tabindex="0">'+
+      '<div class="sr-sc '+scCls(r.s)+'" title="How closely this change matches">'+r.s+'%</div>'+
+      '<div class="sr-main">'+
+        '<div class="sr-k"><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a>'+
+          '<span class="sr-st"><span class="sdot" style="background:'+(STAGE_COLOR[t.stage]||"#9AA7B8")+'"></span>'+esc(t.stage)+' · '+esc(t.status)+'</span>'+
+          sizeBadge(t.size)+ownerBadge(t.owner)+
+          '<span class="sr-d">Created '+fmtD(t.created)+(t.delivered?' · Delivered '+fmtD(t.delivered):'')+(t.open&&t.age!=null?' · open '+t.age+'d':'')+'</span></div>'+
+        '<div class="sr-s">'+hl(t.summary||"—",R.terms)+'</div>'+
+        '<div class="sr-m">'+[t.project,t.svm&&("SVM "+t.svm),t.componentsRaw,t.screen,t.release&&("Release "+t.release)].filter(Boolean).map(function(x){return '<span>'+hl(x,R.terms)+'</span>';}).join('')+'</div>'+
+        (showSn?'<div class="sr-sn">'+sn+'</div>':'')+
+        '<div class="sr-rs">'+r.rs.map(function(x){return '<span class="rt rt-'+x.c+'">'+esc(x.t)+'</span>';}).join('')+'</div>'+
+      '</div></div>';
+  });
+  if(list.length>(S.srLimit||40)) h+='<div style="text-align:center;margin:12px 0"><button class="ghost" id="srMore">Show more ('+(list.length-(S.srLimit||40))+' left)</button></div>';
+  return h;
+}
+function updateSearchView(){ var v=el("searchView"); if(!v){render();return;} v.innerHTML=searchViewHTML(); bindSearchView(); }
+function clearSearch(){ S.search=""; S.searchAll=false; render(); var n=el("gsearch"); if(n)n.focus(); }
+function bindSearchView(){
+  var ss=el("srSort"); if(ss) ss.onchange=function(){S.srSort=ss.value;updateSearchView();};
+  var sc=el("srScope"); if(sc) sc.onclick=function(){S.searchAll=!S.searchAll;updateSearchView();};
+  var sm=el("srMore"); if(sm) sm.onclick=function(){S.srLimit=(S.srLimit||40)+40;updateSearchView();};
+  var cv=el("srCsv"); if(cv) cv.onclick=function(){
+    var cols=["Match %","Why","Key","Summary","Client","Stage","Status","Size","Priority","SVM In Charge","Components","Screen Name","Release","Created","Delivered","Resolved"];
+    var lines=[cols.map(csvCell).join(",")];
+    SR_LAST.forEach(function(r){var t=r.t;lines.push([r.s,r.rs.map(function(x){return x.t;}).join("; "),t.key,t.summary,t.project,t.stage,t.status,t.size,t.priority,t.svm,t.componentsRaw,t.screen,t.release,t.created,t.delivered,t.resolved].map(csvCell).join(","));});
+    dl(lines.join("\n"),"change-search-"+S.search.trim().replace(/[^\w]+/g,"-").slice(0,30).toLowerCase()+".csv");
+  };
+  document.querySelectorAll("[data-srkey]").forEach(function(c){
+    function open(){var t=RAW.find(function(x){return x.key===c.dataset.srkey;}); if(t) openModal(t.key,[t]);}
+    c.onclick=function(e){ if(e.target.closest("a")) return; open(); };
+    c.onkeydown=function(e){ if(e.key==="Enter") open(); };
+  });
+}
+
 /* ── filtering ── */
 var CUR_TERMS=[], SEARCH_STATS={all:0};
 function applyFilters(){
-  var phrase=S.search.trim().toLowerCase(), terms=phrase?parseQuery(phrase):[];
+  var phrase="", terms=[];          // the search box no longer filters the dashboard — it opens the results list (renderSearchView)
   CUR_TERMS=terms;
   FILTERED=RAW.filter(function(t){
     t._score=0; t._m=null;
@@ -569,7 +786,7 @@ function render(){
     '<div class="hactions"><button class="ghost" id="resetBtn">↺ Reset filters</button></div>'+
   '</div>'+
   '<div class="filters">'+
-    '<div class="gsearch"><span class="ico">🔍</span><input type="text" id="gsearch" placeholder="Search key, summary, client, release, screen…" value="'+esc(S.search)+'"></div>'+
+    '<div class="gsearch"><span class="ico">🔍</span><input type="text" id="gsearch" autocomplete="off" placeholder="Ticket number (12360 or SWIPHX-12360), or words from the summary, screen, module…" value="'+esc(S.search)+'">'+(S.search?'<button class="gclear" id="gclear" title="Clear search (Esc)">✕</button>':'')+'</div>'+
     selCell("Client","fProj",S.proj,projs,"All clients")+
     selCell("SVM In Charge","fSvm",S.svm,svms,"All SVM")+
     selCell("Module","fComp",S.comp,comps,"All modules")+
@@ -581,7 +798,11 @@ function render(){
     '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
     '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+
   '</div></header><main>';
-  h+=searchInfo();
+  if(S.search.trim()){                 // searching → results list replaces the dashboard
+    h+='<div id="searchView">'+searchViewHTML()+'</div>';
+    h+='<div class="footer"><b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' change tickets loaded · HD Change Tracker</div></main>';
+    el("app").innerHTML=h; bindAll(); bindSearchView(); return;
+  }
 
   // KPIs
   var total=FILTERED.length;
@@ -610,16 +831,8 @@ function render(){
   el("app").innerHTML=h;
   bindAll();
 }
-function searchInfo(){
-  var q=S.search.trim(); if(!q) return "";
-  var n=FILTERED.length;
-  var txt=n?('<b>'+n.toLocaleString()+'</b> change'+(n!==1?'s':'')+' related to “<b>'+esc(q)+'</b>”'+
-      (CUR_TERMS.length>1&&!S.strict?' · <b>'+SEARCH_STATS.all+'</b> contain every word, the rest match some words or close spellings':'')+' · best matches first in Tickets')
-    :('No change matches “<b>'+esc(q)+'</b>” with the current filters. Try fewer words'+(S.strict?' or turn off exact words':'')+', or clear the Client / SVM filters.');
-  return '<div class="srch-info"><span>'+txt+'</span><span class="hspace"></span><button class="chip-btn'+(S.strict?' on':'')+'" id="strictBtn" title="Only show tickets containing every word exactly">Exact words only</button></div>';
-}
 function tabBtn(k,label,cnt){
-  return '<button class="'+(S.tab===k?"on":"")+'" data-tab="'+k+'">'+label+(cnt!=null?' <span class="cnt">'+cnt+'</span>':'')+'</button>';
+  return '<button class="'+(S.tab===k&&!S.search.trim()?"on":"")+'" data-tab="'+k+'">'+label+(cnt!=null?' <span class="cnt">'+cnt+'</span>':'')+'</button>';
 }
 function kpiCard(id,label,val,sub,icon,style){
   return '<div class="card kpi" data-kpi="'+id+'" style="'+style+'"><span class="tag">'+icon+'</span>'+
@@ -1197,19 +1410,21 @@ function handleUpload(e){var f=e.target.files&&e.target.files[0];if(!f)return;pr
 
 /* ── EVENTS ── */
 function bindAll(){
-  document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){S.tab=b.dataset.tab;S.page=0;render();};});
-  var gs=el("gsearch");if(gs)gs.oninput=function(){
-    clearTimeout(window._gsT);
-    window._gsT=setTimeout(function(){
-      var n0=el("gsearch"), v=n0?n0.value:"", p=n0?n0.selectionStart:v.length;
-      var had=!!S.search.trim(), has=!!v.trim();
-      S.search=v; S.page=0;
-      if(has&&!had&&S.sortCol==="created"&&S.sortDir==="desc") S.sortCol="_score";      // searching → best match first
-      if(!has&&S.sortCol==="_score"){S.sortCol="created";S.sortDir="desc";}                // cleared → back to newest first
-      render(); var n=el("gsearch"); if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}}
-    },220);
-  };
-  var sb=el("strictBtn");if(sb)sb.onclick=function(){S.strict=!S.strict;S.page=0;render();};
+  document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){S.tab=b.dataset.tab;S.page=0;S.search="";render();};});
+  var gs=el("gsearch");if(gs){
+    gs.oninput=function(){
+      clearTimeout(window._gsT);
+      window._gsT=setTimeout(function(){
+        var n0=el("gsearch"), v=n0?n0.value:"", p=n0?n0.selectionStart:v.length;
+        var had=!!S.search.trim(), has=!!v.trim();
+        S.search=v; S.srLimit=40;
+        if(had!==has){ render(); var n=el("gsearch"); if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}} }
+        else if(has) updateSearchView();          // only the results list changes — the page stays put while typing
+      },200);
+    };
+    gs.onkeydown=function(e){ if(e.key==="Escape"&&gs.value){ e.stopPropagation(); clearSearch(); } else if(e.key==="Enter"){ clearTimeout(window._gsT); S.search=gs.value; S.srLimit=40; var p=gs.selectionStart; render(); var n=el("gsearch"); if(n){n.focus();try{n.setSelectionRange(p,p);}catch(x){}} } };
+  }
+  var gc=el("gclear");if(gc)gc.onclick=clearSearch;
   function bindSel(id,key,resetPage){var e=el(id);if(e)e.onchange=function(){S[key]=e.value;if(resetPage)S.page=0;render();};}
   bindSel("fProj","proj",1);bindSel("fSvm","svm",1);bindSel("fComp","comp",1);bindSel("fStage","stage",1);
   bindSel("fSize","size",1);bindSel("fPrio","prio",1);bindSel("fOwner","owner",1);bindSel("fStatus","status",1);
