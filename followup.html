@@ -11,6 +11,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="hd-store.js"></script>
+<script src="sla-engine.js"></script>
+<script src="sla-history.js"></script>
+<script src="sla-link.js"></script>
 <script>
 /* Bridge detection for Jira reminders — runs immediately before Babel */
 window._rmBridge=false;
@@ -231,16 +234,86 @@ function parseTimeToHours(str){
   var total=h+m/60;
   return neg?-total:total;
 }
-// SLA thresholds: {firstResponse in hours, resolution in hours}
-var SLA_THRESHOLDS={"Show Stopper":{fr:1,res:24},"Critical":{fr:1,res:24},"High":{fr:4,res:48},"Medium":{fr:8,res:72},"Low":{fr:24,res:120}};
+/* SLA — read from the SLA Tracker (sla-link.js), so this page shows exactly the same numbers:
+   working time on the configured calendar, paused while the ticket is with the client,
+   per-client targets from SLA Tracker → Settings. The old version read Jira's
+   "Time to first response / resolution" text and compared it with fixed hours, which
+   gave meaningless results. A ticket with no fetched status history shows "No SLA data"
+   rather than a guess. Return shape kept for existing callers. */
 function checkSLA(t){
-  var priority=t.Priority||"Medium";
-  var sla=SLA_THRESHOLDS[priority]||SLA_THRESHOLDS["Medium"];
-  var frHours=parseTimeToHours(t["Time to first response"]);
-  var resHours=parseTimeToHours(t["Time to resolution"]);
-  var frBreach=frHours!==null&&frHours>sla.fr;
-  var resBreach=resHours!==null&&resHours>sla.res;
-  return{frBreach:frBreach,resBreach:resBreach,anyBreach:frBreach||resBreach};
+  var x=window.HDSlaLink?window.HDSlaLink.get(t):{state:"na"};
+  return{frBreach:false,resBreach:!!x.breached,anyBreach:!!x.breached,openBreach:x.state==="breached",atRisk:!!x.atRisk,info:x};
+}
+function slaText(t){var x=checkSLA(t).info;return x.state==="na"||x.state==="loading"?"":x.label||"";}
+var SLA_TONE={red:["#FEE2E2","#BE123C"],orange:["#FFEDD5","#C2410C"],amber:["#FEF3C7","#B45309"],green:["#DCFCE7","#047857"],grey:["#F1F5F9","#475569"]};
+/* compact SLA cell for tables */
+function SlaCell({t}){
+  var x=checkSLA(t).info;
+  if(x.state==="na"||x.state==="loading")return <span style={{color:"var(--t4)",fontSize:10}} title={x.tip||""}>—</span>;
+  if(x.state==="nohist"||x.state==="none")return <span title={x.tip} style={{color:"var(--t4)",fontSize:10,borderBottom:"1px dotted var(--t4)",cursor:"help",whiteSpace:"nowrap"}}>{x.state==="none"?"No target":"No data"}</span>;
+  var c=SLA_TONE[x.tone]||SLA_TONE.grey;
+  return <span title={x.tip} style={{background:c[0],color:c[1],padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap",cursor:"help"}}>{x.state==="breached"?"⚡ ":x.state==="paused"?"⏸ ":""}{x.label}{x.suspect?" ⚠":""}</span>;
+}
+/* SLA badge for ticket cards */
+function SlaPill({t}){
+  var x=checkSLA(t).info;
+  if(x.state==="na"||x.state==="loading"||x.state==="none")return null;
+  if(x.state==="nohist")return <span title={x.tip} style={{background:"var(--bg)",color:"var(--t3)",border:"1px dashed var(--border)",padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:700,flexShrink:0,cursor:"help"}}>SLA: no data</span>;
+  var c=SLA_TONE[x.tone]||SLA_TONE.grey;
+  return <span title={x.tip} style={{background:c[0],color:c[1],padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0,cursor:"help",whiteSpace:"nowrap"}}>SLA · {x.label}</span>;
+}
+/* "Calculate SLA (n)": fetch status history for tickets that have none, through the Jira bridge.
+   Saved into the SLA Tracker's cache, so the SLA Tracker benefits too. */
+function SlaFetchBtn({rows}){
+  const[busy,setBusy]=useState(null);
+  var L=window.HDSlaLink; if(!L||!L.ready())return null;
+  var miss=L.missing(rows||[]).length;
+  if(!miss&&!busy)return null;
+  if(busy)return <span style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",whiteSpace:"nowrap"}}>⏱ Calculating SLA… {busy.d}/{busy.t}</span>;
+  var ok=L.bridgeReady();
+  function go(){
+    setBusy({d:0,t:miss});
+    L.fetchMissing(rows,{onProgress:function(d,t){setBusy({d:d,t:t});}}).then(function(r){
+      setBusy(null);
+      if(r.failed&&r.failed.length)alert(r.failed.length+" ticket(s) could not be fetched, e.g. "+r.failed[0].key+": "+r.failed[0].reason);
+    },function(e){setBusy(null);alert("Could not calculate SLA: "+(e&&e.message||e));});
+  }
+  return <button onClick={go} disabled={!ok} title={ok?"Fetch status history from Jira for "+miss+" ticket(s) without SLA data and calculate their SLA. Also saved for the SLA Tracker.":"HD Jira Bridge extension not detected — enable it and reload"}
+    style={{padding:"8px 14px",borderRadius:8,border:"1px solid #FDBA74",background:"#FFF7ED",fontSize:12,fontWeight:700,color:"#C2410C",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",opacity:ok?1:.55,cursor:ok?"pointer":"not-allowed"}}>⏱ Calculate SLA ({miss})</button>;
+}
+/* Dashboard strip: SLA of the open tickets in view */
+function SlaStrip({rows,onOpen}){
+  var L=window.HDSlaLink; if(!L)return null;
+  if(!L.ready())return <div className="card" style={{padding:"11px 18px",marginBottom:9,fontSize:12,color:"var(--t3)"}}>⏱ Loading SLA data…</div>;
+  var s=L.summarize(rows);
+  if(!s.total)return null;
+  var have=s.total-s.nohist-s.none;
+  function box(label,n,list,bg,fg,sub){
+    return <button onClick={function(){if(n)onOpen(label,list,fg);}} disabled={!n} title={n?"Show these tickets":""}
+      style={{flex:"1 1 120px",textAlign:"left",background:bg,border:"1px solid "+fg+"33",borderRadius:10,padding:"8px 12px",cursor:n?"pointer":"default",opacity:n?1:.6}}>
+      <div style={{fontFamily:"var(--mono)",fontWeight:800,fontSize:20,color:fg,lineHeight:1}}>{n}</div>
+      <div style={{fontSize:11,fontWeight:700,color:"var(--t1)",marginTop:4}}>{label}</div>
+      <div style={{fontSize:10,color:"var(--t3)",marginTop:1}}>{sub}</div>
+    </button>;
+  }
+  return(<div className="fu fu2 card" style={{padding:"12px 18px",marginBottom:9}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,flexWrap:"wrap"}}>
+      <div style={{width:42,height:42,borderRadius:10,background:"#FFF7ED",border:"1px solid #FED7AA",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>⏱</div>
+      <div style={{flex:1,minWidth:220}}>
+        <div style={{fontWeight:800,fontSize:14,color:"var(--t1)"}}>SLA of open tickets</div>
+        <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>Same numbers as the SLA Tracker — working time only, clock paused while with the client. {have} of {s.total} open SLA tickets have data{s.nohist?"; "+s.nohist+" still need their status history":""}.</div>
+      </div>
+      <SlaFetchBtn rows={rows}/>
+      <a href="sla.html" style={{fontSize:12,fontWeight:700,color:"var(--blue)",whiteSpace:"nowrap"}}>Open SLA Tracker ↗</a>
+    </div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {box("Breached",s.breached,s.lists.breached,"#FEF2F2","#BE123C","over target, still open")}
+      {box("At risk",s.atRisk,s.lists.atRisk,"#FFFBEB","#B45309",L.config().warnPct+"%+ of target used")}
+      {box("On track",s.onTrack,s.lists.onTrack,"#F0FDF4","#047857","under "+L.config().warnPct+"% used")}
+      {box("With client",s.paused,s.lists.paused,"#F8FAFC","#475569","clock paused")}
+      {box("No SLA data",s.nohist,s.lists.nohist,"#F8FAFC","#94A3B8","history not fetched")}
+    </div>
+  </div>);
 }
 var PRIORITY_COLORS={"Show Stopper":"#BE123C","Critical":"#E11D48","High":"#D97706","Medium":"#2563EB","Low":"#059669"};
 var PRIORITY_BG={"Show Stopper":"#FFF1F2","Critical":"#FFF1F2","High":"#FFFBEB","Medium":"#EFF6FF","Low":"#ECFDF5"};
@@ -300,12 +373,13 @@ function exportFullCSV(tickets,filename){
   var colSet={},colOrder=[];
   tickets.forEach(function(t){Object.keys(t).forEach(function(k){if(k!=="_sla"&&k!=="_raw"&&!colSet[k]){colSet[k]=1;colOrder.push(k);}});});
   /* Append computed columns at the end */
-  colOrder.push("__Category__","__Age_Days__");
-  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days (computed)":c);}).join(",")];
+  colOrder.push("__Category__","__Age_Days__","__SLA__");
+  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days (computed)":c==="__SLA__"?"SLA (same as SLA Tracker)":c);}).join(",")];
   tickets.forEach(function(t){
     lines.push(colOrder.map(function(c){
       if(c==="__Category__")return escCSV(CL[classify(t.Status)]||"");
       if(c==="__Age_Days__")return ds(t.Updated||t.Created);
+      if(c==="__SLA__")return escCSV(slaText(t));
       return escCSV(t[c]);
     }).join(","));
   });
@@ -324,7 +398,7 @@ function ticketRow(t){
     "Project":t.Project||"","Components":t.Components||"","Root Cause":t["Root Cause"]||"",
     "Type of Fix":t["Type of Fix"]||"","Created":t.Created?fd(t.Created):"","Updated":t.Updated?fd(t.Updated):"",
     "Resolved":t.Resolved?fd(t.Resolved):"","Age Created (days)":crAge===999?"":crAge,
-    "Age Updated (days)":upAge===999?"":upAge,"SLA Breach":sla.anyBreach?"Yes":"",
+    "Age Updated (days)":upAge===999?"":upAge,"SLA":slaText(t),
     "Linked Issues":t["Linked Issues"]||"","Linked Status":t["Linked Ticket status"]||"",
     "Next Action":nextStep(t.Status,c)};
 }
@@ -389,11 +463,11 @@ function _xlDl(wb,fname){var out=XLSX.write(wb,{bookType:"xlsx",type:"array"});v
 function _trow(t,alt,reason){
   var si=alt?"a":"n",sr=alt?"ar":"nr",sw=alt?"aw":"nw";
   var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
-  var r=[_v(t.Key,si),_v((t.Summary||"").substring(0,100),sw),_v(t.Status,si),_v(t.Priority,si),_v(t["SVM In Charge"]||"",si),_v(t["Current Worker"]||"",si),_v(t.Project||"",si),_v(t.Created?fd(t.Created):"",si),_v(t.Updated?fd(t.Updated):"",si),_v(ca===999?0:ca,sr),_v(ua===999?0:ua,sr),_v(checkSLA(t).anyBreach?"YES":"",si),_v(t["Linked Issues"]||"",si)];
+  var r=[_v(t.Key,si),_v((t.Summary||"").substring(0,100),sw),_v(t.Status,si),_v(t.Priority,si),_v(t["SVM In Charge"]||"",si),_v(t["Current Worker"]||"",si),_v(t.Project||"",si),_v(t.Created?fd(t.Created):"",si),_v(t.Updated?fd(t.Updated):"",si),_v(ca===999?0:ca,sr),_v(ua===999?0:ua,sr),_v(slaText(t),si),_v(t["Linked Issues"]||"",si)];
   r.push(reason!==undefined?_v(reason,sw):_v(nextStep(t.Status,classify(t.Status)),si));return r;}
 function _thdr(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
-  return[_v("Key",lid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("Age (Updated)",hid),_v("SLA Breach",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
-var _DW=[15,52,22,14,20,20,26,12,12,13,13,10,16,30];
+  return[_v("Key",lid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("Age (Updated)",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
+var _DW=[15,52,22,14,20,20,26,12,12,13,13,24,16,30];
 
 /* ═══ 1. ENGINEERING REPORT ═══ */
 function generateEnggReport(p){
@@ -417,7 +491,7 @@ function generateEnggReport(p){
   s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"a"),_v(fires.length,"lk"),_v(fires.length?"URGENT - see Fires tab":"None","a")]);
   s1.push([_v("Danger Zone (90+ days)",danger.length?"wa":"a"),_v(danger.length,"lk"),_v("See Danger Zone tab","a")]);
   s1.push([_v("Avg Age Created / Updated","n"),_v(avgCA+"d / "+avgUA+"d","nr"),""]);
-  s1.push([_v("SLA Breaches","a"),_v(slaBr,"ar"),_v("","a")]);s1.push(["","",""]);
+  s1.push([_v("SLA Breaches","a"),_v(slaBr,"ar"),_v("Same calculation as the SLA Tracker","a")]);s1.push(["","",""]);
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
   ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
   s1.push(["","",""]);s1.push([_v("AGING (Created)","sh"),_v("Count","sh"),_v("%","sh")]);
@@ -468,7 +542,12 @@ function generateDailyReport(p){
   s1.push([_v("ATTENTION","sh"),_v("Count","sh"),_v("","sh")]);
   s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"n"),_v(fires.length,"lk"),fires.length?"Immediate escalation needed":"None"]);s1.push(["","",""]);
   s1.push([_v("SLA","sh"),_v("","sh"),_v("","sh")]);
-  s1.push([_v("First Response","n"),_v(slaData.frRate+"%","nr"),""]);s1.push([_v("Resolution","a"),_v(slaData.resRate+"%","ar"),_v("","a")]);
+  var so=slaData.open||{breached:0,atRisk:0,paused:0,onTrack:0,nohist:0},sr=slaData.range||{};
+  s1.push([_v("Open — breached","a"),_v(so.breached,"ar"),_v("Over target, still open","a")]);
+  s1.push([_v("Open — at risk","n"),_v(so.atRisk,"nr"),"Close to target"]);
+  s1.push([_v("Open — on track / with client","a"),_v(so.onTrack+" / "+so.paused,"ar"),_v("","a")]);
+  s1.push([_v("SLA met (closed in range)","n"),_v(sr.metPct==null?"—":sr.metPct+"%","nr"),sr.decided?sr.met+" of "+sr.decided+" closed":""]);
+  if(so.nohist)s1.push([_v("No SLA data yet","a"),_v(so.nohist,"ar"),_v("Use Calculate SLA or the SLA Tracker","a")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,14,50]),"Summary");
   /* Detail sheets */
   function dsh(name,arr){var s=[];s.push(_thdr());arr.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){s.push(_trow(t,i%2));});XLSX.utils.book_append_sheet(wb,_mkSheet(s,_DW),name);}
@@ -523,7 +602,7 @@ function buildDailyMailDraft(p){
   var st=p.st,slaData=p.slaData,prioDist=p.prioDist,today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
   var subject="HD Daily Report | "+today+" | "+st.n+" Open Tickets";
-  var body="Good morning team,\n\nDaily summary as of "+today+":\n\n  Total Open: "+st.n+"  |  HD Action: "+st.hd.length+"  |  Client: "+st.cl.length+"  |  Engg: "+st.eng.length+"\n  On-Hold: "+st.hold.length+"  |  Invoice: "+st.inv.length+"  |  Danger 90+d: "+st.dng+"\n  Fires: "+fires.length+"  |  SLA FR: "+slaData.frRate+"%  |  SLA Res: "+slaData.resRate+"%\n  Priority: SS:"+(prioDist["Show Stopper"]||0)+" Crit:"+(prioDist["Critical"]||0)+" High:"+(prioDist["High"]||0)+" Med:"+(prioDist["Medium"]||0)+" Low:"+(prioDist["Low"]||0)+"\n\nExcel attached.\n\nRegards,\nSVM Help Desk\n";
+  var body="Good morning team,\n\nDaily summary as of "+today+":\n\n  Total Open: "+st.n+"  |  HD Action: "+st.hd.length+"  |  Client: "+st.cl.length+"  |  Engg: "+st.eng.length+"\n  On-Hold: "+st.hold.length+"  |  Invoice: "+st.inv.length+"  |  Danger 90+d: "+st.dng+"\n  Fires: "+fires.length+"  |  SLA: "+((slaData.open||{}).breached||0)+" breached, "+((slaData.open||{}).atRisk||0)+" at risk"+(slaData.range&&slaData.range.metPct!=null?", "+slaData.range.metPct+"% met":"")+"\n  Priority: SS:"+(prioDist["Show Stopper"]||0)+" Crit:"+(prioDist["Critical"]||0)+" High:"+(prioDist["High"]||0)+" Med:"+(prioDist["Medium"]||0)+" Low:"+(prioDist["Low"]||0)+"\n\nExcel attached.\n\nRegards,\nSVM Help Desk\n";
   return{subject:subject,body:body};
 }
 function buildClientMailDraft(p){
@@ -780,6 +859,7 @@ function TicketModal({data,onClose}){
             <div style={{fontSize:16,fontWeight:800,color:"var(--t1)"}}>{data.title}</div>
             <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{tix.length} ticket{tix.length!==1?"s":""}</div>
           </div>
+          <SlaFetchBtn rows={tix}/>
           <button onClick={function(){exportFullCSV(tix,(data.title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
@@ -792,7 +872,8 @@ function TicketModal({data,onClose}){
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Status</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Project</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Same as the SLA Tracker. Hover a value for details.">SLA</th>
+<th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
               <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
             </tr></thead>
@@ -801,15 +882,15 @@ function TicketModal({data,onClose}){
                 var a=ds(t.Updated||t.Created);var bk=abk(a);var c=classify(t.Status);var cs=CS[c];
                 var linked=t["Linked Issues"]||"";var linkedSt=t["Linked Ticket status"]||"";
                 var sla=checkSLA(t);
-                return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.anyBreach?"#FFF5F5":""}}>
+                return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.openBreach?"#FFF5F5":""}}>
                   <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
                     <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12,color:"var(--blue)"}}>{t.Key}</a>
-                    {sla.anyBreach&&<span title={"SLA Breach"+(sla.frBreach?" · Response":"")+(sla.resBreach?" · Resolution":"")} style={{marginLeft:5,background:"#FEE2E2",color:"#BE123C",padding:"1px 5px",borderRadius:4,fontSize:8,fontWeight:700}}>⚡SLA</span>}
                   </td>
                   <td style={{padding:"6px 10px",color:"var(--t2)",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
                   <td style={{padding:"6px 10px"}}><span style={{background:cs.badge,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
                   <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
                   <td style={{padding:"6px 10px",fontSize:11,fontWeight:600,color:t.Priority==="Critical"||t.Priority==="Show Stopper"?"var(--rose)":t.Priority==="High"?"var(--amber)":"var(--t3)"}}>{t.Priority}</td>
+                  <td style={{padding:"6px 10px"}}><SlaCell t={t}/></td>
                   <td style={{padding:"6px 10px",fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                     {linked?<a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--blue)"}}>{linked.split(";")[0]}</a>:<span style={{color:"var(--t4)"}}>—</span>}
                   </td>
@@ -994,7 +1075,8 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Status</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Project</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
-            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Same as the SLA Tracker. Hover a value for details.">SLA</th>
+<th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
             <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
             {(data.showReport||data.showClientReport)&&onRemind&&<th style={{padding:"7px 10px",textAlign:"center",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Remind</th>}
@@ -1003,16 +1085,16 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             {list.slice(0,500).map(function(t,i){
               var a=ds(t.Updated||t.Created);var bk=abk(a);
               var sla=checkSLA(t);var linked=t["Linked Issues"]||"";
-              return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.anyBreach?"#FFF5F5":""}}>
+              return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.openBreach?"#FFF5F5":""}}>
                 <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
                   <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12,color:"var(--blue)"}}>{t.Key}</a>
-                  {sla.anyBreach&&<span style={{marginLeft:5,background:"#FEE2E2",color:"#BE123C",padding:"1px 5px",borderRadius:4,fontSize:8,fontWeight:700}}>⚡SLA</span>}
                 </td>
                 <td style={{padding:"6px 10px",color:"var(--t2)",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
                 <td style={{padding:"6px 10px"}}><span style={{background:badgeColor,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
                 <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
                 <td style={{padding:"6px 10px",fontSize:11,fontWeight:600,color:t.Priority==="Critical"||t.Priority==="Show Stopper"?"var(--rose)":t.Priority==="High"?"var(--amber)":"var(--t3)"}}>{t.Priority}</td>
-                <td style={{padding:"6px 10px",fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                <td style={{padding:"6px 10px"}}><SlaCell t={t}/></td>
+                  <td style={{padding:"6px 10px",fontSize:10,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {linked?<a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--blue)"}}>{linked.split(";")[0]}</a>:<span style={{color:"var(--t4)"}}>—</span>}
                 </td>
                 <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
@@ -1048,6 +1130,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
           {data.showClientReport&&<select value={clientProj} onChange={function(e){setClientProj(e.target.value);}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",minWidth:180,fontFamily:"inherit"}}><option value="">-- Select Client --</option>{clientProjects.map(function(cp){return <option key={cp[0]} value={cp[0]}>{cp[0]} ({cp[1]})</option>;})}</select>}
           {data.showClientReport&&clientProj&&onClientReport&&<button onClick={function(){onClientReport(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Client Report</button>}
           {data.showClientReport&&clientProj&&onClientMail&&<button onClick={function(){onClientMail(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Client Mail</button>}
+          <SlaFetchBtn rows={tix}/>
           <button onClick={function(){exportFullCSV(tix,(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ CSV</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
@@ -1325,12 +1408,12 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             var linkedCount=tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";}).length;
             /* ── export the current (filtered) view to CSV ── */
             function exportEnggCSV(){
-              var rows=[["Engg Assignee","Key","Summary","Status","Priority","Project","Linked Issue","Created","Updated","Age (Updated, days)","SLA Breach","Next Action"]];
+              var rows=[["Engg Assignee","Key","Summary","Status","Priority","Project","Linked Issue","Created","Updated","Age (Updated, days)","SLA","Next Action"]];
               entries.slice().sort(function(a,b){return b[1].n-a[1].n;}).forEach(function(e){
                 var nm=e[0];
                 e[1].tickets.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t){
                   var ua=ds(t.Updated||t.Created);
-                  rows.push([nm,t.Key||"",t.Summary||"",t.Status||"",t.Priority||"",t.Project||"",String(t["Linked Issues"]||"").split(/[;,]/)[0].trim(),t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ua===999?"":ua,checkSLA(t).anyBreach?"Yes":"",nextStep(t.Status,classify(t.Status))]);
+                  rows.push([nm,t.Key||"",t.Summary||"",t.Status||"",t.Priority||"",t.Project||"",String(t["Linked Issues"]||"").split(/[;,]/)[0].trim(),t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ua===999?"":ua,slaText(t),nextStep(t.Status,classify(t.Status))]);
                 });
               });
               var csv=rows.map(function(r){return r.map(escCSV).join(",");}).join("\n");
@@ -1650,7 +1733,7 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
           <div style={{flex:1,fontSize:13,fontWeight:600,color:"var(--t1)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}} title={t.Summary}>{t.Summary}</div>
           <span style={{background:cs.badge,color:"#fff",padding:"3px 11px",borderRadius:20,fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{t.Status}</span>
           {t.Priority && <span style={{fontSize:10,fontWeight:700,color:PRIORITY_COLORS[t.Priority]||"var(--t3)",background:PRIORITY_BG[t.Priority]||"var(--bg)",padding:"3px 10px",borderRadius:20,flexShrink:0}}>{t.Priority}</span>}
-          {sla.anyBreach && <span style={{background:"#FEE2E2",color:"#BE123C",padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0}}>⚡SLA</span>}
+          <SlaPill t={t}/>
           {!isOpen && <span style={{background:"#ECFDF5",color:"#059669",padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0}}>✓ Closed</span>}
         </div>
 
@@ -1983,6 +2066,8 @@ function App(){
   const[mailModal,setMailModal]=useState(null); // {subject, body}
   const[reminderData,setReminderData]=useState(null); // {ticket, mode}
   const[globalSearchOpen,setGlobalSearchOpen]=useState(false); // Global ticket search (Ctrl+K)
+  const[slaVer,setSlaVer]=useState(0); // bumps when SLA Tracker data (re)loads
+  useEffect(function(){if(!window.HDSlaLink)return;return window.HDSlaLink.subscribe(function(){setSlaVer(window.HDSlaLink.version());});},[]);
   const fRef=useRef();
   const blobRef=useRef(null); // original uploaded file, kept for "revert"
 
@@ -2013,6 +2098,7 @@ function App(){
     // Apply Master Data status overrides before rendering so classify() reflects them.
     window.HDStore.loadConfig().then(function(cfg){
       window.HDClass.setOverrides(cfg.statusOverrides);
+      if(window.HDSlaLink)window.HDSlaLink.load();
       window.HDStore.loadFile().then(function(rec){
         if(!rec){window.location.replace("index.html");return;}
         setFn(rec.name);blobRef.current=rec.blob;setLoading(true);
@@ -2165,24 +2251,14 @@ function App(){
     return l;
   },[dateFiltered,w,pf,svmF,itF]);
 
-  /* SLA breach computation — against ALL tickets in range */
+  /* SLA — from the SLA Tracker. open = open tickets in view; range = all tickets in the date range (for "% met"). */
   var slaData=useMemo(function(){
-    var frBreached=[];var resBreached=[];var allBreached=[];
-    var frTotal=0;var resTotal=0;
-    allFiltered.forEach(function(t){
-      var s=checkSLA(t);
-      var frH=parseTimeToHours(t["Time to first response"]);
-      var resH=parseTimeToHours(t["Time to resolution"]);
-      if(frH!==null)frTotal++;
-      if(resH!==null)resTotal++;
-      if(s.frBreach)frBreached.push(Object.assign({},t,{_sla:s}));
-      if(s.resBreach)resBreached.push(Object.assign({},t,{_sla:s}));
-      if(s.anyBreach)allBreached.push(Object.assign({},t,{_sla:s}));
-    });
-    var frRate=frTotal>0?Math.round((frTotal-frBreached.length)/frTotal*100):100;
-    var resRate=resTotal>0?Math.round((resTotal-resBreached.length)/resTotal*100):100;
-    return{all:allBreached,fr:frBreached,res:resBreached,frTotal:frTotal,resTotal:resTotal,frRate:frRate,resRate:resRate,total:allFiltered.length};
-  },[allFiltered]);
+    var L=window.HDSlaLink;
+    var open=L?L.summarize(flt):null, range=L?L.summarize(allFiltered):null;
+    var all=[],res=[];
+    allFiltered.forEach(function(t){var s=checkSLA(t);if(s.anyBreach){var x=Object.assign({},t,{_sla:s});all.push(x);res.push(x);}});
+    return{all:all,fr:[],res:res,open:open,range:range,total:allFiltered.length};
+  },[allFiltered,flt,slaVer]);
 
   /* Priority distribution — against open tickets */
   var prioDist=useMemo(function(){
@@ -2517,6 +2593,8 @@ function App(){
           <button onClick={openDailyReport} style={{background:"var(--blue)",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>📥 Daily Report (Excel)</button>
           <button onClick={openDailyMail} style={{background:"#334155",color:"#fff",border:"none",padding:"9px 20px",borderRadius:8,fontSize:12,fontWeight:700,flexShrink:0,display:"flex",alignItems:"center",gap:6}}>✉️ Mail Draft</button>
         </div>
+
+        <SlaStrip rows={flt} onOpen={function(label,list,color){setModal({title:"SLA · "+label+" ("+list.length+")",icon:"⏱",color:color,tickets:list.slice().sort(function(a,b){var x=checkSLA(a).info,y=checkSLA(b).info;return (y.pct||0)-(x.pct||0);})});}}/>
 
         {/* My Action Queue — the daily driver */}
         {(function(){
