@@ -244,6 +244,45 @@ tbody tr:hover{background:var(--vi-bg)}
 
 .footer{text-align:center;color:var(--faint);font-size:11px;padding:24px 0 8px;margin-top:12px;border-top:1px solid var(--line)}
 
+/* ── SEARCH ── */
+mark.hl{background:#FEF08A;color:inherit;border-radius:3px;padding:0 1px}
+.srch-info{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--ink2);background:var(--vi-bg);border:1px solid var(--vi-line);border-radius:10px;padding:8px 12px;margin-bottom:12px}
+.srch-info b{color:var(--ink)}
+.chip-btn{background:#fff;border:1px solid var(--line2);border-radius:20px;padding:4px 11px;font-size:11px;font-weight:600;color:var(--ink2)}
+.chip-btn.on{background:var(--vi);border-color:var(--vi);color:#fff}
+.mtag{display:inline-block;font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;margin-right:6px;vertical-align:1px}
+.mtag.exact{background:var(--green-bg);color:var(--green)}
+.mtag.all{background:var(--vi-soft);color:var(--vi)}
+.mtag.rel{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.sortbar{display:flex;align-items:center;gap:8px}
+.sortbar .flabel{margin:0}
+/* ── TREND CHARTS ── */
+.seg{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.seg button{background:none;border:none;padding:5px 11px;border-radius:7px;font-size:11px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--ink);color:#fff}
+.tcap{font-size:12px;color:var(--muted);margin:-2px 0 14px;line-height:1.55;max-width:820px}
+.tcap b{color:var(--ink2)}
+.tc{display:flex;align-items:stretch;gap:6px;border-bottom:1px solid var(--line2)}
+.tc-col{flex:1;min-width:0;display:flex}
+.tc-bars{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:2px}
+.tc-b{flex:1;max-width:18px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.tc-b.w{max-width:40px}
+.tc-b[data-trd]{cursor:pointer}
+.tc-b .bar{width:100%;border-radius:3px 3px 0 0;transition:filter .15s}
+.tc-b[data-trd]:hover .bar{filter:brightness(1.12);box-shadow:0 0 0 2px var(--ink)}
+.tc-stack{width:100%;display:flex;flex-direction:column-reverse}
+.tc-seg{width:100%;cursor:pointer;transition:filter .15s}
+.tc-stack .tc-seg:last-child{border-radius:3px 3px 0 0}
+.tc-seg:hover{filter:brightness(1.12);box-shadow:inset 0 0 0 2px var(--ink)}
+.tc-v{font-family:var(--mono);font-size:9.5px;font-weight:700;line-height:1;margin-bottom:3px;white-space:nowrap}
+.tc-lbls{display:flex;gap:6px;margin-top:6px}
+.tc-lbls span{flex:1;min-width:0;text-align:center;font-size:9.5px;color:var(--faint);font-weight:600;white-space:nowrap;overflow:visible}
+.tc-lbls span.cur{color:var(--vi)}
+.ttbl td.n{cursor:pointer;font-family:var(--mono);font-weight:600}
+.ttbl td.n:hover{background:var(--vi-soft)}
+.ttbl td.z{font-family:var(--mono);color:var(--faint)}
+.ttbl tr.tot td{background:var(--vi-bg);font-weight:700;border-top:2px solid var(--line2)}
+
 @media(min-width:1921px)and(min-height:900px){body{zoom:1.18}}
 @media(min-width:2200px)and(min-height:1000px){body{zoom:1.3}}
 @media(min-width:2560px){body{zoom:1.42}}
@@ -261,7 +300,7 @@ tbody tr:hover{background:var(--vi-bg)}
   <div class="modal-panel">
     <div class="modal-head">
       <div><div class="t" id="modalTitle">Tickets</div><div class="s" id="modalSub"></div></div>
-      <button class="modal-x" id="modalClose">✕</button>
+      <div id="modalSort" style="margin-left:auto"></div><button class="modal-x" id="modalClose" style="margin-left:8px">✕</button>
     </div>
     <div class="modal-body" id="modalBody"></div>
     <div class="modal-foot" id="modalFoot"></div>
@@ -285,7 +324,8 @@ var S={
   tab:"overview", search:"",
   proj:"", svm:"", comp:"", stage:"", size:"", prio:"", owner:"", status:"",
   from:"", to:"", sortCol:"created", sortDir:"desc", page:0,
-  pvRow:"stage", pvCol:"owner"
+  pvRow:"stage", pvCol:"owner",
+  strict:false, trWin:12, trDir:"desc", editCol:"created", editDir:"desc"
 };
 
 function el(id){return document.getElementById(id);}
@@ -356,19 +396,94 @@ function normalize(rows){
       linked:String(get(r,"linked issues")||"").trim(), clientRef:String(get(r,"client reference")||"").trim(),
       analysis:String(get(r,"analysis")||"").trim(),
       created:created, delivered:delivered, resolved:resolved, assigned:toD(get(r,"assigned date")),
-      ttr:String(get(r,"time to resolution")||"").trim(), _raw:r
+      ttr:String(get(r,"time to resolution")||"").trim(), updated:toD(get(r,"updated")),
+      desc:String(get(r,"description")||"").trim(), solution:String(get(r,"solution summary")||"").trim(), _raw:r
     };
     t.stage=stageOf(status); t.owner=ownerOf(t); t.closed=isClosed(status); t.open=!t.closed;
     t.age=t.open?ageDays(created):null; t.cycle=daysBetween(created,resolved||delivered);
+    buildIndex(t);
     out.push(t);
   });
   return out.filter(function(t){return t.key;});
 }
 
+/* ── smart search ──
+   The query is split into words; each word is reduced to a simple stem
+   (routing / route / routes → "rout", invoicing / invoice → "invoic") and matched
+   against every useful field of a ticket by exact stem, prefix, part-of-word or
+   a one-letter typo. Tickets are scored (key > summary > module/screen > people &
+   status > analysis/description) and ranked, so the closest matches come first
+   and related tickets that share only some of the words still show up. */
+var STOP={}; "a an the and or of for to in on with is are be by at from as this that it into via".split(" ").forEach(function(w){STOP[w]=1;});
+var SFX=["ational","ations","ation","ments","ment","ings","ing","ies","ers","er","ed","es","s"];
+function stem(w){
+  w=String(w).toLowerCase();
+  if(w.length<=3||/^\d+$/.test(w)) return w;
+  for(var i=0;i<SFX.length;i++){ var x=SFX[i];
+    if(w.length-x.length>=3&&w.slice(-x.length)===x){ if(x==="s"&&/ss$/.test(w)) break; w=w.slice(0,-x.length)+(x==="ies"?"y":""); break; } }
+  if(w.length>4&&w.slice(-1)==="e") w=w.slice(0,-1);
+  return w;
+}
+function tokenize(s){ return String(s||"").toLowerCase().match(/[a-z0-9]+/g)||[]; }
+function stems(s){ var seen={},out=[]; tokenize(s).forEach(function(w){var x=stem(w); if(!seen[x]){seen[x]=1;out.push(x);}}); return out; }
+function lev(a,b){ var m=a.length,n=b.length,prev=[],cur,i,j; for(j=0;j<=n;j++)prev[j]=j;
+  for(i=1;i<=m;i++){ cur=[i]; for(j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); prev=cur; } return prev[n]; }
+function termMatch(q,w){
+  if(w===q) return 1;
+  if(S.strict) return 0;
+  var lq=q.length,lw=w.length;
+  if(lq>=3&&lw>=3&&(w.indexOf(q)===0||q.indexOf(w)===0)) return Math.min(lq,lw)>=4?.85:.6;
+  if(lq>=4&&w.indexOf(q)>0) return .6;
+  if(lq>=4&&Math.abs(lq-lw)<=2&&q[0]===w[0]){ var d=lev(q,w); if(d===1) return .55; if(d===2&&lq>=7) return .4; }
+  return 0;
+}
+function buildIndex(t){
+  function f(w,txt){ txt=String(txt||"").slice(0,4000); return {w:w,raw:txt.toLowerCase(),words:stems(txt)}; }
+  t._ix=[
+    f(5,t.key),
+    f(3,t.summary),
+    f(2,[t.componentsRaw,t.screen,t.menuHead].join(" ")),
+    f(1.5,[t.project,t.svm,t.worker,t.assignee,t.status,t.stage,t.release,t.clientRef,t.typeOfFix,t.rootCause,t.linked].join(" ")),
+    f(1,[t.analysis,t.desc,t.solution].join(" "))
+  ];
+}
+function parseQuery(q){
+  var toks=tokenize(q).filter(function(w){return !STOP[w];}); if(!toks.length) toks=tokenize(q);
+  var seen={},out=[]; toks.forEach(function(w){var x=stem(w); if(!seen[x]){seen[x]=1;out.push(x);}}); return out;
+}
+function scoreTicket(t,terms,phrase){
+  var total=0,hit=0;
+  terms.forEach(function(q){ var best=0;
+    t._ix.forEach(function(fd){ var m=0; for(var i=0;i<fd.words.length&&m<1;i++){var v=termMatch(q,fd.words[i]); if(v>m)m=v;} if(m*fd.w>best)best=m*fd.w; });
+    if(best>=0.5){hit++; total+=best;} });
+  if(!hit) return null;
+  var cov=hit/terms.length, exact=false;
+  if(phrase.length>=3){
+    if(t._ix[0].raw.indexOf(phrase)>-1){total+=20;exact=true;}
+    else if(t._ix[1].raw.indexOf(phrase)>-1){total+=8;exact=true;}
+    else if(t._ix[2].raw.indexOf(phrase)>-1||t._ix[3].raw.indexOf(phrase)>-1){total+=4;exact=true;}
+    else if(t._ix[4].raw.indexOf(phrase)>-1){total+=2;}
+  }
+  return {score:total*(0.5+cov),cov:cov,exact:exact};
+}
+function hl(text,terms){
+  text=String(text==null?"":text);
+  if(!terms||!terms.length) return esc(text);
+  return text.split(/([A-Za-z0-9]+)/).map(function(p,i){
+    if(i%2===0) return esc(p);
+    var x=stem(p); for(var j=0;j<terms.length;j++){ if(termMatch(terms[j],x)>=0.55) return '<mark class="hl">'+esc(p)+'</mark>'; }
+    return esc(p);
+  }).join("");
+}
+function matchTag(m){ if(!m) return ""; if(m.exact) return '<span class="mtag exact">Exact</span>'; if(m.cov===1) return '<span class="mtag all">All words</span>'; return '<span class="mtag rel">Related</span>'; }
+
 /* ── filtering ── */
+var CUR_TERMS=[], SEARCH_STATS={all:0};
 function applyFilters(){
-  var q=S.search.trim().toLowerCase();
+  var phrase=S.search.trim().toLowerCase(), terms=phrase?parseQuery(phrase):[];
+  CUR_TERMS=terms;
   FILTERED=RAW.filter(function(t){
+    t._score=0; t._m=null;
     if(S.proj&&t.project!==S.proj) return false;
     if(S.svm&&t.svm!==S.svm) return false;
     if(S.comp&&t.components.indexOf(S.comp)<0) return false;
@@ -378,30 +493,57 @@ function applyFilters(){
     if(S.owner&&t.owner!==S.owner) return false;
     if(S.status==="open"&&!t.open) return false;
     if(S.status==="closed"&&t.open) return false;
-    if(S.from){var fd=new Date(S.from);if(!t.created||t.created<fd)return false;}
-    if(S.to){var td=new Date(S.to);td.setHours(23,59,59);if(!t.created||t.created>td)return false;}
-    if(q){
-      var hay=[t.key,t.summary,t.project,t.svm,t.worker,t.status,t.stage,t.componentsRaw,t.release,t.screen,t.menuHead,t.rootCause].join(" ").toLowerCase();
-      if(hay.indexOf(q)<0) return false;
+    if(S.from){var fp=S.from.split("-"),fd=new Date(+fp[0],+fp[1]-1,+fp[2]);if(!t.created||t.created<fd)return false;}
+    if(S.to){var tp=S.to.split("-"),td=new Date(+tp[0],+tp[1]-1,+tp[2],23,59,59,999);if(!t.created||t.created>td)return false;}
+    if(terms.length){
+      var r=scoreTicket(t,terms,phrase); if(!r) return false;
+      if(S.strict?r.cov<1:(terms.length>2&&r.cov<0.5)) return false;
+      t._score=r.score; t._m=r;
     }
     return true;
   });
+  SEARCH_STATS.all=FILTERED.filter(function(t){return t._m&&t._m.cov===1;}).length;
 }
 function distinctSorted(key){ var m={}; RAW.forEach(function(t){var v=t[key];if(v)m[v]=(m[v]||0)+1;}); return Object.keys(m).sort(function(a,b){return m[b]-m[a];}); }
 function distinctComp(){ var m={}; RAW.forEach(function(t){t.components.forEach(function(c){m[c]=(m[c]||0)+1;});}); return Object.keys(m).sort(function(a,b){return m[b]-m[a];}); }
 
-/* ── sort ── */
+/* ── sort (shared by Tickets, Edit and every drill-down) ──
+   Blank values always sink to the bottom; ties fall back to newest-created first. */
+var DATE_COLS={created:1,updated:1,assigned:1,delivered:1,resolved:1};
+var DESC_FIRST={created:1,updated:1,assigned:1,delivered:1,resolved:1,age:1,_score:1,priority:1,size:1};
+function sortVal(t,col){
+  if(col==="size"){var i=SIZE_ORDER.indexOf(t.size);return i<0?null:i;}
+  if(col==="priority"){var p=PRIO_ORDER.indexOf(t.priority);return p<0?null:PRIO_ORDER.length-p;}
+  if(col==="stage"){var g=STAGE_ORDER.indexOf(t.stage);return g<0?99:g;}
+  return t[col];
+}
+function newestFirst(a,b){ return (b.created?+b.created:0)-(a.created?+a.created:0); }
 function sortTickets(arr,col,dir){
   var mul=dir==="asc"?1:-1;
   return arr.slice().sort(function(a,b){
-    var va=a[col],vb=b[col];
-    if(col==="age"){va=va==null?-1:va;vb=vb==null?-1:vb;return(va-vb)*mul;}
-    if(va instanceof Date&&vb instanceof Date) return (va-vb)*mul;
-    if(va instanceof Date) return -1*mul; if(vb instanceof Date) return 1*mul;
-    va=String(va==null?"":va).toLowerCase(); vb=String(vb==null?"":vb).toLowerCase();
-    return va<vb?-mul:va>vb?mul:0;
+    var va=sortVal(a,col),vb=sortVal(b,col),na=va==null||va==="",nb=vb==null||vb==="";
+    if(na&&nb) return newestFirst(a,b); if(na) return 1; if(nb) return -1;
+    var r;
+    if(va instanceof Date&&vb instanceof Date) r=va-vb;
+    else if(typeof va==="number"&&typeof vb==="number") r=va-vb;
+    else r=String(va).localeCompare(String(vb),undefined,{numeric:true,sensitivity:"base"});
+    return r*mul||newestFirst(a,b);
   });
 }
+var SORT_OPTS=[
+  {v:"created:desc",l:"Newest created first"},{v:"created:asc",l:"Oldest created first"},
+  {v:"updated:desc",l:"Recently updated first"},{v:"delivered:desc",l:"Recently delivered first"},
+  {v:"resolved:desc",l:"Recently resolved first"},{v:"assigned:desc",l:"Recently assigned first"},
+  {v:"age:desc",l:"Open the longest first"},{v:"priority:desc",l:"Highest priority first"}
+];
+function sortSelect(id,col,dir){
+  var opts=SORT_OPTS.slice(); if(CUR_TERMS.length) opts.unshift({v:"_score:desc",l:"Best match first"});
+  var cur=col+":"+dir, found=opts.some(function(o){return o.v===cur;});
+  if(!found) opts.push({v:cur,l:(COL_LABEL[col]||col)+(dir==="asc"?" ▲":" ▼")});
+  return '<label class="sortbar"><span class="flabel">Sort</span><select class="fsel" id="'+id+'" style="max-width:230px">'+
+    opts.map(function(o){return '<option value="'+o.v+'"'+(o.v===cur?' selected':'')+'>'+esc(o.l)+'</option>';}).join('')+'</select></label>';
+}
+function nextSort(curCol,curDir,c){ return curCol===c?{c:c,d:curDir==="asc"?"desc":"asc"}:{c:c,d:DESC_FIRST[c]?"desc":"asc"}; }
 
 /* ═══════════════════════ RENDER ═══════════════════════ */
 function render(){
@@ -439,6 +581,7 @@ function render(){
     '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
     '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+
   '</div></header><main>';
+  h+=searchInfo();
 
   // KPIs
   var total=FILTERED.length;
@@ -466,6 +609,14 @@ function render(){
   h+='<div class="footer"><b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' change tickets loaded · '+FILTERED.length.toLocaleString()+' in scope · HD Change Tracker</div></main>';
   el("app").innerHTML=h;
   bindAll();
+}
+function searchInfo(){
+  var q=S.search.trim(); if(!q) return "";
+  var n=FILTERED.length;
+  var txt=n?('<b>'+n.toLocaleString()+'</b> change'+(n!==1?'s':'')+' related to “<b>'+esc(q)+'</b>”'+
+      (CUR_TERMS.length>1&&!S.strict?' · <b>'+SEARCH_STATS.all+'</b> contain every word, the rest match some words or close spellings':'')+' · best matches first in Tickets')
+    :('No change matches “<b>'+esc(q)+'</b>” with the current filters. Try fewer words'+(S.strict?' or turn off exact words':'')+', or clear the Client / SVM filters.');
+  return '<div class="srch-info"><span>'+txt+'</span><span class="hspace"></span><button class="chip-btn'+(S.strict?' on':'')+'" id="strictBtn" title="Only show tickets containing every word exactly">Exact words only</button></div>';
 }
 function tabBtn(k,label,cnt){
   return '<button class="'+(S.tab===k?"on":"")+'" data-tab="'+k+'">'+label+(cnt!=null?' <span class="cnt">'+cnt+'</span>':'')+'</button>';
@@ -612,15 +763,25 @@ function pipelineInsights(F){
     n.push({c:old.age>120?"warn":"",h:"Oldest open change: <b>"+esc(old.key)+"</b> — <b>"+old.age+" days</b> in <b>"+esc(old.stage)+"</b>."});}
   return n;
 }
-function trendInsights(F,months,closedBy,delivBy,mkeys){
-  var n=[]; if(!mkeys.length)return n;
-  var last=mkeys[mkeys.length-1];
-  var crLast=months[last]?months[last].total:0, clLast=closedBy[last]||0, net=crLast-clLast;
-  n.push({c:net>0?"warn":"good",h:"<b>"+mLabel(last)+"</b>: <b>"+crLast+"</b> created, <b>"+clLast+"</b> closed — backlog "+(net>0?"grew by <b>"+net+"</b>":net<0?"shrank by <b>"+(-net)+"</b>":"held steady")+"."});
-  var peak=mkeys.slice().sort(function(a,b){return (months[b]?months[b].total:0)-(months[a]?months[a].total:0);})[0];
-  if(peak)n.push({c:"",h:"Peak inflow: <b>"+mLabel(peak)+"</b> — <b>"+(months[peak]?months[peak].total:0)+"</b> new changes."});
-  var totDeliv=0,totClosed=0; mkeys.forEach(function(k){totDeliv+=delivBy[k]||0;totClosed+=closedBy[k]||0;});
-  n.push({c:"",h:"Window totals: <b>"+totDeliv+"</b> delivered, <b>"+totClosed+"</b> closed."});
+function trendInsights(T){
+  var n=[], R=T.rows; if(!R.length) return n;
+  var curK=monthKey(new Date()), first=R[0], last=R[R.length-1];
+  function sum(f){return R.reduce(function(a,r){return a+r[f];},0);}
+  var cr=sum("created"),dv=sum("delivered"),cl=sum("closed"), delta=last.open-T.prevOpen;
+  n.push({c:delta>0?"warn":"good",h:"<b>"+mLabel(first.k)+" – "+mLabel(last.k)+"</b>: <b>"+cr+"</b> raised, <b>"+dv+"</b> delivered, <b>"+cl+"</b> closed. Open changes went from <b>"+T.prevOpen+"</b> to <b>"+last.open+"</b> ("+(delta>0?"+":"")+delta+")."});
+  var aC=cr/R.length, aX=cl/R.length;
+  n.push({c:aC>aX?"warn":"good",h:"On average <b>"+aC.toFixed(1)+"</b> changes are raised and <b>"+aX.toFixed(1)+"</b> closed per month"+(aC>aX?" — closures are not keeping pace with new requests.":" — closures are keeping pace.")});
+  var full=R.filter(function(r){return r.k<curK;});
+  if(full.length){var lm=full[full.length-1],net=lm.created-lm.closed;
+    n.push({c:net>0?"warn":"good",h:"Last full month, <b>"+mLabel(lm.k)+"</b>: <b>"+lm.created+"</b> raised, <b>"+lm.closed+"</b> closed — backlog "+(net>0?"grew by <b>"+net+"</b>":net<0?"shrank by <b>"+(-net)+"</b>":"held steady")+"."});}
+  var cm=R.filter(function(r){return r.k===curK;})[0];
+  if(cm) n.push({c:"",h:"This month so far (<b>"+mLabel(curK)+"</b>, still in progress): <b>"+cm.created+"</b> raised, <b>"+cm.delivered+"</b> delivered, <b>"+cm.closed+"</b> closed."});
+  var peak=R.slice().sort(function(a,b){return b.created-a.created;})[0];
+  if(peak&&peak.created) n.push({c:"",h:"Busiest month for new requests: <b>"+mLabel(peak.k)+"</b> with <b>"+peak.created+"</b>."});
+  var dno=FILTERED.filter(function(t){return t.delivered&&t.open;}).length;
+  if(dno) n.push({c:"warn",h:"<b>"+dno+"</b> changes are delivered but not yet closed (waiting for invoicing, sign-off or closure)."});
+  var nd=FILTERED.filter(function(t){return t.closed&&!closedOn(t);}).length;
+  if(nd) n.push({c:"",h:"<b>"+nd+"</b> closed changes have no Resolved or Updated date, so they are left out of the monthly closed counts."});
   return n;
 }
 function pivotInsights(rowD,colD,rKeys,cKeys,cell,total,rowTot,colTot,maxInfo){
@@ -676,57 +837,106 @@ function renderPipeline(){
 }
 
 /* ── TRENDS ── */
+var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function monthKey(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
-function mLabel(k){return k.split("-")[1]+"/"+k.split("-")[0].slice(2);}
-function renderTrend(){
-  var F=FILTERED;
-  var months={}, closedBy={}, delivBy={};
+function mLabel(k){var p=k.split("-");return MON[+p[1]-1]+" "+p[0].slice(2);}
+function monthEnd(k){var p=k.split("-");return new Date(+p[0],+p[1],0,23,59,59,999);}
+function monthRange(a,b){var out=[],y=+a.slice(0,4),m=+a.slice(5),ey=+b.slice(0,4),em=+b.slice(5);
+  while(y<ey||(y===ey&&m<=em)){out.push(y+"-"+String(m).padStart(2,"0"));m++;if(m>12){m=1;y++;}} return out;}
+function sizeKey(t){return t.size&&SIZE_CLASS[t.size]?t.size:"Unsized";}
+/* when a change was closed: Resolved date, falling back to Updated for closed tickets without one */
+function closedOn(t){return t.closed?(t.resolved||t.updated||null):null;}
+function isOpenAt(t,end){ if(!t.created||t.created>end) return false; if(t.closed){var c=closedOn(t); return c?c>end:false;} return true; }
+function trendData(F){
+  var cr={},dv={},cl={};
   F.forEach(function(t){
-    if(t.created){var mk=monthKey(t.created); if(!months[mk])months[mk]={Minor:0,Medium:0,Major:0,Unsized:0,total:0};
-      months[mk].total++; months[mk][t.size&&SIZE_CLASS[t.size]?t.size:"Unsized"]++;}
-    if(t.resolved&&t.closed){var rk=monthKey(t.resolved);closedBy[rk]=(closedBy[rk]||0)+1;}
-    if(t.delivered){var dk=monthKey(t.delivered);delivBy[dk]=(delivBy[dk]||0)+1;}
+    if(t.created){var k=monthKey(t.created); if(!cr[k])cr[k]={Minor:0,Medium:0,Major:0,Unsized:0,total:0}; cr[k].total++; cr[k][sizeKey(t)]++;}
+    if(t.delivered){var k2=monthKey(t.delivered); dv[k2]=(dv[k2]||0)+1;}
+    var c=closedOn(t); if(c){var k3=monthKey(c); cl[k3]=(cl[k3]||0)+1;}
   });
-  var mkeys=Object.keys(months).sort(), mmax=1; mkeys.forEach(function(k){if(months[k].total>mmax)mmax=months[k].total;});
-  if(!mkeys.length) return '<div class="card" style="padding:40px;text-align:center;color:var(--muted)">No dated changes in the current scope.</div>';
+  var keys=Object.keys(cr).concat(Object.keys(dv),Object.keys(cl)).sort();
+  if(!keys.length) return null;
+  var all=monthRange(keys[0],keys[keys.length-1]);          // continuous — empty months show as zero
+  var win=S.trWin?all.slice(-S.trWin):all;
+  var rows=win.map(function(k){
+    var end=monthEnd(k), open=0; F.forEach(function(t){if(isOpenAt(t,end))open++;});
+    var c=cr[k]||{Minor:0,Medium:0,Major:0,Unsized:0,total:0};
+    return {k:k,created:c.total,size:c,delivered:dv[k]||0,closed:cl[k]||0,open:open};
+  });
+  var p=win[0].split("-"), before=new Date(+p[0],+p[1]-1,0,23,59,59,999), prevOpen=0;
+  F.forEach(function(t){if(isOpenAt(t,before))prevOpen++;});
+  return {rows:rows,prevOpen:prevOpen,allMonths:all.length};
+}
+function trendPred(type,k,sz){
+  if(type==="created") return function(t){return t.created&&monthKey(t.created)===k&&(!sz||sizeKey(t)===sz);};
+  if(type==="delivered") return function(t){return t.delivered&&monthKey(t.delivered)===k;};
+  if(type==="closed") return function(t){var c=closedOn(t);return c&&monthKey(c)===k;};
+  var end=monthEnd(k); return function(t){return isOpenAt(t,end);};
+}
+function tcBar(type,k,v,max,H,color,label,showV,wide){
+  return '<div class="tc-b'+(wide?' w':'')+'"'+(v?' data-trd="'+type+'" data-m="'+k+'"':'')+' title="'+esc(mLabel(k)+" · "+label+": "+v+(v?" — click to list":""))+'">'+
+    (showV&&v?'<span class="tc-v" style="color:'+color.replace(/^linear.*$/,"var(--vi)")+'">'+v+'</span>':'')+
+    '<div class="bar" style="height:'+(max?v/max*H:0).toFixed(1)+'px;'+(v?'min-height:2px;':'')+'background:'+color+'"></div></div>';
+}
+function tcStack(r,max,H,showV){
+  var segs=SIZE_ORDER.concat(["Unsized"]).map(function(sz){var v=r.size[sz]; if(!v) return "";
+    return '<div class="tc-seg" data-trd="created" data-m="'+r.k+'" data-sz="'+sz+'" title="'+esc(mLabel(r.k)+" · "+sz+": "+v+" — click to list")+'" style="height:'+(v/max*H).toFixed(1)+'px;min-height:2px;background:'+SIZE_HEX[sz]+'"></div>';}).join('');
+  return '<div class="tc-b w">'+(showV&&r.created?'<span class="tc-v" data-trd="created" data-m="'+r.k+'" style="color:var(--ink2);cursor:pointer" title="'+esc("All "+r.created+" raised in "+mLabel(r.k)+" — click to list")+'">'+r.created+'</span>':'')+'<div class="tc-stack">'+segs+'</div></div>';
+}
+function tcLabels(R,maxLabels){
+  var curK=monthKey(new Date()), step=Math.max(1,Math.ceil(R.length/maxLabels));
+  return '<div class="tc-lbls">'+R.map(function(r,i){var show=(R.length-1-i)%step===0;
+    return '<span class="'+(r.k===curK?'cur':'')+'"'+(r.k===curK?' title="Current month — still in progress"':'')+'>'+(show?mLabel(r.k)+(r.k===curK?'*':''):'')+'</span>';}).join('')+'</div>';
+}
+function tcChart(R,H,colFn){
+  return '<div class="tc" style="height:'+(H+16)+'px">'+R.map(function(r){return '<div class="tc-col"><div class="tc-bars">'+colFn(r)+'</div></div>';}).join('')+'</div>';
+}
+function renderTrend(){
+  var F=FILTERED, T=trendData(F);
+  var win='<div class="seg" role="group" aria-label="Time window">'+[[6,"6 months"],[12,"12 months"],[24,"24 months"],[0,"All"]].map(function(o){
+    return '<button data-win="'+o[0]+'" class="'+(S.trWin===o[0]?'on':'')+'">'+o[1]+'</button>';}).join('')+'</div>';
+  if(!T) return '<div class="card" style="padding:40px;text-align:center;color:var(--muted)">No dated changes in the current scope. Clear a filter or widen the date range.</div>';
+  var R=T.rows, n=R.length, curK=monthKey(new Date());
+  var H=170, fmax=1, omax=1, cmax=1;
+  R.forEach(function(r){fmax=Math.max(fmax,r.created,r.delivered,r.closed);omax=Math.max(omax,r.open);cmax=Math.max(cmax,r.created);});
 
-  var h=insightsCard("Auto insights","how inflow, delivery and backlog are trending · updates with your filters",trendInsights(F,months,closedBy,delivBy,mkeys));
-  h+='<div class="trend-grid up d1">';
-  // monthly stacked by size
-  h+='<div class="card chart-area"><div class="sec-head"><span class="sec-title">Monthly Changes</span><span class="sec-sub">Created · stacked by size</span></div><div class="mbar-wrap" style="height:180px">';
-  mkeys.forEach(function(k){var m=months[k],H=150;
-    h+='<div class="mbar-group" data-monthdrill="'+k+'" style="cursor:pointer"><div class="mbar-total">'+m.total+'</div><div class="mbar-stack" style="height:'+H+'px">'+
-      '<div class="mbar minor growb" style="height:'+(m.Minor/mmax*H)+'px" title="Minor: '+m.Minor+'"></div>'+
-      '<div class="mbar medium growb" style="height:'+(m.Medium/mmax*H)+'px" title="Medium: '+m.Medium+'"></div>'+
-      '<div class="mbar major growb" style="height:'+(m.Major/mmax*H)+'px" title="Major: '+m.Major+'"></div>'+
-      '<div class="mbar unsized growb" style="height:'+(m.Unsized/mmax*H)+'px" title="Unsized: '+m.Unsized+'"></div>'+
-    '</div><div class="mbar-label">'+mLabel(k)+'</div></div>';
-  });
-  h+='</div><div class="chart-leg"><span><i style="background:var(--minor)"></i> Minor</span><span><i style="background:var(--medium)"></i> Medium</span><span><i style="background:var(--major)"></i> Major</span><span><i style="background:var(--unsized)"></i> Unsized</span></div></div>';
+  // 1 — flow: raised vs delivered vs closed
+  var h='<div class="card up d1 chart-area" style="margin-bottom:14px"><div class="sec-head"><span class="sec-title">Are we keeping up?</span>'+win+'</div>'+
+    '<div class="tcap">Each month shows three bars: changes <b>raised</b>, changes <b>delivered</b> to the client, and changes <b>closed</b>. When the blue bar is taller than the green one, more work came in than went out. Click any bar to list its tickets.</div>'+
+    tcChart(R,H,function(r){return tcBar("created",r.k,r.created,fmax,H,"var(--vi)","Raised",n<=12)+tcBar("delivered",r.k,r.delivered,fmax,H,"var(--amber)","Delivered",n<=12)+tcBar("closed",r.k,r.closed,fmax,H,"var(--green)","Closed",n<=12);})+
+    tcLabels(R,24)+
+    '<div class="chart-leg"><span><i style="background:var(--vi)"></i> Raised</span><span><i style="background:var(--amber)"></i> Delivered</span><span><i style="background:var(--green)"></i> Closed</span>'+(R.some(function(r){return r.k===curK;})?'<span style="color:var(--faint)">* current month, still in progress</span>':'')+'</div></div>';
 
-  // created / delivered / closed grouped
-  var allk=Object.keys(Object.assign({},months,closedBy,delivBy)).sort();
-  var gmax=1; allk.forEach(function(k){var v=Math.max(months[k]?months[k].total:0,delivBy[k]||0,closedBy[k]||0);if(v>gmax)gmax=v;});
-  h+='<div class="card chart-area"><div class="sec-head"><span class="sec-title">Created · Delivered · Closed</span><span class="sec-sub">Monthly flow</span></div><div class="mbar-wrap" style="height:180px">';
-  allk.forEach(function(k){var cr=months[k]?months[k].total:0,dv=delivBy[k]||0,cx=closedBy[k]||0,H=150;
-    h+='<div class="mbar-group" data-monthdrill="'+k+'" style="gap:0;cursor:pointer"><div class="mbar-total"><span style="color:var(--vi)">'+cr+'</span><span style="color:var(--faint)">/</span><span style="color:var(--amber)">'+dv+'</span><span style="color:var(--faint)">/</span><span style="color:var(--green)">'+cx+'</span></div>'+
-      '<div style="display:flex;gap:2px;align-items:flex-end;height:'+H+'px;width:100%">'+
-        '<div style="flex:1;background:var(--vi);border-radius:3px 3px 0 0;height:'+(cr/gmax*H)+'px" class="growb" title="Created: '+cr+'"></div>'+
-        '<div style="flex:1;background:var(--amber);border-radius:3px 3px 0 0;height:'+(dv/gmax*H)+'px" class="growb" title="Delivered: '+dv+'"></div>'+
-        '<div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:'+(cx/gmax*H)+'px" class="growb" title="Closed: '+cx+'"></div>'+
-      '</div><div class="mbar-label">'+mLabel(k)+'</div></div>';
-  });
-  h+='</div><div class="chart-leg"><span><i style="background:var(--vi)"></i> Created</span><span><i style="background:var(--amber)"></i> Delivered</span><span><i style="background:var(--green)"></i> Closed</span></div></div>';
-  h+='</div>';
+  // 2 + 3 — open backlog and size mix
+  var Hh=150;
+  h+='<div class="trend-grid up d2">'+
+    '<div class="card chart-area"><div class="sec-head"><span class="sec-title">Open changes at month end</span><span class="sec-sub">'+(R.length?'now '+R[R.length-1].open:'')+'</span></div>'+
+    '<div class="tcap">How many changes were still open on the last day of each month. A rising run of bars means work is piling up. Click a bar to see what was open then.</div>'+
+    tcChart(R,Hh,function(r){return tcBar("open",r.k,r.open,omax,Hh,"linear-gradient(180deg,#818CF8,#4F46E5)","Open at month end",n<=12,true);})+tcLabels(R,12)+'</div>'+
+    '<div class="card chart-area"><div class="sec-head"><span class="sec-title">New requests by size</span><span class="sec-sub">T-shirt sizing</span></div>'+
+    '<div class="tcap">Changes raised each month, split by effort size. Click a coloured block for that size, or the number on top for the whole month.</div>'+
+    tcChart(R,Hh,function(r){return tcStack(r,cmax,Hh,n<=12);})+tcLabels(R,12)+
+    '<div class="chart-leg"><span><i style="background:var(--minor)"></i> Minor</span><span><i style="background:var(--medium)"></i> Medium</span><span><i style="background:var(--major)"></i> Major</span><span><i style="background:var(--unsized)"></i> Unsized</span></div></div>'+
+  '</div>';
 
-  // cumulative backlog
-  var run=0, cum=mkeys.map(function(k){run+=months[k].total-(closedBy[k]||0);return run;});
-  var cmax=Math.max.apply(null,cum.concat([1]));
-  h+='<div class="card up d2 chart-area" style="margin-top:14px"><div class="sec-head"><span class="sec-title">Estimated Open Backlog</span><span class="sec-sub">cumulative created − closed</span></div><div class="mbar-wrap" style="height:150px">';
-  mkeys.forEach(function(k,i){var H=120;
-    h+='<div class="mbar-group"><div class="mbar-total">'+cum[i]+'</div><div class="mbar-stack" style="height:'+H+'px"><div class="mbar growb" style="height:'+(cum[i]/cmax*H)+'px;background:linear-gradient(180deg,#818CF8,#4F46E5)"></div></div><div class="mbar-label">'+mLabel(k)+'</div></div>';
+  // 4 — month-by-month table (every number clickable)
+  function cell(type,k,v){return v?'<td class="n" data-trd="'+type+'" data-m="'+k+'" title="Click to list">'+v+'</td>':'<td class="z">0</td>';}
+  var rowsT=S.trDir==="asc"?R.slice():R.slice().reverse();
+  var tc=0,td=0,tx=0; R.forEach(function(r){tc+=r.created;td+=r.delivered;tx+=r.closed;});
+  h+='<div class="card up d3" style="padding:20px;margin-top:14px"><div class="sec-head"><span class="sec-title">Month by month</span><span class="sec-sub">click any number to list its tickets</span></div>'+
+    '<div class="tbl-wrap"><table class="ttbl"><thead><tr><th data-trsort="1" title="Click to reverse the order">Month<span class="arr">'+(S.trDir==="asc"?" ▲":" ▼")+'</span></th><th>Raised</th><th>Delivered</th><th>Closed</th><th>Net change</th><th>Open at month end</th></tr></thead><tbody>';
+  rowsT.forEach(function(r){var net=r.created-r.closed;
+    h+='<tr><td style="font-weight:600">'+mLabel(r.k)+(r.k===curK?' <span class="sec-sub">(in progress)</span>':'')+'</td>'+
+      cell("created",r.k,r.created)+cell("delivered",r.k,r.delivered)+cell("closed",r.k,r.closed)+
+      '<td class="mono" style="font-weight:700;color:'+(net>0?'var(--rose)':net<0?'var(--green)':'var(--faint)')+'">'+(net>0?'+':'')+net+'</td>'+
+      cell("open",r.k,r.open)+'</tr>';
   });
-  h+='</div></div>';
+  var tn=tc-tx;
+  h+='<tr class="tot"><td>Total ('+R.length+' months)</td><td class="mono">'+tc+'</td><td class="mono">'+td+'</td><td class="mono">'+tx+'</td><td class="mono" style="color:'+(tn>0?'var(--rose)':tn<0?'var(--green)':'inherit')+'">'+(tn>0?'+':'')+tn+'</td><td class="mono">'+T.prevOpen+' → '+R[R.length-1].open+'</td></tr>';
+  h+='</tbody></table></div></div>';
+
+  // 5 — insights, now at the bottom
+  h+='<div style="margin-top:14px">'+insightsCard("Auto insights","how inflow, delivery and backlog are trending · updates with your filters",trendInsights(T))+'</div>';
   return h;
 }
 
@@ -788,14 +998,14 @@ var COLS=[
   {k:"key",l:"Key",w:"92px"},{k:"summary",l:"Summary",w:""},{k:"project",l:"Client",w:"150px"},
   {k:"stage",l:"Stage",w:"130px"},{k:"status",l:"Status",w:"150px"},{k:"size",l:"Size",w:"78px"},
   {k:"priority",l:"Priority",w:"88px"},{k:"svm",l:"SVM In Charge",w:"130px"},{k:"owner",l:"Owner",w:"84px"},
-  {k:"age",l:"Age",w:"64px"},{k:"created",l:"Created",w:"90px"},{k:"delivered",l:"Delivered",w:"90px"}
+  {k:"age",l:"Age",w:"64px"},{k:"created",l:"Created",w:"90px"},{k:"updated",l:"Updated",w:"90px"},{k:"delivered",l:"Delivered",w:"90px"}
 ];
 function renderTickets(){
   var sorted=sortTickets(FILTERED,S.sortCol,S.sortDir);
   var pages=Math.max(1,Math.ceil(sorted.length/PAGE_SIZE)); if(S.page>=pages)S.page=pages-1;
   var start=S.page*PAGE_SIZE, slice=sorted.slice(start,start+PAGE_SIZE);
   var h='<div class="card up d1" style="margin-bottom:0">'+
-    '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px 4px"><span class="sec-title">'+sorted.length.toLocaleString()+' change tickets</span><span class="hspace"></span><button class="ghost" id="csvBtn">⬇ Export filtered CSV</button></div>'+
+    '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px 4px"><span class="sec-title">'+sorted.length.toLocaleString()+' change tickets</span><span class="hspace"></span>'+sortSelect("tSort",S.sortCol,S.sortDir)+'<button class="ghost" id="csvBtn">⬇ Export filtered CSV</button></div>'+
     '<div class="tbl-wrap" style="border-radius:0 0 var(--r2) var(--r2);border-top:0"><table><thead><tr>';
   COLS.forEach(function(c){var arr=S.sortCol===c.k?(S.sortDir==="asc"?" ▲":" ▼"):"";h+='<th data-sort="'+c.k+'"'+(c.w?' style="min-width:'+c.w+'"':'')+'>'+c.l+'<span class="arr">'+arr+'</span></th>';});
   h+='</tr></thead><tbody>';
@@ -803,7 +1013,7 @@ function renderTickets(){
   slice.forEach(function(t){
     h+='<tr>'+
       '<td><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
-      '<td class="trunc dcell" title="'+esc(t.summary)+'" data-detail="'+esc(t.key)+'">'+esc(t.summary||"—")+'</td>'+
+      '<td class="trunc dcell" title="'+esc(t.summary)+'" data-detail="'+esc(t.key)+'">'+matchTag(t._m)+hl(t.summary||"—",CUR_TERMS)+'</td>'+
       '<td>'+esc(t.project)+'</td>'+
       '<td><span class="sdot" style="background:'+STAGE_COLOR[t.stage]+'"></span>'+esc(t.stage)+'</td>'+
       '<td>'+esc(t.status)+'</td>'+
@@ -813,6 +1023,7 @@ function renderTickets(){
       '<td>'+ownerBadge(t.owner)+'</td>'+
       '<td class="mono">'+(t.age==null?"—":t.age+"d")+'</td>'+
       '<td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td>'+
+      '<td class="mono" style="font-size:11px">'+fmtD(t.updated)+'</td>'+
       '<td class="mono" style="font-size:11px">'+fmtD(t.delivered)+'</td></tr>';
   });
   h+='</tbody></table></div>'+
@@ -833,13 +1044,14 @@ var EDIT_COLS=[
 function getRaw(t,col){ if(!t._raw)return""; var km={};Object.keys(t._raw).forEach(function(k){km[k.trim().toLowerCase()]=k;}); var kk=km[col.trim().toLowerCase()]; return kk!==undefined?t._raw[kk]:""; }
 function setRaw(t,col,val){ if(!t._raw)return; var km={};Object.keys(t._raw).forEach(function(k){km[k.trim().toLowerCase()]=k;}); var kk=km[col.trim().toLowerCase()]; if(kk!==undefined)t._raw[kk]=val; else t._raw[col]=val; }
 function renderEdit(){
-  var F=FILTERED, svms=distinctSorted("svm");
+  var F=sortTickets(FILTERED,S.editCol,S.editDir), svms=distinctSorted("svm");
+  function eth(k,l,w){return '<th data-esort="'+k+'" style="min-width:'+w+'">'+l+'<span class="arr">'+(S.editCol===k?(S.editDir==="asc"?" ▲":" ▼"):"")+'</span></th>';}
   var h='<div class="edit-note">Correct values inline, then press <b>Apply &amp; recalculate</b>. Edits are saved on this device using the original Excel column names, so the Follow-up, Trend, Weekly and Release trackers stay in sync and non-change tickets are left untouched. <b>Revert to upload</b> discards all in-app edits.</div>'+
-    '<div class="card up d1" style="margin-bottom:0"><div style="display:flex;align-items:center;gap:10px;padding:14px 16px 4px"><span class="sec-title">Editing '+F.length.toLocaleString()+' change tickets</span><span class="hspace"></span><span class="sec-sub">'+(F.length>400?"first 400 shown — filter to reach the rest":"filter above to focus")+'</span></div>'+
-    '<div class="tbl-wrap" style="border-top:0;border-radius:0 0 var(--r2) var(--r2)"><table class="etbl"><thead><tr><th style="min-width:88px">Key</th><th style="min-width:240px">Summary</th>'+
+    '<div class="card up d1" style="margin-bottom:0"><div style="display:flex;align-items:center;gap:10px;padding:14px 16px 4px"><span class="sec-title">Editing '+F.length.toLocaleString()+' change tickets</span><span class="hspace"></span><span class="sec-sub">'+(F.length>400?"first 400 shown — filter to reach the rest":"filter above to focus")+'</span>'+sortSelect("eSort",S.editCol,S.editDir)+'</div>'+
+    '<div class="tbl-wrap" style="border-top:0;border-radius:0 0 var(--r2) var(--r2)"><table class="etbl"><thead><tr>'+eth("key","Key","88px")+eth("summary","Summary","240px")+eth("created","Created","86px")+
     EDIT_COLS.map(function(c){return '<th style="min-width:128px">'+esc(c.k)+'</th>';}).join('')+'</tr></thead><tbody>';
   F.slice(0,400).forEach(function(t){
-    h+='<tr data-key="'+esc(t.key)+'"><td class="mono">'+esc(t.key)+'</td><td class="trunc" style="max-width:240px" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td>';
+    h+='<tr data-key="'+esc(t.key)+'"><td class="mono">'+esc(t.key)+'</td><td class="trunc" style="max-width:240px" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td><td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td>';
     EDIT_COLS.forEach(function(c){var cur=String(getRaw(t,c.k)||"");
       if(c.list){h+='<td><input list="svmOpts" data-col="'+esc(c.k)+'" value="'+esc(cur)+'"></td>';}
       else if(c.opt){var o=c.opt.slice();if(o.indexOf(cur)<0)o.push(cur);h+='<td><select data-col="'+esc(c.k)+'">'+o.map(function(x){return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></td>';}
@@ -870,32 +1082,53 @@ function revertUpload(){
 }
 
 /* ── MODAL / DRILL ── */
-function drillTickets(fn,title){ openModal(title,FILTERED.filter(fn)); }
-function openModal(title,tix){
-  el("modalTitle").textContent=title;
-  el("modalSub").textContent=tix.length+" ticket"+(tix.length!==1?"s":"")+" · click a key to open in Jira";
-  var cols=["Key","Summary","Stage","Status","Owner","Project","SVM In Charge","T-Shirt Sizing","Priority","Type of Fix","Root Cause","Components","Screen Name","Menu Head","Release Number","Next Action","Current Worker","Created","Assigned Date","Delivered Date","Resolved","Age","Linked Issues"];
-  var h='<table><thead><tr>'+cols.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr></thead><tbody>';
-  if(!tix.length)h+='<tr><td colspan="'+cols.length+'" style="text-align:center;padding:40px;color:var(--muted)">No tickets</td></tr>';
-  tix.slice().sort(function(a,b){return (b.age||0)-(a.age||0);}).forEach(function(t){
+var MCOLS=[{k:"key",l:"Key"},{k:"summary",l:"Summary"},{k:"stage",l:"Stage"},{k:"status",l:"Status"},{k:"owner",l:"Owner"},{k:"project",l:"Project"},
+  {k:"svm",l:"SVM In Charge"},{k:"size",l:"T-Shirt Sizing"},{k:"priority",l:"Priority"},{k:"typeOfFix",l:"Type of Fix"},{k:"rootCause",l:"Root Cause"},
+  {k:"componentsRaw",l:"Components"},{k:"screen",l:"Screen Name"},{k:"menuHead",l:"Menu Head"},{k:"release",l:"Release Number"},{k:"na",l:"Next Action"},
+  {k:"worker",l:"Current Worker"},{k:"created",l:"Created"},{k:"updated",l:"Updated"},{k:"assigned",l:"Assigned Date"},{k:"delivered",l:"Delivered Date"},
+  {k:"resolved",l:"Resolved"},{k:"age",l:"Age"},{k:"linked",l:"Linked Issues"}];
+var COL_LABEL={_score:"Best match"}; MCOLS.forEach(function(c){COL_LABEL[c.k]=c.l;});
+var MODAL={title:"",tix:[],col:"created",dir:"desc"};
+function drillTickets(fn,title,col,dir){ openModal(title,FILTERED.filter(fn),col,dir); }
+function openModal(title,tix,col,dir){
+  MODAL={title:title,tix:tix,col:col||(CUR_TERMS.length?"_score":"created"),dir:dir||"desc"};
+  drawModal(); el("modalOv").classList.add("open"); el("modalBody").scrollTop=0;
+}
+function sortDesc(col,dir){
+  var d=DATE_COLS[col];
+  if(col==="_score") return "best match first";
+  if(col==="age") return dir==="desc"?"open the longest first":"newest open first";
+  return (COL_LABEL[col]||col).toLowerCase()+(d?(dir==="desc"?", newest first":", oldest first"):(dir==="desc"?", high to low":", A to Z"));
+}
+function drawModal(){
+  var M=MODAL, tix=sortTickets(M.tix,M.col,M.dir), T=CUR_TERMS;
+  el("modalTitle").textContent=M.title;
+  el("modalSub").textContent=tix.length+" ticket"+(tix.length!==1?"s":"")+" · click a key to open in Jira · click a column header to sort";
+  el("modalSort").innerHTML=tix.length>1?sortSelect("mSort",M.col,M.dir):"";
+  var h='<table><thead><tr>'+MCOLS.map(function(c){return '<th data-msort="'+c.k+'">'+c.l+'<span class="arr">'+(M.col===c.k?(M.dir==="asc"?" ▲":" ▼"):"")+'</span></th>';}).join('')+'</tr></thead><tbody>';
+  if(!tix.length)h+='<tr><td colspan="'+MCOLS.length+'" style="text-align:center;padding:40px;color:var(--muted)">No tickets</td></tr>';
+  tix.forEach(function(t){
+    var lk=t.linked?t.linked.split(/[;,]/)[0].trim():"";
     h+='<tr>'+
       '<td><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
-      '<td class="trunc" style="max-width:280px" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td>'+
-      '<td><span class="sdot" style="background:'+STAGE_COLOR[t.stage]+'"></span>'+esc(t.stage)+'</td>'+
+      '<td class="trunc" style="max-width:280px" title="'+esc(t.summary)+'">'+matchTag(t._m)+hl(t.summary,T)+'</td>'+
+      '<td><span class="sdot" style="background:'+(STAGE_COLOR[t.stage]||"#9AA7B8")+'"></span>'+esc(t.stage)+'</td>'+
       '<td>'+esc(t.status)+'</td><td>'+ownerBadge(t.owner)+'</td><td>'+esc(t.project)+'</td>'+
       '<td>'+esc(t.svm||"—")+'</td><td>'+sizeBadge(t.size)+'</td><td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
-      '<td>'+esc(t.typeOfFix||"—")+'</td><td>'+esc(t.rootCause||"—")+'</td><td style="font-size:10.5px">'+esc(t.componentsRaw||"—")+'</td>'+
-      '<td style="font-size:10.5px">'+esc(t.screen||"—")+'</td><td style="font-size:10.5px">'+esc(t.menuHead||"—")+'</td>'+
+      '<td>'+esc(t.typeOfFix||"—")+'</td><td>'+esc(t.rootCause||"—")+'</td><td style="font-size:10.5px">'+hl(t.componentsRaw||"—",T)+'</td>'+
+      '<td style="font-size:10.5px">'+hl(t.screen||"—",T)+'</td><td style="font-size:10.5px">'+hl(t.menuHead||"—",T)+'</td>'+
       '<td class="mono" style="font-size:10px">'+esc(t.release||"—")+'</td><td>'+esc(t.na||"—")+'</td><td>'+esc(t.worker||"—")+'</td>'+
-      '<td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td><td class="mono" style="font-size:11px">'+fmtD(t.assigned)+'</td>'+
+      '<td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td><td class="mono" style="font-size:11px">'+fmtD(t.updated)+'</td>'+
+      '<td class="mono" style="font-size:11px">'+fmtD(t.assigned)+'</td>'+
       '<td class="mono" style="font-size:11px">'+fmtD(t.delivered)+'</td><td class="mono" style="font-size:11px">'+fmtD(t.resolved)+'</td>'+
       '<td class="mono">'+(t.age==null?"—":t.age+"d")+'</td>'+
-      '<td>'+(t.linked?'<a class="jkey" style="color:var(--major)" href="'+JIRA+encodeURIComponent(t.linked.split(";")[0].trim())+'" target="_blank" rel="noreferrer">'+esc(t.linked.split(";")[0])+'</a>':'<span style="color:var(--faint)">—</span>')+'</td></tr>';
+      '<td>'+(lk?'<a class="jkey" style="color:var(--major)" href="'+JIRA+encodeURIComponent(lk)+'" target="_blank" rel="noreferrer" title="'+esc(t.linked)+'">'+esc(lk)+'</a>':'<span style="color:var(--faint)">—</span>')+'</td></tr>';
   });
   h+='</tbody></table>';
   el("modalBody").innerHTML=h;
-  el("modalFoot").textContent=tix.length+" tickets · sorted by age";
-  el("modalOv").classList.add("open");
+  el("modalFoot").textContent=tix.length+" tickets · sorted by "+sortDesc(M.col,M.dir);
+  el("modalBody").querySelectorAll("[data-msort]").forEach(function(th){th.onclick=function(){var x=nextSort(MODAL.col,MODAL.dir,th.dataset.msort);MODAL.col=x.c;MODAL.dir=x.d;drawModal();};});
+  var ms=el("mSort"); if(ms) ms.onchange=function(){var p=ms.value.split(":");MODAL.col=p[0];MODAL.dir=p[1];drawModal();};
 }
 function closeModal(){el("modalOv").classList.remove("open");}
 
@@ -965,12 +1198,23 @@ function handleUpload(e){var f=e.target.files&&e.target.files[0];if(!f)return;pr
 /* ── EVENTS ── */
 function bindAll(){
   document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){S.tab=b.dataset.tab;S.page=0;render();};});
-  var gs=el("gsearch");if(gs)gs.oninput=function(){S.search=gs.value;S.page=0;var p=gs.selectionStart;render();var n=el("gsearch");if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}}};
+  var gs=el("gsearch");if(gs)gs.oninput=function(){
+    clearTimeout(window._gsT);
+    window._gsT=setTimeout(function(){
+      var n0=el("gsearch"), v=n0?n0.value:"", p=n0?n0.selectionStart:v.length;
+      var had=!!S.search.trim(), has=!!v.trim();
+      S.search=v; S.page=0;
+      if(has&&!had&&S.sortCol==="created"&&S.sortDir==="desc") S.sortCol="_score";      // searching → best match first
+      if(!has&&S.sortCol==="_score"){S.sortCol="created";S.sortDir="desc";}                // cleared → back to newest first
+      render(); var n=el("gsearch"); if(n){n.focus();try{n.setSelectionRange(p,p);}catch(e){}}
+    },220);
+  };
+  var sb=el("strictBtn");if(sb)sb.onclick=function(){S.strict=!S.strict;S.page=0;render();};
   function bindSel(id,key,resetPage){var e=el(id);if(e)e.onchange=function(){S[key]=e.value;if(resetPage)S.page=0;render();};}
   bindSel("fProj","proj",1);bindSel("fSvm","svm",1);bindSel("fComp","comp",1);bindSel("fStage","stage",1);
   bindSel("fSize","size",1);bindSel("fPrio","prio",1);bindSel("fOwner","owner",1);bindSel("fStatus","status",1);
   bindSel("fFrom","from",1);bindSel("fTo","to",1);
-  var rb=el("resetBtn");if(rb)rb.onclick=function(){S.search="";S.proj="";S.svm="";S.comp="";S.stage="";S.size="";S.prio="";S.owner="";S.status="";S.from="";S.to="";S.page=0;render();};
+  var rb=el("resetBtn");if(rb)rb.onclick=function(){S.search="";S.proj="";S.svm="";S.comp="";S.stage="";S.size="";S.prio="";S.owner="";S.status="";S.from="";S.to="";S.page=0;S.strict=false;if(S.sortCol==="_score"){S.sortCol="created";S.sortDir="desc";}render();};
 
   // KPI drill
   document.querySelectorAll("[data-kpi]").forEach(function(k){k.onclick=function(){
@@ -1001,11 +1245,16 @@ function bindAll(){
       if(type==="closed")return t.closed; return true;
     },name+" — "+lab[type]+" changes");
   };});
-  // month drill
-  document.querySelectorAll("[data-monthdrill]").forEach(function(b){b.onclick=function(){
-    var mk=b.dataset.monthdrill,p=mk.split("-"),yr=+p[0],mo=+p[1];
-    drillTickets(function(t){return t.created&&t.created.getFullYear()===yr&&(t.created.getMonth()+1)===mo;},mk+" — created changes");
+  // trend drill (bars, size blocks, table cells) + window + table order
+  document.querySelectorAll("[data-trd]").forEach(function(b){b.onclick=function(e){
+    e.stopPropagation();
+    var type=b.dataset.trd,k=b.dataset.m,sz=b.dataset.sz||"";
+    var words={created:"raised in",delivered:"delivered in",closed:"closed in",open:"still open at the end of"};
+    var col={created:"created",delivered:"delivered",closed:"resolved",open:"created"}[type];
+    openModal((sz?sz+" changes ":"Changes ")+words[type]+" "+mLabel(k),FILTERED.filter(trendPred(type,k,sz)),col,"desc");
   };});
+  document.querySelectorAll("[data-win]").forEach(function(b){b.onclick=function(){S.trWin=+b.dataset.win;render();};});
+  var trs=document.querySelector("[data-trsort]");if(trs)trs.onclick=function(){S.trDir=S.trDir==="asc"?"desc":"asc";render();};
   // pivot dims + csv + cell
   var pr=el("pvRow");if(pr)pr.onchange=function(){S.pvRow=pr.value;render();};
   var pc=el("pvCol");if(pc)pc.onchange=function(){S.pvCol=pc.value;render();};
@@ -1018,7 +1267,11 @@ function bindAll(){
   // ticket detail
   document.querySelectorAll("[data-detail]").forEach(function(td){td.onclick=function(){var t=RAW.find(function(x){return x.key===td.dataset.detail;});if(t)openModal(t.key,[t]);};});
   // sort
-  document.querySelectorAll("[data-sort]").forEach(function(th){th.onclick=function(){var c=th.dataset.sort;if(S.sortCol===c)S.sortDir=S.sortDir==="asc"?"desc":"asc";else{S.sortCol=c;S.sortDir="asc";}render();};});
+  document.querySelectorAll("[data-sort]").forEach(function(th){th.onclick=function(){var x=nextSort(S.sortCol,S.sortDir,th.dataset.sort);S.sortCol=x.c;S.sortDir=x.d;S.page=0;render();};});
+  var ts=el("tSort");if(ts)ts.onchange=function(){var p=ts.value.split(":");S.sortCol=p[0];S.sortDir=p[1];S.page=0;render();};
+  function editOk(){var d=document.querySelectorAll(".etbl tr.dirty").length;return !d||window.confirm(d+" row"+(d!==1?"s have":" has")+" unsaved edits. Re-sorting discards them. Continue?");}
+  document.querySelectorAll("[data-esort]").forEach(function(th){th.onclick=function(){if(!editOk())return;var x=nextSort(S.editCol,S.editDir,th.dataset.esort);S.editCol=x.c;S.editDir=x.d;render();};});
+  var es=el("eSort");if(es)es.onchange=function(){if(!editOk()){render();return;}var p=es.value.split(":");S.editCol=p[0];S.editDir=p[1];render();};
   // paging
   document.querySelectorAll("[data-pg]").forEach(function(b){b.onclick=function(){var pages=Math.max(1,Math.ceil(FILTERED.length/PAGE_SIZE));if(b.dataset.pg==="first")S.page=0;else if(b.dataset.pg==="prev")S.page=Math.max(0,S.page-1);else if(b.dataset.pg==="next")S.page=Math.min(pages-1,S.page+1);else S.page=pages-1;render();};});
   // csv
