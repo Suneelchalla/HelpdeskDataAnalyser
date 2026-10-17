@@ -670,6 +670,13 @@ body.intab .shell,body.intab .statsbg{visibility:hidden}
         <div class="js-row"><label class="js-lbl">Client Reference</label><select id="jsFldCrf"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Analysis</label><select id="jsFldAna"><option value="">— not mapped —</option></select></div>
         <div class="js-row"><label class="js-lbl">Solution Summary</label><select id="jsFldSol"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Chargeable (FPA)</label><select id="jsFldChg"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">FPA Man-days</label><select id="jsFldFmd"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Approved Man-days</label><select id="jsFldAmd"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">SVM FPA Prepared By</label><select id="jsFldFpb"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">SVM FPA Approved By</label><select id="jsFldFab"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Impact Module</label><select id="jsFldImp"><option value="">— not mapped —</option></select></div>
+        <div class="js-row"><label class="js-lbl">Manpower Type</label><select id="jsFldMpt"><option value="">— not mapped —</option></select></div>
         <div></div>
       </div>
     </div>
@@ -720,7 +727,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   el("jiraSetupBtn2").onclick=openSetup;
 
   function fillSelects(fields, fm){
-    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh",releaseNumber:"jsFldRel",releaseDataFix:"jsFldRelDf",parentRelease:"jsFldPrn",tshirtSizing:"jsFldTsz",severity:"jsFldSev",assignedDate:"jsFldAsd",deliveredDate:"jsFldDvd",clientReference:"jsFldCrf",analysis:"jsFldAna",solutionSummary:"jsFldSol"};
+    var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh",releaseNumber:"jsFldRel",releaseDataFix:"jsFldRelDf",parentRelease:"jsFldPrn",tshirtSizing:"jsFldTsz",severity:"jsFldSev",assignedDate:"jsFldAsd",deliveredDate:"jsFldDvd",clientReference:"jsFldCrf",analysis:"jsFldAna",solutionSummary:"jsFldSol",chargeable:"jsFldChg",fpaManDays:"jsFldFmd",approvedManDays:"jsFldAmd",fpaPreparedBy:"jsFldFpb",fpaApprovedBy:"jsFldFab",impactModule:"jsFldImp",manpowerType:"jsFldMpt"};
     Object.keys(ids).forEach(function(k){
       var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
       fields.forEach(function(f){
@@ -774,7 +781,10 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
         tshirtSizing: el("jsFldTsz").value, severity: el("jsFldSev").value,
         assignedDate: el("jsFldAsd").value, deliveredDate: el("jsFldDvd").value,
         clientReference: el("jsFldCrf").value, analysis: el("jsFldAna").value,
-        solutionSummary: el("jsFldSol").value
+        solutionSummary: el("jsFldSol").value,
+        chargeable: el("jsFldChg").value, fpaManDays: el("jsFldFmd").value, approvedManDays: el("jsFldAmd").value,
+        fpaPreparedBy: el("jsFldFpb").value, fpaApprovedBy: el("jsFldFab").value,
+        impactModule: el("jsFldImp").value, manpowerType: el("jsFldMpt").value
       },
       _fields: _fields||[]
     });
