@@ -322,6 +322,20 @@ mark.hl{background:#FEF08A;color:inherit;border-radius:3px;padding:0 1px}
 @media(max-width:1200px){.hrow1{flex-wrap:wrap}.filters{flex-wrap:wrap}}
 @media(max-width:680px){.ogrid{grid-template-columns:1fr}.blbl{min-width:90px;max-width:110px}}
 @media print{header.top .tabs,header.top .filters,.hactions,.back{display:none!important}body{background:#fff}.card{box-shadow:none}}
+/* Chargeable tab */
+.chd{cursor:pointer}span.chd{border-radius:5px;padding:0 3px;margin:0 -3px;font-weight:700;transition:background .12s}span.chd:hover{background:var(--vi-bg);color:var(--vi)}
+.chb{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap;color:var(--c);background:color-mix(in srgb,var(--c) 12%,#fff);border:1px solid color-mix(in srgb,var(--c) 30%,#fff)}
+.chcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:16px}
+.chcard{padding:16px 18px;border-top:4px solid var(--c)}
+.chcard-h{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px}.chcard-h .dot{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.chcard-v{font-size:30px;font-weight:700;margin:6px 0 2px;color:var(--c)}.chcard-v .chd{color:inherit}
+.chcard-s{font-size:11.5px;color:var(--muted)}
+.chcard-m{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--muted)}.chcard-m b{color:var(--ink);font-family:var(--mono)}
+.chcard-d{margin-top:6px;font-size:11.5px;color:var(--muted)}
+.chmix{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--line)}.chmix i{display:block;height:100%}
+tr.chtot td{background:var(--bg);border-top:1.5px solid var(--line)}
+.ch-foot{font-size:11px;color:var(--faint);margin-top:8px}
+.ch-empty{padding:16px 20px;margin-bottom:16px;border-left:4px solid var(--amber);font-size:13px;line-height:1.6;color:var(--ink2)}
 </style>
 </head>
 <body>
@@ -358,6 +372,7 @@ var S={
   proj:"", svm:"", comp:"", stage:"", size:"", prio:"", owner:"", status:"",
   from:"", to:"", sortCol:"created", sortDir:"desc", page:0,
   pvRow:"stage", pvCol:"owner",
+  charge:"", chWin:12,
   strict:false, trWin:12, trDir:"desc", editCol:"created", editDir:"desc"
 };
 
@@ -407,6 +422,7 @@ var PRIO_ORDER=["Show Stopper","Critical","High","Medium","Low"];
 /* ── normalize (keeps ALLROWS for edit-preservation, returns Change tickets) ── */
 function makeGet(rows){ var km={}; if(rows[0]) Object.keys(rows[0]).forEach(function(k){km[String(k).trim().toLowerCase()]=k;});
   return function(r,n){var kk=km[n];return kk!==undefined?r[kk]:"";}; }
+function numOf(v){ if(v==null||v==="") return null; var n=typeof v==="number"?v:parseFloat(String(v).replace(/,/g,"")); return isNaN(n)?null:n; }
 function normalize(rows){
   ALLROWS=rows; if(!rows.length) return [];
   var get=makeGet(rows), out=[];
@@ -430,8 +446,12 @@ function normalize(rows){
       analysis:String(get(r,"analysis")||"").trim(),
       created:created, delivered:delivered, resolved:resolved, assigned:toD(get(r,"assigned date")),
       ttr:String(get(r,"time to resolution")||"").trim(), updated:toD(get(r,"updated")),
-      desc:String(get(r,"description")||"").trim(), solution:String(get(r,"solution summary")||"").trim(), _raw:r
+      desc:String(get(r,"description")||"").trim(), solution:String(get(r,"solution summary")||"").trim(),
+      chargeRaw:String(get(r,"chargeable")||"").trim(), fpaDays:numOf(get(r,"fpa man-days")), apprDays:numOf(get(r,"approved man-days")),
+      fpaBy:String(get(r,"svm fpa prepared by")||"").trim(), fpaApprover:String(get(r,"svm fpa approved by")||"").trim(),
+      impactModule:String(get(r,"impact module")||"").trim(), manpower:String(get(r,"manpower type")||"").trim(), _raw:r
     };
+    t.charge=chargeCat(t.chargeRaw);
     t.stage=stageOf(status); t.owner=ownerOf(t); t.closed=isClosed(status); t.open=!t.closed;
     t.age=t.open?ageDays(created):null; t.cycle=daysBetween(created,resolved||delivered);
     buildIndex(t);
@@ -707,6 +727,7 @@ function applyFilters(){
     if(S.stage&&t.stage!==S.stage) return false;
     if(S.size&&(t.size||"Unsized")!==S.size) return false;
     if(S.prio&&t.priority!==S.prio) return false;
+    if(S.charge&&t.charge!==S.charge) return false;
     if(S.owner&&t.owner!==S.owner) return false;
     if(S.status==="open"&&!t.open) return false;
     if(S.status==="closed"&&t.open) return false;
@@ -762,6 +783,172 @@ function sortSelect(id,col,dir){
 }
 function nextSort(curCol,curDir,c){ return curCol===c?{c:c,d:curDir==="asc"?"desc":"asc"}:{c:c,d:DESC_FIRST[c]?"desc":"asc"}; }
 
+/* ═══════════════════════ CHARGEABLE TAB ═══════════════════════
+   Commercial view of change tickets, from the FPA Details field "Chargeable"
+   (Chargeable / Non-Chargeable / Product Upgrade). Values are normalised so spelling
+   variants ("Non Chargeable", "Non-chargeable", "Product upgrade") land in one bucket;
+   anything else is kept under its own name. Every number opens its tickets. */
+var CH_BASE=[["Chargeable","#059669"],["Non-Chargeable","#E11D48"],["Product Upgrade","#7C3AED"]];
+var CH_NOTSET="Not set", CH_OTHER_HEX=["#0891B2","#D97706","#DB2777","#4F46E5","#65A30D"];
+function chargeCat(v){
+  var s=String(v==null?"":v).trim(); if(!s||/^(none|nan|null|-|n\/a)$/i.test(s)) return CH_NOTSET;
+  var k=s.toLowerCase().replace(/[^a-z]/g,"");
+  if(/^(non|not|un)charg/.test(k)||k==="free"||k==="nocharge") return "Non-Chargeable";
+  if(k.indexOf("productupgrade")>-1||k.indexOf("upgrade")>-1) return "Product Upgrade";
+  if(k.indexOf("charg")===0||k==="billable"||k==="yes") return "Chargeable";
+  return s;
+}
+function chCats(F){            // fixed order first, then any other values found, "Not set" last
+  var seen={}; F.forEach(function(t){seen[t.charge]=1;});
+  var extra=Object.keys(seen).filter(function(k){return k!==CH_NOTSET&&!CH_BASE.some(function(b){return b[0]===k;});}).sort();
+  return CH_BASE.map(function(b){return b[0];}).concat(extra,[CH_NOTSET]);
+}
+function chHex(c){ for(var i=0;i<CH_BASE.length;i++) if(CH_BASE[i][0]===c) return CH_BASE[i][1]; if(c===CH_NOTSET) return "#9AA7B8";
+  var h=0; for(var j=0;j<c.length;j++) h=(h*31+c.charCodeAt(j))>>>0; return CH_OTHER_HEX[h%CH_OTHER_HEX.length]; }
+function chBadge(c){ var x=chHex(c); return '<span class="chb" style="--c:'+x+'">'+esc(c)+'</span>'; }
+/* a clickable number: spec is a small JSON filter read by chPred() */
+function chN(n,spec,style,txt){ var t=txt!=null?txt:fmtN(n); return n?'<span class="chd" data-chd="'+esc(JSON.stringify(spec))+'"'+(style?' style="'+style+'"':'')+' title="Show the '+n+' ticket'+(n===1?'':'s')+'">'+t+'</span>':'<span style="color:var(--faint)">'+(txt!=null?txt:"0")+'</span>'; }
+function chPred(sp){
+  return function(t){
+    if(sp.c!=null&&t.charge!==sp.c) return false;
+    if(sp.p!=null&&(t.project||"(blank)")!==sp.p) return false;
+    if(sp.s!=null&&(t.svm||"(unassigned)")!==sp.s) return false;
+    if(sp.g!=null&&t.stage!==sp.g) return false;
+    if(sp.m!=null&&!(t.created&&monthKey(t.created)===sp.m)) return false;
+    if(sp.dm!=null&&!(t.delivered&&monthKey(t.delivered)===sp.dm)) return false;
+    if(sp.o==="open"&&!t.open) return false; if(sp.o==="closed"&&t.open) return false;
+    if(sp.o==="delivered"&&!t.delivered) return false;
+    if(sp.md==="any"&&!(t.fpaDays>0||t.apprDays>0)) return false;
+    if(sp.gap==="noset"&&!(t.charge===CH_NOTSET&&t.open&&CH_LATE[t.stage])) return false;
+    if(sp.gap==="nodays"&&!(t.charge==="Chargeable"&&!(t.apprDays>0))) return false;
+    return true;
+  };
+}
+function chTitle(sp){
+  var p=[]; if(sp.c!=null)p.push(sp.c); else p.push("All");
+  p[0]+=" changes";
+  if(sp.o==="open")p.push("open"); if(sp.o==="closed")p.push("closed"); if(sp.o==="delivered")p.push("delivered");
+  if(sp.p!=null)p.push(sp.p); if(sp.s!=null)p.push("SVM "+sp.s); if(sp.g!=null)p.push("stage "+sp.g);
+  if(sp.m!=null)p.push("raised in "+mLabel(sp.m)); if(sp.dm!=null)p.push("delivered in "+mLabel(sp.dm));
+  if(sp.md==="any")p.push("with man-days"); if(sp.gap==="noset")p.push("past estimation but Chargeable not set"); if(sp.gap==="nodays")p.push("no approved man-days");
+  return p.join(" · ");
+}
+/* stages after which the commercial decision should already be made */
+var CH_LATE={}; ["Work Order","Development","UAT & Testing","Delivery","Invoicing"].forEach(function(k){CH_LATE[k]=1;});
+function chDays(v){ return v>0?(Math.round(v*10)/10).toLocaleString():"—"; }
+
+function renderCharge(){
+  var F=FILTERED, total=F.length, cats=chCats(F), have=F.filter(function(t){return t.charge!==CH_NOTSET;}).length;
+  var h='';
+  if(!RAW.some(function(t){return t.charge!==CH_NOTSET;})){
+    h+='<div class="card up d1 ch-empty"><b>No “Chargeable” values in the loaded data yet.</b><br>The field lives in Jira’s <b>FPA Details</b> tab. '+
+      'If you use <b>Jira Live</b>, go to the launcher and click <b>Refresh</b> — the field is now fetched (the first refresh after this update re-reads every ticket, so it takes a little longer). '+
+      'If you upload an Excel export, add the <b>Chargeable</b> column to the export.</div>';
+  }
+  var by={}; cats.forEach(function(c){by[c]={n:0,open:0,closed:0,deliv:0,fpa:0,appr:0,nd:0};});
+  F.forEach(function(t){var o=by[t.charge]; o.n++; if(t.open)o.open++; else o.closed++; if(t.delivered)o.deliv++; if(t.fpaDays>0)o.fpa+=t.fpaDays; if(t.apprDays>0){o.appr+=t.apprDays;o.nd++;}});
+
+  /* ── category cards ── */
+  h+='<div class="chcards up d1">'+cats.filter(function(c){return by[c].n||CH_BASE.some(function(b){return b[0]===c;});}).map(function(c){
+    var o=by[c], x=chHex(c);
+    return '<div class="card chcard" style="--c:'+x+'"><div class="chcard-h"><span class="dot"></span>'+esc(c)+'</div>'+
+      '<div class="chcard-v mono">'+chN(o.n,{c:c},"",fmtN(o.n))+'</div>'+
+      '<div class="chcard-s">'+pct(o.n,total)+' of '+fmtN(total)+' changes</div>'+
+      '<div class="chcard-m"><span>Open <b>'+chN(o.open,{c:c,o:"open"})+'</b></span><span>Closed <b>'+chN(o.closed,{c:c,o:"closed"})+'</b></span><span>Delivered <b>'+chN(o.deliv,{c:c,o:"delivered"})+'</b></span></div>'+
+      (o.appr||o.fpa?'<div class="chcard-d">Approved <b class="mono">'+chDays(o.appr)+'</b> man-days'+(o.fpa?' · FPA <b class="mono">'+chDays(o.fpa)+'</b>':'')+'</div>':'')+'</div>';
+  }).join('')+'</div>';
+
+  /* ── mix donut + by client ── */
+  h+='<div class="ogrid up d2">';
+  h+='<div class="card" style="padding:20px"><div class="sec-head"><span class="sec-title">Commercial Mix</span><span class="sec-sub">'+fmtN(have)+' of '+fmtN(total)+' have a value</span></div><div style="display:flex;flex-direction:column;align-items:center">'+
+    drawDonut(cats.map(function(c){return {v:by[c].n,c:chHex(c),l:c};}),total)+
+    '<div class="legend" style="align-self:stretch">'+cats.filter(function(c){return by[c].n;}).map(function(c){
+      return '<div class="leg-row chd" data-chd="'+esc(JSON.stringify({c:c}))+'"><span class="leg-dot" style="background:'+chHex(c)+'"></span><span class="leg-label">'+esc(c)+'</span><span class="leg-val">'+fmtN(by[c].n)+'</span><span class="leg-pct">'+pct(by[c].n,total)+'</span></div>';}).join('')+'</div></div></div>';
+  var pm={}; F.forEach(function(t){var k=t.project||"(blank)"; if(!pm[k]){pm[k]={total:0}; cats.forEach(function(c){pm[k][c]=0;});} pm[k].total++; pm[k][t.charge]++;});
+  var ps=Object.keys(pm).sort(function(a,b){return pm[b].total-pm[a].total;}).slice(0,12), pmax=ps.length?pm[ps[0]].total:1;
+  h+='<div class="card" style="padding:20px"><div class="sec-head"><span class="sec-title">By Client</span><span class="sec-sub">Top 12 · click a segment</span></div>'+
+    ps.map(function(p){ var d=pm[p], w=d.total/pmax*100;
+      return '<div class="barrow" style="cursor:default"><span class="blbl chd" data-chd="'+esc(JSON.stringify({p:p}))+'" title="'+esc(p)+'">'+esc(p)+'</span><div class="btrack">'+
+        cats.map(function(c){ var v=d[c]; if(!v) return ''; return '<div class="bfill growb chd" data-chd="'+esc(JSON.stringify({p:p,c:c}))+'" title="'+esc(p+" · "+c+": "+v)+'" style="width:'+(v/d.total*w)+'%;background:'+chHex(c)+'"><span class="bfill-n">'+v+'</span></div>'; }).join('')+
+        '</div><span class="bnum">'+fmtN(d.total)+'</span></div>'; }).join('')+
+    '<div class="chart-leg" style="justify-content:flex-start;margin-top:14px">'+cats.filter(function(c){return by[c].n;}).map(function(c){return '<span><i style="background:'+chHex(c)+'"></i> '+esc(c)+'</span>';}).join('')+'</div></div>';
+  h+='</div>';
+
+  /* ── monthly trend, stacked by category ── */
+  var mk={}; F.forEach(function(t){ if(!t.created) return; var k=monthKey(t.created); if(!mk[k]){mk[k]={total:0}; cats.forEach(function(c){mk[k][c]=0;});} mk[k].total++; mk[k][t.charge]++; });
+  var ks=Object.keys(mk).sort();
+  if(ks.length){
+    var all=monthRange(ks[0],ks[ks.length-1]), win=S.chWin?all.slice(-S.chWin):all, mmax=1;
+    win.forEach(function(k){ if(mk[k]&&mk[k].total>mmax) mmax=mk[k].total; });
+    var H=170, cols=win.map(function(k){ var d=mk[k]||{total:0};
+      var segs=cats.slice().reverse().map(function(c){ var v=d[c]; if(!v) return ''; return '<div class="tc-seg chd" data-chd="'+esc(JSON.stringify({m:k,c:c}))+'" title="'+esc(mLabel(k)+" · "+c+": "+v+" — click to list")+'" style="height:'+(v/mmax*H).toFixed(1)+'px;min-height:2px;background:'+chHex(c)+'"></div>'; }).join('');
+      return '<div class="tc-col"><div class="tc-bars"><div class="tc-b w">'+(d.total?'<span class="tc-v chd" data-chd="'+esc(JSON.stringify({m:k}))+'" style="color:var(--ink2);cursor:pointer">'+d.total+'</span>':'')+'<div class="tc-stack">'+segs+'</div></div></div></div>'; }).join('');
+    var winBtns='<div class="seg" role="group">'+[[6,"6 months"],[12,"12 months"],[24,"24 months"],[0,"All"]].map(function(o){return '<button data-chwin="'+o[0]+'" class="'+(S.chWin===o[0]?'on':'')+'">'+o[1]+'</button>';}).join('')+'</div>';
+    h+='<div class="card up d3" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">Raised per month by category</span><span class="sec-sub">by created date · click a segment</span><span class="hspace"></span>'+winBtns+'</div>'+
+      '<div class="tc" style="height:'+(H+16)+'px">'+cols+'</div>'+tcLabels(win.map(function(k){return {k:k};}),14)+
+      '<div class="chart-leg" style="margin-top:10px">'+cats.filter(function(c){return by[c].n;}).map(function(c){return '<span><i style="background:'+chHex(c)+'"></i> '+esc(c)+'</span>';}).join('')+'</div></div>';
+  }
+
+  /* ── table helper: rows × categories ── */
+  function matrix(title,sub,rowsList,keyOf,specKey,labelOf,openOnly){
+    var m={}; F.forEach(function(t){ if(openOnly&&!t.open) return; var k=keyOf(t); if(!m[k]){m[k]={total:0}; cats.forEach(function(c){m[k][c]=0;});} m[k].total++; m[k][t.charge]++; });
+    var keys=rowsList?rowsList.filter(function(k){return m[k];}):Object.keys(m).sort(function(a,b){return m[b].total-m[a].total;});
+    var useCats=cats.filter(function(c){return by[c].n;});
+    var tot={total:0}; useCats.forEach(function(c){tot[c]=0;}); keys.forEach(function(k){tot.total+=m[k].total; useCats.forEach(function(c){tot[c]+=m[k][c];});});
+    var base=openOnly?{o:"open"}:{};
+    function sp(extra){var o={}; Object.keys(base).forEach(function(k){o[k]=base[k];}); Object.keys(extra).forEach(function(k){o[k]=extra[k];}); return o;}
+    var t='<div class="card up" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">'+esc(title)+'</span><span class="sec-sub">'+esc(sub)+'</span></div><div class="tbl-wrap"><table><thead><tr><th>'+esc(specKey==="g"?"Stage":specKey==="s"?"SVM In Charge":"Client")+'</th>'+
+      useCats.map(function(c){return '<th class="num">'+chBadge(c)+'</th>';}).join('')+'<th class="num">Total</th><th style="min-width:170px">Mix</th><th class="num">Chargeable %</th></tr></thead><tbody>';
+    keys.forEach(function(k){ var d=m[k], kk={}, decided=d.total-(d[CH_NOTSET]||0); kk[specKey]=k;
+      t+='<tr><td style="font-weight:600">'+chN(d.total,sp(kk),"",labelOf?labelOf(k):esc(k))+'</td>'+
+        useCats.map(function(c){var o={}; o[specKey]=k; o.c=c; return '<td class="num mono">'+chN(d[c],sp(o))+'</td>';}).join('')+
+        '<td class="num mono"><b>'+chN(d.total,sp(kk))+'</b></td><td><div class="chmix">'+useCats.map(function(c){return d[c]?'<i style="width:'+(d[c]/d.total*100)+'%;background:'+chHex(c)+'" title="'+esc(c+": "+d[c])+'"></i>':'';}).join('')+'</div></td>'+
+        '<td class="num mono">'+(decided?Math.round((d["Chargeable"]||0)/decided*100)+"%":"—")+'</td></tr>'; });
+    var tdec=tot.total-(tot[CH_NOTSET]||0);
+    t+='<tr class="chtot"><td><b>Total</b></td>'+useCats.map(function(c){return '<td class="num mono"><b>'+chN(tot[c],sp({c:c}))+'</b></td>';}).join('')+'<td class="num mono"><b>'+chN(tot.total,sp({}))+'</b></td><td></td><td class="num mono"><b>'+(tdec?Math.round((tot["Chargeable"]||0)/tdec*100)+"%":"—")+'</b></td></tr>';
+    return t+'</tbody></table></div><div class="ch-foot">Chargeable % = chargeable ÷ tickets with a value (Not set is left out).</div></div>';
+  }
+  h+=matrix("Open pipeline by stage","open changes only · where the chargeable work sits now",STAGE_ORDER.concat(["Other"]),function(t){return t.stage;},"g",function(k){return '<span class="sdot" style="background:'+(STAGE_COLOR[k]||"#9AA7B8")+'"></span>'+esc(k);},true);
+  h+=matrix("By client","all changes in scope · most changes first",null,function(t){return t.project||"(blank)";},"p");
+
+  /* ── man-days ── */
+  var md=F.filter(function(t){return t.fpaDays>0||t.apprDays>0;});
+  if(md.length){
+    var mc={}; md.forEach(function(t){var k=t.project||"(blank)"; if(!mc[k])mc[k]={}; var o=mc[k][t.charge]||(mc[k][t.charge]={n:0,fpa:0,appr:0}); o.n++; o.fpa+=t.fpaDays||0; o.appr+=t.apprDays||0;});
+    var useC=cats.filter(function(c){return md.some(function(t){return t.charge===c;});});
+    var rowsC=Object.keys(mc).sort(function(a,b){var sa=0,sb=0; Object.keys(mc[a]).forEach(function(c){sa+=mc[a][c].appr;}); Object.keys(mc[b]).forEach(function(c){sb+=mc[b][c].appr;}); return sb-sa;});
+    h+='<div class="card up" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">Man-days by category</span><span class="sec-sub">FPA estimate vs approved · '+fmtN(md.length)+' changes have man-days</span></div><div class="tbl-wrap"><table><thead><tr><th>Client</th>'+
+      useC.map(function(c){return '<th class="num" colspan="2">'+chBadge(c)+'</th>';}).join('')+'</tr><tr><th></th>'+useC.map(function(){return '<th class="num">Approved</th><th class="num">FPA</th>';}).join('')+'</tr></thead><tbody>'+
+      rowsC.map(function(p){return '<tr><td style="font-weight:600">'+esc(p)+'</td>'+useC.map(function(c){var o=mc[p][c]; return o?'<td class="num mono">'+chN(o.n,{p:p,c:c,md:"any"},"",chDays(o.appr))+'</td><td class="num mono" style="color:var(--muted)">'+chDays(o.fpa)+'</td>':'<td class="num" style="color:var(--faint)">—</td><td></td>';}).join('')+'</tr>';}).join('')+
+      '<tr class="chtot"><td><b>Total</b></td>'+useC.map(function(c){return '<td class="num mono"><b>'+chN(by[c].nd||md.filter(function(t){return t.charge===c;}).length,{c:c,md:"any"},"",chDays(by[c].appr))+'</b></td><td class="num mono" style="color:var(--muted)"><b>'+chDays(by[c].fpa)+'</b></td>';}).join('')+'</tr></tbody></table></div><div class="ch-foot">Click an approved figure to see its tickets.</div></div>';
+  }
+
+  /* ── by SVM ── */
+  h+=matrix("By SVM In Charge","all changes in scope",null,function(t){return t.svm||"(unassigned)";},"s");
+
+  /* ── delivered per month (billing view) ── */
+  var dk={}; F.forEach(function(t){ if(!t.delivered) return; var k=monthKey(t.delivered); if(!dk[k]){dk[k]={}; } dk[k][t.charge]=(dk[k][t.charge]||0)+1; });
+  var dks=Object.keys(dk).sort().slice(-12);
+  if(dks.length){
+    var dc=cats.filter(function(c){return dks.some(function(k){return dk[k][c];});});
+    h+='<div class="card up" style="padding:20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">Delivered per month</span><span class="sec-sub">by delivered date · last 12 months with deliveries · useful for invoicing</span></div><div class="tbl-wrap"><table><thead><tr><th>Month</th>'+dc.map(function(c){return '<th class="num">'+chBadge(c)+'</th>';}).join('')+'<th class="num">Total</th></tr></thead><tbody>'+
+      dks.slice().reverse().map(function(k){var tot=0; dc.forEach(function(c){tot+=dk[k][c]||0;}); return '<tr><td style="font-weight:600">'+mLabel(k)+'</td>'+dc.map(function(c){return '<td class="num mono">'+chN(dk[k][c]||0,{dm:k,c:c})+'</td>';}).join('')+'<td class="num mono"><b>'+chN(tot,{dm:k})+'</b></td></tr>';}).join('')+'</tbody></table></div></div>';
+  }
+
+  /* ── data gaps + insights ── */
+  var n=[], noset=F.filter(chPred({gap:"noset"})).length, nod=F.filter(chPred({gap:"nodays"})).length;
+  var openNs=F.filter(function(t){return t.open&&t.charge===CH_NOTSET;}).length;
+  if(have&&total) n.push({c:"",h:"<b>"+pct(by["Chargeable"].n,have)+"</b> of changes with a value are <b>chargeable</b> ("+fmtN(by["Chargeable"].n)+" of "+fmtN(have)+")."});
+  if(by["Product Upgrade"]&&by["Product Upgrade"].n) n.push({c:"",h:"<b>"+fmtN(by["Product Upgrade"].n)+"</b> product upgrades ("+pct(by["Product Upgrade"].n,total)+" of scope), "+chN(by["Product Upgrade"].open,{c:"Product Upgrade",o:"open"})+" still open."});
+  if(noset) n.push({c:"warn",h:chN(noset,{gap:"noset"})+" open changes are already past estimation (Work Order stage or later) but <b>Chargeable is not set</b> — the commercial decision is missing."});
+  else if(openNs) n.push({c:"warn",h:chN(openNs,{c:CH_NOTSET,o:"open"})+" open changes have <b>no Chargeable value</b> yet."});
+  if(nod&&md.length) n.push({c:"warn",h:chN(nod,{gap:"nodays"})+" chargeable changes have <b>no approved man-days</b>."});
+  var topC=null,topV=0; Object.keys(pm).forEach(function(p){ if(pm[p]["Chargeable"]>topV){topV=pm[p]["Chargeable"];topC=p;} });
+  if(topC) n.push({c:"good",h:"Most chargeable work: <b>"+esc(topC)+"</b> — "+chN(topV,{p:topC,c:"Chargeable"})+" changes."});
+  h+='<div class="card up" style="padding:20px;margin-bottom:0"><div class="sec-head"><span class="sec-title">Checks &amp; insights</span><span class="sec-sub">read from the numbers in view · click a number</span></div>'+noteHTML(n)+'</div>';
+  return h;
+}
+
 /* ═══════════════════════ RENDER ═══════════════════════ */
 function render(){
   applyFilters();
@@ -781,7 +968,7 @@ function render(){
     '<div class="divider"></div>'+
     '<div class="tabs" id="tabs">'+
       tabBtn("overview","Overview")+tabBtn("pipeline","Pipeline")+tabBtn("trend","Trends")+
-      tabBtn("pivots","Pivots")+tabBtn("tickets","Tickets",FILTERED.length)+tabBtn("edit","Edit Data")+
+      tabBtn("pivots","Pivots")+tabBtn("charge","Chargeable")+tabBtn("tickets","Tickets",FILTERED.length)+tabBtn("edit","Edit Data")+
     '</div><div class="hspace"></div>'+
     '<div class="hactions"><button class="ghost" id="resetBtn">↺ Reset filters</button></div>'+
   '</div>'+
@@ -792,6 +979,7 @@ function render(){
     selCell("Module","fComp",S.comp,comps,"All modules")+
     '<div class="fcell"><span class="flabel">Stage</span><select class="fsel" id="fStage"><option value="">All stages</option>'+STAGE_ORDER.map(function(v){return '<option'+(S.stage===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></div>'+
     '<div class="fcell"><span class="flabel">Size</span><select class="fsel" id="fSize"><option value="">All sizes</option>'+SIZE_ORDER.concat(["Unsized"]).map(function(v){return '<option'+(S.size===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></div>'+
+    '<div class="fcell"><span class="flabel">Chargeable</span><select class="fsel" id="fCharge"><option value="">All</option>'+chCats(RAW).map(function(v){return '<option'+(S.charge===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></div>'+
     '<div class="fcell"><span class="flabel">Priority</span><select class="fsel" id="fPrio"><option value="">All</option>'+PRIO_ORDER.map(function(v){return '<option'+(S.prio===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select></div>'+
     '<div class="fcell"><span class="flabel">Owner</span><select class="fsel" id="fOwner"><option value="">SVM &amp; Client</option><option value="svm"'+(S.owner==="svm"?' selected':'')+'>SVM owned</option><option value="client"'+(S.owner==="client"?' selected':'')+'>Client owned</option></select></div>'+
     '<div class="fcell"><span class="flabel">Status</span><select class="fsel" id="fStatus"><option value="">All</option><option value="open"'+(S.status==="open"?' selected':'')+'>Open</option><option value="closed"'+(S.status==="closed"?' selected':'')+'>Closed</option></select></div>'+
@@ -824,6 +1012,7 @@ function render(){
   else if(S.tab==="pipeline") h+=renderPipeline();
   else if(S.tab==="trend") h+=renderTrend();
   else if(S.tab==="pivots") h+=renderPivots();
+  else if(S.tab==="charge") h+=renderCharge();
   else if(S.tab==="tickets") h+=renderTickets();
   else if(S.tab==="edit") h+=renderEdit();
 
@@ -1296,7 +1485,7 @@ function revertUpload(){
 
 /* ── MODAL / DRILL ── */
 var MCOLS=[{k:"key",l:"Key"},{k:"summary",l:"Summary"},{k:"stage",l:"Stage"},{k:"status",l:"Status"},{k:"owner",l:"Owner"},{k:"project",l:"Project"},
-  {k:"svm",l:"SVM In Charge"},{k:"size",l:"T-Shirt Sizing"},{k:"priority",l:"Priority"},{k:"typeOfFix",l:"Type of Fix"},{k:"rootCause",l:"Root Cause"},
+  {k:"svm",l:"SVM In Charge"},{k:"size",l:"T-Shirt Sizing"},{k:"charge",l:"Chargeable"},{k:"apprDays",l:"Approved Man-days"},{k:"priority",l:"Priority"},{k:"typeOfFix",l:"Type of Fix"},{k:"rootCause",l:"Root Cause"},
   {k:"componentsRaw",l:"Components"},{k:"screen",l:"Screen Name"},{k:"menuHead",l:"Menu Head"},{k:"release",l:"Release Number"},{k:"na",l:"Next Action"},
   {k:"worker",l:"Current Worker"},{k:"created",l:"Created"},{k:"updated",l:"Updated"},{k:"assigned",l:"Assigned Date"},{k:"delivered",l:"Delivered Date"},
   {k:"resolved",l:"Resolved"},{k:"age",l:"Age"},{k:"linked",l:"Linked Issues"}];
@@ -1327,7 +1516,7 @@ function drawModal(){
       '<td class="trunc" style="max-width:280px" title="'+esc(t.summary)+'">'+matchTag(t._m)+hl(t.summary,T)+'</td>'+
       '<td><span class="sdot" style="background:'+(STAGE_COLOR[t.stage]||"#9AA7B8")+'"></span>'+esc(t.stage)+'</td>'+
       '<td>'+esc(t.status)+'</td><td>'+ownerBadge(t.owner)+'</td><td>'+esc(t.project)+'</td>'+
-      '<td>'+esc(t.svm||"—")+'</td><td>'+sizeBadge(t.size)+'</td><td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
+      '<td>'+esc(t.svm||"—")+'</td><td>'+sizeBadge(t.size)+'</td><td>'+chBadge(t.charge)+'</td><td class="mono">'+chDays(t.apprDays)+'</td><td><span class="pill">'+esc(t.priority||"—")+'</span></td>'+
       '<td>'+esc(t.typeOfFix||"—")+'</td><td>'+esc(t.rootCause||"—")+'</td><td style="font-size:10.5px">'+hl(t.componentsRaw||"—",T)+'</td>'+
       '<td style="font-size:10.5px">'+hl(t.screen||"—",T)+'</td><td style="font-size:10.5px">'+hl(t.menuHead||"—",T)+'</td>'+
       '<td class="mono" style="font-size:10px">'+esc(t.release||"—")+'</td><td>'+esc(t.na||"—")+'</td><td>'+esc(t.worker||"—")+'</td>'+
@@ -1427,10 +1616,16 @@ function bindAll(){
   var gc=el("gclear");if(gc)gc.onclick=clearSearch;
   function bindSel(id,key,resetPage){var e=el(id);if(e)e.onchange=function(){S[key]=e.value;if(resetPage)S.page=0;render();};}
   bindSel("fProj","proj",1);bindSel("fSvm","svm",1);bindSel("fComp","comp",1);bindSel("fStage","stage",1);
-  bindSel("fSize","size",1);bindSel("fPrio","prio",1);bindSel("fOwner","owner",1);bindSel("fStatus","status",1);
+  bindSel("fSize","size",1);bindSel("fPrio","prio",1);bindSel("fOwner","owner",1);bindSel("fStatus","status",1);bindSel("fCharge","charge",1);
   bindSel("fFrom","from",1);bindSel("fTo","to",1);
-  var rb=el("resetBtn");if(rb)rb.onclick=function(){S.search="";S.proj="";S.svm="";S.comp="";S.stage="";S.size="";S.prio="";S.owner="";S.status="";S.from="";S.to="";S.page=0;S.strict=false;if(S.sortCol==="_score"){S.sortCol="created";S.sortDir="desc";}render();};
+  var rb=el("resetBtn");if(rb)rb.onclick=function(){S.search="";S.proj="";S.svm="";S.comp="";S.stage="";S.size="";S.prio="";S.owner="";S.status="";S.charge="";S.from="";S.to="";S.page=0;S.strict=false;if(S.sortCol==="_score"){S.sortCol="created";S.sortDir="desc";}render();};
 
+  // Chargeable tab: every number / bar / segment opens its tickets
+  document.querySelectorAll("[data-chd]").forEach(function(b){b.onclick=function(e){
+    e.stopPropagation(); var sp; try{sp=JSON.parse(b.dataset.chd);}catch(x){return;}
+    drillTickets(chPred(sp),chTitle(sp));
+  };});
+  document.querySelectorAll("[data-chwin]").forEach(function(b){b.onclick=function(){S.chWin=+b.dataset.chwin;render();};});
   // KPI drill
   document.querySelectorAll("[data-kpi]").forEach(function(k){k.onclick=function(){
     var id=k.dataset.kpi, labels={total:"All Change Tickets",open:"Open Changes",uat:"In UAT / Testing",delivered:"Delivered Changes",client:"Awaiting Client",closed:"Closed Changes"};
