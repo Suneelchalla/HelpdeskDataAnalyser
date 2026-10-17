@@ -403,6 +403,17 @@ function histFor(t) {
   if (t.updated == null) return e;
   return null;
 }
+/* Why does a ticket that HAS a saved history not get to use it? (null when there is no saved history)
+   kind "older": this data is older than Jira (Jira had already moved on when the history was fetched) → refetching
+                 can't help, refresh the data in the launcher.  kind "changed": the ticket changed after the fetch → fetch again. */
+function staleWhy(t) {
+  var e = ST.hist.tickets[t.key]; if (!e || histFor(t)) return null;
+  var last = e.transitions.length ? e.transitions[e.transitions.length - 1].to : e.status, jiraSt = e.status || last;
+  var dataOlder = t.updated == null || !e.fetchedAt || t.updated <= e.fetchedAt;
+  if (jiraSt !== t.status && last !== t.status && dataOlder)
+    return { kind: "older", text: "When its history was fetched (" + fdt(e.fetchedAt) + " IST) Jira already had it in “" + jiraSt + "”, but the loaded data still shows “" + t.status + "”. The loaded data is older than Jira, so fetching again won’t help — click <b>Refresh</b> in the launcher to load the latest data." };
+  return { kind: "changed", text: "The ticket changed in Jira after its history was fetched (" + fdt(e.fetchedAt) + " IST). Fetching it again will fix it." };
+}
 function getResult(t) {
   if (Object.prototype.hasOwnProperty.call(ST.results, t.key)) return ST.results[t.key];
   var e = histFor(t), r = null;
@@ -523,18 +534,29 @@ function renderBar() {
   var mk = missingKeys(false), miss = mk.length, stale = mk.filter(function (k) { return ST.hist.tickets[k]; }).length, bad = sc.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
   var missAll = active ? missingKeys(false, true).length : miss;
   var sus = sc.filter(function (t) { var e = histFor(t); return e && e.suspect; }).length;
+  var mism = sc.filter(function (t) { var r = getResult(t); return r && r.statusMismatch; }).length;
   var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + drNum(bad.length, ["bar", "bad"]) + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
-  var warn = sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + sus + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "";
+  var warn = (mism ? '<br><span style="color:var(--ink2)">ⓘ ' + drNum(mism, ["bar", "mism"], "", mism.toLocaleString()) + " ticket" + (mism > 1 ? "s’" : "’s") + " Jira history ends in a different status than the ticket is in now (usually a status renamed in the workflow). The current status is used from the last recorded change, so who holds it matches the Follow-up Tracker.</span>" : "") + (sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + sus + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "");
   var older = olderPend(true).length, nIn = n - older;
   var head = active ? drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
-  if (older) head += " + " + drNum(older, ["bar", "older"], "", older.toLocaleString()) + " <b>older open ticket" + (older === 1 ? "" : "s") + "</b> with Help Desk or Engineering (created before " + fd(r.from) + ", included so the SVM pending table is complete)";
+  if (older) {
+    /* these are open Help Desk / Engineering tickets created OUTSIDE the range — before it AND after it (the old text said "before" only) */
+    var ol = olderPend(true), nBefore = ol.filter(function (t) { return t.created < r.from; }).length, nAfter = older - nBefore;
+    var parts = []; if (nBefore) parts.push(nBefore.toLocaleString() + " created before " + fd(r.from)); if (nAfter) parts.push(nAfter.toLocaleString() + " created after " + fd(r.to));
+    head += " + " + drNum(older, ["bar", "older"], "", older.toLocaleString()) + " <b>other open ticket" + (older === 1 ? "" : "s") + "</b> with Help Desk or Engineering (" + parts.join(", ") + " — included so the SVM pending table is complete)";
+  }
   var tip = !active && miss > 40 && (!autoOn() || miss > AUTO_MAX) ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
   var pill = '<span class="pill ' + (BR.ready ? "ok" : "") + '"><i></i>' + (BR.ready ? "Extension connected" : "Extension not detected") + "</span>";
   var other = otherFetching(), aon = autoOn();
   var autoChk = '<label class="autochk" title="' + (aon ? "Status history is fetched automatically for tickets in view that need it (up to " + AUTO_MAX.toLocaleString() + " at a time). Untick to only fetch when you click." : "Automatic calculation is off — tick to turn it on.") + '"><input type="checkbox" id="chkAuto"' + (aon ? " checked" : "") + "> Auto-calculate</label>";
   if (other) tip += '<br><span style="color:var(--ink2)">⏳ <b>' + esc(other) + "</b> is fetching status history right now — results appear here automatically when it finishes.</span>";
   else if (aon && BR.ready && miss > AUTO_MAX) tip += '<br><span style="color:var(--ink2)">' + miss.toLocaleString() + " tickets is too many to fetch automatically (limit " + AUTO_MAX.toLocaleString() + ") — narrow the range or pick a client, or click the button to fetch them all.</span>";
-  else if (aon && BR.ready && miss > 0 && !autoKeys().length) tip += '<br><span style="color:var(--ink2)">These were already tried automatically in this session and still have no valid history (see the reason when you open a ticket). Click the button to try again.</span>';
+  else if (aon && BR.ready && miss > 0 && !autoKeys().length) {
+    var stuck = mk.map(function (k) { return ST.byKey[k]; }).filter(Boolean), olderOnes = stuck.filter(function (t) { var w = staleWhy(t); return w && w.kind === "older"; });
+    if (olderOnes.length === stuck.length)
+      tip += '<br><span style="color:var(--ink2)">⟳ ' + (stuck.length === 1 ? "This ticket has" : "These " + stuck.length + " tickets have") + " moved on in Jira since the loaded data was fetched (" + stuck.slice(0, 3).map(function (t) { return '<span class="dr" role="button" tabindex="0" data-open="' + esc(t.key) + '" title="Open ' + esc(t.key) + '" style="font-weight:700">' + esc(t.key) + "</span>"; }).join(", ") + (stuck.length > 3 ? ", …" : "") + "). Their SLA will appear after you click <b>Refresh</b> in the launcher — fetching again here won’t change it.</span>";
+    else tip += '<br><span style="color:var(--ink2)">These were already tried automatically in this session and still have no valid history (open a ticket to see why). Click the button to try again.</span>';
+  }
   var btn = miss > 0
     ? '<button class="primary" id="btnFetch"' + (BR.ready ? "" : " disabled") + '>Fetch &amp; calculate ' + miss.toLocaleString() + " ticket" + (miss > 1 ? "s" : "") + "</button>"
     : (n ? '<button class="ghost" id="btnRefetch"' + (BR.ready ? "" : " disabled") + ">Re-fetch these from Jira</button>" : "");
@@ -694,8 +716,9 @@ function drillList(spec) {
     case "bar": {
       var sc = fetchScope().map(function (t) { var rr = getResult(t); return { t: t, r: rr, b: bucketOf(rr) }; });
       if (p[1] === "all") { r.list = sc; r.title = "Everything Fetch covers"; r.sub = "Tickets created in the selected range that match your filters, plus any older open tickets with Help Desk or Engineering."; }
+      else if (p[1] === "mism") { r.list = sc.filter(function (x) { return x.r && x.r.statusMismatch; }); r.title = "History ends in a different status"; r.sub = "Jira’s status history for these tickets ends in a status that is not their current status (usually a status renamed in the workflow — the history keeps the old name). The current status is used from the last recorded change. Open a ticket to see both names."; }
       else if (p[1] === "range") { r.list = sc.filter(function (x) { return ST.scopeKeys[x.t.key]; }); r.title = "Tickets created in the selected range"; r.sub = "Created " + fd(rangeMs().from) + " – " + fd(rangeMs().to) + " and matching your filters."; }
-      else if (p[1] === "older") { r.list = sc.filter(function (x) { return !ST.scopeKeys[x.t.key]; }); r.title = "Older open tickets with Help Desk or Engineering"; r.sub = "Created before " + fd(rangeMs().from) + " and still open, held by Help Desk or Engineering by their current status. They are added to the fetch so the SVM pending table (which is not limited by the Created range) is complete."; }
+      else if (p[1] === "older") { r.list = sc.filter(function (x) { return !ST.scopeKeys[x.t.key]; }); r.title = "Open tickets outside the range with Help Desk or Engineering"; r.sub = "Created before " + fd(rangeMs().from) + " or after " + fd(rangeMs().to) + " and still open, held by Help Desk or Engineering by their current status. They are added to the fetch so the SVM pending table (which is not limited by the Created range) is complete."; }
       else if (p[1] === "ready") { r.list = sc.filter(function (x) { return x.r; }); r.title = "Status history ready"; r.sub = "Their SLA clock is calculated."; }
       else if (p[1] === "miss") { r.list = sc.filter(function (x) { return !x.r && !ST.failedSet[x.t.key]; }); r.title = "Still need history"; r.sub = "Use Fetch & calculate to get them."; }
       else { r.list = sc.filter(function (x) { return !x.r && ST.failedSet[x.t.key]; }); var rs = {}; r.list.forEach(function (x) { var w = ST.failedSet[x.t.key]; rs[w] = (rs[w] || 0) + 1; }); r.title = "Could not be fetched"; r.sub = Object.keys(rs).map(function (w) { return rs[w] + " × " + w; }).join("; "); }
@@ -937,7 +960,8 @@ function renderDetailInner() {
   var t = ST.byKey[ST.detail]; if (!t) return;
   var r = getResult(t), b = bucketOf(r), h = '<div class="modal"><div class="mh"><div style="flex:1;min-width:0"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="font-size:20px">' + keyLink(t.key) + "</h2>" + chip(b) + (r && r.isPaused ? kchip("client") + ' <span style="font-size:11.5px;color:var(--muted)">clock paused</span>' : "") + '</div><div style="font-size:14px;margin-top:6px;font-weight:500">' + esc(t.summary) + '</div><div style="font-size:11.5px;color:var(--muted);margin-top:5px">' + esc(clientName(t.prefix)) + " · " + esc(t.type) + " · " + esc(t.priority || "No priority") + " · worker " + esc(t.worker || "—") + " · SVM " + esc(t.svm || "—") + " · created " + fdt(t.created) + '</div></div>' + (r && !r.isClosed && r.targetMin != null ? '<button class="primary" data-remind="' + esc(t.key) + '">🔔 Send SLA reminder</button>' : "") + '<button class="x" data-closedetail aria-label="Close">✕</button></div><div class="mb">';
   if (!r) {
-    h += '<div class="empty"><b>No status history for this ticket yet.</b><br>The clock needs its status changes to work out time with the client.<br><br><button class="primary" id="btnFetchOne"' + (BR.ready && !ST.fetching ? "" : " disabled") + ">" + (ST.fetching ? "Fetching…" : "Load history for this ticket") + "</button>" + (BR.ready ? "" : '<div style="margin-top:8px;font-size:12px">Extension not detected.</div>') + "</div></div></div>";
+    var sw = staleWhy(t);
+    h += '<div class="empty"><b>' + (sw ? "The saved status history doesn’t match this ticket any more." : "No status history for this ticket yet.") + "</b><br>" + (sw ? sw.text : "The clock needs its status changes to work out time with the client.") + '<br><br><button class="primary" id="btnFetchOne"' + (BR.ready && !ST.fetching ? "" : " disabled") + ">" + (ST.fetching ? "Fetching…" : "Load history for this ticket") + "</button>" + (BR.ready ? "" : '<div style="margin-top:8px;font-size:12px">Extension not detected.</div>') + "</div></div></div>";
   } else {
     var tot = r.segs.reduce(function (a, sg) { return a + Math.max(sg.calMin, 0); }, 0) || 1, dayNote = calFor(t).dayMin < 1440 ? " (1 working day = " + fcal(calFor(t).dayMin).replace(/ 0m$/, "") + ")" : "";
     var e = histFor(t);
@@ -949,6 +973,7 @@ function renderDetailInner() {
     h += '<div class="sr">' + breachSentence(bi) + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "Created <b>" + fcal(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(calText(calFor(t))) + "), which came to <b>" + fdur(r.elapsedMin) + "</b>" + dayNote + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
       (r.pausedMin > 0 ? "<b>" + fdur(r.pausedMin) + "</b> of working time was spent with the client and was <b>not</b> counted. " : "This ticket has not been with the client. ") +
       (e && e.suspect ? '<br><span style="color:var(--amber)"><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</span> ' : "") +
+      (r.statusMismatch ? '<br><span style="color:var(--amber)">ⓘ Jira’s history ends in <b>“' + esc(r.statusMismatch.history) + "”</b>, but the ticket is now in <b>“" + esc(r.statusMismatch.current) + "”</b> (Jira’s own status). The time since the last recorded change is counted under the current status.</span>" : "") +
       (r.unmapped.length ? '<br><span style="color:var(--amber)">Status(es) not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</span>" : "") + "</div>";
     /* who had it */
     var kinds = [["hd", "Help Desk"], ["engg", "Engineering"], ["client", "Client"], ["closed", "Closed"]].filter(function (k) { return r.byKind[k[0]].cal > 0.5; });
