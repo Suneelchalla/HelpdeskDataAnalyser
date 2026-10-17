@@ -250,9 +250,9 @@ var SLA_TONE={red:["#FEE2E2","#BE123C"],orange:["#FFEDD5","#C2410C"],amber:["#FE
 function SlaCell({t}){
   var x=checkSLA(t).info;
   if(x.state==="na"||x.state==="loading")return <span style={{color:"var(--t4)",fontSize:10}} title={x.tip||""}>—</span>;
-  if(x.state==="nohist"||x.state==="none")return <span title={x.tip} style={{color:"var(--t4)",fontSize:10,borderBottom:"1px dotted var(--t4)",cursor:"help",whiteSpace:"nowrap"}}>{x.state==="none"?"No target":"No data"}</span>;
+  if(x.state==="nohist"||x.state==="none")return <span title={x.tip+(x.state==="nohist"?"\n\nClick for details.":"")} onClick={x.state==="nohist"?function(e){e.stopPropagation();openSlaDetail(t);}:undefined} style={{color:x.why==="status"?"#B45309":"var(--t4)",fontSize:10,borderBottom:"1px dotted currentColor",cursor:x.state==="nohist"?"pointer":"help",whiteSpace:"nowrap"}}>{x.state==="none"?"No target":x.why==="status"?"Out of date":"No data"}</span>;
   var c=SLA_TONE[x.tone]||SLA_TONE.grey;
-  return <span title={x.tip} style={{background:c[0],color:c[1],padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap",cursor:"help"}}>{x.state==="breached"?"⚡ ":x.state==="paused"?"⏸ ":""}{x.label}{x.suspect?" ⚠":""}</span>;
+  return <button type="button" onClick={function(e){e.stopPropagation();openSlaDetail(t);}} title={x.tip+"\n\nClick to see how this was calculated."} style={{background:c[0],color:c[1],padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer",border:"1px solid transparent",fontFamily:"inherit",lineHeight:"inherit"}} onMouseEnter={function(e){e.currentTarget.style.borderColor=c[1];}} onMouseLeave={function(e){e.currentTarget.style.borderColor="transparent";}}>{x.state==="breached"?"⚡ ":x.state==="paused"?"⏸ ":""}{x.label}{x.suspect?" ⚠":""}</button>;
 }
 /* SLA badge for ticket cards */
 function SlaPill({t}){
@@ -260,8 +260,191 @@ function SlaPill({t}){
   if(x.state==="na"||x.state==="loading"||x.state==="none")return null;
   if(x.state==="nohist")return <span title={x.tip} style={{background:"var(--bg)",color:"var(--t3)",border:"1px dashed var(--border)",padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:700,flexShrink:0,cursor:"help"}}>SLA: no data</span>;
   var c=SLA_TONE[x.tone]||SLA_TONE.grey;
-  return <span title={x.tip} style={{background:c[0],color:c[1],padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0,cursor:"help",whiteSpace:"nowrap"}}>SLA · {x.label}</span>;
+  return <span title={x.tip+"\n\nClick to see how this was calculated."} onClick={function(e){e.stopPropagation();openSlaDetail(t);}} style={{background:c[0],color:c[1],padding:"2px 8px",borderRadius:6,fontSize:9,fontWeight:800,flexShrink:0,cursor:"pointer",whiteSpace:"nowrap"}}>SLA · {x.label}</span>;
 }
+/* ─── SLA detail popup (same breakdown as the SLA Tracker's ticket view) ───
+   Any SLA badge can open it: openSlaDetail(row). One host component (SlaDetailHost) is mounted
+   in App and listens for the event, so no props have to be threaded through every table. */
+function openSlaDetail(t){window.dispatchEvent(new CustomEvent("hd-sla-detail",{detail:t}));}
+var SLA_KIND={hd:["Help Desk","#0F766E","#D6F3EE","#14B8A6"],engg:["Engineering","#5B57D8","#E2E1FB","#5B57D8"],client:["Client","#B45309","#FEF3C7","#F0A838"],closed:["Closed","#475569","#E5E9EF","#B8C2CF"]};
+function KindChip({k}){var c=SLA_KIND[k]||SLA_KIND.hd;return <span style={{background:c[2],color:c[1],padding:"2px 9px",borderRadius:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{c[0]}</span>;}
+function slaBreachSentence(bi,d){
+  var F=d.fmt,W=function(ms){return ms==null?"—":new Date(ms).toLocaleString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"2-digit",month:"short",year:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});};
+  switch(bi.state){
+    case "running":return <span>At the current pace it <b>breaches on {W(bi.breachAt)} IST</b> ({F(bi.remainingMin)} of working time left). </span>;
+    case "paused":return <span>The clock is <b>paused</b> while the ticket is with the client, with {F(bi.remainingMin)} of working time left. If it came back now it would breach on <b>{W(bi.ifResumedAt)} IST</b>. </span>;
+    case "breached":return <span><b>Breached on {W(bi.breachedAt)} IST</b> and now {F(bi.overByMin)} over target. </span>;
+    case "missed":return <span>Closed after breaching on <b>{W(bi.breachedAt)} IST</b>. </span>;
+  }return null;
+}
+function SlaKpi({label,value,sub,color}){
+  return <div style={{flex:"1 1 180px",border:"1px solid var(--border)",borderLeft:"4px solid "+color,borderRadius:12,padding:"12px 14px",background:"#fff"}}>
+    <div style={{fontFamily:"var(--mono)",fontSize:22,fontWeight:800,color:"var(--t1)",lineHeight:1.1}}>{value}</div>
+    <div style={{fontSize:12,fontWeight:600,color:"var(--t2)",marginTop:6}}>{label}</div>
+    <div style={{fontSize:11,color:"var(--t3)",marginTop:1}}>{sub}</div>
+  </div>;
+}
+var SLA_TH={padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",background:"var(--bg)",whiteSpace:"nowrap"};
+var SLA_TD={padding:"6px 10px",borderBottom:"1px solid var(--border)",fontSize:12,whiteSpace:"nowrap"};
+function SlaDetailModal({row,onClose}){
+  const[busy,setBusy]=useState(null);
+  const[err,setErr]=useState("");
+  var L=window.HDSlaLink;
+  if(!row||!L)return null;
+  var d=L.detail(row),x=d.info,t=d.t,r=d.r;
+  var tone=SLA_TONE[x.tone]||SLA_TONE.grey;
+  function recheck(){
+    if(!L.bridgeReady()){setErr("HD Jira Bridge extension not detected — enable it and reload the page.");return;}
+    setErr("");setBusy("Loading status history from Jira…");
+    L.fetchMissing([row],{force:true}).then(function(res){
+      setBusy(null);
+      if(res.failed&&res.failed.length)setErr(res.failed[0].key+": "+res.failed[0].reason);
+    },function(e){setBusy(null);setErr(String(e&&e.message||e));});
+  }
+  var head=(
+    <div style={{padding:"18px 22px",borderBottom:"1px solid var(--border)",display:"flex",gap:14,alignItems:"flex-start"}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+          <a href={J+row.Key} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontWeight:800,fontSize:15,color:"var(--blue)"}}>{row.Key}</a>
+          {x.label&&<span style={{background:tone[0],color:tone[1],padding:"2px 9px",borderRadius:6,fontSize:11,fontWeight:800}}>{x.label}</span>}
+          {r&&r.isPaused&&<span style={{fontSize:11.5,color:"var(--t3)"}}>clock paused</span>}
+        </div>
+        <div style={{fontSize:15,fontWeight:600,color:"var(--t1)",marginTop:6}}>{row.Summary}</div>
+        <div style={{fontSize:11.5,color:"var(--t3)",marginTop:4}}>{[row.Project,row["Issue Type"],row.Priority||"No priority","status "+(row.Status||"—"),"worker "+(row["Current Worker"]||"—"),"SVM "+(row["SVM In Charge"]||"—"),"created "+(d.fdt?d.fdt(t&&t.created):fd(row.Created))].filter(Boolean).join(" · ")}</div>
+      </div>
+      <button onClick={recheck} disabled={!!busy} title="Fetch this ticket's status history from Jira again and recalculate" style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",whiteSpace:"nowrap",opacity:busy?.6:1}}>{busy?"Checking…":"↻ Recheck from Jira"}</button>
+      <button onClick={onClose} aria-label="Close" style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:16,color:"var(--t2)",flexShrink:0}}>✕</button>
+    </div>);
+  var body;
+  if(!r){
+    body=<div style={{padding:"40px 24px",textAlign:"center",color:"var(--t2)",fontSize:13,lineHeight:1.6}}>
+      <b style={{color:"var(--t1)"}}>{x.state==="na"?"Not tracked for SLA":x.state==="none"?"No SLA target":"No valid status history for this ticket"}</b><br/>{x.tip||""}
+      {x.state==="nohist"&&<div style={{marginTop:16}}><button onClick={recheck} disabled={!!busy} style={{padding:"9px 16px",borderRadius:8,border:"1px solid #FDBA74",background:"#FFF7ED",color:"#C2410C",fontWeight:700,fontSize:12}}>{busy?"Loading…":"Load history for this ticket"}</button></div>}
+    </div>;
+  }else{
+    var F=d.fmt,C=d.fcal,bi=d.bi,e=d.entry;
+    var tot=r.segs.reduce(function(a,sg){return a+Math.max(sg.calMin,0);},0)||1;
+    var cur=d.classify(row.Status||"");
+    var kinds=[["hd"],["engg"],["client"],["closed"]].map(function(k){return k[0];}).filter(function(k){return r.byKind[k].cal>0.5;});
+    var dt=function(ms){return d.fdt(ms);};
+    body=<div style={{padding:"16px 22px 22px"}}>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <SlaKpi label="Working time counted" value={F(r.elapsedMin)} sub={"of "+(r.targetMin!=null?F(r.targetMin)+" target":"no target")} color="#EA580C"/>
+        <SlaKpi label={r.remainingMin!=null&&r.remainingMin<0?"Over target by":"Remaining"} value={r.remainingMin==null?"—":r.remainingMin===0?"At limit":F(Math.abs(r.remainingMin))} sub={r.pct!=null?Math.round(r.pct)+"% used":""} color={r.remainingMin!=null&&r.remainingMin<=0?"#BE123C":"#059669"}/>
+        <SlaKpi label="Not counted (with client)" value={F(r.pausedMin)} sub={r.clientRounds+" time"+(r.clientRounds===1?"":"s")+" with client"} color="#F0A838"/>
+        <SlaKpi label="Age since created" value={C(r.ageCalMin)} sub="calendar time, incl. weekends" color="#334155"/>
+      </div>
+      <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"11px 14px",fontSize:12.5,color:"var(--t2)",lineHeight:1.65,marginBottom:10}}>
+        {bi&&slaBreachSentence(bi,d)}{r.isClosed?"Closed "+dt(r.closedAt)+". ":""}Created <b>{C(r.ageCalMin)}</b> ago on the calendar. Only working time counts ({d.calText}), which came to <b>{F(r.elapsedMin)}</b>{r.targetMin!=null?<span> against a target of <b>{F(r.targetMin)}</b></span>:null}. {r.pausedMin>0?<span><b>{F(r.pausedMin)}</b> of working time was spent with the client and was <b>not</b> counted.</span>:"This ticket has not been with the client."}
+        <div style={{marginTop:6}}>Current status <b>“{row.Status}”</b> is classified as <KindChip k={cur.kind}/> in Master Data → clock {cur.kind==="client"?"paused":cur.kind==="closed"?"stopped":"running"}.{r.currentStatus!==row.Status&&<span style={{color:"#B45309"}}> ⚠ The history ends in “{r.currentStatus}”, not the current status — use Recheck.</span>}</div>
+        {e&&e.suspect&&<div style={{color:"#B45309",marginTop:6}}><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</div>}
+        {r.unmapped.length>0&&<div style={{color:"#B45309",marginTop:6}}>Status(es) not in Master Data (counted as running): <b>{r.unmapped.join(", ")}</b>.</div>}
+        {e&&e.fetchedAt&&<div style={{fontSize:11,color:"var(--t3)",marginTop:6}}>History fetched {dt(e.fetchedAt)} IST · source: {e.src==="issue"?"per-ticket changelog (complete)":"batch search"}</div>}
+      </div>
+      <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",margin:"14px 0 6px"}}>Who had this ticket</div>
+      <div style={{overflowX:"auto",border:"1px solid var(--border)",borderRadius:10}}><table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr><th style={SLA_TH}>Held by</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Working time</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Calendar time</th><th style={SLA_TH}>Share of the ticket’s life</th><th style={SLA_TH}>Counts towards SLA?</th></tr></thead>
+        <tbody>{kinds.map(function(k){var o=r.byKind[k],counted=k==="hd"||k==="engg";return <tr key={k}>
+          <td style={SLA_TD}><KindChip k={k}/></td>
+          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{k==="closed"?"—":F(o.biz)}</td>
+          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{C(o.cal)}</td>
+          <td style={SLA_TD}><div style={{minWidth:160,height:10,background:"#E8EDF3",borderRadius:5,overflow:"hidden"}}><div style={{width:Math.max(1,o.cal/tot*100)+"%",height:"100%",background:SLA_KIND[k][3]}}/></div></td>
+          <td style={SLA_TD}>{counted?"Yes — counted":k==="client"?"No — clock paused":"No — clock stopped"}</td></tr>;})}</tbody>
+      </table></div>
+      <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",margin:"16px 0 6px"}}>Status by status ({r.segs.length} step{r.segs.length===1?"":"s"})</div>
+      <div style={{display:"flex",gap:14,fontSize:11,color:"var(--t3)",marginBottom:6}}>{["hd","engg","client","closed"].map(function(k){return <span key={k} style={{display:"flex",alignItems:"center",gap:5}}><i style={{width:10,height:10,borderRadius:3,background:SLA_KIND[k][3],display:"inline-block"}}/>{SLA_KIND[k][0]}{k==="client"?" (paused)":""}</span>;})}</div>
+      <div style={{display:"flex",gap:2,height:18,marginBottom:10}} aria-hidden="true">{r.segs.map(function(sg,i){return <i key={i} title={sg.status+" · "+SLA_KIND[sg.kind][0]} style={{flexGrow:Math.max(sg.calMin,tot*0.008),flexShrink:1,flexBasis:0,minWidth:3,background:SLA_KIND[sg.kind][3],borderRadius:4}}/>;})}</div>
+      <div style={{overflowX:"auto",border:"1px solid var(--border)",borderRadius:10,maxHeight:340,overflowY:"auto"}}><table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead style={{position:"sticky",top:0}}><tr><th style={SLA_TH}>Status</th><th style={SLA_TH}>Held by</th><th style={SLA_TH}>From</th><th style={SLA_TH}>To</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Calendar</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Working time</th><th style={SLA_TH}>Clock</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Counted so far</th></tr></thead>
+        <tbody>{r.segs.map(function(sg,i){return <tr key={i} style={{background:sg.open?"#F8FAFF":""}}>
+          <td style={SLA_TD}><b>{sg.status}</b>{!sg.mapped&&<span style={{marginLeft:6,fontSize:10,color:"#B45309",background:"#FEF3C7",padding:"1px 6px",borderRadius:5}}>unmapped</span>}</td>
+          <td style={SLA_TD}><KindChip k={sg.kind}/></td>
+          <td style={SLA_TD}>{dt(sg.start)}</td>
+          <td style={SLA_TD}>{sg.open?"now":dt(sg.end)}</td>
+          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{C(sg.calMin)}</td>
+          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{sg.kind==="closed"?"—":F(sg.bizMin)}</td>
+          <td style={SLA_TD}>{sg.counted?"▶ counted":sg.kind==="client"?"⏸ paused":"■ stopped"}</td>
+          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{F(sg.elapsedAfter)}</td></tr>;})}</tbody>
+      </table></div>
+    </div>;
+  }
+  return(
+    <div onClick={function(ev){if(ev.target===ev.currentTarget)onClose();}} role="dialog" aria-modal="true" style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
+      <div style={{background:"#fff",borderRadius:18,boxShadow:"0 20px 60px rgba(0,0,0,.25)",width:"100%",maxWidth:1060,animation:"modalIn .25s cubic-bezier(.22,1,.36,1)"}}>
+        {head}
+        {(busy||err)&&<div style={{padding:"8px 22px",fontSize:12,background:err?"#FEF2F2":"#EFF6FF",color:err?"#B91C1C":"#1D4ED8",borderBottom:"1px solid var(--border)"}}>{err||busy}</div>}
+        {body}
+      </div>
+    </div>);
+}
+function SlaDetailHost(){
+  const[row,setRow]=useState(null);
+  const[,setV]=useState(0);
+  useEffect(function(){
+    function on(e){setRow(e.detail||null);}
+    window.addEventListener("hd-sla-detail",on);
+    var un=window.HDSlaLink?window.HDSlaLink.subscribe(function(){setV(function(v){return v+1;});}):null;
+    return function(){window.removeEventListener("hd-sla-detail",on);if(un)un();};
+  },[]);
+  useEffect(function(){
+    if(!row)return;
+    /* capture phase on window runs before the app's own Escape handler, so Esc closes only this popup */
+    function key(e){if(e.key==="Escape"){e.stopImmediatePropagation();e.preventDefault();setRow(null);}}
+    window.addEventListener("keydown",key,true);
+    return function(){window.removeEventListener("keydown",key,true);};
+  },[row]);
+  return row?<SlaDetailModal row={row} onClose={function(){setRow(null);}}/>:null;
+}
+
+/* ─── SLA filter + Created sort for ticket tables ─── */
+var SLA_FILTERS=[
+  ["breached","Breached","#BE123C"],["critical","Critical","#C2410C"],["atrisk","At risk","#B45309"],
+  ["ontrack","On track","#047857"],["paused","Paused","#475569"],["nohist","No data","#64748B"],["other","No target / n.a.","#94A3B8"]
+];
+function slaBucket(t){
+  var x=checkSLA(t).info;
+  if(x.state==="breached"||x.state==="missed")return "breached";
+  if(x.state==="paused")return "paused";
+  if(x.state==="nohist")return "nohist";
+  if(x.state==="running"||x.state==="met"||x.level){
+    if(x.state==="met")return "ontrack";
+    return x.level==="danger"?"critical":x.level==="warning"?"atrisk":"ontrack";
+  }
+  return "other";
+}
+function createdMs(t){var v=t&&t.Created;if(!v)return null;var d=v instanceof Date?v:new Date(v);return isNaN(d)?null:d.getTime();}
+/* view = {sla:"" | bucket id, sort:"" | "desc" | "asc"} */
+function applySlaView(list,view){
+  var out=view.sla?list.filter(function(t){return slaBucket(t)===view.sla;}):list.slice();
+  if(view.sort){var dir=view.sort==="asc"?1:-1;out.sort(function(a,b){var x=createdMs(a),y=createdMs(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return (x-y)*dir;});}
+  return out;
+}
+function SlaFilterBar({list,view,setView}){
+  var cnt={};list.forEach(function(t){var b=slaBucket(t);cnt[b]=(cnt[b]||0)+1;});
+  function chip(id,label,color,n){
+    var on=view.sla===id;
+    return <button key={id||"all"} onClick={function(){setView({sla:on?"":id,sort:view.sort});}} disabled={!n&&!on}
+      style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:700,whiteSpace:"nowrap",border:"1px solid "+(on?color:"var(--border)"),background:on?color:"#fff",color:on?"#fff":(n?color:"var(--t4)"),opacity:!n&&!on?.5:1,cursor:!n&&!on?"default":"pointer"}}>
+      {label} <span style={{opacity:.8,fontFamily:"var(--mono)"}}>{n||0}</span></button>;
+  }
+  return <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",padding:"10px 16px",borderBottom:"1px solid var(--border)",background:"#fff"}}>
+    <span style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",marginRight:2}}>SLA</span>
+    {chip("","All","#2563EB",list.length)}
+    {SLA_FILTERS.map(function(f){return chip(f[0],f[1],f[2],cnt[f[0]]);})}
+    <span style={{flex:1}}/>
+    <span style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px"}}>Created</span>
+    <select value={view.sort} onChange={function(e){setView({sla:view.sla,sort:e.target.value});}} style={{padding:"4px 8px",borderRadius:7,border:"1px solid var(--border)",fontSize:11,fontWeight:600,color:"var(--t2)",background:"#fff",fontFamily:"inherit"}}>
+      <option value="">Default order</option><option value="desc">Newest first</option><option value="asc">Oldest first</option>
+    </select>
+  </div>;
+}
+/* clickable "Created" column header: default → newest → oldest → default */
+function CreatedTh({view,setView,style}){
+  var next=view.sort===""?"desc":view.sort==="desc"?"asc":"";
+  var arrow=view.sort==="desc"?" ↓":view.sort==="asc"?" ↑":" ⇅";
+  return <th onClick={function(){setView({sla:view.sla,sort:next});}} title="Sort by created date" style={Object.assign({},style,{cursor:"pointer",userSelect:"none",color:view.sort?"var(--blue)":style.color})}>Created{arrow}</th>;
+}
+
 /* "Calculate SLA (n)": fetch status history for tickets that have none, through the Jira bridge.
    Saved into the SLA Tracker's cache, so the SLA Tracker benefits too. */
 function SlaFetchBtn({rows}){
@@ -845,7 +1028,9 @@ function MailDraftModal({data,onClose}){
 /* ─── Modal Component ─── */
 function TicketModal({data,onClose}){
   if(!data)return null;
-  var tix=data.tickets||[];
+  const [slaView, setSlaView] = useState({sla:"",sort:""});
+  var allTix=data.tickets||[];
+  var tix=applySlaView(allTix,slaView);
   return(
     <div onClick={function(e){if(e.target===e.currentTarget)onClose();}} style={{
       position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,.4)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",
@@ -857,12 +1042,13 @@ function TicketModal({data,onClose}){
           <div style={{width:40,height:40,borderRadius:10,background:data.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{data.icon}</div>
           <div style={{flex:1}}>
             <div style={{fontSize:16,fontWeight:800,color:"var(--t1)"}}>{data.title}</div>
-            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{tix.length} ticket{tix.length!==1?"s":""}</div>
+            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{allTix.length} ticket{allTix.length!==1?"s":""}{tix.length!==allTix.length?" · "+tix.length+" shown":""}</div>
           </div>
-          <SlaFetchBtn rows={tix}/>
-          <button onClick={function(){exportFullCSV(tix,(data.title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
+          <SlaFetchBtn rows={allTix}/>
+          <button onClick={function(){exportFullCSV(allTix,(data.title||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ Export Full Data</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
+        {allTix.length>0&&<SlaFilterBar list={allTix} view={slaView} setView={setSlaView}/>}
         {/* Modal table */}
         <div style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -874,7 +1060,7 @@ function TicketModal({data,onClose}){
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Same as the SLA Tracker. Hover a value for details.">SLA</th>
 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
+              <CreatedTh view={slaView} setView={setSlaView} style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}/>
               <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
             </tr></thead>
             <tbody>
@@ -901,7 +1087,7 @@ function TicketModal({data,onClose}){
             </tbody>
           </table>
           {tix.length>500&&<div style={{padding:12,textAlign:"center",color:"var(--t3)",fontSize:11,borderTop:"1px solid var(--border)"}}>Showing 500 of {tix.length}</div>}
-          {tix.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--t3)",fontSize:13}}>No tickets in this category</div>}
+          {tix.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--t3)",fontSize:13}}>{allTix.length?"No tickets match this SLA filter":"No tickets in this category"}</div>}
         </div>
       </div>
     </div>
@@ -929,6 +1115,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   const [enggBridgeMissing, setEnggBridgeMissing] = useState(false);
   const [enggSearch, setEnggSearch] = useState("");
   const scrollRef=useRef(null), savedScroll=useRef(0);
+  const [slaView, setSlaView] = useState({sla:"",sort:""}); // SLA filter + Created sort, shared by every tab's table
 
   /* Fetch all linked ticket assignees in batches of 5 */
   function loadEnggAssignees(force){
@@ -1001,7 +1188,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
   /* Reset engg-tab view state whenever the modal's ticket set changes (e.g. Engg vs Client). */
   useEffect(function(){
-    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");setClientProj("");
+    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");setClientProj("");setSlaView({sla:"",sort:""});
   },[data&&data.title]);
 
   /* Keep the user's scroll position stable across the periodic pivot repaints while loading. */
@@ -1065,8 +1252,11 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   var svmPalette=["#7C3AED","#5B21B6","#2563EB","#0891B2","#059669","#D97706","#E11D48","#9333EA","#4338CA","#0D9488","#B45309","#DC2626"];
 
   /* ── shared ticket table ── */
-  function renderTable(list,showAge,flat){
+  function renderTable(allList,showAge,flat){
+    var list=applySlaView(allList,slaView);
     return(
+      <div>
+      {allList.length>0&&<SlaFilterBar list={allList} view={slaView} setView={setSlaView}/>}
       <div style={flat?{overflowX:"auto"}:{overflowX:"auto",maxHeight:420,overflowY:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr style={{background:"var(--bg)",position:"sticky",top:0,zIndex:2}}>
@@ -1077,7 +1267,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Same as the SLA Tracker. Hover a value for details.">SLA</th>
 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
-            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Created</th>
+            <CreatedTh view={slaView} setView={setSlaView} style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}/>
             <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
             {(data.showReport||data.showClientReport)&&onRemind&&<th style={{padding:"7px 10px",textAlign:"center",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Remind</th>}
           </tr></thead>
@@ -1107,7 +1297,8 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
           </tbody>
         </table>
         {list.length>500&&<div style={{padding:12,textAlign:"center",color:"var(--t3)",fontSize:11,borderTop:"1px solid var(--border)"}}>Showing 500 of {list.length}</div>}
-        {list.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--t3)",fontSize:13}}>No tickets in this category</div>}
+        {list.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--t3)",fontSize:13}}>{allList.length?"No tickets match this SLA filter":"No tickets in this category"}</div>}
+      </div>
       </div>
     );
   }
@@ -2824,6 +3015,7 @@ function App(){
 
       {/* ─── Ticket Modal ─── */}
       <TicketModal data={modal} onClose={closeModal}/>
+      <SlaDetailHost/>
       {/* ─── Category Detail Modal (Engg / Client Followup) ─── */}
       <CategoryDetailModal data={catModal} activeTab={catTab} onTabChange={setCatTab} onClose={closeCatModal} onReport={openEnggReport} onMail={openEnggMail} onClientReport={handleClientReport} onClientMail={handleClientMail} onRemind={function(t,mode){setReminderData({ticket:t,mode:mode||"internal"});}}/>
       <MailDraftModal data={mailModal} onClose={function(){setMailModal(null);}}/>
