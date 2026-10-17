@@ -209,6 +209,24 @@ const AL=["< 1 week","1–30 days","31–60 days","61–90 days","90+ days"];
 const AS=["<1w","1-30d","31-60d","61-90d","90+d"];
 const abk=d=>d<=7?0:d<=30?1:d<=60?2:d<=90?3:4;
 function ds(v){if(!v)return 999;const d=v instanceof Date?v:new Date(v);return isNaN(d)?999:Math.max(0,Math.floor((Date.now()-d)/864e5))}
+/* Two different "ages":
+     ageC(t) — real age: days since the ticket was CREATED.
+     idle(t) — days since the ticket last CHANGED STATUS, read from its Jira status history (the SLA Tracker cache).
+   Jira's "Updated" moves on every comment and field edit — including the reminders this page posts — so a ticket
+   reminded today looked 0 days old even if it had not moved for months. idle() falls back to Updated only when a
+   ticket has no status history yet. Cached per SLA-data version. */
+function ageC(t){return ds(t&&t.Created);}
+var _idleC={v:-1,m:new WeakMap()};
+function idle(t){
+  if(!t)return 999; var L=window.HDSlaLink, v=L&&L.version?L.version():0;
+  if(_idleC.v!==v)_idleC={v:v,m:new WeakMap()};
+  var c=_idleC.m.get(t); if(c!==undefined)return c;
+  var ms=L&&L.lastMove?L.lastMove(t):null;
+  c=ms!=null?Math.max(0,Math.floor((Date.now()-ms)/864e5)):idle(t);
+  _idleC.m.set(t,c); return c;
+}
+function idleSrc(t){var L=window.HDSlaLink;return L&&L.lastMove&&L.lastMove(t)!=null?"since its last status change":"since its last update in Jira (no status history yet)";}
+function dTxt(n){return n>=999?"—":n+"d";}
 function fd(v){if(!v)return"—";const d=v instanceof Date?v:new Date(v);return isNaN(d)?"—":d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})}
 function fm(v){if(!v)return"";const d=v instanceof Date?v:new Date(v);return isNaN(d)?"":d.toLocaleDateString("en-US",{month:"short",year:"2-digit"})}
 function px(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});const sn=wb.SheetNames.find(s=>s.toLowerCase().includes("jira"))||wb.SheetNames[1]||wb.SheetNames[0];res(XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:""}));}catch(e){rej(e);}};r.onerror=rej;r.readAsArrayBuffer(file);})}
@@ -399,7 +417,7 @@ function SlaDetailHost(){
 
 /* ─── SLA filter + Created sort for ticket tables ─── */
 var SLA_FILTERS=[
-  ["breached","Breached","#BE123C"],["critical","Critical","#C2410C"],["atrisk","At risk","#B45309"],
+  ["breached","Breached","#BE123C"],["critical","Due soon","#C2410C"],["atrisk","At risk","#B45309"],
   ["ontrack","On track","#047857"],["paused","Paused","#475569"],["nohist","No data","#64748B"],["other","No target / n.a.","#94A3B8"]
 ];
 function slaBucket(t){
@@ -583,12 +601,13 @@ function exportFullCSV(tickets,filename){
   var colSet={},colOrder=[];
   tickets.forEach(function(t){Object.keys(t).forEach(function(k){if(k!=="_sla"&&k!=="_raw"&&!colSet[k]){colSet[k]=1;colOrder.push(k);}});});
   /* Append computed columns at the end */
-  colOrder.push("__Category__","__Age_Days__","__SLA__");
-  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days (computed)":c==="__SLA__"?"SLA (same as SLA Tracker)":c);}).join(",")];
+  colOrder.push("__Category__","__Age_Days__","__Idle_Days__","__SLA__");
+  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days since Created (computed)":c==="__Idle_Days__"?"Days since last status change (computed)":c==="__SLA__"?"SLA (same as SLA Tracker)":c);}).join(",")];
   tickets.forEach(function(t){
     lines.push(colOrder.map(function(c){
       if(c==="__Category__")return escCSV(CL[classify(t.Status)]||"");
-      if(c==="__Age_Days__")return ds(t.Updated||t.Created);
+      if(c==="__Age_Days__")return ageC(t);
+      if(c==="__Idle_Days__")return idle(t);
       if(c==="__SLA__")return escCSV(slaText(t));
       return escCSV(t[c]);
     }).join(","));
@@ -602,13 +621,13 @@ function exportCSV(tickets,filename){ exportFullCSV(tickets,filename); }
    DAILY REPORT — Multi-Tab Excel + Mail Draft Generator
    ═══════════════════════════════════════════════════════════════════════════ */
 function ticketRow(t){
-  var c=classify(t.Status),crAge=ds(t.Created),upAge=ds(t.Updated||t.Created),sla=checkSLA(t);
+  var c=classify(t.Status),crAge=ds(t.Created),upAge=idle(t),sla=checkSLA(t);
   return{"Key":t.Key||"","Summary":t.Summary||"","Status":t.Status||"","Category":CL[c]||c,
     "Priority":t.Priority||"","SVM In Charge":t["SVM In Charge"]||"","Current Worker":t["Current Worker"]||"",
     "Project":t.Project||"","Components":t.Components||"","Root Cause":t["Root Cause"]||"",
     "Type of Fix":t["Type of Fix"]||"","Created":t.Created?fd(t.Created):"","Updated":t.Updated?fd(t.Updated):"",
     "Resolved":t.Resolved?fd(t.Resolved):"","Age Created (days)":crAge===999?"":crAge,
-    "Age Updated (days)":upAge===999?"":upAge,"SLA":slaText(t),
+    "No status change (days)":upAge===999?"":upAge,"SLA":slaText(t),
     "Linked Issues":t["Linked Issues"]||"","Linked Status":t["Linked Ticket status"]||"",
     "Next Action":nextStep(t.Status,c)};
 }
@@ -672,24 +691,24 @@ function _xlDl(wb,fname){var out=XLSX.write(wb,{bookType:"xlsx",type:"array"});v
 /* Ticket detail row builder */
 function _trow(t,alt,reason){
   var si=alt?"a":"n",sr=alt?"ar":"nr",sw=alt?"aw":"nw";
-  var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+  var ca=ds(t.Created),ua=idle(t);
   var r=[_v(t.Key,si),_v((t.Summary||"").substring(0,100),sw),_v(t.Status,si),_v(t.Priority,si),_v(t["SVM In Charge"]||"",si),_v(t["Current Worker"]||"",si),_v(t.Project||"",si),_v(t.Created?fd(t.Created):"",si),_v(t.Updated?fd(t.Updated):"",si),_v(ca===999?0:ca,sr),_v(ua===999?0:ua,sr),_v(slaText(t),si),_v(t["Linked Issues"]||"",si)];
   r.push(reason!==undefined?_v(reason,sw):_v(nextStep(t.Status,classify(t.Status)),si));return r;}
 function _thdr(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
-  return[_v("Key",lid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("Age (Updated)",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
+  return[_v("Key",lid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("No status change (days)",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
 var _DW=[15,52,22,14,20,20,26,12,12,13,13,24,16,30];
 
 /* ═══ 1. ENGINEERING REPORT ═══ */
 function generateEnggReport(p){
   var tix=p.tickets,fn=p.fn,w=p.w||[],pf=p.pf||[],N=tix.length;
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-  var danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-  var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;});
+  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&idle(t)>14;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);});
+  var danger=tix.filter(function(t){return idle(t)>=90;}).sort(function(a,b){return idle(b)-idle(a);});
+  var stale30=tix.filter(function(t){return idle(t)>30;});
   var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0},bkC=[0,0,0,0,0],bkU=[0,0,0,0,0],totCA=0,totUA=0,slaBr=0;
-  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ca=ds(t.Created),ua=ds(t.Updated||t.Created);bkC[abk(ca)]++;bkU[abk(ua)]++;totCA+=(ca===999?0:ca);totUA+=(ua===999?0:ua);if(checkSLA(t).anyBreach)slaBr++;});
+  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ca=ds(t.Created),ua=idle(t);bkC[abk(ca)]++;bkU[abk(ua)]++;totCA+=(ca===999?0:ca);totUA+=(ua===999?0:ua);if(checkSLA(t).anyBreach)slaBr++;});
   var avgCA=N?Math.round(totCA/N):0,avgUA=N?Math.round(totUA/N):0;
-  var icm={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";if(!icm[sv])icm[sv]={n:0,bkC:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};var m=icm[sv];m.n++;var ca=ds(t.Created),ua=ds(t.Updated||t.Created);m.bkC[abk(ca)]++;m.tCA+=(ca===999?0:ca);m.tUA+=(ua===999?0:ua);m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;});
+  var icm={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";if(!icm[sv])icm[sv]={n:0,bkC:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};var m=icm[sv];m.n++;var ca=ds(t.Created),ua=idle(t);m.bkC[abk(ca)]++;m.tCA+=(ca===999?0:ca);m.tUA+=(ua===999?0:ua);m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;});
   var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
   var wb=XLSX.utils.book_new();
   /* Summary */
@@ -700,7 +719,7 @@ function generateEnggReport(p){
   s1.push([_v("Total with Engineering","b"),_v(N,"lk"),_v("All tickets with dev/engineering")]);
   s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"a"),_v(fires.length,"lk"),_v(fires.length?"URGENT - see Fires tab":"None","a")]);
   s1.push([_v("Danger Zone (90+ days)",danger.length?"wa":"a"),_v(danger.length,"lk"),_v("See Danger Zone tab","a")]);
-  s1.push([_v("Avg Age Created / Updated","n"),_v(avgCA+"d / "+avgUA+"d","nr"),""]);
+  s1.push([_v("Avg Age Created / No status change","n"),_v(avgCA+"d / "+avgUA+"d","nr"),""]);
   s1.push([_v("SLA Breaches","a"),_v(slaBr,"ar"),_v("Same calculation as the SLA Tracker","a")]);s1.push(["","",""]);
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
   ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
@@ -718,16 +737,16 @@ function generateEnggReport(p){
   var s3=[];ick.forEach(function(name){var m=icm[name];s3.push(Array(14).fill(""));
     var hdr=_v(name+" | "+m.n+" tickets | Avg created: "+(m.n?Math.round(m.tCA/m.n):0)+"d | Avg updated: "+(m.n?Math.round(m.tUA/m.n):0)+"d","vh");s3.push([hdr].concat(Array(13).fill(_v("","vh"))));
     s3.push(_thdr());
-    tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){s3.push(_trow(t,i%2));});});
+    tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t,i){s3.push(_trow(t,i%2));});});
   XLSX.utils.book_append_sheet(wb,_mkSheet(s3,_DW),"InCharge Details");
   /* Fires */
-  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sf.push(_trow(t,false,t.Priority+" | Created "+ca+"d ago | Updated "+ua+"d ago"+(ua>30?" | NO MOVEMENT 30+d":"")));});}else{sf.push([_v("No fires currently","ok")])}
+  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sf.push(_trow(t,false,t.Priority+" | Created "+ca+"d ago | No status change "+ua+"d"+(ua>30?" | NO MOVEMENT 30+d":"")));});}else{sf.push([_v("No fires currently","ok")])}
   XLSX.utils.book_append_sheet(wb,_mkSheet(sf,_DW),"Fires");
   /* Danger */
-  var sd=[];if(danger.length){sd.push(_thdr("oth","otl","Why Danger Zone"));danger.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sd.push(_trow(t,false,"Created "+ca+"d ago | Updated "+ua+"d ago | "+t.Priority+(ua>60?" | STAGNANT 60+d":"")));});}else{sd.push([_v("No danger zone tickets","ok")])}
+  var sd=[];if(danger.length){sd.push(_thdr("oth","otl","Why Danger Zone"));danger.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,"Created "+ca+"d ago | No status change "+ua+"d | "+t.Priority+(ua>60?" | STAGNANT 60+d":"")));});}else{sd.push([_v("No danger zone tickets","ok")])}
   XLSX.utils.book_append_sheet(wb,_mkSheet(sd,_DW),"Danger Zone");
   /* All */
-  var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
+  var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return idle(b)-idle(a);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
   XLSX.utils.book_append_sheet(wb,_mkSheet(sa,_DW),"All Engg Tickets");
   _xlDl(wb,"Engg-Followup-"+new Date().toISOString().slice(0,10)+".xlsx");
 }
@@ -736,7 +755,7 @@ function generateEnggReport(p){
 function generateDailyReport(p){
   var flt=p.flt,st=p.st,slaData=p.slaData,prioDist=p.prioDist,fn=p.fn;
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-  var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&idle(t)>14;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);});
   var wb=XLSX.utils.book_new();
   /* Summary */
   var s1=[];s1.push([_v("HD FOLLOW-UP | DAILY STATUS REPORT","ttb"),_v("","ttb"),_v("","ttb")]);
@@ -760,12 +779,12 @@ function generateDailyReport(p){
   if(so.nohist)s1.push([_v("No SLA data yet","a"),_v(so.nohist,"ar"),_v("Use Calculate SLA or the SLA Tracker","a")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,14,50]),"Summary");
   /* Detail sheets */
-  function dsh(name,arr){var s=[];s.push(_thdr());arr.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){s.push(_trow(t,i%2));});XLSX.utils.book_append_sheet(wb,_mkSheet(s,_DW),name);}
+  function dsh(name,arr){var s=[];s.push(_thdr());arr.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t,i){s.push(_trow(t,i%2));});XLSX.utils.book_append_sheet(wb,_mkSheet(s,_DW),name);}
   dsh("HD Action",st.hd.slice());dsh("Client Followup",st.cl.slice());dsh("Engineering",st.eng.slice());
-  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sf.push(_trow(t,false,t.Priority+" | "+ca+"d old | Updated "+ua+"d ago"));});}else sf.push([_v("None","ok")]);
+  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sf.push(_trow(t,false,t.Priority+" | "+ca+"d old | No status change "+ua+"d"));});}else sf.push([_v("None","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(sf,_DW),"Fires");
-  var dg=flt.filter(function(t){return ds(t.Updated||t.Created)>=90;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
-  var sd=[];if(dg.length){sd.push(_thdr("oth","otl","Why Danger"));dg.forEach(function(t){var ca=ds(t.Created),ua=ds(t.Updated||t.Created);sd.push(_trow(t,false,ca+"d old | Updated "+ua+"d ago"));});}else sd.push([_v("None","ok")]);
+  var dg=flt.filter(function(t){return idle(t)>=90;}).sort(function(a,b){return idle(b)-idle(a);});
+  var sd=[];if(dg.length){sd.push(_thdr("oth","otl","Why Danger"));dg.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,ca+"d old | No status change "+ua+"d"));});}else sd.push([_v("None","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(sd,_DW),"Danger Zone");
   dsh("All Open",flt.slice());
   _xlDl(wb,"HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xlsx");
@@ -776,8 +795,8 @@ function generateClientReport(p){
   var project=p.project,tix=p.tickets;
   var N=tix.length,today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0},bkU=[0,0,0,0,0],totUA=0;
-  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ua=ds(t.Updated||t.Created);bkU[abk(ua)]++;totUA+=(ua===999?0:ua);});
-  var urgent=tix.filter(function(t){return t.Priority==="Show Stopper"||t.Priority==="Critical"||t.Priority==="High";}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+  tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ua=idle(t);bkU[abk(ua)]++;totUA+=(ua===999?0:ua);});
+  var urgent=tix.filter(function(t){return t.Priority==="Show Stopper"||t.Priority==="Critical"||t.Priority==="High";}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);});
   var wb=XLSX.utils.book_new();
   var s1=[];s1.push([_v("PENDING TICKETS | "+project+" - Awaiting Your Response","tto"),_v("","tto"),_v("","tto")]);
   s1.push([_v("Generated: "+today+" | From: SVM Help Desk","mt"),_v("","mt"),_v("","mt")]);s1.push(["","",""]);
@@ -787,10 +806,10 @@ function generateClientReport(p){
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
   ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,12,40]),"Summary");
-  var su=[];su.push(_thdr("rth","rtl","Action Needed"));urgent.forEach(function(t,i){su.push(_trow(t,i%2,"Please respond - "+t.Priority+", "+ds(t.Updated||t.Created)+"d since last update"));});
+  var su=[];su.push(_thdr("rth","rtl","Action Needed"));urgent.forEach(function(t,i){su.push(_trow(t,i%2,"Please respond - "+t.Priority+", "+idle(t)+"d since last status change"));});
   if(!urgent.length)su.push([_v("No urgent tickets","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(su,_DW),"Urgent");
-  var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
+  var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return idle(b)-idle(a);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
   XLSX.utils.book_append_sheet(wb,_mkSheet(sa,_DW),"All Tickets");
   _xlDl(wb,project.replace(/[^a-zA-Z0-9]/g,"-").substring(0,30)+"-Pending-"+new Date().toISOString().slice(0,10)+".xlsx");
 }
@@ -798,19 +817,19 @@ function generateClientReport(p){
 /* ═══ MAIL DRAFTS ═══ */
 function buildEnggMailDraft(p){
   var tix=p.tickets,today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),N=tix.length;
-  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
-  var stale30=tix.filter(function(t){return ds(t.Updated||t.Created)>30;}),danger=tix.filter(function(t){return ds(t.Updated||t.Created)>=90;});
+  var fires=tix.filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&idle(t)>14;});
+  var stale30=tix.filter(function(t){return idle(t)>30;}),danger=tix.filter(function(t){return idle(t)>=90;});
   var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0};tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;});
   var icm={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";icm[sv]=(icm[sv]||0)+1;});
   var ick=Object.keys(icm).sort(function(a,b){return icm[b]-icm[a];});
   var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;},rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
   var subject="Engineering Follow-up (Incidents & SRs) | "+today+" | "+N+" Tickets Pending";
-  var body="Dear Engineering Team,\n\nThis is the daily follow-up on "+N+" tickets (Incidents & Service Requests only) pending with your team as of "+today+".\n\n  Total: "+N+"  |  Fires: "+fires.length+(fires.length?" << URGENT":"")+"  |  Stale 30+d: "+stale30.length+"  |  Danger 90+d: "+danger.length+"\n  Priority: SS:"+pri["Show Stopper"]+" Crit:"+pri["Critical"]+" High:"+pri["High"]+" Med:"+pri["Medium"]+" Low:"+pri["Low"]+"\n\n  TEAM-WISE\n"+ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],4);}).join("\n")+"\n\n"+(fires.length?"  FIRES\n"+fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,50)+" ("+ds(t.Updated||t.Created)+"d)";}).join("\n")+"\n\n":"")+"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":"2")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nExcel attached.\n\nRegards,\nSVM Help Desk Operations\n";
+  var body="Dear Engineering Team,\n\nThis is the daily follow-up on "+N+" tickets (Incidents & Service Requests only) pending with your team as of "+today+".\n\n  Total: "+N+"  |  Fires: "+fires.length+(fires.length?" << URGENT":"")+"  |  Stale 30+d: "+stale30.length+"  |  Danger 90+d: "+danger.length+"\n  Priority: SS:"+pri["Show Stopper"]+" Crit:"+pri["Critical"]+" High:"+pri["High"]+" Med:"+pri["Medium"]+" Low:"+pri["Low"]+"\n\n  TEAM-WISE\n"+ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],4);}).join("\n")+"\n\n"+(fires.length?"  FIRES\n"+fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,50)+" ("+idle(t)+"d)";}).join("\n")+"\n\n":"")+"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":"2")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nExcel attached.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
 function buildDailyMailDraft(p){
   var st=p.st,slaData=p.slaData,prioDist=p.prioDist,today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-  var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&ds(t.Updated||t.Created)>14;});
+  var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&idle(t)>14;});
   var subject="HD Daily Report | "+today+" | "+st.n+" Open Tickets";
   var body="Good morning team,\n\nDaily summary as of "+today+":\n\n  Total Open: "+st.n+"  |  HD Action: "+st.hd.length+"  |  Client: "+st.cl.length+"  |  Engg: "+st.eng.length+"\n  On-Hold: "+st.hold.length+"  |  Invoice: "+st.inv.length+"  |  Danger 90+d: "+st.dng+"\n  Fires: "+fires.length+"  |  SLA: "+((slaData.open||{}).breached||0)+" breached, "+((slaData.open||{}).atRisk||0)+" at risk"+(slaData.range&&slaData.range.metPct!=null?", "+slaData.range.metPct+"% met":"")+"\n  Priority: SS:"+(prioDist["Show Stopper"]||0)+" Crit:"+(prioDist["Critical"]||0)+" High:"+(prioDist["High"]||0)+" Med:"+(prioDist["Medium"]||0)+" Low:"+(prioDist["Low"]||0)+"\n\nExcel attached.\n\nRegards,\nSVM Help Desk\n";
   return{subject:subject,body:body};
@@ -825,7 +844,7 @@ function buildClientMailDraft(p){
 /* ═══ SINGLE-TICKET MAIL DRAFT (for Global Search) ═══ */
 function buildSingleTicketMailDraft(t){
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-  var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+  var ca=ds(t.Created),ua=idle(t);
   var c=classify(t.Status),catLabel=CL[c]||c;
   var isOpen=t.Status&&t.Status!=="Closed";
   var subject="Follow-up: "+t.Key+" | "+(t.Summary||"").substring(0,60)+" | "+today;
@@ -849,7 +868,7 @@ function buildSingleTicketMailDraft(t){
 /* ═══ Jira Internal Note — Reminder System ═══ */
 function _buildReminder(t,mode){
   mode=mode||"internal";
-  var ca=ds(t.Created),ua=ds(t.Updated||t.Created);
+  var ca=ds(t.Created),ua=idle(t);
   /* Smart name: skip system/generic accounts, prefer real person */
   var _skip={"svm help desk":1,"svm helpdesk":1,"jira misc":1,"jiramisc":1,"unassigned":1,"":1,"nan":1};
   function _real(v){var s=String(v||"").trim();return s&&!_skip[s.toLowerCase()]?s:"";}
@@ -1088,11 +1107,12 @@ function TicketModal({data,onClose}){
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Same as the SLA Tracker. Hover a value for details.">SLA</th>
 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
               <CreatedTh view={slaView} setView={setSlaView} style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}/>
-              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Days since the ticket was created">Age</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",whiteSpace:"nowrap"}} title="Days since the last status change (from Jira history). Comments and reminders don't reset it.">In status</th>
             </tr></thead>
             <tbody>
               {tix.slice(0,500).map(function(t,i){
-                var a=ds(t.Updated||t.Created);var bk=abk(a);var c=classify(t.Status);var cs=CS[c];
+                var a=ageC(t),ia=idle(t);var bk=abk(a);var c=classify(t.Status);var cs=CS[c];
                 var linked=t["Linked Issues"]||"";var linkedSt=t["Linked Ticket status"]||"";
                 var sla=checkSLA(t);
                 return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.openBreach?"#FFF5F5":""}}>
@@ -1108,7 +1128,8 @@ function TicketModal({data,onClose}){
                     {linked?<a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--blue)"}}>{linked.split(";")[0]}</a>:<span style={{color:"var(--t4)"}}>—</span>}
                   </td>
                   <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
-                  <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+                  <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}} title={"Created "+dTxt(a)+" ago"}>{dTxt(a)}</td>
+                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"No status change for "+dTxt(ia)+" — counted "+idleSrc(t)+". Comments and reminders don't reset this."}>{dTxt(ia)}</td>
                 </tr>);
               })}
             </tbody>
@@ -1207,7 +1228,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
       var name=_real(enggMap[t.Key])||"(No linked assignee)";
       if(!pivot[name])pivot[name]={n:0,bk:[0,0,0,0,0],pri:{},tickets:[]};
       var m=pivot[name];m.n++;m.tickets.push(t);
-      var ua=ds(t.Updated||t.Created);m.bk[abk(ua)]++;
+      var ua=idle(t);m.bk[abk(ua)]++;
       m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;
     });
     return pivot;
@@ -1259,7 +1280,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   /* ── Ageing buckets based on Updated date ── */
   var ageBucketsU=[[], [], [], [], []];
   viewTix.forEach(function(t){
-    var age=ds(t.Updated||t.Created);
+    var age=idle(t);
     var idx=age<=7?0:age<=30?1:age<=60?2:age<=90?3:4;
     ageBucketsU[idx].push(t);
   });
@@ -1295,12 +1316,13 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Same as the SLA Tracker. Hover a value for details.">SLA</th>
 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
             <CreatedTh view={slaView} setView={setSlaView} style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}/>
-            <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Age</th>
+            <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Days since the ticket was created">Age</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",whiteSpace:"nowrap"}} title="Days since the last status change (from Jira history). Comments and reminders don't reset it.">In status</th>
             {(data.showReport||data.showClientReport)&&onRemind&&<th style={{padding:"7px 10px",textAlign:"center",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Remind</th>}
           </tr></thead>
           <tbody>
             {list.slice(0,500).map(function(t,i){
-              var a=ds(t.Updated||t.Created);var bk=abk(a);
+              var a=ageC(t),ia=idle(t);var bk=abk(a);
               var sla=checkSLA(t);var linked=t["Linked Issues"]||"";
               return(<tr key={i} style={{borderBottom:"1px solid var(--border)",background:sla.openBreach?"#FFF5F5":""}}>
                 <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
@@ -1315,7 +1337,8 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   {linked?<a href={J+(linked.split(";")[0])} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontSize:10,color:"var(--blue)"}}>{linked.split(";")[0]}</a>:<span style={{color:"var(--t4)"}}>—</span>}
                 </td>
                 <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
-                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}} title={"Created "+dTxt(a)+" ago"}>{dTxt(a)}</td>
+                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"No status change for "+dTxt(ia)+" — counted "+idleSrc(t)+". Comments and reminders don't reset this."}>{dTxt(ia)}</td>
                 {(data.showReport||data.showClientReport)&&onRemind&&<td style={{padding:"6px 8px",textAlign:"center"}}>
                   <button onClick={function(e){e.stopPropagation();onRemind(t,data.showReport?"internal":"public");}} title={"Send reminder for "+t.Key} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+(data.showReport?"var(--violet-border)":"var(--amber-border)"),background:data.showReport?"var(--violet-bg)":"var(--amber-bg)",color:data.showReport?"var(--violet)":"var(--amber)",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>🔔 Remind</button>
                 </td>}
@@ -1355,7 +1378,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* Tabs */}
         <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid var(--border)",background:"var(--bg)"}}>
-          {[["all","📋 All Tickets",viewTix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
+          {[["all","📋 All Tickets",viewTix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (In status)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
             var id=tb[0],label=tb[1],cnt=tb[2];var active=activeTab===id;
             return(<button key={id} onClick={function(){onTabChange(id);setAgeFilter(null);setSvmFilter(null);}} style={{
               padding:"10px 18px",borderRadius:"10px 10px 0 0",fontSize:12,fontWeight:700,border:"1px solid "+(active?"var(--border)":"transparent"),borderBottom:active?"1px solid #fff":"1px solid var(--border)",
@@ -1447,7 +1470,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   var pct=viewTix.length?bucket.length/viewTix.length*100:0;
                   if(bucket.length===0)return null;
                   var isActive=ageFilter===i;
-                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets (by last updated) — click to filter"} style={{
+                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets (by days since last status change) — click to filter"} style={{
                     width:pct+"%",background:ageColors[i],display:"flex",alignItems:"center",justifyContent:"center",
                     fontSize:12,fontWeight:800,color:"#fff",minWidth:bucket.length>0?34:0,transition:"all .3s",
                     cursor:"pointer",opacity:ageFilter!==null&&!isActive?0.4:1,
@@ -1475,7 +1498,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               {ageFilter!==null&&(
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:ageColors[ageFilter]+"14",borderRadius:10,border:"1px solid "+ageColors[ageFilter]+"44"}}>
                   <div style={{width:12,height:12,borderRadius:3,background:ageColors[ageFilter]}}/>
-                  <span style={{fontSize:13,fontWeight:800,color:ageColors[ageFilter]}}>{ageLabels[ageFilter]} (by last updated)</span>
+                  <span style={{fontSize:13,fontWeight:800,color:ageColors[ageFilter]}}>{ageLabels[ageFilter]} (by days since last status change)</span>
                   <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {ageBucketsU[ageFilter].length} ticket{ageBucketsU[ageFilter].length!==1?"s":""}</span>
                   <div style={{flex:1}}/>
                   <button onClick={function(){setAgeFilter(null);}} style={{background:ageColors[ageFilter],color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
@@ -1484,19 +1507,19 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
               {/* Filtered: single bucket table */}
               {ageFilter!==null&&(function(){
-                var sorted=[].concat(ageBucketsU[ageFilter]).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+                var sorted=[].concat(ageBucketsU[ageFilter]).sort(function(a,b){return idle(b)-idle(a);});
                 return renderTable(sorted);
               })()}
 
               {/* Unfiltered: show all buckets */}
               {ageFilter===null&&ageBucketsU.map(function(bucket,i){
                 if(bucket.length===0)return null;
-                var sorted=[].concat(bucket).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+                var sorted=[].concat(bucket).sort(function(a,b){return idle(b)-idle(a);});
                 return(<div key={i} style={{marginBottom:18}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                     <div style={{width:14,height:14,borderRadius:4,background:ageColors[i]}}/>
                     <span style={{fontSize:14,fontWeight:800,color:ageColors[i]}}>{ageLabels[i]}</span>
-                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""} (by last updated)</span>
+                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""} (by days since last status change)</span>
                   </div>
                   {renderTable(sorted)}
                 </div>);
@@ -1629,8 +1652,8 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               var rows=[["Engg Assignee","Key","Summary","Status","Priority","Project","Linked Issue","Created","Updated","Age (Updated, days)","SLA","Next Action"]];
               entries.slice().sort(function(a,b){return b[1].n-a[1].n;}).forEach(function(e){
                 var nm=e[0];
-                e[1].tickets.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}).forEach(function(t){
-                  var ua=ds(t.Updated||t.Created);
+                e[1].tickets.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t){
+                  var ua=idle(t);
                   rows.push([nm,t.Key||"",t.Summary||"",t.Status||"",t.Priority||"",t.Project||"",String(t["Linked Issues"]||"").split(/[;,]/)[0].trim(),t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ua===999?"":ua,slaText(t),nextStep(t.Status,classify(t.Status))]);
                 });
               });
@@ -1676,7 +1699,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                     <div style={{flex:1}}/>
                     <button onClick={function(){setSvmFilter(null);}} style={{background:"var(--violet)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all assignees</button>
                   </div>
-                  {renderTable(selM.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}),false,true)}
+                  {renderTable(selM.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}),false,true)}
                   <div style={{fontSize:11,color:"var(--t3)",marginTop:8,marginBottom:2}}>Pick another person below to switch.</div>
                 </div>);
               })()}
@@ -1713,7 +1736,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                     <span style={{fontSize:14,fontWeight:800,color:color}}>{name}</span>
                     <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {m.n} ticket{m.n!==1?"s":""}</span>
                   </div>
-                  {renderTable(m.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||ds(b.Updated||b.Created)-ds(a.Updated||a.Created);}),false,true)}
+                  {renderTable(m.tickets.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}),false,true)}
                 </div>);
               })}
             </div>);
@@ -1816,17 +1839,17 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
   var openTix = allTix.filter(function(t){ return t.Status && t.Status !== "Closed" && isFollowupType(t); });
 
   /* ── Smart suggestions ── */
-  var fires = openTix.filter(function(t){ return (t.Priority==="Show Stopper"||t.Priority==="Critical") && ds(t.Updated||t.Created) > 14; })
-    .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || ds(b.Updated||b.Created)-ds(a.Updated||a.Created); }).slice(0,10);
-  var danger = openTix.filter(function(t){ return ds(t.Updated||t.Created) >= 90; })
-    .sort(function(a,b){ return ds(b.Updated||b.Created)-ds(a.Updated||a.Created); }).slice(0,10);
-  var recent = openTix.filter(function(t){ return ds(t.Updated||t.Created) <= 3; })
-    .sort(function(a,b){ return ds(a.Updated||a.Created)-ds(b.Updated||b.Created); }).slice(0,10);
+  var fires = openTix.filter(function(t){ return (t.Priority==="Show Stopper"||t.Priority==="Critical") && idle(t) > 14; })
+    .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || idle(b)-idle(a); }).slice(0,10);
+  var danger = openTix.filter(function(t){ return idle(t) >= 90; })
+    .sort(function(a,b){ return idle(b)-idle(a); }).slice(0,10);
+  var recent = openTix.filter(function(t){ return idle(t) <= 3; })
+    .sort(function(a,b){ return idle(a)-idle(b); }).slice(0,10);
   var hdAction = openTix.filter(function(t){ return classify(t.Status)==="hd" && t.Status!=="On-Hold" && t.Status!=="Invoice Yet to Raise"; })
-    .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || ds(b.Updated||b.Created)-ds(a.Updated||a.Created); }).slice(0,10);
+    .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || idle(b)-idle(a); }).slice(0,10);
   var sugTabs = [
     {id:"fire",icon:"🔥",label:"Fires",list:fires,color:"#E11D48",desc:"Critical/SS tickets stale > 14 days"},
-    {id:"danger",icon:"🔴",label:"Danger Zone",list:danger,color:"#EA580C",desc:"Tickets stale 90+ days"},
+    {id:"danger",icon:"🔴",label:"Danger Zone",list:danger,color:"#EA580C",desc:"No status change for 90+ days"},
     {id:"recent",icon:"🕐",label:"Recently Updated",list:recent,color:"#059669",desc:"Updated in the last 3 days"},
     {id:"hd",icon:"🎯",label:"HD Action",list:hdAction,color:"#0891B2",desc:"Tickets needing your action"}
   ];
@@ -1889,7 +1912,7 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
 
   /* ── Copy ticket info ── */
   function copyInfo(t){
-    var ca=ds(t.Created), ua=ds(t.Updated||t.Created), c=classify(t.Status);
+    var ca=ds(t.Created), ua=idle(t), c=classify(t.Status);
     var text = t.Key + " | " + (t.Summary||"") + "\n"
       + "Status: " + (t.Status||"") + " (" + (CL[c]||c) + ") | Priority: " + (t.Priority||"") + "\n"
       + "Created: " + (t.Created?fd(t.Created):"—") + " (" + ca + "d) | Updated: " + (t.Updated?fd(t.Updated):"—") + " (" + ua + "d)\n"
@@ -1906,9 +1929,9 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
   function exportCSVResults(){
     var src = hasQuery ? results : activeSug.list;
     if(!src.length) return;
-    var rows = [["Key","Summary","Status","Category","Priority","Project","SVM In Charge","Current Worker","Created","Updated","Age (Created)","Age (Updated)","Linked Issues","Linked Status","Root Cause","Type of Fix","Components","Issue Type","Comment Count","Last Comment","Next Action","Jira URL"]];
+    var rows = [["Key","Summary","Status","Category","Priority","Project","SVM In Charge","Current Worker","Created","Updated","Age (Created)","No status change (days)","Linked Issues","Linked Status","Root Cause","Type of Fix","Components","Issue Type","Comment Count","Last Comment","Next Action","Jira URL"]];
     src.forEach(function(t){
-      var ca=ds(t.Created),ua=ds(t.Updated||t.Created),c=classify(t.Status);
+      var ca=ds(t.Created),ua=idle(t),c=classify(t.Status);
       rows.push([t.Key||"",t.Summary||"",t.Status||"",CL[c]||c,t.Priority||"",t.Project||"",t["SVM In Charge"]||"",t["Current Worker"]||"",t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ca===999?"":ca,ua===999?"":ua,t["Linked Issues"]||"",t["Linked Ticket status"]||"",t["Root Cause"]||"",t["Type of Fix"]||"",t.Components||"",t["Issue Type"]||"",t["Comment Count"]||"",t["Last Comment"]?fd(t["Last Comment"]):"",nextStep(t.Status,c),J+(t.Key||"")]);
     });
     var csv=rows.map(function(r){return r.map(escCSV).join(",");}).join("\n");
@@ -1921,7 +1944,7 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
 
   /* ── Render a ticket card (shared between suggestions and results) ── */
   function renderCard(t, idx, showCheckbox){
-    var ca=ds(t.Created), ua=ds(t.Updated||t.Created), c=classify(t.Status);
+    var ca=ds(t.Created), ua=idle(t), c=classify(t.Status);
     var cs=CS[c]||CS.hd, sla=checkSLA(t);
     var linked=String(t["Linked Issues"]||"").trim(); if(linked.toLowerCase()==="nan") linked="";
     var lk1=linked?linked.split(/[;,]/)[0].trim():"";
@@ -2316,8 +2339,8 @@ function App(){
     // Apply Master Data status overrides before rendering so classify() reflects them.
     window.HDStore.loadConfig().then(function(cfg){
       window.HDClass.setOverrides(cfg.statusOverrides);
-      if(window.HDSlaLink)window.HDSlaLink.load();
-      window.HDStore.loadFile().then(function(rec){
+      var slaP=window.HDSlaLink?window.HDSlaLink.load():Promise.resolve();
+      Promise.all([window.HDStore.loadFile(),slaP]).then(function(a){var rec=a[0];
         if(!rec){window.location.replace("index.html");return;}
         setFn(rec.name);blobRef.current=rec.blob;setLoading(true);
         window.HDStore.loadRows().then(function(edited){
@@ -2348,46 +2371,46 @@ function App(){
   function openCatModal(c){
     var label=CL[c];var cs=CS[c];
     var tix=flt.filter(function(t){return classify(t.Status)===c&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
-    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    tix.sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:label,icon:cs.icon,color:cs.badge,tickets:tix});
   }
   function openHoldModal(){
-    var tix=st.hold.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=st.hold.slice().sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"On-Hold tickets",icon:"⏸️",color:"#64748B",tickets:tix});
   }
   function openInvoiceModal(){
-    var tix=st.inv.slice().sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=st.inv.slice().sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"Invoice Yet to Raise",icon:"🧾",color:"#0891B2",tickets:tix});
   }
   function openEnggModal(){
     var tix=flt.filter(function(t){return classify(t.Status)==="engg"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
-    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    tix.sort(function(a,b){return idle(b)-idle(a);});
     setCatModal({tickets:tix,title:"Engineering Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" with engineering / dev",icon:"🔧",color:"var(--violet)",bg:"var(--violet-bg)",border:"var(--violet-border)",badgeColor:"#7C3AED",showReport:true});setCatTab("all");
   }
   function openClientModal(){
     var tix=flt.filter(function(t){return classify(t.Status)==="client"&&t.Status!=="On-Hold"&&t.Status!=="Invoice Yet to Raise";});
-    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    tix.sort(function(a,b){return idle(b)-idle(a);});
     setCatModal({tickets:tix,title:"Client Followup",subtitle:tix.length+" ticket"+(tix.length!==1?"s":"")+" awaiting client response",icon:"💬",color:"var(--amber)",bg:"var(--amber-bg)",border:"var(--amber-border)",badgeColor:"#D97706",showClientReport:true});setCatTab("all");
   }
   function closeCatModal(){setCatModal(null);}
   function openAgeModal(i){
-    var tix=flt.filter(function(t){return abk(ds(t.Updated||t.Created))===i;});
-    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=flt.filter(function(t){return abk(idle(t))===i;});
+    tix.sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:AL[i]+" old tickets",icon:"⏰",color:AC[i],tickets:tix});
   }
   function openStatusModal(s){
     var c=classify(s);var cs=CS[c];
     var tix=flt.filter(function(t){return t.Status===s;});
-    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    tix.sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:s,icon:cs.icon,color:cs.badge,tickets:tix});
   }
   function openAllModal(){
-    var tix=[].concat(flt).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=[].concat(flt).sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"All Open Tickets",icon:"📂",color:"#2563EB",tickets:tix});
   }
   function openDangerModal(){
-    var tix=flt.filter(function(t){return abk(ds(t.Updated||t.Created))===4;});
-    tix.sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=flt.filter(function(t){return abk(idle(t))===4;});
+    tix.sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"Danger Zone — 90+ days",icon:"🔴",color:"#E11D48",tickets:tix});
   }
 
@@ -2490,26 +2513,26 @@ function App(){
   },[flt]);
 
   function openSLAModal(){
-    var tix=[].concat(slaData.all).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=[].concat(slaData.all).sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"SLA Breached Tickets ("+tix.length+")",icon:"⚡",color:"#E11D48",tickets:tix});
   }
   function openSLAFRModal(){
-    var tix=[].concat(slaData.fr).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=[].concat(slaData.fr).sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"First Response SLA Breached ("+tix.length+")",icon:"⚡",color:"#E11D48",tickets:tix});
   }
   function openSLAResModal(){
-    var tix=[].concat(slaData.res).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=[].concat(slaData.res).sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:"Resolution SLA Breached ("+tix.length+")",icon:"⚡",color:"#D97706",tickets:tix});
   }
   function openPriorityModal(p){
-    var tix=flt.filter(function(t){return t.Priority===p;}).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=flt.filter(function(t){return t.Priority===p;}).sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:p+" Priority Tickets",icon:"🔷",color:PRIORITY_COLORS[p]||"#2563EB",tickets:tix});
   }
 
   /* Performance modal openers */
   function perfModal(title,icon,color,filterFn){
     var src=allFiltered||[];
-    var tix=src.filter(filterFn).sort(function(a,b){return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+    var tix=src.filter(filterFn).sort(function(a,b){return idle(b)-idle(a);});
     setModal({title:title+" ("+tix.length+")",icon:icon,color:color,tickets:tix});
   }
   function pmAll(){perfModal("All Handled","📋","#2563EB",function(){return true;});}
@@ -2547,7 +2570,7 @@ function App(){
         else if(c==="engg")eng.push(t);
         else cl.push(t);
       }
-      const a=ds(t.Updated||t.Created);bk[abk(a)]++;ta+=a;
+      const a=idle(t);bk[abk(a)]++;ta+=a;
       sm[t.Status]=(sm[t.Status]||0)+1;pm[t.Project]=(pm[t.Project]||0)+1;
     });
     return{n:flt.length,hd,cl,eng,hold,inv,avg:flt.length?Math.round(ta/flt.length):0,bk,dng:bk[4],sm,pm};
@@ -2556,14 +2579,15 @@ function App(){
   const disp=useMemo(()=>{
     let l=flt;
     if(cf)l=l.filter(t=>classify(t.Status)===cf);
-    if(af!==null)l=l.filter(t=>abk(ds(t.Updated||t.Created))===af);
+    if(af!==null)l=l.filter(t=>abk(idle(t))===af);
     if(sf)l=l.filter(t=>t.Status===sf);
     if(search){const s=search.toLowerCase();l=l.filter(t=>(t.Key||"").toLowerCase().includes(s)||(t.Summary||"").toLowerCase().includes(s));}
     // Sort
     l=[...l];
     const dir=sortDir==="asc"?1:-1;
     l.sort((a,b)=>{
-      if(sortCol==="age")return dir*(ds(b.Updated||b.Created)-ds(a.Updated||a.Created));
+      if(sortCol==="age")return dir*(ageC(b)-ageC(a));
+      if(sortCol==="idle")return dir*(idle(b)-idle(a));
       if(sortCol==="key")return dir*(a.Key||"").localeCompare(b.Key||"");
       if(sortCol==="status")return dir*(a.Status||"").localeCompare(b.Status||"");
       if(sortCol==="priority"){const po={Critical:0,"Show Stopper":0,High:1,Medium:2,Low:3};return dir*((po[a.Priority]??4)-(po[b.Priority]??4));}
@@ -2776,14 +2800,14 @@ function App(){
         {/* Fires + Stale-client callouts */}
         {(function(){
           var all=[].concat(st.hd,st.cl,st.eng);
-          var fires=all.filter(function(t){var p=t.Priority;return (p==="Show Stopper"||p==="Critical")&&ds(t.Updated||t.Created)>14;});
-          var stale=st.cl.filter(function(t){return ds(t.Updated||t.Created)>14;});
+          var fires=all.filter(function(t){var p=t.Priority;return (p==="Show Stopper"||p==="Critical")&&idle(t)>14;});
+          var stale=st.cl.filter(function(t){return idle(t)>14;});
           if(!fires.length&&!stale.length)return null;
           return(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:10,marginBottom:9}}>
             {fires.length>0&&<div onClick={function(){setModal({title:"Fires — high priority & ageing",icon:"🔥",color:"#E11D48",tickets:fires});}} className="card" style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderColor:"var(--rose-border)",background:"var(--rose-bg)"}}>
-              <span style={{fontSize:20}}>🔥</span><div><div style={{color:"var(--rose)",fontWeight:800,fontSize:13.5}}>{fires.length} fire{fires.length!==1?"s":""} — high priority &amp; ageing</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Show Stopper / Critical open over 14 days — tackle first.</div></div></div>}
+              <span style={{fontSize:20}}>🔥</span><div><div style={{color:"var(--rose)",fontWeight:800,fontSize:13.5}}>{fires.length} fire{fires.length!==1?"s":""} — high priority &amp; ageing</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Show Stopper / Critical with no status change for 14+ days — tackle first.</div></div></div>}
             {stale.length>0&&<div onClick={function(){setModal({title:"Stale client follow-ups (over 14 days)",icon:"💬",color:"#D97706",tickets:stale});}} className="card" style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderColor:"var(--amber-border)",background:"var(--amber-bg)"}}>
-              <span style={{fontSize:20}}>💬</span><div><div style={{color:"var(--amber)",fontWeight:800,fontSize:13.5}}>{stale.length} client follow-up{stale.length!==1?"s":""} going stale</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Waiting on the client over 14 days — worth a nudge.</div></div></div>}
+              <span style={{fontSize:20}}>💬</span><div><div style={{color:"var(--amber)",fontWeight:800,fontSize:13.5}}>{stale.length} client follow-up{stale.length!==1?"s":""} going stale</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Waiting on the client with no status change for 14+ days — worth a nudge.</div></div></div>}
           </div>);
         })()}
 
@@ -2799,7 +2823,7 @@ function App(){
             onClick={function(){openHoldModal();}}/>
           <KPI icon="🧾" label="Invoice Pending" value={st.inv.length} color="#0891B2" bgColor="#ECFEFF" sub="Yet to raise"
             onClick={function(){openInvoiceModal();}}/>
-          <KPI icon="🔴" label="Danger 90+" value={st.dng} color="var(--rose)" bgColor="var(--rose-bg)" sub="Stale — decide or close"
+          <KPI icon="🔴" label="Danger 90+" value={st.dng} color="var(--rose)" bgColor="var(--rose-bg)" sub="No status change 90+ days"
             onClick={function(){openDangerModal();}}/>
           <KPI icon="📂" label="Open (total)" value={st.n.toLocaleString()} color="var(--blue)" bgColor="var(--blue-bg)" sub="All not-closed"
             onClick={function(){openAllModal();}}/>
@@ -2820,12 +2844,12 @@ function App(){
 
         {/* My Action Queue — the daily driver */}
         {(function(){
-          var q=st.hd.slice().sort(function(a,b){var pr=prioRank(a.Priority)-prioRank(b.Priority);if(pr)return pr;return ds(b.Updated||b.Created)-ds(a.Updated||a.Created);});
+          var q=st.hd.slice().sort(function(a,b){var pr=prioRank(a.Priority)-prioRank(b.Priority);if(pr)return pr;return idle(b)-idle(a);});
           return(<div className="card" style={{padding:"13px 16px",marginBottom:9}}>
             <div style={{fontSize:13,fontWeight:700,marginBottom:2,color:"var(--t1)"}}>🎯 {w?"Your":"HD"} Action Queue <span style={{fontWeight:400,color:"var(--t3)",fontSize:11}}>· {q.length} need action · sorted by priority &amp; age</span></div>
             {q.length===0?<div style={{color:"var(--t3)",fontSize:12,padding:"10px 0"}}>Nothing needs action right now. 🎉</div>:
             <div style={{marginTop:8}}>
-              {q.slice(0,12).map(function(t,i){var age=ds(t.Updated||t.Created);var pc=PRIORITY_COLORS[t.Priority]||"var(--t3)";
+              {q.slice(0,12).map(function(t,i){var age=idle(t);var pc=PRIORITY_COLORS[t.Priority]||"var(--t3)";
                 return(<div key={t.Key} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:i?"1px solid var(--border)":"none"}}>
                   <span style={{width:7,height:7,borderRadius:7,background:pc,flexShrink:0}}/>
                   <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontFamily:"var(--mono)",fontWeight:700,fontSize:12,flexShrink:0,minWidth:96}}>{t.Key}</a>
@@ -2929,9 +2953,10 @@ function App(){
                 <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Linked</th>
                 <TH col="created">Created</TH>
                 <TH col="age" align="right">Age</TH>
+                <TH col="idle" align="right">In status</TH>
               </tr></thead>
               <tbody>{disp.slice(0,300).map((t,i)=>{
-                const a=ds(t.Updated||t.Created);const bk=abk(a);const c=classify(t.Status);const cs=CS[c];
+                const a=ageC(t),ia=idle(t);const bk=abk(a);const c=classify(t.Status);const cs=CS[c];
                 const linked=t["Linked Issues"]||"";const linkedSt=t["Linked Ticket status"]||"";
                 return(<tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
                   <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}><a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12}}>{t.Key}</a></td>
@@ -2971,7 +2996,7 @@ function App(){
               </tr></thead>
               <tbody>{wks.slice(0,20).map(([n,c],idx)=>{
                 const wt=op.filter(t=>t["Current Worker"]===n);const bk=[0,0,0,0,0];let hd=0,cl=0,eng=0;
-                wt.forEach(t=>{bk[abk(ds(t.Updated||t.Created))]++;const cat=classify(t.Status);if(cat==="hd")hd++;else if(cat==="client")cl++;else eng++;});
+                wt.forEach(t=>{bk[abk(idle(t))]++;const cat=classify(t.Status);if(cat==="hd")hd++;else if(cat==="client")cl++;else eng++;});
                 return(<tr key={n} onClick={function(){setW([n]);clr();}} style={{cursor:"pointer",borderBottom:"1px solid var(--border)",transition:"background .15s"}} onMouseOver={function(e){e.currentTarget.style.background="var(--blue-bg)";}} onMouseOut={function(e){e.currentTarget.style.background="";}}>
                   <td style={{padding:"7px 12px",fontWeight:600}}>{n}</td>
                   <td style={{padding:"10px 8px",textAlign:"right",fontWeight:800,color:"var(--blue)",fontFamily:"var(--mono)"}}>{c}</td>
