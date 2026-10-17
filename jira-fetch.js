@@ -58,11 +58,20 @@
       deliveredDate: [/delivered\s*date/i, /^\s*delivered\s*on\s*$/i],
       clientReference: [/client\s*reference/i, /client\s*ref\b/i],
       analysis: [/^\s*analysis\s*$/i],
-      solutionSummary: [/solution\s*summary/i, /^\s*solution\s*$/i]
+      solutionSummary: [/solution\s*summary/i, /^\s*solution\s*$/i],
+      /* FPA Details (change tickets) */
+      chargeable: [/^\s*chargeable\s*$/i, /^\s*charge\s*type\s*$/i, /chargeab/i],
+      fpaManDays: [/^\s*fpa\s*man.?days\s*$/i, /fpa\s*man.?days(?!\s*split)/i],
+      approvedManDays: [/^\s*approved\s*man.?days\s*$/i, /approved\s*man.?days/i],
+      fpaPreparedBy: [/fpa\s*prepared\s*by/i],
+      fpaApprovedBy: [/fpa\s*approved\s*by/i],
+      impactModule: [/^\s*impact\s*module\s*$/i, /impact\s*module/i],
+      manpowerType: [/man\s*power\s*type/i]
     };
     Object.keys(patterns).forEach(function (key) {
-      for (var i = 0; i < customFields.length; i++) {
-        for (var j = 0; j < patterns[key].length; j++) {
+      /* patterns are tried in order across ALL fields, so an exact name ("Chargeable") wins over a loose one ("Chargeable Amount") */
+      for (var j = 0; j < patterns[key].length; j++) {
+        for (var i = 0; i < customFields.length; i++) {
           if (patterns[key][j].test(customFields[i].name || "")) { map[key] = customFields[i].id; return; }
         }
       }
@@ -148,6 +157,13 @@
       row["Client Reference"] = txt(f[fm.clientReference]);
       row["Analysis"] = rich(f[fm.analysis]);
       row["Solution Summary"] = rich(f[fm.solutionSummary]);
+      row["Chargeable"] = anyVal(f[fm.chargeable]);
+      row["FPA Man-days"] = num(f[fm.fpaManDays]);
+      row["Approved Man-days"] = num(f[fm.approvedManDays]);
+      row["SVM FPA Prepared By"] = person(f[fm.fpaPreparedBy]);
+      row["SVM FPA Approved By"] = person(f[fm.fpaApprovedBy]);
+      row["Impact Module"] = anyVal(f[fm.impactModule]);
+      row["Manpower Type"] = anyVal(f[fm.manpowerType]);
       row["Labels"] = (f.labels || []).join("; ");
       row["Description"] = rich(f.description);
       row["Environment"] = txt(f.environment);
@@ -183,6 +199,10 @@
   function rich(v) { if (v == null) return ""; if (typeof v === "string") return v;
     if (typeof v === "object") { if (Array.isArray(v.content)) { var out = ""; (function walk(n) { if (!n) return; if (n.text) out += n.text; if (Array.isArray(n.content)) n.content.forEach(walk); if (n.type === "paragraph") out += "\n"; })(v); return out.trim(); } return v.value || v.name || ""; }
     return String(v); }
+  /* select / multi-select / cascading / text / number → plain text */
+  function anyVal(v) { if (v == null || v === "") return ""; if (Array.isArray(v)) return v.map(anyVal).filter(Boolean).join("; ");
+    if (typeof v === "object") { var b = v.value || v.name || v.displayName || ""; return v.child && v.child.value ? b + " - " + v.child.value : b; } return String(v); }
+  function num(v) { if (v == null || v === "") return ""; var n = typeof v === "number" ? v : parseFloat(anyVal(v)); return isNaN(n) ? anyVal(v) : n; }
   function sla(s) { if (!s) return ""; if (typeof s === "string") return s;
     if (s.completedCycles && s.completedCycles.length) { var l = s.completedCycles[s.completedCycles.length - 1]; if (l.elapsedTime) return (l.breached ? "-" : "") + (l.elapsedTime.friendly || ""); }
     if (s.ongoingCycle) { var o = s.ongoingCycle; if (o.breached && o.elapsedTime) return "-" + (o.elapsedTime.friendly || ""); if (o.remainingTime) return o.remainingTime.friendly || ""; }
@@ -209,17 +229,38 @@
   /* opts.full === true forces a full re-pull. Otherwise, if a cached fetch exists
      for the same JQL + host, only tickets updated since the last fetch are pulled
      and merged by Key (incremental). Returns {..., mode, changed}. */
+  /* Fields added in a later version (e.g. Chargeable) are mapped automatically on the next fetch, so nobody has to
+     re-open the setup: missing keys are auto-detected from the saved field list, or from Jira if there is none. */
+  var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType"];
+  function ensureFieldMap(cfg) {
+    var fm = cfg.fieldMap || {}, need = NEW_KEYS.filter(function (k) { return !(k in fm); });
+    if (!need.length) return Promise.resolve(cfg);
+    var src = cfg._fields && cfg._fields.length ? Promise.resolve(cfg._fields) : discoverFields(cfg).catch(function () { return []; });
+    return src.then(function (list) {
+      var auto = autoDetect(list || []);
+      need.forEach(function (k) { fm[k] = auto[k] || ""; });           // "" = looked for, not found (not searched again)
+      cfg.fieldMap = fm; if (list && list.length && !(cfg._fields && cfg._fields.length)) cfg._fields = list;
+      saveCfg(cfg); return cfg;
+    });
+  }
+
   function fetchAll(jql, onProgress, opts) {
     opts = opts || {};
-    var cfg = loadCfg(), host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
+    return ensureFieldMap(loadCfg()).then(function (cfg) { return fetchWith(cfg, jql, onProgress, opts); });
+  }
+  function fetchWith(cfg, jql, onProgress, opts) {
+    var host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent","comment"];
-    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"]
+    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary","chargeable","fpaManDays","approvedManDays","fpaPreparedBy","fpaApprovedBy","impactModule","manpowerType"]
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
 
     var loadCache = (window.HDStore && window.HDStore.loadFetchCache) ? window.HDStore.loadFetchCache() : Promise.resolve(null);
     return loadCache.then(function (cache) {
       var fetchStart = Date.now();
-      var canDelta = !opts.full && cache && cache.rows && cache.rows.length && cache.jql === jql && cache.host === host && cache.lastFetch;
+      /* the cached rows only hold the fields that were fetched then — if the field set changed (a field was added or
+         re-mapped), unchanged tickets would never get the new columns, so do one full fetch instead of a delta */
+      var fieldSig = fields.join(",");
+      var canDelta = !opts.full && cache && cache.rows && cache.rows.length && cache.jql === jql && cache.host === host && cache.lastFetch && cache.fieldSig === fieldSig;
       if (canDelta) {
         /* relative minutes are evaluated against Jira's own clock, so this is safe
            regardless of the browser's timezone; +5 min guards against clock skew. */
@@ -243,7 +284,7 @@
       var blob = toBlob(rows);
       var name = "Jira Live \u00B7 " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + ".xlsx";
       var saveCache = (window.HDStore && window.HDStore.saveFetchCache)
-        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart })
+        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart, fieldSig: fields.join(",") })
         : Promise.resolve();
       return saveCache
         .then(function () { return window.HDStore.saveFile(blob, name); })
