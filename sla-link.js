@@ -54,15 +54,23 @@
       updated: S.parseTs(pick(row, ["Updated"])), prefix: S.prefixOf(key) };
   }
 
-  /* ── cached history is valid while the ticket hasn't changed since it was fetched (same as sla.html histFor) ── */
-  function histFor(t) {
-    var e = L.hist.tickets[t.key]; if (!e) return null;
-    if (e.updated != null && t.updated != null && e.updated === t.updated) return e;
+  /* ── cached history is valid only while it describes the ticket as it is in this row ──
+     The history must agree with the row's CURRENT STATUS. Before, a matching "Updated" stamp was
+     enough, but the stamp saved with a history is the one from the row at fetch time — if Jira had
+     moved on in between (e.g. Approval DB Admin → Waiting for customer), the newer history was
+     accepted against the older row and the ticket showed "Paused" while sitting in an Engineering
+     status. e.status is Jira's own status at fetch time (same naming as the row's Status column). */
+  function histCheck(t) {
+    var e = L.hist.tickets[t.key]; if (!e) return { e: null, why: "none" };
     var last = e.transitions.length ? e.transitions[e.transitions.length - 1].to : e.status;
-    if (t.updated != null && e.fetchedAt && t.updated <= e.fetchedAt - 300000 && last === t.status) return e;
-    if (t.updated == null && last === t.status) return e;
-    return null;
+    var jiraSt = e.status || last;
+    if (jiraSt !== t.status && last !== t.status) return { e: null, why: "status", jiraStatus: jiraSt, fetchedAt: e.fetchedAt };
+    if (e.updated != null && t.updated != null && e.updated === t.updated) return { e: e };
+    if (t.updated != null && e.fetchedAt && t.updated <= e.fetchedAt - 300000) return { e: e };
+    if (t.updated == null) return { e: e };
+    return { e: null, why: "changed", fetchedAt: e.fetchedAt };
   }
+  function histFor(t) { return histCheck(t).e; }
 
   var IST = "Asia/Kolkata";
   function fdt(ms) { return ms == null ? "—" : new Date(ms).toLocaleString("en-GB", { timeZone: IST, weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }); }
@@ -84,8 +92,11 @@
       var cal = L.cals.get(t.prefix), target = S.targetMin(L.cfg, t.sev, t.prefix);
       if (target == null) out = { state: "none", label: "No target", tip: "No SLA target for " + (t.priority || "this severity") + "." };
       else {
-        var e = histFor(t);
-        if (!e) out = { state: "nohist", label: "No SLA data", tip: "Status history not fetched yet, or the ticket changed in Jira since. Use “Calculate SLA” or open the SLA Tracker." };
+        var hc = histCheck(t), e = hc.e;
+        if (!e) out = { state: "nohist", label: "No SLA data", why: hc.why,
+          tip: hc.why === "status"
+            ? "The saved status history ends in “" + hc.jiraStatus + "” (Jira, " + fdt(hc.fetchedAt) + " IST) but this data shows “" + t.status + "”. The two are from different moments, so no SLA is shown. Refresh the data from the launcher, then use “Calculate SLA”."
+            : "Status history not fetched yet, or the ticket changed in Jira since. Use “Calculate SLA” or open the SLA Tracker." };
         else out = describe(S.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify }), cal, e);
       }
     }
@@ -122,6 +133,29 @@
     }
     if (o.suspect) o.tip += " ⚠ History unverified — Jira showed no status changes for this ticket.";
     return o;
+  }
+
+  /* Everything the SLA detail popup needs for one row (same numbers as the SLA Tracker's ticket view). */
+  function DN() { return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]; }
+  function calText(cal) {
+    var S = Sla(), w = Object.keys(cal.workDays).map(Number).sort(), run = w.length > 1 && w[w.length - 1] - w[0] === w.length - 1, dn = DN();
+    var days = w.length === 7 ? "every day" : run ? dn[w[0]] + "–" + dn[w[w.length - 1]] : w.map(function (d) { return dn[d]; }).join(", ");
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; }, hm = function (m) { return pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60); };
+    var hrs = cal.dayMin >= 1440 ? "24 hours a day" : hm(cal.startMin) + "–" + hm(cal.endMin);
+    return days + ", " + hrs + " IST" + (cal.dayMin >= 1440 ? "" : " · 1 day = " + S.fmtDur(cal.dayMin).replace(/ 0m$/, ""));
+  }
+  function detail(row) {
+    var info = get(row);
+    if (!L.loaded || !Sla() || !row) return { info: info };
+    var S = Sla(), t = norm(row), hc = histCheck(t), e = hc.e, cal = L.cals.get(t.prefix);
+    var out = { info: info, t: t, entry: e, check: hc, cal: cal, calText: calText(cal), now: L.now,
+      fmt: function (m) { return S.fmtDur(m, cal.dayMin); }, fcal: function (m) { return S.fmtDur(m); }, fdt: fdt,
+      classify: classify };
+    if (e && L.types[t.type.toLowerCase()] && S.targetMin(L.cfg, t.sev, t.prefix) != null) {
+      out.r = S.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify });
+      out.bi = S.breachInfo(out.r, cal, L.now);
+    }
+    return out;
   }
 
   function summarize(rows) {
@@ -185,7 +219,7 @@
      (merged with whatever is there now, so a fetch running in the SLA Tracker tab is not overwritten). */
   function fetchMissing(rows, opts) {
     opts = opts || {};
-    var H = root.HDSlaHistory, list = missing(rows), byKey = {};
+    var H = root.HDSlaHistory, list = opts.force ? (rows || []) : missing(rows), byKey = {};
     list.forEach(function (r) { var t = norm(r); byKey[t.key] = t; });
     var keys = Object.keys(byKey);
     if (!keys.length) return Promise.resolve({ fetched: 0, failed: [] });
@@ -205,7 +239,10 @@
       onProgress: function (d, t) { if (opts.onProgress) opts.onProgress(d, t); },
       shouldCancel: opts.shouldCancel,
       onBatch: function (res) {
-        Object.keys(res).forEach(function (k) { var t = byKey[k]; got[k] = { updated: t ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
+        Object.keys(res).forEach(function (k) { var t = byKey[k];
+          /* keep the row's Updated stamp only if Jira's status matches the row — otherwise the row is older than the
+             history and the stamp would wrongly vouch for it (histCheck then decides by status + fetch time) */
+          got[k] = { updated: t && t.status === res[k].status ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
       }
     }).then(function (r) {
       return persist().then(function () { L.fetching = false; L.now = Date.now(); notify(); return { fetched: Object.keys(r.results).length, failed: r.failed, cancelled: r.cancelled }; });
@@ -217,7 +254,7 @@
   root.HDSlaLink = {
     load: load, ready: function () { return L.loaded; }, version: function () { return L.ver; },
     subscribe: function (fn) { L.subs.push(fn); return function () { L.subs = L.subs.filter(function (f) { return f !== fn; }); }; },
-    get: get, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
+    get: get, detail: detail, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
     isFetching: function () { return L.fetching; }, config: function () { return L.cfg; }
   };
 })(typeof self !== "undefined" ? self : this);
