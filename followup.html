@@ -158,6 +158,7 @@ input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
 @media (min-width: 3840px) {
   body { zoom: 1.9; }
 }
+@keyframes slaSpin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -299,7 +300,7 @@ function SlaDetailModal({row,onClose}){
     L.fetchMissing([row],{force:true}).then(function(res){
       setBusy(null);
       if(res.failed&&res.failed.length)setErr(res.failed[0].key+": "+res.failed[0].reason);
-    },function(e){setBusy(null);setErr(String(e&&e.message||e));});
+    },function(e){setBusy(null);setErr(String(e&&e.message||e).replace(/^BUSY:/,""));});
   }
   var head=(
     <div style={{padding:"18px 22px",borderBottom:"1px solid var(--border)",display:"flex",gap:14,alignItems:"flex-start"}}>
@@ -445,24 +446,49 @@ function CreatedTh({view,setView,style}){
   return <th onClick={function(){setView({sla:view.sla,sort:next});}} title="Sort by created date" style={Object.assign({},style,{cursor:"pointer",userSelect:"none",color:view.sort?"var(--blue)":style.color})}>Created{arrow}</th>;
 }
 
-/* "Calculate SLA (n)": fetch status history for tickets that have none, through the Jira bridge.
-   Saved into the SLA Tracker's cache, so the SLA Tracker benefits too. */
+/* SLA history is now calculated AUTOMATICALLY in the background (see App → HDSlaLink.autoFetch), for every
+   open ticket that has no valid history. This button shows that progress, and stays as a manual fallback:
+   it appears when tickets are still missing (auto turned off, extension missing, or a ticket failed once). */
+function useSlaProgress(){
+  const[p,setP]=useState(function(){return window.HDSlaLink&&window.HDSlaLink.progress?window.HDSlaLink.progress():{done:0,total:0};});
+  useEffect(function(){var L=window.HDSlaLink;if(!L||!L.onProgress)return;return L.onProgress(function(x){setP({done:x.done,total:x.total,auto:x.auto});});},[]);
+  return p;
+}
 function SlaFetchBtn({rows}){
-  const[busy,setBusy]=useState(null);
+  const[err,setErr]=useState("");
+  var prog=useSlaProgress();
   var L=window.HDSlaLink; if(!L||!L.ready())return null;
+  var pill={padding:"8px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6};
+  if(L.isFetching()){
+    var pct=prog.total?Math.round(prog.done/prog.total*100):0;
+    return <span style={pill} title="Fetching status history from Jira in the background. You can keep working; numbers fill in as they arrive.">
+      <span className="sla-spin" style={{display:"inline-block",width:11,height:11,border:"2px solid #FDBA74",borderTopColor:"#C2410C",borderRadius:"50%",animation:"slaSpin .8s linear infinite"}}/>
+      Calculating SLA… {prog.done}/{prog.total}
+      <span style={{width:50,height:4,background:"#E2E8F0",borderRadius:2,overflow:"hidden",display:"inline-block"}}><i style={{display:"block",height:"100%",width:pct+"%",background:"#EA580C"}}/></span>
+    </span>;
+  }
+  var other=L.otherFetching&&L.otherFetching();
+  if(other)return <span style={pill} title="Only one page fetches at a time. Results appear here automatically when it finishes.">⏳ Calculating in {other}…</span>;
   var miss=L.missing(rows||[]).length;
-  if(!miss&&!busy)return null;
-  if(busy)return <span style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",whiteSpace:"nowrap"}}>⏱ Calculating SLA… {busy.d}/{busy.t}</span>;
+  if(!miss)return null;
   var ok=L.bridgeReady();
   function go(){
-    setBusy({d:0,t:miss});
-    L.fetchMissing(rows,{onProgress:function(d,t){setBusy({d:d,t:t});}}).then(function(r){
-      setBusy(null);
-      if(r.failed&&r.failed.length)alert(r.failed.length+" ticket(s) could not be fetched, e.g. "+r.failed[0].key+": "+r.failed[0].reason);
-    },function(e){setBusy(null);alert("Could not calculate SLA: "+(e&&e.message||e));});
+    setErr("");
+    L.fetchMissing(rows).then(function(r){
+      if(r.failed&&r.failed.length)setErr(r.failed.length+" ticket(s) could not be fetched, e.g. "+r.failed[0].key+": "+r.failed[0].reason);
+    },function(e){setErr(String(e&&e.message||e).replace(/^BUSY:/,""));});
   }
-  return <button onClick={go} disabled={!ok} title={ok?"Fetch status history from Jira for "+miss+" ticket(s) without SLA data and calculate their SLA. Also saved for the SLA Tracker.":"HD Jira Bridge extension not detected — enable it and reload"}
-    style={{padding:"8px 14px",borderRadius:8,border:"1px solid #FDBA74",background:"#FFF7ED",fontSize:12,fontWeight:700,color:"#C2410C",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",opacity:ok?1:.55,cursor:ok?"pointer":"not-allowed"}}>⏱ Calculate SLA ({miss})</button>;
+  var why=err||L.autoError()||"";
+  return <button onClick={go} disabled={!ok} title={(ok?"Fetch status history from Jira for "+miss+" ticket(s) without SLA data and calculate their SLA. Also saved for the SLA Tracker.":"HD Jira Bridge extension not detected — enable it and reload")+(why?"\n\nLast problem: "+why:"")}
+    style={{padding:"8px 14px",borderRadius:8,border:"1px solid #FDBA74",background:"#FFF7ED",fontSize:12,fontWeight:700,color:"#C2410C",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",opacity:ok?1:.55,cursor:ok?"pointer":"not-allowed"}}>⏱ Calculate SLA ({miss}){why?" ⚠":""}</button>;
+}
+/* Auto-calculate on/off (shared with the SLA Tracker, remembered in this browser). */
+function SlaAutoToggle(){
+  var L=window.HDSlaLink; if(!L||!L.autoOn)return null;
+  var on=L.autoOn();
+  return <label title={on?"SLA is calculated automatically for tickets that need it. Untick to only calculate when you click.":"Auto-calculate is off — tick to calculate SLA automatically."} style={{display:"flex",alignItems:"center",gap:5,fontSize:11.5,fontWeight:600,color:"var(--t3)",cursor:"pointer",whiteSpace:"nowrap"}}>
+    <input type="checkbox" checked={on} onChange={function(e){L.setAuto(e.target.checked);}} style={{accentColor:"#EA580C"}}/>Auto-calculate
+  </label>;
 }
 /* Dashboard strip: SLA of the open tickets in view */
 function SlaStrip({rows,onOpen}){
@@ -486,6 +512,7 @@ function SlaStrip({rows,onOpen}){
         <div style={{fontWeight:800,fontSize:14,color:"var(--t1)"}}>SLA of open tickets</div>
         <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>Same numbers as the SLA Tracker — working time only, clock paused while with the client. {have} of {s.total} open SLA tickets have data{s.nohist?"; "+s.nohist+" still need their status history":""}.</div>
       </div>
+      <SlaAutoToggle/>
       <SlaFetchBtn rows={rows}/>
       <a href="sla.html" style={{fontSize:12,fontWeight:700,color:"var(--blue)",whiteSpace:"nowrap"}}>Open SLA Tracker ↗</a>
     </div>
@@ -494,7 +521,7 @@ function SlaStrip({rows,onOpen}){
       {box("At risk",s.atRisk,s.lists.atRisk,"#FFFBEB","#B45309",L.config().warnPct+"%+ of target used")}
       {box("On track",s.onTrack,s.lists.onTrack,"#F0FDF4","#047857","under "+L.config().warnPct+"% used")}
       {box("With client",s.paused,s.lists.paused,"#F8FAFC","#475569","clock paused")}
-      {box("No SLA data",s.nohist,s.lists.nohist,"#F8FAFC","#94A3B8","history not fetched")}
+      {box("No SLA data",s.nohist,s.lists.nohist,"#F8FAFC","#94A3B8",L.isFetching()?"being calculated…":"history not fetched")}
     </div>
   </div>);
 }
@@ -2450,6 +2477,10 @@ function App(){
     allFiltered.forEach(function(t){var s=checkSLA(t);if(s.anyBreach){var x=Object.assign({},t,{_sla:s});all.push(x);res.push(x);}});
     return{all:all,fr:[],res:res,open:open,range:range,total:allFiltered.length};
   },[allFiltered,flt,slaVer]);
+
+  /* Calculate SLA automatically: whenever the open tickets or the SLA data change, fetch status history in
+     the background for any open ticket that has none (only those — usually just the tickets that changed). */
+  useEffect(function(){if(window.HDSlaLink&&window.HDSlaLink.autoFetch&&op&&op.length)window.HDSlaLink.autoFetch(op);},[op,slaVer]);
 
   /* Priority distribution — against open tickets */
   var prioDist=useMemo(function(){
