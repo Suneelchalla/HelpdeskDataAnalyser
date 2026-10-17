@@ -240,6 +240,23 @@ tr.picked td{background:var(--sla-bg)}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .autochk{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}.autochk input{accent-color:#EA580C}
+
+/* Insights tab */
+.kpis.k6{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.ins-intro{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ins-h4{font-size:12.5px;margin:16px 0 6px;color:var(--ink2)}
+.ibar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;min-width:70px}.ibar i{display:block;height:100%;border-radius:5px}
+.sbar{position:relative;display:flex;height:12px;border-radius:6px;background:var(--line);overflow:visible;min-width:110px}.sbar i{display:block;height:100%}.sbar i:first-child{border-radius:6px 0 0 6px}.sbar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);border-radius:1px}
+tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
+.mut{color:var(--muted);font-weight:500}
+.cchart{display:flex;align-items:stretch;gap:6px;height:210px;overflow-x:auto;padding:6px 2px 2px}
+.ccol{flex:1 0 38px;display:flex;flex-direction:column;align-items:center;min-width:38px}
+.cval{font-family:var(--mono);font-size:11.5px;height:18px}
+.cstack{flex:1;width:70%;max-width:44px;display:flex;flex-direction:column;justify-content:flex-end;background:linear-gradient(var(--paper),var(--paper));border-radius:6px 6px 0 0;overflow:hidden}
+.cseg{display:block;width:100%;margin:0;padding:0;border-radius:0;min-height:2px}.cseg.dr:hover{filter:brightness(1.12);background-blend-mode:normal}
+.clab{font-size:10.5px;color:var(--muted);margin-top:5px;white-space:nowrap}
+.crate{font-size:10px;color:var(--faint);font-family:var(--mono)}
+@media (max-width:1100px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -510,7 +527,7 @@ function buildFilters() {
   ["client", "sev", "type", "svm", "worker"].forEach(msList);
 }
 function renderTabs() {
-  var tabs = [["overview", "Overview"], ["tickets", "Tickets"], ["settings", "Settings"]];
+  var tabs = [["overview", "Overview"], ["tickets", "Tickets"], ["insights", "Insights"], ["settings", "Settings"]];
   $("tabs").innerHTML = tabs.map(function (t) { return '<button data-tab="' + t[0] + '" class="' + (ST.tab === t[0] ? "on" : "") + '">' + t[1] + (t[0] === "tickets" ? '<span class="cnt">' + view().length + "</span>" : "") + "</button>"; }).join("");
 }
 
@@ -691,6 +708,7 @@ function periodOfKey(k) { return perLabel(k); }
 function drillList(spec) {
   var p = spec.split("|").map(decodeURIComponent), v = p[0] === "pn" ? pendingView() : view(true), r = { title: "", sub: "", list: [], tab: null };
   switch (p[0]) {
+    case "in": r = insDrill(p, v); break;
     case "kpi": {
       r.list = v.filter(function (x) { return kpiCat(x, p[1]); });
       var T = { sla: ["SLA met — the tickets behind the percentage", "Met + missed + open tickets already over target. Open tickets still inside their target are not counted yet."], ob: ["Breached, still open", "Open tickets that have already used up their target."], risk: ["At risk", ST.cfg.warnPct + "% or more of the target used, not yet breached."], open: ["Open tickets", "Everything with history that is not closed."], closed: ["Closed tickets", "Used for the average time to resolve (working time)."],
@@ -727,7 +745,7 @@ function drillList(spec) {
   }
   return r;
 }
-function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: /^pn\|(client|nohist)/.test(spec) ? { key: "key", dir: "asc" } : spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: /^in\|(st|stbr)\|/.test(spec) ? { key: "dwell", dir: "desc" } : /^in\|(now|stnow)\|/.test(spec) ? { key: "cur", dir: "desc" } : /^pn\|(client|nohist)/.test(spec) ? { key: "key", dir: "asc" } : spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
 function grpOf(x) { return x.b === "breached" ? "breached" : (x.b === "warning" || x.b === "danger") ? "soon" : "ok"; }
 function drToolbar(list) {
   var el = list.filter(canRemind); if (!el.length) return "";
@@ -748,13 +766,17 @@ function mixChips(list) {
 }
 function renderDrill() {
   var d = ST.dr; if (!d) return; var r = drillList(d.spec), s = d.sort, dir = s.dir === "asc" ? 1 : -1;
+  d.dwell = r.dwell || null;
+  /* Insights lists show the time the list is about in its own sortable column */
+  var exTh = r.dwell ? th("Time in “" + esc(r.dwell) + "”", "dwell", 1, "dr") : r.cur ? th("In current status", "cur", 1, "dr") : "";
+  var exFn = r.dwell ? function (x) { var v0 = dwellVal(x, r.dwell); return '<td class="num"><b>' + (v0 < 0 ? "—" : fmet(v0)) + "</b></td>"; } : r.cur ? function (x) { var o = insOf(x); return '<td class="num"><b>' + (o && o.cur ? fmet(ST.ins.metric === "cal" ? o.cur.cal : o.cur.biz) : "—") + '</b><div class="sub2">' + (o && o.cur ? esc(o.cur.status) : "") + "</div></td>"; } : null;
   var list = r.list.slice().sort(function (a, b) { var x = sortVal(a, s.key), y = sortVal(b, s.key); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
   var pages = Math.max(1, Math.ceil(list.length / 15)); if (d.page > pages) d.page = pages;
   var pg = list.slice((d.page - 1) * 15, d.page * 15), elig = list.some(canRemind);
   Object.keys(d.sel).forEach(function (k) { if (!list.some(function (x) { return x.t.key === k && canRemind(x); })) delete d.sel[k]; });    // selection only ever holds tickets that are in this list and can be reminded
   var h = '<div class="modal" style="width:min(1400px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + esc(r.title) + ' <span class="chip2 x" id="drCount">' + list.length.toLocaleString() + " ticket" + (list.length === 1 ? "" : "s") + '</span></h2><div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(r.sub) + '</div></div>' +
     (r.tab ? '<button class="ghost" id="drTab" data-rs="' + r.tab + '">Show in Tickets tab</button>' : "") + '<button class="ghost" id="drExport">Export to Excel</button><button class="x" data-closedrill aria-label="Close">✕</button></div><div class="mb">' +
-    (list.length ? '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">' + mixChips(list) + "</div>" + drToolbar(list) + '<div class="tw"><table><thead><tr>' + ticketHead("dr", elig) + "</tr></thead><tbody>" + pg.map(function (x) { return ticketRowHtml(x, elig ? d.sel : null); }).join("") + '</tbody></table></div><div class="pager"><button id="drPrev"' + (d.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + d.page + " of " + pages + '</span><button id="drNext"' + (d.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets.</div>') + "</div></div>";
+    (list.length ? '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">' + mixChips(list) + "</div>" + drToolbar(list) + '<div class="tw"><table><thead><tr>' + ticketHead("dr", elig, exTh) + "</tr></thead><tbody>" + pg.map(function (x) { return ticketRowHtml(x, elig ? d.sel : null, exFn); }).join("") + '</tbody></table></div><div class="pager"><button id="drPrev"' + (d.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + d.page + " of " + pages + '</span><button id="drNext"' + (d.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets.</div>') + "</div></div>";
   overlay("drill", h); drSelUpdate();
 }
 
@@ -916,6 +938,8 @@ function histSuspect(t) { var e = histFor(t); return !!(e && e.suspect); }
 function sortVal(x, k) {
   var r = x.r;
   switch (k) {
+    case "dwell": return x.r ? dwellVal(x, ST.dr && ST.dr.dwell) : -1;
+    case "cur": return x.r ? curVal(x) : -1;
     case "key": return x.t.key; case "sev": return x.t.sev ? Sla.SEVERITIES.map(function (s) { return s.id; }).indexOf(x.t.sev) : 99;
     case "created": return x.t.created; case "target": return r && r.targetMin != null ? r.targetMin : -1;
     case "elapsed": return r ? r.elapsedMin : -1; case "paused": return r ? r.pausedMin : -1; case "pct": return r && r.pct != null ? r.pct : -1;
@@ -925,11 +949,11 @@ function sortVal(x, k) {
   } return 0;
 }
 function th(label, k, num, mode) { var dr = mode === "dr", cur = dr ? ST.dr.sort : ST.sort, on = cur.key === k; return '<th class="sort' + (num ? " num" : "") + '" ' + (dr ? "data-drsort" : "data-sort") + '="' + k + '" aria-sort="' + (on ? (cur.dir === "asc" ? "ascending" : "descending") : "none") + '">' + label + (on ? (cur.dir === "asc" ? " ▲" : " ▼") : "") + "</th>"; }
-function ticketHead(mode, selectable) { return (selectable ? '<th class="selc"><input type="checkbox" id="drSelPage" aria-label="Select every reminder-eligible ticket on this page" title="Select this page"></th>' : "") + th("Ticket", "key", 0, mode) + "<th>Summary</th>" + th("Severity", "sev", 0, mode) + "<th>Status</th><th>Held by</th>" + th("Worker", "worker", 0, mode) + th("Target", "target", 1, mode) + th("Counted", "elapsed", 1, mode) + th("Used", "pct", 0, mode) + th("Breaks at", "breach", 0, mode) + "<th>Result</th><th></th>"; }
-function ticketRowHtml(x, sel) { return withCal(x.t, function () { return ticketRowInner(x, sel); }); }
-function ticketRowInner(x, sel) {
+function ticketHead(mode, selectable, extraTh) { return (selectable ? '<th class="selc"><input type="checkbox" id="drSelPage" aria-label="Select every reminder-eligible ticket on this page" title="Select this page"></th>' : "") + th("Ticket", "key", 0, mode) + "<th>Summary</th>" + th("Severity", "sev", 0, mode) + "<th>Status</th><th>Held by</th>" + (extraTh || "") + th("Worker", "worker", 0, mode) + th("Target", "target", 1, mode) + th("Counted", "elapsed", 1, mode) + th("Used", "pct", 0, mode) + th("Breaks at", "breach", 0, mode) + "<th>Result</th><th></th>"; }
+function ticketRowHtml(x, sel, extra) { return withCal(x.t, function () { return ticketRowInner(x, sel, extra); }); }
+function ticketRowInner(x, sel, extra) {
   var t = x.t, r = x.r, picked = sel && sel[t.key];
-  return '<tr class="row-click' + (picked ? " picked" : "") + '" tabindex="0" data-open="' + esc(t.key) + '">' + (sel ? '<td class="selc">' + (canRemind(x) ? '<input type="checkbox" data-sel="' + esc(t.key) + '"' + (picked ? " checked" : "") + ' aria-label="Select ' + esc(t.key) + ' for a reminder">' : "") + "</td>" : "") + '<td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
+  return '<tr class="row-click' + (picked ? " picked" : "") + '" tabindex="0" data-open="' + esc(t.key) + '">' + (sel ? '<td class="selc">' + (canRemind(x) ? '<input type="checkbox" data-sel="' + esc(t.key) + '"' + (picked ? " checked" : "") + ' aria-label="Select ' + esc(t.key) + ' for a reminder">' : "") + "</td>" : "") + '<td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td>" + (extra ? extra(x) : "") + "<td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
 }
 function renderTickets(v) {
   var M = $("main");
@@ -1389,7 +1413,193 @@ function renderAll() {
   renderTabs(); renderBar(); if (!ST.fetching) scheduleAuto();
   if (ST.tab === "settings") { renderSettings(); return; }
   var v = view(ST.tab !== "tickets");
-  if (ST.tab === "tickets") renderTickets(v); else renderOverview(v);
+  if (ST.tab === "tickets") renderTickets(v); else if (ST.tab === "insights") renderInsights(v); else renderOverview(v);
+}
+
+/* ═════════ Insights tab ═════════
+   Where SLA time goes and where it breaks. Everything is built from the same per-ticket timeline the
+   ticket view shows (r.segs), for the tickets in the selected range + filters that have history.
+   Every number opens its tickets (drill spec "in|…"), and every ticket opens its full timeline. */
+ST.ins = { blame: "at", metric: "biz", stSort: "total", stAll: false, nowKind: "all", dimBy: "client" };
+var INS_CACHE = typeof WeakMap !== "undefined" ? new WeakMap() : null;
+function isBr(x) { return !!(x.r && (x.b === "breached" || x.b === "missed")); }
+function isDec(x) { return !!(x.r && (x.b === "met" || x.b === "missed" || x.b === "breached")); }
+/* per-ticket facts, cached on the result object (results are rebuilt whenever data or settings change) */
+function insOf(x) {
+  var r = x.r; if (!r) return null;
+  if (INS_CACHE && INS_CACHE.has(r)) return INS_CACHE.get(r);
+  var o = { dwell: {}, at: null, atStatus: null, major: null, hops: 0, escMin: null, cur: null };
+  var last = null, hdBefore = 0, sawEngg = false;
+  r.segs.forEach(function (sg) {
+    if (sg.kind !== "closed") { var d = o.dwell[sg.status] || (o.dwell[sg.status] = { biz: 0, cal: 0, kind: sg.kind, visits: 0 }); d.biz += sg.bizMin; d.cal += Math.max(0, sg.calMin); d.visits++; d.kind = sg.kind; }
+    if (sg.kind === "hd" || sg.kind === "engg") { if (last && last !== sg.kind) o.hops++; last = sg.kind; }
+    if (sg.kind === "engg") sawEngg = true; else if (sg.kind === "hd" && !sawEngg) hdBefore += sg.bizMin;
+  });
+  if (sawEngg) o.escMin = hdBefore;
+  if (r.targetMin != null && r.elapsedMin >= r.targetMin) {
+    for (var i = 0; i < r.segs.length; i++) { var sg = r.segs[i]; if (sg.counted && sg.elapsedAfter >= r.targetMin) { o.at = sg.kind; o.atStatus = sg.status; break; } }
+  }
+  if (r.elapsedMin > 0) o.major = r.enggMin > r.hdMin ? "engg" : "hd";
+  var ls = r.segs[r.segs.length - 1];
+  if (!r.isClosed && ls && ls.open) o.cur = { status: ls.status, kind: ls.kind, biz: ls.bizMin, cal: Math.max(0, ls.calMin) };
+  if (INS_CACHE) INS_CACHE.set(r, o);
+  return o;
+}
+function blameOf(x) { var o = insOf(x); return !o ? null : ST.ins.blame === "major" ? o.major : o.at; }
+function dwellVal(x, status) { var o = insOf(x), d = o && o.dwell[status]; return d ? (ST.ins.metric === "cal" ? d.cal : d.biz) : -1; }
+function curVal(x) { var o = insOf(x); return o && o.cur ? (ST.ins.metric === "cal" ? o.cur.cal : o.cur.biz) : -1; }
+function fmet(m) { return ST.ins.metric === "cal" ? fcal(m) : fdur(m); }
+function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+function pctl(a, p) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }); return s[Math.min(s.length - 1, Math.ceil(p / 100 * s.length) - 1)]; }
+function insTog(key, cur, opts) { return '<div class="tog" role="group">' + opts.map(function (o) { return '<button data-ins="' + key + ":" + o[0] + '" class="' + (cur === o[0] ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>"; }
+function insKpi(label, val, sub, acc, parts, n) {
+  var click = parts && n > 0;
+  return "<" + (click ? "button" : "div") + ' class="kpi' + (click ? " clk" : "") + '" style="--acc:' + acc + '"' + (click ? drAttr(parts, n) : "") + '><span class="kv">' + val + '</span><span class="kl">' + label + "</span>" + (sub ? '<span class="ks">' + sub + "</span>" : "") + "</" + (click ? "button" : "div") + ">";
+}
+function hbar(p, color) { return '<div class="ibar"><i style="width:' + Math.max(0, Math.min(100, p || 0)) + "%;background:" + color + '"></i></div>'; }
+var KC = { hd: "var(--hd2)", engg: "var(--engg)", client: "#F0A838", closed: "#B8C2CF" };
+var HOP_B = [["0", "Never handed over", function (n) { return n === 0; }], ["1", "Once", function (n) { return n === 1; }], ["2", "Twice", function (n) { return n === 2; }], ["3", "3 times", function (n) { return n === 3; }], ["4", "4 or more", function (n) { return n >= 4; }]];
+var ESC_B = [["a", "Under 1 hour", 0, 60], ["b", "1 – 4 hours", 60, 240], ["c", "4 – 8 hours", 240, 480], ["d", "8 – 24 hours", 480, 1440], ["e", "1 – 2 days (24–48 h)", 1440, 2880], ["f", "Over 48 hours", 2880, Infinity]];
+function escBucket(x) { var o = insOf(x); if (!o) return null; if (o.escMin == null) return "never"; for (var i = 0; i < ESC_B.length; i++) if (o.escMin >= ESC_B[i][2] && o.escMin < ESC_B[i][3]) return ESC_B[i][0]; return null; }
+function hopBucket(x) { var o = insOf(x); if (!o) return null; for (var i = 0; i < HOP_B.length; i++) if (HOP_B[i][2](o.hops)) return HOP_B[i][0]; return null; }
+function rateCell(br, dec) { if (!dec) return '<td class="num" style="color:var(--faint)">—</td><td></td>'; var p = Math.round(br / dec * 100); return '<td class="num" style="color:' + (p >= 50 ? "var(--rose)" : p >= 25 ? "var(--amber)" : "var(--green)") + '"><b>' + p + "%</b></td><td style=\"width:22%\">" + hbar(p, p >= 50 ? "var(--rose)" : p >= 25 ? "#F59E0B" : "var(--green)") + "</td>"; }
+
+/* drill lists for every Insights number */
+function insDrill(p, v) {
+  var r = { title: "", sub: "", list: [], tab: null }, H = v.filter(function (x) { return x.r; }), K = function (k) { return KN[k] || k; };
+  switch (p[1]) {
+    case "br": r.list = H.filter(isBr); r.title = "All breaches"; r.sub = "Open tickets already over target, plus closed tickets that finished over target."; break;
+    case "blame": {                                     // in|blame|kind|cat   cat: all | open | missed
+      var kind = p[2], cat = p[3];
+      r.list = H.filter(function (x) { return isBr(x) && (kind === "*" || blameOf(x) === kind) && (cat === "all" || (cat === "open" ? x.b === "breached" : x.b === "missed")); });
+      r.title = (cat === "open" ? "Breached, still open" : cat === "missed" ? "Missed (closed over target)" : "Breaches") + (kind === "*" ? "" : (ST.ins.blame === "major" ? " — " + K(kind) + " used most of the time" : " — broke while with " + K(kind)));
+      r.sub = ST.ins.blame === "major" ? "Grouped by who used more of the counted working time (Help Desk vs Engineering)." : "Grouped by who was holding the ticket at the moment its counted time crossed the target.";
+      break;
+    }
+    case "atst": r.list = H.filter(function (x) { var o = insOf(x); return isBr(x) && o.atStatus === p[2]; }); r.title = "Breached while in “" + p[2] + "”"; r.sub = "The SLA target ran out while the ticket was in this status."; break;
+    case "per": {                                       // in|per|period|kind
+      r.list = H.filter(function (x) { return isBr(x) && perKey(x.t.created) === p[2] && (p[3] === "*" || blameOf(x) === p[3]); });
+      r.title = "Breaches · " + perLabel(p[2]) + (p[3] === "*" ? "" : " · " + K(p[3])); r.sub = "Grouped by when the ticket was created."; break;
+    }
+    case "st": case "stnow": case "stbr": {             // tickets that spent time in a status / are in it now / broke in it
+      var st = p[2];
+      r.list = H.filter(function (x) { var o = insOf(x); return p[1] === "st" ? !!o.dwell[st] : p[1] === "stnow" ? !!(o.cur && o.cur.status === st) : (isBr(x) && o.atStatus === st); });
+      r.title = (p[1] === "stnow" ? "Sitting in “" : p[1] === "stbr" ? "Breached while in “" : "Spent time in “") + st + "”";
+      r.sub = (ST.ins.metric === "cal" ? "Calendar" : "Working") + " time in this status is shown in its own column (all visits added up). Longest first.";
+      r.dwell = p[1] === "stnow" ? null : st; r.cur = p[1] === "stnow"; break;
+    }
+    case "now": r.list = H.filter(function (x) { var o = insOf(x); return o.cur && (p[2] === "all" || o.cur.kind === p[2]); }); r.title = "Open tickets by time in their current status" + (p[2] === "all" ? "" : " — " + K(p[2])); r.sub = "How long each ticket has been in the status it is in right now. Longest first."; r.cur = true; break;
+    case "hop": r.list = H.filter(function (x) { return hopBucket(x) === p[2] && (p[3] !== "br" || isBr(x)) && (p[3] !== "dec" || isDec(x)); }); r.title = "Handed between Help Desk and Engineering: " + HOP_B.filter(function (b) { return b[0] === p[2]; })[0][1].toLowerCase() + (p[3] === "br" ? " — breached" : ""); r.sub = "A hand-off = the ticket moved from Help Desk to Engineering or back (time with the client in between is ignored)."; break;
+    case "esc": { var lb = p[2] === "never" ? "never went to Engineering" : ESC_B.filter(function (b) { return b[0] === p[2]; })[0][1]; r.list = H.filter(function (x) { return escBucket(x) === p[2] && (p[3] !== "br" || isBr(x)); }); r.title = "Help Desk time before escalation: " + lb + (p[3] === "br" ? " — breached" : ""); r.sub = "Working time at Help Desk before the ticket first reached Engineering."; break; }
+    case "sev": r.list = H.filter(function (x) { return (x.t.sev || "none") === p[2] && (p[3] !== "br" || isBr(x)); }); r.title = (p[2] === "none" ? "Unrated" : Sla.sevName(p[2])) + " tickets" + (p[3] === "br" ? " — breached" : ""); r.sub = "Tickets in the selected range with this severity."; break;
+    case "dim": {                                       // in|dim|by|key|cat   cat: dec | br | hd | engg
+      var f = dimFn(p[2]);
+      r.list = H.filter(function (x) { if (f(x.t) !== p[3]) return false; if (p[4] === "dec") return isDec(x); if (p[4] === "br") return isBr(x); return isBr(x) && blameOf(x) === p[4]; });
+      r.title = dimLabelText(p[2], p[3]) + " — " + (p[4] === "dec" ? "decided tickets" : p[4] === "br" ? "breaches" : "breaches with " + K(p[4]));
+      r.sub = p[4] === "hd" || p[4] === "engg" ? (ST.ins.blame === "major" ? "Engineering/Help Desk used most of the counted time." : "Broke while held by this team.") : "";
+      break;
+    }
+  }
+  return r;
+}
+
+function renderInsights(v) {
+  var M = $("main"), H = v.filter(function (x) { return x.r; });
+  if (!ST.scope.length) { M.innerHTML = '<div class="card empty"><b>No tickets created in this date range.</b><br>Pick a wider range above.</div>'; return; }
+  if (!H.length) { M.innerHTML = '<div class="card empty"><b>No status history for these tickets yet.</b><br>Insights are built from each ticket’s status timeline — it fills in as history is fetched.</div>'; return; }
+  var I = ST.ins, blameTxt = I.blame === "major" ? "used most of the time" : "held it when it broke";
+  var br = H.filter(isBr), dec = H.filter(isDec);
+  var bk = { hd: { open: 0, missed: 0, over: 0 }, engg: { open: 0, missed: 0, over: 0 } };
+  br.forEach(function (x) { var k = blameOf(x); if (!bk[k]) return; bk[k][x.b === "breached" ? "open" : "missed"]++; bk[k].over += x.r.elapsedMin - x.r.targetMin; });
+  var nHd = bk.hd.open + bk.hd.missed, nEn = bk.engg.open + bk.engg.missed, nBr = br.length;
+  var sum = { hd: 0, engg: 0, client: 0 }; H.forEach(function (x) { sum.hd += x.r.hdMin; sum.engg += x.r.enggMin; sum.client += x.r.pausedMin; });
+  var h = '<div class="callout ins-intro">Built from the status timeline of <b>' + H.length.toLocaleString() + "</b> tickets (selected range + filters). <b>Click any number</b> to see the tickets behind it, then a ticket for its full timeline. Breaches are " + insTog("blame", I.blame, [["at", "Who held it when it broke"], ["major", "Who used most of the time"]]) + "</div>";
+  var pc = function (n) { return nBr ? Math.round(n / nBr * 100) + "% of breaches" : ""; };
+  h += '<div class="kpis k6">' +
+    insKpi("Breaches", nBr.toLocaleString(), (dec.length ? Math.round(nBr / dec.length * 100) + "% of " + dec.length.toLocaleString() + " decided" : "nothing decided yet"), "var(--rose)", ["in", "br"], nBr) +
+    insKpi(I.blame === "major" ? "Mostly Help Desk time" : "Broke at Help Desk", nHd.toLocaleString(), pc(nHd), "var(--hd2)", ["in", "blame", "hd", "all"], nHd) +
+    insKpi(I.blame === "major" ? "Mostly Engineering time" : "Broke at Engineering", nEn.toLocaleString(), pc(nEn), "var(--engg)", ["in", "blame", "engg", "all"], nEn) +
+    insKpi("Avg Help Desk time", fdur(sum.hd / H.length), "working time per ticket", "var(--hd)", null, 0) +
+    insKpi("Avg Engineering time", fdur(sum.engg / H.length), "working time per ticket", "var(--engg)", null, 0) +
+    insKpi("Avg client wait", fdur(sum.client / H.length), "working time, not counted", "#F0A838", null, 0) + "</div>";
+
+  /* ── A. breaches by team ── */
+  var rowA = function (k) { var o = bk[k], n = o.open + o.missed, B = function (c) { return ["in", "blame", k, c]; };
+    return "<tr><td>" + kchip(k) + '</td><td class="num">' + drNum(o.open, B("open"), o.open ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.missed, B("missed")) + '</td><td class="num"><b>' + drNum(n, B("all")) + '</b></td><td style="width:30%">' + (n ? '<span class="dr bar"' + drAttr(B("all"), n) + ">" + hbar(nBr ? n / nBr * 100 : 0, KC[k]) + "</span>" : hbar(0, KC[k])) + '</td><td class="num">' + (n ? fdur(o.over / n) : "—") + "</td></tr>"; };
+  var atSt = {}; br.forEach(function (x) { var o = insOf(x); if (o.atStatus) { var a = atSt[o.atStatus] || (atSt[o.atStatus] = { n: 0, kind: o.at }); a.n++; } });
+  var atL = Object.keys(atSt).sort(function (a, b) { return atSt[b].n - atSt[a].n; }).slice(0, 8), atMax = atL.length ? atSt[atL[0]].n : 1;
+  var panA = '<div class="card panel"><h3>Breaches by team</h3><div class="sub">' + (I.blame === "major" ? "Each breach is given to the team that used <b>more of its counted working time</b>." : "Each breach is given to the team <b>holding the ticket at the moment its counted time crossed the target</b>.") + ' Switch at the top.</div><div class="tw"><table><thead><tr><th>Team</th><th class="num">Still open</th><th class="num">Missed (closed)</th><th class="num">Total</th><th>Share of breaches</th><th class="num">Avg over target</th></tr></thead><tbody>' + rowA("hd") + rowA("engg") +
+    '<tr class="tot"><td><b>All breaches</b></td><td class="num">' + drNum(bk.hd.open + bk.engg.open, ["in", "blame", "*", "open"]) + '</td><td class="num">' + drNum(bk.hd.missed + bk.engg.missed, ["in", "blame", "*", "missed"]) + '</td><td class="num"><b>' + drNum(nBr, ["in", "br"]) + "</b></td><td></td><td></td></tr></tbody></table></div>" +
+    (atL.length ? '<h4 class="ins-h4">Status the ticket was in when the SLA broke</h4><div class="tw"><table><tbody>' + atL.map(function (s) { var a = atSt[s]; return '<tr><td style="width:40%"><span class="dr"' + drAttr(["in", "atst", s], a.n) + "><b>" + esc(s) + "</b></span></td><td>" + kchip(a.kind) + '</td><td class="num">' + drNum(a.n, ["in", "atst", s]) + '</td><td style="width:34%">' + hbar(a.n / atMax * 100, KC[a.kind]) + "</td></tr>"; }).join("") + "</tbody></table></div>" : "") + "</div>";
+
+  /* ── B. breaches over time, stacked by team ── */
+  var per = {}; br.forEach(function (x) { var k = perKey(x.t.created), o = per[k] || (per[k] = { hd: 0, engg: 0, n: 0 }), b = blameOf(x); o.n++; if (b === "hd" || b === "engg") o[b]++; });
+  var dper = {}; dec.forEach(function (x) { var k = perKey(x.t.created); dper[k] = (dper[k] || 0) + 1; });
+  var pk = Object.keys(dper).sort(), pmax = 1; pk.forEach(function (k) { if (per[k] && per[k].n > pmax) pmax = per[k].n; });
+  var cols = pk.map(function (k) { var o = per[k] || { hd: 0, engg: 0, n: 0 }, other = o.n - o.hd - o.engg, d = dper[k], rate = d ? Math.round(o.n / d * 100) : 0;
+    var seg = function (n, kind, color) { return n ? '<span class="dr cseg"' + drAttr(["in", "per", k, kind], n).replace(/ title="[^"]*"/, "") + ' title="' + n + " " + (KN[kind] || "") + " breach" + (n === 1 ? "" : "es") + " — click to see them" + '" style="height:' + (n / pmax * 100) + "%;background:" + color + '"></span>' : ""; };
+    return '<div class="ccol"><div class="cval">' + (o.n ? drNum(o.n, ["in", "per", k, "*"]) : "0") + '</div><div class="cstack">' + seg(o.engg, "engg", KC.engg) + seg(o.hd, "hd", KC.hd) + (other ? '<span class="cseg" style="height:' + (other / pmax * 100) + '%;background:var(--faint)"></span>' : "") + '</div><div class="clab">' + esc(perLabel(k).replace(/^Week of /, "")) + '</div><div class="crate" title="breaches ÷ decided tickets">' + rate + "%</div></div>"; }).join("");
+  var panB = '<div class="card panel"><div class="panel-h"><h3>Breaches by ' + (ST.trendBy === "week" ? "week" : "month") + "</h3>" + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Stacked by team (' + blameTxt + '). Grouped by when the ticket was created; the % under each bar is breaches ÷ decided tickets. Click a bar segment for its tickets.</div><div class="legend"><span style="--c:var(--hd2)">Help Desk</span><span style="--c:var(--engg)">Engineering</span></div><div class="cchart">' + (cols || '<div class="empty">No decided tickets.</div>') + "</div></div>";
+  h += '<div class="grid2">' + panA + panB + "</div>";
+
+  /* ── C. time by status ── */
+  var stm = {};
+  H.forEach(function (x) { var o = insOf(x), br1 = isBr(x);
+    Object.keys(o.dwell).forEach(function (s) { var d = o.dwell[s], a = stm[s] || (stm[s] = { s: s, kind: d.kind, vals: [], total: 0, max: -1, maxKey: "", now: 0, br: 0, visits: 0 }); var val = I.metric === "cal" ? d.cal : d.biz; a.vals.push(val); a.total += val; a.visits += d.visits; if (val > a.max) { a.max = val; a.maxKey = x.t.key; } });
+    if (o.cur && stm[o.cur.status]) stm[o.cur.status].now++;
+    if (br1 && o.atStatus && stm[o.atStatus]) stm[o.atStatus].br++;
+  });
+  var stl = Object.keys(stm).map(function (s) { var a = stm[s]; a.n = a.vals.length; a.avg = a.total / a.n; a.med = median(a.vals); a.p90 = pctl(a.vals, 90); return a; });
+  var SK = { total: "total", avg: "avg", p90: "p90", max: "max", now: "now", br: "br" }, sk = SK[I.stSort] || "total";
+  stl.sort(function (a, b) { return b[sk] - a[sk] || b.total - a.total; });
+  var smax = stl.length ? (stl[0][sk] || 1) : 1, grand = 0; stl.forEach(function (a) { grand += a.total; });
+  var shown = I.stAll ? stl : stl.slice(0, 15);
+  var srow = shown.map(function (a) { var S = function (k) { return ["in", k, a.s]; };
+    return '<tr><td><span class="dr"' + drAttr(S("st"), a.n) + "><b>" + esc(a.s) + "</b></span></td><td>" + kchip(a.kind) + '</td><td class="num">' + drNum(a.n, S("st")) + '</td><td class="num">' + fmet(a.total) + ' <small class="mut">' + (grand ? Math.round(a.total / grand * 100) : 0) + '%</small></td><td class="num">' + fmet(a.avg) + '</td><td class="num">' + fmet(a.med) + '</td><td class="num">' + fmet(a.p90) + '</td><td class="num"><span class="dr" data-open="' + esc(a.maxKey) + '" role="button" tabindex="0" title="Open ' + esc(a.maxKey) + '">' + fmet(a.max) + '<small class="mut"> ' + esc(a.maxKey) + '</small></span></td><td class="num">' + drNum(a.now, S("stnow"), a.now ? "color:var(--sla)" : "") + '</td><td class="num">' + drNum(a.br, S("stbr"), a.br ? "color:var(--rose)" : "") + '</td><td style="width:14%">' + hbar(a[sk] / smax * 100, KC[a.kind]) + "</td></tr>"; }).join("");
+  h += '<div class="card panel"><div class="panel-h"><h3>Where tickets wait longest — time by status</h3><div style="display:flex;gap:8px;flex-wrap:wrap">' + insTog("metric", I.metric, [["biz", "Working time"], ["cal", "Calendar time"]]) + insTog("stSort", I.stSort, [["total", "Total"], ["avg", "Average"], ["p90", "90th %"], ["max", "Longest"], ["now", "Sitting now"], ["br", "Breaches"]]) + '</div></div><div class="sub">Every status a ticket passed through, with all its visits added up. <b>Total</b> = time all tickets spent there (and its share of all time); <b>Average / Median / 90th %</b> = per ticket that passed through; <b>Longest</b> opens that ticket; <b>Sitting now</b> = open tickets in it right now; <b>Breaches</b> = SLA broke while in it. ' + (I.metric === "cal" ? "Calendar time counts nights, weekends and holidays." : "Working time is on each client’s calendar; time with the client is shown but never counted toward the SLA.") + '</div><div class="tw"><table><thead><tr><th>Status</th><th>Held by</th><th class="num">Tickets</th><th class="num">Total</th><th class="num">Average</th><th class="num">Median</th><th class="num">90th %</th><th class="num">Longest</th><th class="num">Sitting now</th><th class="num">Breaches</th><th></th></tr></thead><tbody>' + srow + "</tbody></table></div>" +
+    (stl.length > 15 ? '<div style="margin-top:8px"><button class="quiet" data-ins="stAll:' + (I.stAll ? "0" : "1") + '">' + (I.stAll ? "Show top 15" : "Show all " + stl.length + " statuses") + "</button></div>" : "") + "</div>";
+
+  /* ── D. sitting longest right now ── */
+  var nowL = H.filter(function (x) { var o = insOf(x); return o.cur && (I.nowKind === "all" || o.cur.kind === I.nowKind); }).sort(function (a, b) { return curVal(b) - curVal(a); });
+  var nrow = nowL.slice(0, 12).map(function (x) { var o = insOf(x); return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell" style="max-width:150px">' + esc(o.cur.status) + "</td><td>" + kchip(o.cur.kind) + '</td><td class="num"><b>' + withCal(x.t, function () { return I.metric === "cal" ? fcal(o.cur.cal) : fdur(o.cur.biz); }) + "</b></td><td>" + chip(x.b) + "</td></tr>"; }).join("");
+  var panD = '<div class="card panel"><div class="panel-h"><h3>Sitting longest right now</h3>' + insTog("nowKind", I.nowKind, [["all", "All"], ["hd", "Help Desk"], ["engg", "Engg"], ["client", "Client"]]) + '</div><div class="sub">Open tickets by ' + (I.metric === "cal" ? "calendar" : "working") + " time in the status they are in <b>right now</b>. Click a ticket for its timeline.</div>" +
+    (nrow ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Status</th><th>Held by</th><th class="num">In it for</th><th>SLA</th></tr></thead><tbody>' + nrow + "</tbody></table></div>" + (nowL.length > 12 ? '<div style="margin-top:8px">' + drNum(nowL.length, ["in", "now", I.nowKind], "", "See all " + nowL.length.toLocaleString() + " →") + "</div>" : "") : '<div class="empty">No open tickets here.</div>') + "</div>";
+
+  /* ── E. hand-offs ── */
+  var hop = HOP_B.map(function (b) { var l = H.filter(function (x) { return hopBucket(x) === b[0]; }); return { b: b, n: l.length, dec: l.filter(isDec).length, br: l.filter(isBr).length }; });
+  var panE = '<div class="card panel"><h3>Hand-offs between Help Desk and Engineering</h3><div class="sub">How often a ticket moved between the two teams (time with the client in between ignored), and how often those tickets breached. Breach rate = breaches ÷ decided tickets.</div><div class="tw"><table><thead><tr><th>Handed over</th><th class="num">Tickets</th><th class="num">Breached</th><th class="num">Breach rate</th><th></th></tr></thead><tbody>' +
+    hop.map(function (o) { return "<tr><td><b>" + o.b[1] + '</b></td><td class="num">' + drNum(o.n, ["in", "hop", o.b[0], "all"]) + '</td><td class="num">' + drNum(o.br, ["in", "hop", o.b[0], "br"], o.br ? "color:var(--rose)" : "") + "</td>" + rateCell(o.br, o.dec) + "</tr>"; }).join("") + "</tbody></table></div></div>";
+  h += '<div class="grid2">' + panD + panE + "</div>";
+
+  /* ── F. time before escalation ── */
+  var escRows = ESC_B.map(function (b) { return [b[0], b[1]]; }).concat([["never", "Never went to Engineering"]]).map(function (b) {
+    var l = H.filter(function (x) { return escBucket(x) === b[0]; }), eg = 0; l.forEach(function (x) { eg += x.r.enggMin; });
+    return { k: b[0], l: b[1], n: l.length, dec: l.filter(isDec).length, br: l.filter(isBr).length, eg: l.length ? eg / l.length : null }; });
+  var panF = '<div class="card panel"><h3>Help Desk time before escalation</h3><div class="sub">Working time a ticket spent at Help Desk before it first reached Engineering — does a late hand-over lead to breaches?</div><div class="tw"><table><thead><tr><th>At Help Desk first</th><th class="num">Tickets</th><th class="num">Breached</th><th class="num">Breach rate</th><th></th><th class="num">Avg Engg time after</th></tr></thead><tbody>' +
+    escRows.map(function (o) { return "<tr" + (o.k === "never" ? ' class="tot"' : "") + "><td><b>" + o.l + '</b></td><td class="num">' + drNum(o.n, ["in", "esc", o.k, "all"]) + '</td><td class="num">' + drNum(o.br, ["in", "esc", o.k, "br"], o.br ? "color:var(--rose)" : "") + "</td>" + rateCell(o.br, o.dec) + '<td class="num">' + (o.k === "never" || o.eg == null ? "—" : fdur(o.eg)) + "</td></tr>"; }).join("") + "</tbody></table></div></div>";
+
+  /* ── G. time split by severity ── */
+  var sevs = Sla.SEVERITIES.map(function (z) { return z.id; }).concat(["none"]);
+  var sevRows = sevs.map(function (sv) { var l = H.filter(function (x) { return (x.t.sev || "none") === sv; }); if (!l.length) return null;
+    var a = { hd: 0, engg: 0, cl: 0, tg: 0, ntg: 0 }; l.forEach(function (x) { a.hd += x.r.hdMin; a.engg += x.r.enggMin; a.cl += x.r.pausedMin; if (x.r.targetMin != null) { a.tg += x.r.targetMin; a.ntg++; } });
+    return { sv: sv, n: l.length, br: l.filter(isBr).length, dec: l.filter(isDec).length, hd: a.hd / l.length, engg: a.engg / l.length, cl: a.cl / l.length, tg: a.ntg ? a.tg / a.ntg : null }; }).filter(Boolean);
+  var gmax = 1; sevRows.forEach(function (o) { gmax = Math.max(gmax, o.hd + o.engg, o.tg || 0); });
+  var panG = '<div class="card panel"><h3>Help Desk vs Engineering time by severity</h3><div class="sub">Average counted working time per ticket, split by team; the dark tick is the average target. Client wait is not counted and shown for reference.</div><div class="tw"><table><thead><tr><th>Severity</th><th class="num">Tickets</th><th class="num">Breached</th><th class="num">Help Desk</th><th class="num">Engg</th><th>Split vs target</th><th class="num">Client wait</th></tr></thead><tbody>' +
+    sevRows.map(function (o) { return '<tr><td><span class="dr"' + drAttr(["in", "sev", o.sv, "all"], o.n) + '><span class="sevdot" style="background:' + Sla.sevColor(o.sv === "none" ? null : o.sv) + '"></span><b>' + (o.sv === "none" ? "Unrated" : Sla.sevName(o.sv)) + '</b></span></td><td class="num">' + drNum(o.n, ["in", "sev", o.sv, "all"]) + '</td><td class="num">' + drNum(o.br, ["in", "sev", o.sv, "br"], o.br ? "color:var(--rose)" : "") + '</td><td class="num">' + fdur(o.hd) + '</td><td class="num">' + fdur(o.engg) + '</td><td style="width:30%"><div class="sbar"><i style="width:' + (o.hd / gmax * 100) + '%;background:var(--hd2)"></i><i style="width:' + (o.engg / gmax * 100) + '%;background:var(--engg)"></i>' + (o.tg != null ? '<b style="left:' + Math.min(100, o.tg / gmax * 100) + '%" title="avg target ' + fdur(o.tg) + '"></b>' : "") + '</div></td><td class="num mut">' + fdur(o.cl) + "</td></tr>"; }).join("") + "</tbody></table></div></div>";
+  h += '<div class="grid2">' + panF + panG + "</div>";
+
+  /* ── H. breaches by client / severity / worker × team ── */
+  var by = I.dimBy, f = dimFn(by), dm = {};
+  dec.forEach(function (x) { var k = f(x.t), o = dm[k] || (dm[k] = { k: k, dec: 0, br: 0, hd: 0, engg: 0 }); o.dec++; if (isBr(x)) { o.br++; var b = blameOf(x); if (b === "hd" || b === "engg") o[b]++; } });
+  var sevOrder = sevs, dl = Object.keys(dm).map(function (k) { return dm[k]; }).sort(function (a, b) { return by === "severity" ? sevOrder.indexOf(a.k) - sevOrder.indexOf(b.k) : b.br - a.br || b.dec - a.dec; });
+  var dmore = dl.length > 15 ? dl.length - 15 : 0; dl = dl.slice(0, 15);
+  h += '<div class="card panel"><div class="panel-h"><h3>Breaches by ' + (by === "client" ? "client" : by === "severity" ? "severity" : "worker") + " and team</h3>" + insTog("dimBy", by, [["client", "Client"], ["severity", "Severity"], ["worker", "Worker"]]) + '</div><div class="sub">Decided tickets only (met, missed, or already breached). Team = ' + blameTxt + ". Most breaches first.</div>" +
+    '<div class="tw"><table><thead><tr><th>' + (by === "client" ? "Client" : by === "severity" ? "Severity" : "Worker") + '</th><th class="num">Decided</th><th class="num">Breaches</th><th class="num">Breach rate</th><th></th><th class="num">At Help Desk</th><th class="num">At Engineering</th><th>Team split</th></tr></thead><tbody>' +
+    dl.map(function (o) { var D = function (c) { return ["in", "dim", by, o.k, c]; }, t2 = o.hd + o.engg;
+      return '<tr><td><span class="dr"' + drAttr(D("dec"), o.dec) + "><b>" + esc(dimLabelText(by, o.k)) + '</b></span></td><td class="num">' + drNum(o.dec, D("dec")) + '</td><td class="num"><b>' + drNum(o.br, D("br"), o.br ? "color:var(--rose)" : "") + "</b></td>" + rateCell(o.br, o.dec) + '<td class="num">' + drNum(o.hd, D("hd")) + '</td><td class="num">' + drNum(o.engg, D("engg")) + '</td><td style="width:16%">' + (t2 ? '<div class="sbar"><i style="width:' + (o.hd / t2 * 100) + '%;background:var(--hd2)"></i><i style="width:' + (o.engg / t2 * 100) + '%;background:var(--engg)"></i></div>' : "") + "</td></tr>"; }).join("") +
+    "</tbody></table></div>" + (dmore ? '<div class="sub" style="margin-top:6px">…and ' + dmore + " more. Use the filters above to narrow down.</div>" : "") + "</div>";
+
+  M.innerHTML = h;
 }
 
 /* ═════════ events ═════════ */
@@ -1410,6 +1620,7 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-tab]"))) { ST.tab = x.dataset.tab; if (ST.tab === "settings") ST.draft = null; renderAll(); return; }
   if ((x = q("[data-trend]"))) { ST.trendBy = x.dataset.trend; renderAll(); return; }
   if ((x = q("[data-matrix]"))) { ST.matrixBy = x.dataset.matrix; renderAll(); return; }
+  if ((x = q("[data-ins]"))) { var iv = x.dataset.ins.split(":"), ik = iv[0], ivv = iv.slice(1).join(":"); ST.ins[ik] = ik === "stAll" ? ivv === "1" : ivv; renderAll(); return; }
   if (q("#btnFetchAll")) { runFetch(missingKeys(false, true)); return; }
   if ((x = q("[data-sort]"))) { var sk = x.dataset.sort; ST.sort = { key: sk, dir: ST.sort.key === sk && ST.sort.dir === "desc" ? "asc" : "desc" }; renderAll(); return; }
   if ((x = q("input[data-sel]"))) { if (t.checked) ST.dr.sel[x.dataset.sel] = 1; else delete ST.dr.sel[x.dataset.sel]; drSelUpdate(); return; }
