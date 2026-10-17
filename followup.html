@@ -222,7 +222,7 @@ function idle(t){
   if(_idleC.v!==v)_idleC={v:v,m:new WeakMap()};
   var c=_idleC.m.get(t); if(c!==undefined)return c;
   var ms=L&&L.lastMove?L.lastMove(t):null;
-  c=ms!=null?Math.max(0,Math.floor((Date.now()-ms)/864e5)):idle(t);
+  c=ms!=null?Math.max(0,Math.floor((Date.now()-ms)/864e5)):ds(t.Updated||t.Created);   /* fallback: Jira "Updated" — must NOT call idle() */
   _idleC.m.set(t,c); return c;
 }
 function idleSrc(t){var L=window.HDSlaLink;return L&&L.lastMove&&L.lastMove(t)!=null?"since its last status change":"since its last update in Jira (no status history yet)";}
