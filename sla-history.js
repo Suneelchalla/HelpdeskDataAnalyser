@@ -202,5 +202,29 @@
     }).catch(function (e) { report.steps.push({ name: "Error", ok: false, detail: errText(e) }); return report; });
   }
 
-  return { fetchHistory: fetchHistory, probe: probe, statusTransitions: statusTransitions, searchKeys: searchKeys, perIssue: perIssue, looksWrong: looksWrong, parseTs: parseTs };
+  /* ── One fetch at a time across every open page/tab (Follow-up Tracker, SLA Tracker, …) ──
+     A lease in localStorage: the holder refreshes it every few seconds while it works; a lease not
+     refreshed for 30 s is considered abandoned (tab closed / crashed) and can be taken over.
+     When a fetch finishes, "hd-sla-hist-ping" is bumped so other pages reload the shared cache. */
+  var LOCK_KEY = "hd-sla-fetch-lock", PING_KEY = "hd-sla-hist-ping", STALE = 30000;
+  function ls() { try { return typeof localStorage !== "undefined" ? localStorage : null; } catch (e) { return null; } }
+  var lock = {
+    holder: function () { var s = ls(); if (!s) return null; try { var l = JSON.parse(s.getItem(LOCK_KEY) || "null"); return l && Date.now() - l.at < STALE ? l : null; } catch (e) { return null; } },
+    acquire: function (id, label) { var s = ls(); if (!s) return true; var h = lock.holder(); if (h && h.id !== id) return false;
+      try { s.setItem(LOCK_KEY, JSON.stringify({ id: id, label: label || "", at: Date.now() })); } catch (e) {} var c = lock.holder(); return !c || c.id === id; },
+    beat: function (id) { var s = ls(), h = lock.holder(); if (s && h && h.id === id) try { h.at = Date.now(); s.setItem(LOCK_KEY, JSON.stringify(h)); } catch (e) {} },
+    release: function (id) { var s = ls(); if (!s) return; var h = lock.holder(); try { if (!h || h.id === id) s.removeItem(LOCK_KEY); s.setItem(PING_KEY, String(Date.now())); } catch (e) {} },
+    PING_KEY: PING_KEY, LOCK_KEY: LOCK_KEY
+  };
+  /* Auto-calculate on/off, shared by every page (default on). */
+  function autoOn() { var s = ls(); try { return !s || s.getItem("hd-sla-auto") !== "off"; } catch (e) { return true; } }
+  function setAuto(on) { var s = ls(); try { if (s) s.setItem("hd-sla-auto", on ? "on" : "off"); } catch (e) {} }
+  /* Merge two saved caches ticket by ticket, keeping whichever copy was fetched more recently. */
+  function mergeHist(mine, theirs) {
+    if (!theirs || !theirs.tickets) return mine;
+    Object.keys(theirs.tickets).forEach(function (k) { var a = mine.tickets[k], b = theirs.tickets[k]; if (!a || (b.fetchedAt || 0) > (a.fetchedAt || 0)) mine.tickets[k] = b; });
+    return mine;
+  }
+
+  return { lock: lock, autoOn: autoOn, setAuto: setAuto, mergeHist: mergeHist, fetchHistory: fetchHistory, probe: probe, statusTransitions: statusTransitions, searchKeys: searchKeys, perIssue: perIssue, looksWrong: looksWrong, parseTs: parseTs };
 });
