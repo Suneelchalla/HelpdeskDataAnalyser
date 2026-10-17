@@ -216,7 +216,11 @@
   }
 
   /* Fetch status history for rows that have none, and save it into the SLA Tracker's cache
-     (merged with whatever is there now, so a fetch running in the SLA Tracker tab is not overwritten). */
+     (merged with whatever is there now, so a fetch running in the SLA Tracker tab is not overwritten).
+     Only one page fetches at a time (HDSlaHistory.lock). Progress goes to onProgress subscribers only,
+     so a progress tick re-renders the progress display, not the whole dashboard. */
+  var PROG = { done: 0, total: 0, auto: false }, psubs = [], myId = "link-" + Math.random().toString(36).slice(2);
+  function pnotify() { psubs.slice().forEach(function (f) { try { f(PROG); } catch (e) {} }); }
   function fetchMissing(rows, opts) {
     opts = opts || {};
     var H = root.HDSlaHistory, list = opts.force ? (rows || []) : missing(rows), byKey = {};
@@ -225,8 +229,10 @@
     if (!keys.length) return Promise.resolve({ fetched: 0, failed: [] });
     if (!H) return Promise.reject(new Error("sla-history.js did not load."));
     if (!bridgeReady()) return Promise.reject(new Error("HD Jira Bridge extension not detected. Enable it and reload the page."));
-    var got = {};
-    L.fetching = true;
+    if (L.fetching) return Promise.reject(new Error("An SLA calculation is already running on this page."));
+    if (H.lock && !H.lock.acquire(myId, "Follow-up Tracker")) { var h = H.lock.holder(); return Promise.reject(new Error("BUSY:" + ((h && h.label) || "another page") + " is already fetching status history. It will finish there and appear here automatically.")); }
+    var got = {}, beat = setInterval(function () { if (H.lock) H.lock.beat(myId); }, 5000), nb = 0, lastPaint = Date.now();
+    L.fetching = true; PROG = { done: 0, total: keys.length, auto: !!opts.auto }; pnotify();
     function persist() {
       return root.HDStore.loadSlaHistory().then(function (cur) {
         var h = cur && cur.v === HIST_VER ? cur : { v: HIST_VER, tickets: {} };
@@ -234,27 +240,75 @@
         L.hist = h; return root.HDStore.saveSlaHistory(h);
       });
     }
+    function done() { clearInterval(beat); if (H.lock) H.lock.release(myId); L.fetching = false; PROG = { done: 0, total: 0, auto: false }; pnotify(); }
     return H.fetchHistory(keys, {
       call: bridgeCall, host: jiraHost(), batch: 50, concurrency: 4, mode: "auto",
-      onProgress: function (d, t) { if (opts.onProgress) opts.onProgress(d, t); },
+      onProgress: function (d, t) { PROG = { done: d, total: t, auto: !!opts.auto }; pnotify(); if (opts.onProgress) opts.onProgress(d, t); },
       shouldCancel: opts.shouldCancel,
       onBatch: function (res) {
         Object.keys(res).forEach(function (k) { var t = byKey[k];
           /* keep the row's Updated stamp only if Jira's status matches the row — otherwise the row is older than the
              history and the stamp would wrongly vouch for it (histCheck then decides by status + fetch time) */
           got[k] = { updated: t && t.status === res[k].status ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
+        /* long runs: save and show results every few batches (and at most every 4 s) so numbers fill in as they arrive */
+        if (++nb % 4 === 0 && Date.now() - lastPaint > 4000) { lastPaint = Date.now(); return persist().then(function () { L.now = Date.now(); notify(); }).catch(function () {}); }
       }
     }).then(function (r) {
-      return persist().then(function () { L.fetching = false; L.now = Date.now(); notify(); return { fetched: Object.keys(r.results).length, failed: r.failed, cancelled: r.cancelled }; });
+      return persist().then(function () { done(); L.now = Date.now(); notify(); return { fetched: Object.keys(r.results).length, failed: r.failed, cancelled: r.cancelled }; });
     }, function (err) {
-      return persist().catch(function () {}).then(function () { L.fetching = false; notify(); throw err; });
+      return persist().catch(function () {}).then(function () { done(); notify(); throw err; });
     });
   }
+
+  /* ── Automatic calculation ──
+     autoFetch(rows) is called by a dashboard whenever its rows or the SLA data change. It fetches, in the
+     background, only rows that need it — and each ticket VERSION (key + Updated + Status) at most once per
+     page session, so a ticket that cannot be fixed by fetching (deleted in Jira, or this data is older than
+     Jira → "Out of date") is not retried in a loop. When another page holds the fetch lock, it waits and
+     tries again later; that page's results arrive through the shared cache. */
+  var AUTO = { tried: {}, timer: null, rows: null, last: null, lastErr: "" };
+  function sig(t) { return t.key + "|" + t.updated + "|" + t.status; }
+  function autoFetch(rows) {
+    AUTO.rows = rows || [];
+    clearTimeout(AUTO.timer);
+    AUTO.timer = setTimeout(autoRun, 1500);
+  }
+  function autoRun() {
+    var H = root.HDSlaHistory;
+    if (!L.loaded || L.fetching || !H || !bridgeReady() || !(H.autoOn ? H.autoOn() : true) || !AUTO.rows) return;
+    var todo = missing(AUTO.rows).filter(function (r) { return !AUTO.tried[sig(norm(r))]; }).slice(0, 1000);
+    if (!todo.length) return;
+    if (H.lock && H.lock.holder() && H.lock.holder().id !== myId) { AUTO.timer = setTimeout(autoRun, 15000); return; }
+    todo.forEach(function (r) { AUTO.tried[sig(norm(r))] = 1; });
+    AUTO.lastErr = "";
+    fetchMissing(todo, { auto: true }).then(function (r) {
+      if (r.failed && r.failed.length) { AUTO.lastErr = r.failed.length + " ticket(s) could not be fetched, e.g. " + r.failed[0].key + ": " + r.failed[0].reason; notify(); }
+      AUTO.timer = setTimeout(autoRun, 500);                        // more than 1000 waiting → next slice
+    }, function (e) {
+      var m = String((e && e.message) || e);
+      if (/^BUSY:/.test(m)) { todo.forEach(function (r) { delete AUTO.tried[sig(norm(r))]; }); AUTO.timer = setTimeout(autoRun, 15000); return; }
+      todo.forEach(function (r) { delete AUTO.tried[sig(norm(r))]; });       // bridge/network trouble: allow a later retry
+      AUTO.lastErr = m; notify(); AUTO.timer = setTimeout(autoRun, 60000);
+    });
+  }
+  /* another page finished a fetch → reload the shared cache here */
+  if (root.addEventListener) root.addEventListener("storage", function (e) {
+    if (e.key === "hd-sla-hist-ping" && L.loaded && !L.fetching) load().then(function () { if (AUTO.rows) autoFetch(AUTO.rows); });
+    if (e.key === "hd-sla-auto" && AUTO.rows) { notify(); autoFetch(AUTO.rows); }
+    if (e.key === "hd-sla-fetch-lock") pnotify();                   // another page started/stopped fetching → refresh "Calculating in …"
+  });
 
   root.HDSlaLink = {
     load: load, ready: function () { return L.loaded; }, version: function () { return L.ver; },
     subscribe: function (fn) { L.subs.push(fn); return function () { L.subs = L.subs.filter(function (f) { return f !== fn; }); }; },
     get: get, detail: detail, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
-    isFetching: function () { return L.fetching; }, config: function () { return L.cfg; }
+    isFetching: function () { return L.fetching; }, config: function () { return L.cfg; },
+    autoFetch: autoFetch,
+    autoOn: function () { var H = root.HDSlaHistory; return H && H.autoOn ? H.autoOn() : true; },
+    setAuto: function (on) { var H = root.HDSlaHistory; if (H && H.setAuto) H.setAuto(on); notify(); if (on && AUTO.rows) { AUTO.tried = {}; autoFetch(AUTO.rows); } },
+    autoError: function () { return AUTO.lastErr; },
+    progress: function () { return PROG; },
+    onProgress: function (fn) { psubs.push(fn); return function () { psubs = psubs.filter(function (f) { return f !== fn; }); }; },
+    otherFetching: function () { var H = root.HDSlaHistory, h = H && H.lock ? H.lock.holder() : null; return h && h.id !== myId ? (h.label || "another page") : null; }
   };
 })(typeof self !== "undefined" ? self : this);
