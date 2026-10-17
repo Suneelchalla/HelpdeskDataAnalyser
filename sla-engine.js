@@ -202,6 +202,12 @@
       raw.push({ status: cur, start: curStart, end: t });
       cur = transitions[i].to || cur; curStart = t;
     }
+    /* Jira's current status is the authority for where the ticket is NOW. If the history ends in a different
+       status (a status renamed in the workflow keeps its old name in the history, or Jira's changelog is
+       incomplete), the time since the last recorded change is put on the CURRENT status, so the clock and
+       "who holds it" agree with the Status column every dashboard shows. Flagged as statusMismatch. */
+    var mismatch = null;
+    if (ticket.status && cur !== ticket.status && transitions.length) { mismatch = { history: cur, current: ticket.status }; cur = ticket.status; }
     raw.push({ status: cur, start: curStart, end: Math.max(now, curStart), open: true });
 
     var elapsed = 0, paused = 0, hd = 0, engg = 0, unmappedMin = 0, clientRounds = 0, reopens = 0;
@@ -231,7 +237,7 @@
       unmappedMin: unmappedMin, unmapped: Object.keys(unmapped),
       clientRounds: clientRounds, reopens: reopens,
       isClosed: isClosed, closedAt: closedAt,
-      isPaused: !isClosed && last.kind === "client",
+      isPaused: !isClosed && last.kind === "client", statusMismatch: mismatch,
       currentKind: last.kind, currentStatus: last.status,
       targetMin: target, remainingMin: target == null ? null : target - elapsed,
       pct: target ? elapsed / target * 100 : null,
