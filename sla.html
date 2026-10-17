@@ -239,6 +239,7 @@ tr.picked td{background:var(--sla-bg)}
 .pnfoot{margin-top:.7rem;font-size:11.5px;color:var(--muted)}
 @media print{header.top,#bar,.pager,.ghost,.primary{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.autochk{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;cursor:pointer}.autochk input{accent-color:#EA580C}
 </style>
 </head>
 <body>
@@ -319,7 +320,7 @@ function toast(msg, err) {
 var BR = { ready: false, seq: 5000000, pend: {} };
 window.addEventListener("message", function (e) {
   if (e.source !== window || !e.data) return;
-  if (e.data.type === "HD_BRIDGE_READY") { BR.ready = true; if (ST.cfg) renderBar(); return; }
+  if (e.data.type === "HD_BRIDGE_READY") { var was = BR.ready; BR.ready = true; if (ST.cfg) { renderBar(); if (!was) scheduleAuto(); } return; }
   if (e.data.type !== "HD_BRIDGE_RESULT") return;
   var p = BR.pend[e.data.id]; if (!p) return; delete BR.pend[e.data.id];
   if (e.data.ok) p.res(e.data.data); else p.rej(new Error(e.data.error || "Bridge error"));
@@ -515,7 +516,7 @@ function renderBar() {
   var el = $("bar"), r = rangeMs();
   if (ST.fetching && ST.prog) {
     var p = ST.prog, w = p.total ? Math.round(p.done / p.total * 100) : 0;
-    el.innerHTML = '<div class="databar"><div class="txt"><b>Fetching status history…</b> <span id="progTxt">' + p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches, checking each result") + '</span><div class="pbar"><i id="progFill" style="width:' + w + '%"></i></div></div><button class="ghost" id="btnCancel">Cancel</button></div>';
+    el.innerHTML = '<div class="databar"><div class="txt"><b>' + (ST.autoRun ? "Calculating SLA automatically…" : "Fetching status history…") + '</b> <span id="progTxt">' + p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches, checking each result") + '</span><div class="pbar"><i id="progFill" style="width:' + w + '%"></i></div></div><button class="ghost" id="btnCancel">Cancel</button></div>';
     return;
   }
   var sc = fetchScope(), n = sc.length, inRange = ST.scope.length, active = filtersActive();
@@ -527,46 +528,100 @@ function renderBar() {
   var older = olderPend(true).length, nIn = n - older;
   var head = active ? drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
   if (older) head += " + " + drNum(older, ["bar", "older"], "", older.toLocaleString()) + " <b>older open ticket" + (older === 1 ? "" : "s") + "</b> with Help Desk or Engineering (created before " + fd(r.from) + ", included so the SVM pending table is complete)";
-  var tip = !active && miss > 40 ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
+  var tip = !active && miss > 40 && (!autoOn() || miss > AUTO_MAX) ? '<br><span style="color:var(--ink2)">Tip: choose a client (or severity, worker…) above first to fetch just those tickets.</span>' : "";
   var pill = '<span class="pill ' + (BR.ready ? "ok" : "") + '"><i></i>' + (BR.ready ? "Extension connected" : "Extension not detected") + "</span>";
+  var other = otherFetching(), aon = autoOn();
+  var autoChk = '<label class="autochk" title="' + (aon ? "Status history is fetched automatically for tickets in view that need it (up to " + AUTO_MAX.toLocaleString() + " at a time). Untick to only fetch when you click." : "Automatic calculation is off — tick to turn it on.") + '"><input type="checkbox" id="chkAuto"' + (aon ? " checked" : "") + "> Auto-calculate</label>";
+  if (other) tip += '<br><span style="color:var(--ink2)">⏳ <b>' + esc(other) + "</b> is fetching status history right now — results appear here automatically when it finishes.</span>";
+  else if (aon && BR.ready && miss > AUTO_MAX) tip += '<br><span style="color:var(--ink2)">' + miss.toLocaleString() + " tickets is too many to fetch automatically (limit " + AUTO_MAX.toLocaleString() + ") — narrow the range or pick a client, or click the button to fetch them all.</span>";
+  else if (aon && BR.ready && miss > 0 && !autoKeys().length) tip += '<br><span style="color:var(--ink2)">These were already tried automatically in this session and still have no valid history (see the reason when you open a ticket). Click the button to try again.</span>';
   var btn = miss > 0
     ? '<button class="primary" id="btnFetch"' + (BR.ready ? "" : " disabled") + '>Fetch &amp; calculate ' + miss.toLocaleString() + " ticket" + (miss > 1 ? "s" : "") + "</button>"
     : (n ? '<button class="ghost" id="btnRefetch"' + (BR.ready ? "" : " disabled") + ">Re-fetch these from Jira</button>" : "");
   var all = active && missAll > miss ? '<button class="quiet" id="btnFetchAll"' + (BR.ready ? "" : " disabled") + ">Fetch all " + missAll.toLocaleString() + " in range</button>" : "";
   el.innerHTML = '<div class="databar' + (miss > 0 ? " warn" : "") + '"><div class="txt">' + head + " · status history ready for " + drNum(ready, ["bar", "ready"], "", ready.toLocaleString()) + " of " + drNum(n, ["bar", "all"], "", n.toLocaleString()) + (miss > 0 ? " · " + drNum(miss, ["bar", "miss"], "", miss.toLocaleString()) + " still need it" + (stale ? ' <span style="color:var(--muted)">(' + (miss - stale).toLocaleString() + " never fetched, " + stale.toLocaleString() + " changed in Jira since they were fetched)</span>" : ' <span style="color:var(--muted)">(never fetched)</span>') : "") +
-    '<br><span style="color:var(--muted);font-size:11.5px">Working time: ' + esc(calBar()) + " · clocks as of " + fdt(ST.now) + " IST" + (miss > 0 && !BR.ready ? " · install / enable the HD Jira Bridge extension to fetch" : "") + "</span>" + tip + fail + warn + "</div>" + pill + all + btn + "</div>";
+    '<br><span style="color:var(--muted);font-size:11.5px">Working time: ' + esc(calBar()) + " · clocks as of " + fdt(ST.now) + " IST" + (miss > 0 && !BR.ready ? " · install / enable the HD Jira Bridge extension to fetch" : "") + "</span>" + tip + fail + warn + "</div>" + pill + autoChk + (other ? "" : all + btn) + "</div>";
 }
 function renderProg() {
   var p = ST.prog; if (!p) return; var t = $("progTxt"), f = $("progFill");
   if (t) t.textContent = p.done + " of " + p.total + " tickets · " + (p.mode === "per-issue" ? "one ticket at a time" : "in batches, checking each result");
   if (f) f.style.width = (p.total ? Math.round(p.done / p.total * 100) : 0) + "%";
 }
-function runFetch(keys) {
+/* ═════════ automatic calculation ═════════
+   Status history is fetched automatically, in the background, for tickets in view that need it (no history yet,
+   or the ticket changed in Jira since). Each ticket VERSION (key + Updated + Status) is tried once per page
+   session, so a ticket that can't be fixed by fetching is not retried in a loop. Very large sets (over AUTO_MAX,
+   e.g. "All time" with no filter) are left to the button so a casual click on a range can't start thousands
+   of Jira calls. Only one page fetches at a time (shared lock with the Follow-up Tracker); results always merge
+   into the shared cache, never overwrite it. */
+var AUTO_MAX = 2000, MY_ID = "sla-" + Math.random().toString(36).slice(2), AUTO = { tried: {}, timer: null };
+function tsig(t) { return t.key + "|" + t.updated + "|" + t.status; }
+function autoOn() { return !Hist.autoOn || Hist.autoOn(); }
+function otherFetching() { var h = Hist.lock ? Hist.lock.holder() : null; return h && h.id !== MY_ID ? (h.label || "another page") : null; }
+function autoKeys() { return missingKeys(false).filter(function (k) { var t = ST.byKey[k]; return t && !AUTO.tried[tsig(t)]; }); }
+function scheduleAuto(ms) { clearTimeout(AUTO.timer); AUTO.timer = setTimeout(autoRun, ms == null ? 1200 : ms); }
+function autoRun() {
+  if (!ST.cfg || ST.fetching || !BR.ready || !autoOn() || ST.tab === "settings") return;
+  var keys = autoKeys();
+  if (!keys.length || keys.length > AUTO_MAX) return;
+  if (otherFetching()) { scheduleAuto(15000); return; }
+  keys.forEach(function (k) { AUTO.tried[tsig(ST.byKey[k])] = 1; });
+  runFetch(keys, true);
+}
+/* save = merge with what is stored now (another page may have saved tickets since we loaded) */
+function saveHist() {
+  return HDStore.loadSlaHistory().then(function (cur) {
+    if (cur && cur.v === HIST_VER && Hist.mergeHist) Hist.mergeHist(ST.hist, cur);
+    return HDStore.saveSlaHistory(ST.hist);
+  }).catch(function () {});
+}
+function reloadHist() {
+  return HDStore.loadSlaHistory().then(function (cur) {
+    if (cur && cur.v === HIST_VER && Hist.mergeHist) { Hist.mergeHist(ST.hist, cur); recompute(); renderAll(); if (ST.detail) renderDetail(); }
+  }).catch(function () {});
+}
+window.addEventListener("storage", function (e) {
+  if (!ST.cfg) return;
+  if (e.key === "hd-sla-hist-ping" && !ST.fetching) reloadHist();
+  else if (e.key === "hd-sla-fetch-lock") { if (!ST.fetching) renderBar(); }
+  else if (e.key === "hd-sla-auto") { renderBar(); scheduleAuto(); }
+});
+
+function runFetch(keys, auto) {
   if (ST.fetching || !keys.length) return Promise.resolve();
-  if (!BR.ready) { toast("HD Jira Bridge extension not detected. Install or enable it, then reload.", true); return Promise.resolve(); }
-  ST.fetching = true; ST.cancel = false; ST.failed = []; ST.saves = 0; ST.prog = { done: 0, total: keys.length, mode: ST.mode }; renderBar();
+  if (!BR.ready) { if (!auto) toast("HD Jira Bridge extension not detected. Install or enable it, then reload.", true); return Promise.resolve(); }
+  if (Hist.lock && !Hist.lock.acquire(MY_ID, "SLA Tracker")) {
+    if (auto) { keys.forEach(function (k) { var t = ST.byKey[k]; if (t) delete AUTO.tried[tsig(t)]; }); scheduleAuto(15000); }
+    else toast((otherFetching() || "Another page") + " is already fetching status history. It will appear here when it finishes.", true);
+    renderBar(); return Promise.resolve();
+  }
+  var beat = setInterval(function () { Hist.lock.beat(MY_ID); }, 5000);
+  ST.fetching = true; ST.autoRun = !!auto; ST.cancel = false; ST.failed = []; ST.saves = 0; ST.prog = { done: 0, total: keys.length, mode: ST.mode }; renderBar();
   return Hist.fetchHistory(keys, {
     call: bridgeCall, host: jiraHost(), batch: 50, concurrency: 4, mode: ST.mode === "per-issue" ? "per-issue" : "auto",
     onProgress: function (d, t, m) { ST.prog = { done: d, total: t, mode: m }; renderProg(); },
     shouldCancel: function () { return ST.cancel; },
     onBatch: function (res) {
       Object.keys(res).forEach(function (k) { var t = ST.byKey[k]; ST.hist.tickets[k] = { updated: t && t.status === res[k].status ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
-      if (++ST.saves % 5 === 0) return HDStore.saveSlaHistory(ST.hist).catch(function () {});
+      /* save + show results every 5 batches, so a long run fills in as it goes */
+      if (++ST.saves % 5 === 0) return saveHist().then(function () { ST.results = {}; ST.now = Date.now(); renderAll(); });
     }
   }).then(function (r) {
     if (r.mode === "per-issue") ST.mode = "per-issue";
     ST.failed = r.failed; r.failed.forEach(function (f) { ST.failedSet[f.key] = f.reason; });
     Object.keys(r.results).forEach(function (k) { delete ST.failedSet[k]; });
-    if (r.cancelled) toast("Cancelled — what was fetched is saved.");
+    if (r.cancelled) { toast("Cancelled — what was fetched is saved." + (auto ? " Automatic calculation is paused until you reload or change the view." : "")); }
     else if (r.failed.length) toast(r.failed.length + " ticket(s) could not be fetched. See the bar above.", true);
     else if (r.suspectCount) toast("Fetched, but " + r.suspectCount + " ticket(s) show no status changes even after checking — marked unverified.", true);
-    else toast("History fetched for " + Object.keys(r.results).length + " tickets" + (r.verifiedCount ? " (" + r.verifiedCount + " double-checked one by one)" : "") + ".");
+    else toast((auto ? "SLA calculated automatically for " : "History fetched for ") + Object.keys(r.results).length + " ticket" + (Object.keys(r.results).length === 1 ? "" : "s") + (r.verifiedCount ? " (" + r.verifiedCount + " double-checked one by one)" : "") + ".");
   }).catch(function (e) {
+    if (auto) keys.forEach(function (k) { var t = ST.byKey[k]; if (t) delete AUTO.tried[tsig(t)]; });   // bridge/network trouble: allow a later retry
     toast(String(e && e.message) === "EXTENSION_NOT_FOUND" ? "Extension not detected." : "Fetch failed: " + (e && e.message), true);
   }).then(function () {
-    return HDStore.saveSlaHistory(ST.hist).catch(function () {});
+    return saveHist();
   }).then(function () {
-    ST.fetching = false; recompute(); renderAll(); if (ST.detail) renderDetail(); if (ST.dr && $("drill")) renderDrill();
+    clearInterval(beat); if (Hist.lock) Hist.lock.release(MY_ID);
+    ST.fetching = false; ST.autoRun = false; recompute(); renderAll(); if (ST.detail) renderDetail(); if (ST.dr && $("drill")) renderDrill();
   });
 }
 
@@ -1306,7 +1361,7 @@ function saveSettings() {
 function renderAll() {
   $("filters").style.display = ST.tab === "settings" ? "none" : "";
   var rc = $("resChips"); if (rc) rc.style.display = ST.tab === "tickets" ? "" : "none";          // Result chips narrow the ticket list only
-  renderTabs(); renderBar();
+  renderTabs(); renderBar(); if (!ST.fetching) scheduleAuto();
   if (ST.tab === "settings") { renderSettings(); return; }
   var v = view(ST.tab !== "tickets");
   if (ST.tab === "tickets") renderTickets(v); else renderOverview(v);
@@ -1399,6 +1454,7 @@ document.addEventListener("input", function (e) {
   if (t.dataset && t.dataset.d && ST.draft) readDraftInput(t);
 });
 document.addEventListener("change", function (e) {
+  if (e.target && e.target.id === "chkAuto") { if (Hist.setAuto) Hist.setAuto(e.target.checked); if (e.target.checked) AUTO.tried = {}; renderBar(); scheduleAuto(300); return; }
   var t = e.target;
   if (t.id === "bkSkip" && ST.bk) { ST.bk.skip = t.checked; renderBulk(); return; }
   if (t.dataset && t.dataset.rp && ST.rp) { ST.rp[t.dataset.rp] = t.checked ? 1 : 0; renderReportBody(); return; }
