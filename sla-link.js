@@ -127,7 +127,7 @@
         o.tip = "Clock paused — ticket is with the client. " + D(bi.remainingMin) + " of working time left when it comes back. " + used + paused + "."; break;
       default:
         var crit = r.level === "danger", warn = r.level === "warning";
-        o.label = (crit ? "Critical" : warn ? "At risk" : "On track") + " · " + D(bi.remainingMin) + " left"; o.short = D(bi.remainingMin) + " left";
+        o.label = (crit ? "Due soon" : warn ? "At risk" : "On track") + " · " + D(bi.remainingMin) + " left"; o.short = D(bi.remainingMin) + " left";
         o.tone = crit ? "orange" : warn ? "amber" : "green";
         o.tip = "Breaches " + fdt(bi.breachAt) + " IST if still with us. " + used + paused + ". Held by " + o.heldBy + ".";
     }
@@ -156,6 +156,14 @@
       out.bi = S.breachInfo(out.r, cal, L.now);
     }
     return out;
+  }
+
+  /* When did this ticket last CHANGE STATUS (ms)? From its valid cached history; the created time if it never moved.
+     null when there is no valid history. Unlike Jira's "Updated", comments (e.g. our own reminders) don't count. */
+  function lastMove(row) {
+    if (!L.loaded || !Sla() || !row) return null;
+    var t = norm(row), e = histCheck(t).e; if (!e) return null;
+    var tr = e.transitions; return tr.length ? tr[tr.length - 1].t : t.created;
   }
 
   function summarize(rows) {
@@ -301,7 +309,7 @@
   root.HDSlaLink = {
     load: load, ready: function () { return L.loaded; }, version: function () { return L.ver; },
     subscribe: function (fn) { L.subs.push(fn); return function () { L.subs = L.subs.filter(function (f) { return f !== fn; }); }; },
-    get: get, detail: detail, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
+    get: get, detail: detail, lastMove: lastMove, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
     isFetching: function () { return L.fetching; }, config: function () { return L.cfg; },
     autoFetch: autoFetch,
     autoOn: function () { var H = root.HDSlaHistory; return H && H.autoOn ? H.autoOn() : true; },
