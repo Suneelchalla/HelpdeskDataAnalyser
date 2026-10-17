@@ -389,12 +389,17 @@ function scope() {
   return ST.tickets.filter(function (t) { return t.created >= r.from && t.created <= r.to && types[t.type.toLowerCase()]; });
 }
 /* cached history is valid while the ticket hasn't changed since it was fetched */
+/* The history must also agree with the ticket's CURRENT status (same rule as sla-link.js). A matching
+   "Updated" stamp alone is not enough: the stamp saved with a history is the row's at fetch time, and if Jira
+   had moved on in between, a newer history would be judged against an older row (e.g. "Paused" shown while
+   the row is in an Engineering status). e.status is Jira's own status when the history was fetched. */
 function histFor(t) {
   var e = ST.hist.tickets[t.key]; if (!e) return null;
+  var last = e.transitions.length ? e.transitions[e.transitions.length - 1].to : e.status, jiraSt = e.status || last;
+  if (jiraSt !== t.status && last !== t.status) return null;
   if (e.updated != null && t.updated != null && e.updated === t.updated) return e;
-  var last = e.transitions.length ? e.transitions[e.transitions.length - 1].to : e.status;
-  if (t.updated != null && e.fetchedAt && t.updated <= e.fetchedAt - 300000 && last === t.status) return e;
-  if (t.updated == null && last === t.status) return e;
+  if (t.updated != null && e.fetchedAt && t.updated <= e.fetchedAt - 300000) return e;
+  if (t.updated == null) return e;
   return null;
 }
 function getResult(t) {
@@ -545,7 +550,7 @@ function runFetch(keys) {
     onProgress: function (d, t, m) { ST.prog = { done: d, total: t, mode: m }; renderProg(); },
     shouldCancel: function () { return ST.cancel; },
     onBatch: function (res) {
-      Object.keys(res).forEach(function (k) { var t = ST.byKey[k]; ST.hist.tickets[k] = { updated: t ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
+      Object.keys(res).forEach(function (k) { var t = ST.byKey[k]; ST.hist.tickets[k] = { updated: t && t.status === res[k].status ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
       if (++ST.saves % 5 === 0) return HDStore.saveSlaHistory(ST.hist).catch(function () {});
     }
   }).then(function (r) {
