@@ -309,10 +309,10 @@ var SLA_TD={padding:"6px 10px",borderBottom:"1px solid var(--border)",fontSize:1
 /* ── "How this SLA was calculated", day strip and per-step "not counted" (same as the SLA Tracker's ticket view) ── */
 var FU_DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],FU_MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function fuIso(iso){var p=iso.split("-");return p[2]+" "+FU_MON[+p[1]-1]+" "+p[0].slice(2);}
-function fuOffTxt(o,C){var a=[];
+function fuOffTxt(o,C,cal){var a=[];
   if(o.weekend>0.5){var wd=Object.keys(o.weekendDays).sort();a.push(C(o.weekend)+" weekend"+(wd.length<=4?" ("+wd.map(function(x){return FU_DOW[new Date(x+"T00:00:00Z").getUTCDay()]+" "+fuIso(x).slice(0,6);}).join(", ")+")":" ("+wd.length+" days)"));}
   if(o.holiday>0.5)a.push(C(o.holiday)+" holiday ("+Object.keys(o.holidayDays).sort().map(function(x){return fuIso(x).slice(0,6);}).join(", ")+")");
-  if(o.night>0.5)a.push(C(o.night)+" off-hours");
+  if(o.night>0.5)a.push(cal?window.HDSla.offHoursText(o,cal,C):C(o.night)+" outside working hours");
   return a.length?a.map(function(x,i){return <div key={i} style={{lineHeight:1.45,marginTop:i?2:0}}>{x}</div>;}):"";}
 function fuDtS(ms){if(ms==null)return "—";var d=new Date(ms+330*60000),y=d.getUTCFullYear(),p2=function(n){return (n<10?"0":"")+n;};return p2(d.getUTCDate())+" "+FU_MON[d.getUTCMonth()]+(y!==new Date().getFullYear()?" "+String(y).slice(2):"")+", "+p2(d.getUTCHours())+":"+p2(d.getUTCMinutes());}
 function SlaBasis({d,row}){
@@ -437,7 +437,7 @@ function SlaDetailModal({row,onClose}){
           <td style={SLA_TD} title={sg.open?"":dt(sg.end)+" IST"}>{sg.open?"now":fuDtS(sg.end)}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{C(sg.calMin)}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})} title="Working time inside this step, in hours">{sg.kind==="closed"?"—":window.HDSla.fmtDur(sg.bizMin,"h")}</td>
-          <td style={Object.assign({},SLA_TD,{whiteSpace:"normal",fontSize:11.5,minWidth:190,maxWidth:290})}>{sg.kind==="client"?<span style={{color:"var(--t3)"}}>all of it — with the client</span>:sg.kind==="closed"?"—":(fuOffTxt(d.off(sg),C)||<span style={{color:"var(--t3)"}}>nothing</span>)}</td>
+          <td style={Object.assign({},SLA_TD,{whiteSpace:"normal",fontSize:11.5,minWidth:190,maxWidth:290})}>{sg.kind==="client"?<span style={{color:"var(--t3)"}}>all of it — with the client</span>:sg.kind==="closed"?"—":(fuOffTxt(d.off(sg),C,d.cal)||<span style={{color:"var(--t3)"}}>nothing</span>)}</td>
           <td style={SLA_TD}>{sg.counted?(sg.bizMin>=0.5?"▶ counted":<span style={{color:"var(--t3)"}} title="This team’s time counts, but this step fell outside working hours (night, weekend or holiday)">▷ nothing counted</span>):sg.kind==="client"?"⏸ paused":"■ stopped"}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{F(sg.elapsedAfter)}</td></tr>;})}</tbody>
       </table></div>
