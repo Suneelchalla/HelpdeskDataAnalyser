@@ -306,7 +306,7 @@
        holiday — a listed holiday that falls on a working day
        night   — a working day, outside working hours */
   function offBreakdown(a, b, cal) {
-    var o = { work: 0, weekend: 0, holiday: 0, night: 0, weekendDays: {}, holidayDays: {} };
+    var o = { work: 0, weekend: 0, holiday: 0, night: 0, before: 0, after: 0, weekendDays: {}, holidayDays: {} };
     if (a == null || b == null || b <= a) return o;
     var off = cal.tz * MIN, la = a + off, lb = b + off, d0 = Math.floor(la / DAY), d1 = Math.floor((lb - 1) / DAY);
     for (var d = d0; d <= d1; d++) {
@@ -314,10 +314,21 @@
       var len = (e - s) / MIN, dt = new Date(ds), iso = dt.toISOString().slice(0, 10);
       if (!cal.workDays[dt.getUTCDay()]) { o.weekend += len; o.weekendDays[iso] = 1; }
       else if (cal.holidays[iso]) { o.holiday += len; o.holidayDays[iso] = 1; }
-      else { var ws = Math.max(s, ds + cal.startMin * MIN), we = Math.min(e, ds + cal.endMin * MIN), w = we > ws ? (we - ws) / MIN : 0; o.work += w; o.night += len - w; }
+      else { var ws = Math.max(s, ds + cal.startMin * MIN), we = Math.min(e, ds + cal.endMin * MIN), w = we > ws ? (we - ws) / MIN : 0; o.work += w; o.night += len - w;
+        o.before += Math.max(0, Math.min(e, ds + cal.startMin * MIN) - s) / MIN;                 // working day, before the day starts
+        o.after += Math.max(0, e - Math.max(s, ds + cal.endMin * MIN)) / MIN; }                    // working day, after it ends
     }
     o.nWeekendDays = Object.keys(o.weekendDays).length; o.nHolidayDays = Object.keys(o.holidayDays).length;
     return o;
+  }
+  /* "2m before 10:00" / "20m after 18:00" / "30m outside 10:00–18:00" for the off-hours part of offBreakdown() */
+  function offHoursText(o, cal, fmt) {
+    if (!(o.night > 0.5)) return "";
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; }, hm = function (m) { return pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60); };
+    var a = hm(cal.startMin), b = hm(cal.endMin), f = fmt || function (m) { return fmtDur(m); };
+    if (o.before > 0.5 && o.after < 0.5) return f(o.night) + " before " + a;
+    if (o.after > 0.5 && o.before < 0.5) return f(o.night) + " after " + b;
+    return f(o.night) + " outside " + a + "–" + b;
   }
   /* One entry per IST calendar day of the ticket's life (oldest first), for a day-by-day strip:
      { iso, dow, type: "work"|"weekend"|"holiday", kind (who held it most that day), counted (working min counted),
@@ -368,6 +379,6 @@
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
     advanceBiz: advanceBiz, breachInfo: breachInfo,
-    offBreakdown: offBreakdown, dayStrip: dayStrip, basis: basis, nextWorkStart: nextWorkStart
+    offBreakdown: offBreakdown, dayStrip: dayStrip, basis: basis, nextWorkStart: nextWorkStart, offHoursText: offHoursText
   };
 });
