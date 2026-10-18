@@ -295,11 +295,77 @@
     return s.trim();
   }
 
+  /* ─────────── explaining a result (used by the ticket views) ─────────── */
+  var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function istDate(ms) { return new Date(ms).toISOString().slice(0, 10); }
+  /* Split the calendar time [a, b) into what the calendar does with it:
+       work    — inside working hours on a working day (the only time that can count)
+       weekend — a non-working day (e.g. Sat/Sun)
+       holiday — a listed holiday that falls on a working day
+       night   — a working day, outside working hours */
+  function offBreakdown(a, b, cal) {
+    var o = { work: 0, weekend: 0, holiday: 0, night: 0, weekendDays: {}, holidayDays: {} };
+    if (a == null || b == null || b <= a) return o;
+    var off = cal.tz * MIN, la = a + off, lb = b + off, d0 = Math.floor(la / DAY), d1 = Math.floor((lb - 1) / DAY);
+    for (var d = d0; d <= d1; d++) {
+      var ds = d * DAY, s = Math.max(la, ds), e = Math.min(lb, ds + DAY); if (e <= s) continue;
+      var len = (e - s) / MIN, dt = new Date(ds), iso = dt.toISOString().slice(0, 10);
+      if (!cal.workDays[dt.getUTCDay()]) { o.weekend += len; o.weekendDays[iso] = 1; }
+      else if (cal.holidays[iso]) { o.holiday += len; o.holidayDays[iso] = 1; }
+      else { var ws = Math.max(s, ds + cal.startMin * MIN), we = Math.min(e, ds + cal.endMin * MIN), w = we > ws ? (we - ws) / MIN : 0; o.work += w; o.night += len - w; }
+    }
+    o.nWeekendDays = Object.keys(o.weekendDays).length; o.nHolidayDays = Object.keys(o.holidayDays).length;
+    return o;
+  }
+  /* One entry per IST calendar day of the ticket's life (oldest first), for a day-by-day strip:
+     { iso, dow, type: "work"|"weekend"|"holiday", kind (who held it most that day), counted (working min counted),
+       by: {hd, engg, client, closed} calendar minutes }. maxDays keeps the most recent days. */
+  function dayStrip(r, cal, maxDays) {
+    if (!r || !r.segs || !r.segs.length) return { days: [], truncated: 0 };
+    var off = cal.tz * MIN, map = {}, order = [];
+    r.segs.forEach(function (sg) {
+      var la = sg.start + off, lb = Math.max(sg.end, sg.start) + off, d0 = Math.floor(la / DAY), d1 = Math.floor((Math.max(lb, la + 1) - 1) / DAY);
+      for (var d = d0; d <= d1; d++) {
+        var ds = d * DAY, x = map[d];
+        if (!x) { var dt = new Date(ds), iso = dt.toISOString().slice(0, 10);
+          x = map[d] = { iso: iso, dow: dt.getUTCDay(), type: !cal.workDays[dt.getUTCDay()] ? "weekend" : cal.holidays[iso] ? "holiday" : "work", by: { hd: 0, engg: 0, client: 0, closed: 0 }, work: { hd: 0, engg: 0, client: 0, closed: 0 }, counted: 0 }; order.push(d); }
+        var s = Math.max(la, ds), e = Math.min(lb, ds + DAY); if (e <= s) continue;
+        x.by[sg.kind] += (e - s) / MIN;
+        if (x.type === "work") { var ws = Math.max(s, ds + cal.startMin * MIN), we = Math.min(e, ds + cal.endMin * MIN); if (we > ws) { x.work[sg.kind] += (we - ws) / MIN; if (sg.counted) x.counted += (we - ws) / MIN; } }
+      }
+    });
+    order.sort(function (a, b) { return a - b; });
+    var days = order.map(function (d) { var x = map[d], src = x.type === "work" && (x.work.hd + x.work.engg + x.work.client + x.work.closed) > 0 ? x.work : x.by, best = "closed", bv = -1;
+      ["hd", "engg", "client", "closed"].forEach(function (k) { if (src[k] > bv) { bv = src[k]; best = k; } }); x.kind = best; return x; });
+    var cut = maxDays && days.length > maxDays ? days.length - maxDays : 0;
+    return { days: cut ? days.slice(cut) : days, truncated: cut };
+  }
+  /* The rules a ticket was measured by, in plain parts, for "How this was calculated". */
+  function basis(cfg, cals, prefix, sev, r) {
+    var own = cals.has(prefix), cal = cals.get(prefix), oc = own ? cfg.calendars[prefix] : null;
+    var wd = Object.keys(cal.workDays).map(Number).sort(), run = wd.length > 1 && wd[wd.length - 1] - wd[0] === wd.length - 1;
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; }, hm = function (m) { return pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60); };
+    var days = wd.length === 7 ? "Every day (Sun–Sat)" : run ? DOW[wd[0]] + "–" + DOW[wd[wd.length - 1]] : wd.map(function (d) { return DOW[d]; }).join(", ");
+    var off = []; [1, 2, 3, 4, 5, 6, 0].forEach(function (i) { if (!cal.workDays[i]) off.push(DOW[i]); });
+    var hrs = cal.dayMin >= 1440 ? "24 hours a day" : hm(cal.startMin) + "–" + hm(cal.endMin) + " IST";
+    var hol = own ? oc.holidays !== false : true, names = {};
+    (cfg.holidays || []).forEach(function (h) { var t = String(typeof h === "string" ? h : (h && h.date) || ""); var d = t.slice(0, 10); if (d) names[d] = t.slice(10).trim() || ((h && h.name) || ""); });
+    var inLife = [];
+    if (r && r.segs && r.segs.length && hol) { var a = r.segs[0].start, b = r.segs[r.segs.length - 1].end, br = offBreakdown(a, b, cal);
+      inLife = Object.keys(br.holidayDays).sort().map(function (d) { return { date: d, name: names[d] || "" }; }); }
+    var ex = cfg.targets.clients && cfg.targets.clients[prefix], tH = null, tSrc = "default";
+    if (sev) { if (ex && ex[sev] > 0) { tH = ex[sev]; tSrc = "client"; } else if (cfg.targets.defaults[sev] > 0) tH = cfg.targets.defaults[sev]; }
+    return { own: own, prefix: prefix, days: days, offDays: off, hours: hrs, dayMin: cal.dayMin, is247: wd.length === 7 && cal.dayMin >= 1440,
+      holidaysSkipped: hol, holidaysListed: Object.keys(cal.holidays).length, holidaysInLife: inLife,
+      sev: sev, sevName: sevName(sev), targetH: tH, targetSrc: tSrc, warnPct: cfg.warnPct, dangerPct: cfg.dangerPct };
+  }
+
   return {
     DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig,
     parseTs: parseTs, makeCalendar: makeCalendar, makeCalendarSet: makeCalendarSet, bizMinutes: bizMinutes,
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
-    advanceBiz: advanceBiz, breachInfo: breachInfo
+    advanceBiz: advanceBiz, breachInfo: breachInfo,
+    offBreakdown: offBreakdown, dayStrip: dayStrip, basis: basis
   };
 });
