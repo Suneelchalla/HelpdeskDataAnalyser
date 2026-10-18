@@ -129,7 +129,7 @@
         var crit = r.level === "danger", warn = r.level === "warning";
         o.label = (crit ? "Due soon" : warn ? "At risk" : "On track") + " · " + D(bi.remainingMin) + " left"; o.short = D(bi.remainingMin) + " left";
         o.tone = crit ? "orange" : warn ? "amber" : "green";
-        o.tip = "Breaches " + fdt(bi.breachAt) + " IST if still with us. " + used + paused + ". Held by " + o.heldBy + ".";
+        o.tip = (r.elapsedMin < 0.5 ? "No working time has passed yet — the clock starts " + fdt(S.nextWorkStart(L.now, cal)) + " IST. " : "") + "Breaches " + fdt(bi.breachAt) + " IST if still with us. " + used + paused + ". Held by " + o.heldBy + ".";
     }
     if (o.suspect) o.tip += " ⚠ History unverified — Jira showed no status changes for this ticket.";
     return o;
