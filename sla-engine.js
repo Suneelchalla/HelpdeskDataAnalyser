@@ -295,6 +295,8 @@
     return s.trim();
   }
 
+  /* The next moment the working clock can run (now, if inside working hours). */
+  function nextWorkStart(t, cal) { var x = advanceBiz(t, 1, cal); return x == null ? null : x - MIN; }
   /* ─────────── explaining a result (used by the ticket views) ─────────── */
   var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   function istDate(ms) { return new Date(ms).toISOString().slice(0, 10); }
@@ -366,6 +368,6 @@
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
     advanceBiz: advanceBiz, breachInfo: breachInfo,
-    offBreakdown: offBreakdown, dayStrip: dayStrip, basis: basis
+    offBreakdown: offBreakdown, dayStrip: dayStrip, basis: basis, nextWorkStart: nextWorkStart
   };
 });
