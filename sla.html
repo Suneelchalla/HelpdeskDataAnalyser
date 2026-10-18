@@ -272,6 +272,7 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 .dc.ho{background:repeating-linear-gradient(135deg,#E9D5FF 0 3px,#fff 3px 6px)}
 .dc.k2-hd{--kc:var(--hd2)}.dc.k2-engg{--kc:var(--engg)}.dc.k2-client{--kc:#F0A838}.dc.k2-closed{--kc:#B8C2CF}
 .legend .lg-we::before{background:repeating-linear-gradient(135deg,#CBD5E1 0 3px,#fff 3px 6px)!important}.legend .lg-ho::before{background:repeating-linear-gradient(135deg,#D8B4FE 0 3px,#fff 3px 6px)!important}
+.rtoday{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;margin-left:4px}.rtoday b{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -342,6 +343,15 @@ var ST = {
   trendBy: "month", matrixBy: "client", fetching: false, cancel: false, prog: null, mode: "auto", failed: [], failedSet: {}, detail: null, draft: null, probe: null, saves: 0
 };
 try { var u = JSON.parse(localStorage.getItem("hd-sla-ui")); if (u && u.preset) ST.ui = u; } catch (e) {}
+/* A tab left open (e.g. overnight) is brought up to date when you come back to it: the clocks move on and
+   "up to today" ranges take in the new day. Skipped while a fetch runs or a popup is open. */
+function freshen() {
+  if (!ST.cfg || ST.fetching || document.hidden) return;
+  if (Date.now() - ST.now < 10 * 60000) return;
+  if ($("detail") || $("drill") || $("remind")) return;
+  recompute(); buildOptions(); buildFilters(); renderAll();
+}
+document.addEventListener("visibilitychange", freshen); window.addEventListener("focus", freshen);
 function saveUi() { try { localStorage.setItem("hd-sla-ui", JSON.stringify(ST.ui)); } catch (e) {} }
 function toast(msg, err) {
   var t = document.createElement("div"); t.className = "toast" + (err ? " err" : ""); t.setAttribute("role", "status"); t.textContent = msg;
@@ -408,8 +418,18 @@ function classify(status) {
   return { kind: C.classify3(status) === "engg" ? "engg" : "hd", mapped: o !== null };
 }
 function istDayStart(ms) { var off = 330 * 60000; return Math.floor((ms + off) / 86400000) * 86400000 - off; }
+/* Created-date range. Rolling presets (1M…12M) and "This month / This year" always end NOW, so new tickets are
+   included automatically every day; "Last month / Last year" are fixed calendar periods. All in IST. */
+function presetTitle(k) { return { "1m": "Last 1 month, up to today", "3m": "Last 3 months, up to today", "4m": "Last 4 months, up to today", "6m": "Last 6 months, up to today", "12m": "Last 12 months, up to today", mtd: "From the 1st of this month, up to today", lm: "The whole of last month", ytd: "From 1 January this year, up to today", ly: "The whole of last year", custom: "Pick your own dates" }[k] || ""; }
+function presetLabel() { var k = ST.ui.preset; if (k === "custom") return ST.ui.to ? "" : " (to today)"; var t = { mtd: "this month", lm: "last month", ytd: "this year", ly: "last year" }[k]; return t ? " (" + t + ")" : " (last " + parseInt(k, 10) + " month" + (parseInt(k, 10) > 1 ? "s" : "") + ")"; }
+function istYMD(ms) { var d = new Date(ms + 330 * 60000); return { y: d.getUTCFullYear(), m: d.getUTCMonth() }; }
+function istStart(y, m) { return Date.UTC(y, m, 1) - 330 * 60000; }          // 1st of month (m may overflow), 00:00 IST
 function rangeMs() {
-  var now = Date.now(), u = ST.ui;
+  var now = Date.now(), u = ST.ui, c = istYMD(now);
+  if (u.preset === "mtd") return { from: istStart(c.y, c.m), to: now };
+  if (u.preset === "lm") return { from: istStart(c.y, c.m - 1), to: istStart(c.y, c.m) - 1000 };
+  if (u.preset === "ytd") return { from: istStart(c.y, 0), to: now };
+  if (u.preset === "ly") return { from: istStart(c.y - 1, 0), to: istStart(c.y, 0) - 1000 };
   if (u.preset === "custom") {
     var f = u.from ? Date.parse(u.from + "T00:00:00+05:30") : 0, t = u.to ? Date.parse(u.to + "T23:59:59+05:30") : now;
     return { from: isNaN(f) ? 0 : f, to: isNaN(t) ? now : t };
@@ -532,11 +552,12 @@ function msList(k) {
 function msUpdate(k) { var b = document.querySelector('[data-msb="' + k + '"]'); if (!b) return; b.classList.toggle("has", ST.f[k].length > 0); b.querySelector(".ms-t").textContent = msTxt(k); msList(k); }
 function buildFilters() {
   var u = ST.ui, r = rangeMs();
-  var presets = [["1m", "1M"], ["3m", "3M"], ["4m", "4M"], ["6m", "6M"], ["12m", "12M"], ["custom", "Custom"]];
+  var presets = [["1m", "1M"], ["3m", "3M"], ["4m", "4M"], ["6m", "6M"], ["12m", "12M"]], periods = [["mtd", "This month"], ["lm", "Last month"], ["ytd", "This year"], ["ly", "Last year"], ["custom", "Custom"]];
+  var pbtn = function (p) { return '<button data-preset="' + p[0] + '" class="' + (u.preset === p[0] ? "on" : "") + '" title="' + esc(presetTitle(p[0])) + '">' + p[1] + "</button>"; };
   var resChips = [["", "All"], ["open", "Open"], ["closed", "Closed"], ["breached", "Breached / missed"], ["risk", "At risk"], ["paused", "With client"], ["nohist", "No history"]];
   $("filters").innerHTML =
-    '<div class="grp"><label>Created</label><div class="seg" role="group" aria-label="Created within">' + presets.map(function (p) { return '<button data-preset="' + p[0] + '" class="' + (u.preset === p[0] ? "on" : "") + '">' + p[1] + "</button>"; }).join("") + "</div>" +
-    (u.preset === "custom" ? '<input type="date" id="rFrom" value="' + esc(u.from) + '" aria-label="From"><input type="date" id="rTo" value="' + esc(u.to) + '" aria-label="To">' : "") + "</div>" +
+    '<div class="grp"><label>Created</label><div class="seg" role="group" aria-label="Created within (rolling)">' + presets.map(pbtn).join("") + '</div><div class="seg" role="group" aria-label="Created in period">' + periods.map(pbtn).join("") + "</div>" +
+    (u.preset === "custom" ? '<input type="date" id="rFrom" value="' + esc(u.from) + '" aria-label="From">' + (u.to ? '<input type="date" id="rTo" value="' + esc(u.to) + '" aria-label="To"><button class="ghost sm" id="rToday" title="Let the range run up to today, so new tickets are included every day">→ to today</button>' : '<span class="rtoday" title="No end date: the range always runs up to today, so new tickets are included every day">to <b>today</b> <button class="ghost sm" id="rSetTo">set end date</button></span>') : "") + "</div>" +
     msel("client", "Client") + msel("sev", "Severity") + msel("type", "Type") + msel("svm", "SVM in charge") + msel("worker", "Worker") +
     '<div class="chips" id="resChips" role="group" aria-label="Result">' + resChips.map(function (c) { return '<button class="chip' + (ST.f.result === c[0] ? " on" : "") + '" data-res="' + c[0] + '">' + c[1] + "</button>"; }).join("") + "</div>";
   ["client", "sev", "type", "svm", "worker"].forEach(msList);
@@ -1278,7 +1299,7 @@ function runBulk() {
 var RES_LABEL = { "": "All", open: "Open", closed: "Closed", breached: "Breached / missed", openbreached: "Breached, still open", risk: "At risk", paused: "With client", nohist: "No history" };
 function rpFilterLines() {
   var f = ST.f, r = rangeMs(), L = [], lab = function (k, v) { var o = (ST.opts[k] || []).filter(function (x) { return x.v === v; })[0]; return o ? o.l : v; };
-  L.push(["Created", fd(r.from) + " – " + fd(r.to) + (ST.ui.preset === "custom" ? "" : " (last " + parseInt(ST.ui.preset, 10) + " month" + (parseInt(ST.ui.preset, 10) > 1 ? "s" : "") + ")")]);
+  L.push(["Created", fd(r.from) + " – " + fd(r.to) + presetLabel()]);
   L.push(["Ticket types", ST.cfg.issueTypes.join(", ")]);
   [["client", "Client"], ["sev", "Severity"], ["type", "Type"], ["svm", "SVM in charge"], ["worker", "Worker"]].forEach(function (k) {
     if (f[k[0]].length) { var names = f[k[0]].map(function (v) { return lab(k[0], v); }); L.push([k[1], names.slice(0, 6).join(", ") + (names.length > 6 ? " +" + (names.length - 6) + " more" : "")]); }
@@ -1688,7 +1709,9 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-msall]"))) { var k1 = x.dataset.msall; ST.f[k1] = ST.opts[k1].map(function (o) { return o.v; }); msUpdate(k1); ST.page = 1; renderAll(); return; }
   if ((x = q("[data-msnone]"))) { var k2 = x.dataset.msnone; ST.f[k2] = []; msUpdate(k2); ST.page = 1; renderAll(); return; }
   if ((x = q(".ms-opt"))) { var k3 = x.dataset.msk, val = x.dataset.msv, ix = ST.f[k3].indexOf(val); if (ix > -1) ST.f[k3].splice(ix, 1); else ST.f[k3].push(val); msUpdate(k3); ST.page = 1; renderAll(); return; }
-  if ((x = q("[data-preset]"))) { ST.ui.preset = x.dataset.preset; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
+  if (t.id === "rToday") { ST.ui.to = ""; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
+  if (t.id === "rSetTo") { var tn = new Date(Date.now() + 330 * 60000); ST.ui.to = tn.toISOString().slice(0, 10); saveUi(); buildFilters(); return; }
+  if ((x = q("[data-preset]"))) { if (x.dataset.preset === "custom" && ST.ui.preset !== "custom") { var r0 = rangeMs(); ST.ui.from = new Date(r0.from + 330 * 60000).toISOString().slice(0, 10); ST.ui.to = ""; } ST.ui.preset = x.dataset.preset; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
   if ((x = q("[data-res]"))) { ST.f.result = x.dataset.res; ST.page = 1; buildFilters(); renderAll(); return; }
   if ((x = q("[data-tab]"))) { if (x.closest("#detail")) closeOv("detail"); if (x.closest("#drill")) closeOv("drill"); ST.tab = x.dataset.tab; if (ST.tab === "settings") ST.draft = null; renderAll(); return; }
   if ((x = q("[data-trend]"))) { ST.trendBy = x.dataset.trend; renderAll(); return; }
