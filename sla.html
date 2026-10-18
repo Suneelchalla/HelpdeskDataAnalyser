@@ -273,6 +273,46 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 .dc.k2-hd{--kc:var(--hd2)}.dc.k2-engg{--kc:var(--engg)}.dc.k2-client{--kc:#F0A838}.dc.k2-closed{--kc:#B8C2CF}
 .legend .lg-we::before{background:repeating-linear-gradient(135deg,#CBD5E1 0 3px,#fff 3px 6px)!important}.legend .lg-ho::before{background:repeating-linear-gradient(135deg,#D8B4FE 0 3px,#fff 3px 6px)!important}
 .rtoday{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;margin-left:4px}.rtoday b{color:var(--ink)}
+
+/* ── SLA report document ── */
+.rp-toolbar .rp-secs{flex-basis:100%;display:flex;gap:12px;flex-wrap:wrap;align-items:center;color:var(--muted);font-weight:600;padding-top:6px;border-top:1px dashed var(--line)}
+.rp-toolbar input:not([type]),.rp-toolbar input[data-rptext]{padding:5px 8px;border:1px solid var(--line2);border-radius:7px;font:inherit;font-size:12px}
+.rp-doc{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#0F172A;font-size:11.5px;line-height:1.5;padding:36px 44px}
+.rp-doc.portrait{width:min(860px,100%)}
+.rp-doc .mut{color:#64748B;font-weight:400}
+.rp-title{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:14px;border-bottom:3px solid #0F172A}
+.rp-brand{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#EA580C}
+.rp-doc h1{font-size:26px;letter-spacing:-.5px;margin:4px 0 2px;font-weight:800}
+.rp-for{font-size:15px;font-weight:600;color:#334155}
+.rp-meta{border-collapse:collapse;font-size:11px;min-width:240px}.rp-meta th{position:static;background:none;border:0;text-align:left;color:#64748B;font-weight:600;padding:2px 12px 2px 0;font-size:10.5px;text-transform:none;letter-spacing:0;vertical-align:top}.rp-meta td{padding:2px 0;border:0;font-weight:600}
+.rp-scope{font-size:10px;color:#64748B;margin:8px 0 2px}
+.rp-doc h2{font-size:14.5px;font-weight:800;margin:22px 0 8px;padding:0 0 5px;border-bottom:1.5px solid #CBD5E1;display:flex;align-items:center;gap:8px;break-after:avoid}
+.rp-doc h2 .n{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#0F172A;color:#fff;font-size:11px}
+.rp-doc .rp-note{color:#64748B;font-size:10px;margin:0 0 8px}
+.rp-sec{break-inside:auto}.rp-sec h2+*{break-before:avoid}
+.rp-exec{display:grid;grid-template-columns:190px 1fr;gap:14px;align-items:stretch}
+.rp-gauge{border-radius:12px;padding:14px 16px;color:#fff;display:flex;flex-direction:column;justify-content:center}
+.rp-gauge .v{font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:1}.rp-gauge .l{font-size:12px;font-weight:700;margin-top:4px}.rp-gauge .s{font-size:10.5px;opacity:.85}.rp-gauge .st{margin-top:8px;font-size:10.5px;font-weight:700;background:rgba(255,255,255,.2);border-radius:5px;padding:2px 7px;align-self:flex-start}
+.t-bg-g{background:#15803D}.t-bg-a{background:#C2410C}.t-bg-r{background:#B91C1C}.t-bg-n{background:#64748B}
+.rp-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.rp-kpi div{border:1px solid #E2E8F0;border-radius:10px;padding:9px 12px;break-inside:avoid}.rp-kpi b{display:block;font-size:19px;font-weight:800;letter-spacing:-.5px}.rp-kpi span{font-size:10px;color:#64748B;font-weight:600}
+.rp-points{margin-top:12px;border:1px solid #E2E8F0;border-left:4px solid #0F172A;border-radius:8px;padding:9px 14px;break-inside:avoid}.rp-points .hd{font-weight:800;font-size:11.5px;margin-bottom:3px}.rp-points ul{margin:0;padding-left:16px}.rp-points li{margin:3px 0}
+.rpchart{width:100%;height:auto;max-height:210px;margin:2px 0 8px;display:block}
+.rp-t{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:4px}.rp-t th{position:static;background:#F1F5F9;color:#334155;font-weight:700;padding:6px 8px;border-bottom:1.5px solid #CBD5E1;text-transform:none;letter-spacing:0;font-size:10px}.rp-t td{padding:5px 8px;border-bottom:1px solid #EEF2F6;vertical-align:top}.rp-t tr{break-inside:avoid}.rp-t thead{display:table-header-group}
+.rp-t .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.rp-t tr.tot td{font-weight:800;background:#F8FAFC;border-top:1.5px solid #CBD5E1}
+.rp-t td.barc{width:16%;min-width:90px}.rpbar{position:relative;height:8px;border-radius:4px;background:#E2E8F0;margin-top:4px}.rpbar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}.rpbar i.g{background:#16A34A}.rpbar i.a{background:#F59E0B}.rpbar i.r{background:#DC2626}.rpbar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:#0F172A}
+.t-g{color:#15803D}.t-a{color:#B45309}.t-r{color:#B91C1C}.t-n{color:#64748B}
+.rp-list td.key{font-family:var(--mono);font-weight:700;white-space:nowrap}.rp-list td.sum{max-width:260px}
+.rp-cols{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start}
+.rp-def{border-collapse:collapse;font-size:10.5px}.rp-def th{position:static;background:none;border:0;text-align:left;color:#334155;font-weight:700;padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:10.5px}.rp-def td{padding:4px 0;border:0;border-bottom:1px solid #EEF2F6}
+.rp-doc .rp-foot{margin-top:20px;padding-top:8px;border-top:1px solid #E2E8F0;font-size:9.5px;color:#64748B}
+@media print{.rp-doc{padding:0!important;width:auto!important}}
+.rp-title>div:first-child{flex:1;min-width:0}.rp-doc h1{white-space:nowrap}.rp-meta{width:auto!important;flex:0 0 auto}
+.rp-doc,.rp-doc table,.rp-doc th,.rp-doc td,.rp-doc .num{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important}
+.rp-t.keep,.rp-terms,.rp-exec,.rp-points{break-inside:avoid}.rp-t td:first-child{white-space:nowrap}.rp-t td.nw{white-space:nowrap}.rp-list td.sum{max-width:none;min-width:200px}
+.rp-def{width:100%}.rp-def th{width:190px;white-space:normal!important}
+.rp-cols{grid-template-columns:250px 1fr}
+@media print{.rp-doc h2,.rp-doc .rp-note{break-after:avoid}.rp-sec{break-inside:auto}.rp-doc .rp-hk{break-inside:avoid}}
+
 </style>
 </head>
 <body>
@@ -1293,118 +1333,210 @@ function runBulk() {
   function finish() { bk.phase = "done"; renderBulk(); renderAll(); if (ST.dr && $("drill")) renderDrill(); }
 }
 
-/* ═════════ PDF report (what is on screen, as a printable document) ═════════
-   Built from the same filtered tickets as the Overview and Tickets tabs, so it always matches the screen.
-   "Save as PDF" goes through the browser's print dialog (same as the Weekly Report). */
-var RES_LABEL = { "": "All", open: "Open", closed: "Closed", breached: "Breached / missed", openbreached: "Breached, still open", risk: "At risk", paused: "With client", nohist: "No history" };
-function rpFilterLines() {
-  var f = ST.f, r = rangeMs(), L = [], lab = function (k, v) { var o = (ST.opts[k] || []).filter(function (x) { return x.v === v; })[0]; return o ? o.l : v; };
-  L.push(["Created", fd(r.from) + " – " + fd(r.to) + presetLabel()]);
-  L.push(["Ticket types", ST.cfg.issueTypes.join(", ")]);
-  [["client", "Client"], ["sev", "Severity"], ["type", "Type"], ["svm", "SVM in charge"], ["worker", "Worker"]].forEach(function (k) {
-    if (f[k[0]].length) { var names = f[k[0]].map(function (v) { return lab(k[0], v); }); L.push([k[1], names.slice(0, 6).join(", ") + (names.length > 6 ? " +" + (names.length - 6) + " more" : "")]); }
+/* ═════════ PDF report — presentation document for a director or a client ═════════
+   Built from the same filtered tickets as the screen (date range + Client / Severity / Type / SVM / Worker filters).
+   Two audiences:
+     client     — what a customer needs: compliance, by period / priority / request type, open position,
+                  breaches, and the SLA terms. No internal team names or data-quality notes.
+     management — the same, plus Help Desk vs Engineering accountability, SVM pending and a by-SVM view.
+   All durations are WORKING time in hours (no "day" of ambiguous length). "Save as PDF" uses the print dialog. */
+var RP_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var RP_SEC = [["summary", "Executive summary"], ["trend", "Monthly performance"], ["priority", "By priority"], ["type", "By request type"], ["client", "By client"], ["open", "Open tickets"], ["team", "Team accountability", "management"], ["breaches", "Breach register"], ["terms", "SLA terms"]];
+function rpH(m) { return m == null || isNaN(m) ? "—" : Sla.fmtDur(m, "h").replace(/ 0m$/, ""); }
+function rpD(ms) { if (ms == null) return "—"; var d = new Date(ms + 330 * 60000); return ("0" + d.getUTCDate()).slice(-2) + " " + RP_MON[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+function rpDs(ms) { if (ms == null) return "—"; var d = new Date(ms + 330 * 60000); return ("0" + d.getUTCDate()).slice(-2) + " " + RP_MON[d.getUTCMonth()] + " " + String(d.getUTCFullYear()).slice(2); }
+function rpPct(n, d) { return d ? Math.round(n / d * 1000) / 10 : null; }
+function rpPctTxt(p) { return p == null ? "—" : (Math.round(p) === p ? p : p.toFixed(1)) + "%"; }
+function rpTone(p) { var g = ST.cfg.goalPct; return p == null ? "n" : p >= g ? "g" : p >= g - 10 ? "a" : "r"; }
+function rpPeriodName() { var k = ST.ui.preset; return { mtd: "Month to date", lm: "Last month", ytd: "Year to date", ly: "Last year" }[k] || (k === "custom" ? (ST.ui.to ? "Custom period" : "Custom period, to date") : "Last " + parseInt(k, 10) + " month" + (parseInt(k, 10) > 1 ? "s" : "")); }
+function rpClients(v) { var m = {}; v.forEach(function (x) { m[x.t.prefix] = 1; }); return Object.keys(m).sort(); }
+function rpForName(v) {
+  var cs = ST.f.client.length ? ST.f.client : rpClients(v);
+  if (cs.length === 1) return clientName(cs[0]);
+  if (cs.length <= 3) return cs.map(clientName).join(", ");
+  return ST.f.client.length ? cs.length + " clients" : "All clients";
+}
+/* one aggregate row */
+function rpAgg(list) {
+  var a = { n: list.length, met: 0, missed: 0, ob: 0, open: 0, closed: 0, sum: 0, res: [] };
+  list.forEach(function (x) { var r = x.r; if (!r) return;
+    if (x.b === "met") a.met++; else if (x.b === "missed") a.missed++; else if (x.b === "breached") a.ob++;
+    if (r.isClosed) { a.closed++; a.sum += r.elapsedMin; a.res.push(r.elapsedMin); } else a.open++; });
+  a.br = a.missed + a.ob; a.dec = a.met + a.br; a.within = a.open - a.ob; a.comp = rpPct(a.met, a.dec); a.avg = a.closed ? a.sum / a.closed : null;
+  a.res.sort(function (x, y) { return x - y; }); a.med = a.res.length ? a.res[a.res.length >> 1] : null;
+  return a;
+}
+function rpBar(p) { var g = ST.cfg.goalPct; return '<div class="rpbar"><i class="' + rpTone(p) + '" style="width:' + (p == null ? 0 : Math.min(100, p)) + '%"></i><b style="left:' + g + '%"></b></div>'; }
+function rpCompCell(a) { return '<td class="num"><b class="t-' + rpTone(a.comp) + '">' + rpPctTxt(a.comp) + '</b></td><td class="barc">' + rpBar(a.comp) + "</td>"; }
+function rpHead(cols) { return "<thead><tr>" + cols.map(function (c) { return "<th" + (c[1] ? ' class="num"' : "") + ">" + c[0] + "</th>"; }).join("") + "</tr></thead>"; }
+var RP_STD = [["Tickets", 1], ["Met", 1], ["Breached", 1], ["Compliance", 1], ["vs target", 0], ["Avg resolution", 1]];
+function rpStdCells(a) { return '<td class="num">' + a.n.toLocaleString() + '</td><td class="num">' + a.met.toLocaleString() + '</td><td class="num">' + (a.br ? '<span class="t-r">' + a.br.toLocaleString() + "</span>" : "0") + "</td>" + rpCompCell(a) + '<td class="num">' + rpH(a.avg) + "</td>"; }
+
+/* monthly compliance chart (inline SVG, prints crisply) */
+function rpChart(rows) {
+  if (!rows.length) return "";
+  var W = 720, H = 190, L = 34, B = 26, T = 14, n = rows.length, bw = Math.min(46, (W - L - 10) / n * 0.62), step = (W - L - 10) / n, g = ST.cfg.goalPct;
+  var y = function (p) { return T + (H - T - B) * (1 - p / 100); }, col = { g: "#16A34A", a: "#F59E0B", r: "#DC2626", n: "#CBD5E1" };
+  var s = '<svg class="rpchart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Monthly SLA compliance">';
+  [0, 25, 50, 75, 100].forEach(function (p) { s += '<line x1="' + L + '" x2="' + (W - 6) + '" y1="' + y(p) + '" y2="' + y(p) + '" stroke="#E5E9F0" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (y(p) + 3) + '" text-anchor="end" font-size="9" fill="#6B7A90">' + p + "%</text>"; });
+  rows.forEach(function (r, i) {
+    var cx = L + step * i + step / 2, p = r.a.comp, top = p == null ? y(0) : y(p);
+    if (p != null) s += '<rect x="' + (cx - bw / 2) + '" y="' + top + '" width="' + bw + '" height="' + (y(0) - top) + '" rx="3" fill="' + col[rpTone(p)] + '"/><text x="' + cx + '" y="' + (top - 4) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1E293B">' + Math.round(p) + "%</text>";
+    s += '<text x="' + cx + '" y="' + (H - 10) + '" text-anchor="middle" font-size="9.5" fill="#475569">' + esc(r.label) + "</text>";
   });
-  if (f.result && ST.tab === "tickets") L.push(["Ticket list shows", RES_LABEL[f.result] || f.result]);
-  return L;
+  s += '<line x1="' + L + '" x2="' + (W - 6) + '" y1="' + y(g) + '" y2="' + y(g) + '" stroke="#0F172A" stroke-width="1.5" stroke-dasharray="5 3"/><text x="' + (W - 8) + '" y="' + (y(g) - 4) + '" text-anchor="end" font-size="9.5" font-weight="700" fill="#0F172A">Target ' + g + "%</text>";
+  return s + "</svg>";
 }
-function rpFileName() {
-  var cl = ST.f.client.length ? ST.f.client.slice(0, 3).join("-") : "All clients", r = rangeMs();
-  return ("SLA Report - " + cl + " - " + new Date(r.from + 330 * 60000).toISOString().slice(0, 10) + " to " + new Date(r.to + 330 * 60000).toISOString().slice(0, 10)).replace(/[\\\/:*?"<>|]/g, "-");
-}
-function rpPending(v) {
-  var m = pendingModel(v), cols = m.types, shown = m.rows.filter(function (r) { return r.key !== "notarget" || r.list.length; });
-  function cells(k) { var tot = k === "all" ? m.pend.length : (m.rows.filter(function (r) { return r.key === k; })[0] || { list: [] }).list.length;
-    return cols.map(function (t) { return '<td class="num">' + m.n(k, t, "*") + "</td>"; }).join("") + '<td class="num"><b>' + tot + '</b></td><td class="num">' + m.n(k, "*", "hd") + '</td><td class="num">' + m.n(k, "*", "engg") + "</td>"; }
-  function first(f) { if (!f) return "—"; var bi = binfoOf(f); return "<b>" + esc(f.t.key) + "</b>" + (bi ? '<div class="rp-note" style="margin:0">' + (bi.state === "breached" ? "breached " + fdtw(bi.breachedAt) : bi.breachAt ? "breaks " + fdtw(bi.breachAt) : "") + "</div>" : ""); }
-  return '<h2>SVM pending tickets</h2><div class="rp-note">Open tickets with Help Desk or Engineering right now, most urgent first: ready to breach, then breached, then not yet breached. ' + "Not limited by the Created range. " + (m.nohist ? m.nohist + " open ticket" + (m.nohist === 1 ? " has" : "s have") + " no status history yet and cannot be placed. " : "") + (m.client ? m.client + " more open ticket" + (m.client === 1 ? " is" : "s are") + " waiting with the client (clock paused) and not counted." : "") + "</div>" +
-    '<table><thead><tr><th>Where they stand</th>' + cols.map(function (t) { return '<th class="num">' + esc(t) + "</th>"; }).join("") + '<th class="num">Total</th><th class="num">Help Desk</th><th class="num">Engineering</th><th>Most urgent</th></tr></thead><tbody>' +
-    shown.map(function (r) { return '<tr><td><i class="pdot" style="background:' + PN_META[r.key].c + '"></i><b>' + PN_META[r.key].l + '</b><div class="rp-note" style="margin:0 0 0 .9rem">' + pnSub(r.key) + "</div></td>" + cells(r.key) + "<td>" + first(r.first) + "</td></tr>"; }).join("") +
-    '<tr style="font-weight:700;background:#EEF1F5"><td>Total SVM pending</td>' + cells("all") + "<td>" + first(m.first) + "</td></tr></tbody></table>";
-}
-function rpTrend(v) {
-  var groups = {}; v.forEach(function (x) { if (!x.r) return; (groups[perKey(x.t.created)] || (groups[perKey(x.t.created)] = [])).push(x); });
-  var data = Object.keys(groups).sort().map(function (k) { var g = groups[k], c = function (cat) { return g.filter(function (x) { return trendCat(x, cat); }).length; }; var met = c("met"), missed = c("missed"), ob = c("ob"); return { k: k, n: g.length, met: met, missed: missed, ob: ob, run: c("run"), nt: c("nt"), dec: met + missed + ob }; });
-  var anyNt = data.some(function (d) { return d.nt > 0; });
-  var rows = data.map(function (d) { var p = pct(d.met, d.dec);
-    return "<tr><td><b>" + perLabel(d.k) + '</b></td><td class="num">' + d.n + '</td><td class="num">' + d.met + '</td><td class="num">' + d.missed + '</td><td class="num">' + d.ob + '</td><td class="num"><b>' + d.dec + '</b></td><td class="num">' + d.run + "</td>" + (anyNt ? '<td class="num">' + d.nt + "</td>" : "") + '<td style="width:26%">' + slaBar(p) + '</td><td class="num"><b>' + pctTxt(p) + "</b></td></tr>"; }).join("");
-  return '<h2>SLA % by ' + (ST.trendBy === "week" ? "week" : "month") + '</h2><div class="rp-note">Grouped by when the ticket was created. Decided = Met + Missed + Breached (open); SLA % = Met ÷ Decided. The dark tick marks the ' + ST.cfg.goalPct + '% goal; open tickets still inside their target are not counted until they resolve or breach.' + (anyNt ? " “No target” tickets have a Priority that is blank or not one of the five severities, so they can’t be measured." : "") + '</div><table><thead><tr><th>Created in</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Breached (open)</th><th class="num">Decided</th><th class="num">Open, within target</th>' + (anyNt ? '<th class="num">No target</th>' : "") + '<th>vs goal</th><th class="num">SLA %</th></tr></thead><tbody>' + rows + "</tbody></table>";
-}
-function rpMatrix(v, by) {
-  var keys = {}, periods = {}, all = { n: 0, met: 0, cells: {} }, f = dimFn(by);
-  function add(o, p, met) { o.n++; if (met) o.met++; var c = o.cells[p] || (o.cells[p] = { n: 0, met: 0 }); c.n++; if (met) c.met++; }
-  v.forEach(function (x) { if (!isDecided(x)) return; var d = f(x.t), p = perKey(x.t.created); periods[p] = 1; add(keys[d] || (keys[d] = { n: 0, met: 0, cells: {} }), p, x.b === "met"); add(all, p, x.b === "met"); });
-  var pk = Object.keys(periods).sort(), sevOrder = Sla.SEVERITIES.map(function (z) { return z.id; }).concat(["none"]);
-  var ks = Object.keys(keys).sort(function (a, b) { return by === "severity" ? sevOrder.indexOf(a) - sevOrder.indexOf(b) : keys[b].n - keys[a].n; }), more = ks.length > 25 ? ks.length - 25 : 0; ks = ks.slice(0, 25);
-  var single = pk.length === 1;
-  function cell(o, p) { var c = o.cells[p]; if (!c) return '<td class="cell n">—</td>'; var pp = Math.round(c.met / c.n * 100); return '<td class="cell ' + cls(pp) + '">' + pp + "%<small>" + c.n + "</small></td>"; }
-  function tot(o) { if (single) return ""; var pp = o.n ? Math.round(o.met / o.n * 100) : null; return '<td class="cell ' + cls(pp) + '" style="border-left:1.5px solid var(--line2)">' + pctTxt(pp) + "<small>" + o.n + "</small></td>"; }
-  var name = by === "client" ? "Client" : by === "severity" ? "Severity" : "Worker";
-  var lab = by === "client" ? function (k) { return "<b>" + esc(clientName(k)) + '</b> <span style="color:var(--faint)">' + esc(k) + "</span>"; } : by === "severity" ? function (k) { return "<b>" + (k === "none" ? "Unrated" : Sla.sevName(k)) + "</b>"; } : function (k) { return "<b>" + esc(k) + "</b>"; };
-  if (!pk.length) return "<h2>SLA % by " + name.toLowerCase() + '</h2><div class="rp-note">No tickets have a decided outcome yet.</div>';
-  return "<h2>SLA % by " + name.toLowerCase() + ", " + (ST.trendBy === "week" ? "week" : "month") + ' by ' + (ST.trendBy === "week" ? "week" : "month") + '</h2><div class="rp-note">Each cell is the SLA % for tickets created in that ' + (ST.trendBy === "week" ? "week" : "month") + " (small number = tickets counted). Green meets the " + ST.cfg.goalPct + "% goal, amber is within 15 points, red is further off.</div>" +
-    '<table class="hm"><thead><tr><th>' + name + "</th>" + pk.map(function (p) { return "<th>" + perLabel(p) + "</th>"; }).join("") + (single ? "" : "<th>Overall</th>") + '</tr></thead><tbody><tr class="all"><td>All</td>' + pk.map(function (p) { return cell(all, p); }).join("") + tot(all) + "</tr>" +
-    ks.map(function (k) { var o = keys[k]; return "<tr><td>" + lab(k) + "</td>" + pk.map(function (p) { return cell(o, p); }).join("") + tot(o) + "</tr>"; }).join("") + "</tbody></table>" + (more ? '<div class="rp-note" style="margin-top:4px">…and ' + more + " more with fewer tickets.</div>" : "");
-}
-function rpHolders(s) {
-  return '<h2>Who has the open tickets</h2><div class="rp-note">Time only runs while a ticket is with Help Desk or Engineering; tickets with the client are paused.</div><table><thead><tr><th>Held by</th><th class="num">Open</th><th class="num">Breached</th><th class="num">At risk</th><th class="num">Within target</th></tr></thead><tbody>' +
-    ["hd", "engg", "client"].map(function (k) { var o = s.by[k]; return "<tr><td>" + kchip(k) + '</td><td class="num">' + o.n + '</td><td class="num">' + o.br + '</td><td class="num">' + o.risk + '</td><td class="num">' + (o.n - o.br - o.risk) + "</td></tr>"; }).join("") + "</tbody></table>";
-}
-function rpRows(list, withAt) {
-  return list.map(function (x) { return withCal(x.t, function () {
-    var t = x.t, r = x.r, bi = binfoOf(x), when = !bi ? "—" : bi.state === "running" ? fdtw(bi.breachAt) : bi.state === "paused" ? "Paused · " + fdur(bi.remainingMin) + " left" : (bi.state === "breached" || bi.state === "missed") ? (bi.state === "breached" ? "Breached " : "Missed ") + fdtw(bi.breachedAt) : "—";
-    return '<tr><td><b class="key">' + esc(t.key) + '</b></td><td style="min-width:150px">' + esc(t.summary) + "</td><td>" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? " <i>(unverified)</i>" : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + "</td><td>" + esc(t.svm || "—") + "</td>" +
-      '<td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) + (r.pct != null ? " (" + Math.round(r.pct) + "%)" : "") : "—") + "</td><td>" + when + "</td><td>" + chip(x.b) + "</td></tr>"; }); }).join("");
-}
-var RP_HEAD = "<th>Ticket</th><th>Summary</th><th>Severity</th><th>Status</th><th>Held by</th><th>SVM in charge</th><th class=\"num\">Target</th><th class=\"num\">Counted (used)</th><th>Breaks at / breached</th><th>Result</th>";
-function reportHtml(v, o, vl) {
-  vl = vl || v;
-  var s = stats(v), goal = ST.cfg.goalPct, compC = s.comp == null ? "var(--faint)" : s.comp >= goal ? "var(--green)" : s.comp >= goal - 15 ? "#F59E0B" : "var(--rose)";
-  var noHist = v.filter(function (x) { return !x.r; }).length, sus = v.filter(function (x) { return x.r && histSuspect(x.t); }).length;
-  var h = '<h1>SLA Report</h1><div class="rp-sub">HD SLA Tracker · generated ' + fdt(Date.now()) + " IST · " + s.n.toLocaleString() + " ticket" + (s.n === 1 ? "" : "s") + " in this view</div>" +
-    '<div class="rp-filters">' + rpFilterLines().map(function (l) { return "<div><b>" + esc(l[0]) + "</b> " + esc(l[1]) + "</div>"; }).join("") + '<div><b>Working time</b> ' + esc(calBar()) + "</div></div>";
-  if (noHist || sus) h += '<div class="rp-warn">' + (noHist ? "<b>" + noHist + " ticket" + (noHist > 1 ? "s" : "") + "</b> in this view " + (noHist > 1 ? "have" : "has") + " no status history yet and " + (noHist > 1 ? "are" : "is") + " <b>not included</b> in any figure below. " : "") + (sus ? "<b>" + sus + "</b> ticket" + (sus > 1 ? "s are" : " is") + " marked unverified: Jira returned no status changes for " + (sus > 1 ? "them" : "it") + "." : "") + "</div>";
+
+function reportHtml(v, o) {
+  var H = v.filter(function (x) { return x.r; }), mgmt = o.audience === "management", goal = ST.cfg.goalPct, r = rangeMs();
+  var A = rpAgg(H), excl = v.length - H.length, sevs = Sla.SEVERITIES;
+  var mon = {}; H.forEach(function (x) { var d = new Date(x.t.created + 330 * 60000), k = d.getUTCFullYear() + "-" + ("0" + (d.getUTCMonth() + 1)).slice(-2); (mon[k] || (mon[k] = [])).push(x); });
+  var months = Object.keys(mon).sort().map(function (k) { var p = k.split("-"); return { k: k, label: RP_MON[+p[1] - 1] + " " + p[0].slice(2), a: rpAgg(mon[k]) }; });
+  var openL = H.filter(function (x) { return !x.r.isClosed; }), withUs = openL.filter(function (x) { return x.r.currentKind !== "client"; }), withClient = openL.filter(function (x) { return x.r.currentKind === "client"; });
+  var ob = withUs.filter(function (x) { return x.b === "breached"; }).length, risk = withUs.filter(function (x) { return x.b === "warning" || x.b === "danger"; }).length;
+  var forName = o.forName || rpForName(v), multi = rpClients(H).length > 1;
+
+  /* ── title block ── */
+  var h = '<div class="rp-title"><div><div class="rp-brand">' + esc(o.byName || "SVM Help Desk") + '</div><h1>SLA Performance Report</h1><div class="rp-for">' + esc(forName) + "</div></div>" +
+    '<table class="rp-meta"><tr><th>Reporting period</th><td>' + rpD(r.from) + " – " + rpD(Math.min(r.to, Date.now())) + '<br><span class="mut">' + esc(rpPeriodName()) + "</span></td></tr>" +
+    "<tr><th>Prepared by</th><td>" + esc(o.byName || "SVM Help Desk") + "</td></tr><tr><th>Date</th><td>" + rpD(Date.now()) + "</td></tr>" +
+    (mgmt ? '<tr><th>Edition</th><td>Management</td></tr>' : "") + "</table></div>";
+  var scope = []; if (ST.f.sev.length) scope.push("Priority: " + ST.f.sev.map(function (s) { return s === "none" ? "Unrated" : Sla.sevName(s); }).join(", ")); if (ST.f.type.length) scope.push("Request type: " + ST.f.type.join(", ")); if (mgmt && ST.f.svm.length) scope.push("SVM in charge: " + ST.f.svm.join(", ")); if (mgmt && ST.f.worker.length) scope.push("Worker: " + ST.f.worker.join(", "));
+  scope.push("Ticket types measured: " + ST.cfg.issueTypes.join(", "));
+  h += '<div class="rp-scope">' + scope.map(esc).join(" · ") + "</div>";
+
+  /* ── 1. executive summary ── */
   if (o.summary) {
-    var K = function (acc, val, lab, sub) { return '<div class="rp-k" style="--acc:' + acc + '"><div class="v">' + val + '</div><div class="l">' + lab + '</div><div class="s">' + sub + "</div></div>"; };
-    h += '<div class="rp-kpis">' + K(compC, pctTxt(s.comp), "SLA met", s.decided ? s.met + " of " + s.decided + " decided · goal " + goal + "%" : "nothing decided yet") + K("var(--rose)", s.openBreached, "Breached, still open", "over their target") + K("#F59E0B", s.risk, "At risk", ST.cfg.warnPct + "%+ of target used") +
-      K("var(--engg)", s.open, "Open now", "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n) + K("var(--hd)", s.nEl ? fdur(s.sumEl / s.nEl) : "—", "Avg time to resolve", s.nEl + " closed · working time") + K("var(--ink2)", s.hist.toLocaleString(), "Tickets counted", "of " + s.n.toLocaleString() + " in view") + "</div>";
+    var diff = A.comp == null ? null : Math.round((A.comp - goal) * 10) / 10, tone = rpTone(A.comp);
+    var status = A.comp == null ? "No tickets decided yet" : diff >= 0 ? "Target achieved" : "Below target by " + Math.abs(diff) + " pts";
+    h += '<h2><span class="n">1</span>Executive summary</h2><div class="rp-exec"><div class="rp-gauge t-bg-' + tone + '"><div class="v">' + rpPctTxt(A.comp) + '</div><div class="l">SLA compliance</div><div class="s">Target ' + goal + '%</div><div class="st">' + status + "</div></div>" +
+      '<div class="rp-kpi"><div><b>' + A.n.toLocaleString() + "</b><span>Tickets raised</span></div><div><b>" + A.closed.toLocaleString() + "</b><span>Resolved</span></div><div><b>" + A.met.toLocaleString() + "</b><span>Resolved within SLA</span></div><div><b class=\"t-r\">" + A.br.toLocaleString() + "</b><span>SLA breaches</span></div><div><b>" + rpH(A.avg) + "</b><span>Avg resolution (working)</span></div><div><b>" + openL.length.toLocaleString() + "</b><span>Open at report date</span></div></div></div>";
+    var pts = [];
+    if (A.dec) pts.push("<b>" + A.met.toLocaleString() + " of " + A.dec.toLocaleString() + "</b> tickets with an outcome were resolved within their SLA target (<b>" + rpPctTxt(A.comp) + "</b> against a " + goal + "% target).");
+    var mv = months.filter(function (m) { return m.a.dec >= 5; });
+    if (mv.length >= 2) { var la = mv[mv.length - 1], pr = mv[mv.length - 2], dd = Math.round((la.a.comp - pr.a.comp) * 10) / 10;
+      pts.push("Compliance " + (dd > 0 ? "improved" : dd < 0 ? "declined" : "was unchanged") + " from <b>" + rpPctTxt(pr.a.comp) + "</b> in " + pr.label + " to <b>" + rpPctTxt(la.a.comp) + "</b> in " + la.label + (la.k === months[months.length - 1].k && ST.ui.preset !== "lm" && ST.ui.preset !== "ly" ? " (month in progress)" : "") + ".");
+      var best = mv.slice().sort(function (a, b) { return b.a.comp - a.a.comp; })[0]; if (mv.length >= 3) pts.push("Best month: <b>" + best.label + "</b> at " + rpPctTxt(best.a.comp) + ". " + mv.filter(function (m) { return m.a.comp >= goal; }).length + " of " + mv.length + " months met the target."); }
+    var bySev = sevs.map(function (z) { return { z: z, a: rpAgg(H.filter(function (x) { return x.t.sev === z.id; })) }; }).filter(function (s) { return s.a.dec >= 5; });
+    if (bySev.length >= 2) { var ws = bySev.slice().sort(function (a, b) { return a.a.comp - b.a.comp; })[0]; if (ws.a.comp < goal) pts.push("Lowest compliance by priority: <b>" + ws.z.name + "</b> at " + rpPctTxt(ws.a.comp) + " (" + ws.a.br + " breach" + (ws.a.br === 1 ? "" : "es") + ")."); }
+    if (openL.length) pts.push("At the report date <b>" + openL.length.toLocaleString() + "</b> tickets were open: <b>" + withUs.length.toLocaleString() + "</b> with the support team" + (ob ? " (" + ob + " already over target" + (risk ? ", " + risk + " close to target" : "") + ")" : risk ? " (" + risk + " close to target)" : "") + " and <b>" + withClient.length.toLocaleString() + "</b> awaiting " + (multi || mgmt ? "client" : "your") + " response, for which the SLA clock is paused.");
+    if (mgmt) { var tb = { hd: 0, engg: 0 }; H.filter(isBr).forEach(function (x) { var w = insOf(x); if (w && tb[w.at] != null) tb[w.at]++; }); var tt = tb.hd + tb.engg;
+      if (tt) pts.push("Breaches by team holding the ticket when the target was exceeded: Engineering <b>" + tb.engg + "</b> (" + Math.round(tb.engg / tt * 100) + "%), Help Desk <b>" + tb.hd + "</b> (" + Math.round(tb.hd / tt * 100) + "%)."); }
+    if (pts.length) h += '<div class="rp-points"><div class="hd">Key points</div><ul>' + pts.map(function (p) { return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
   }
-  if (o.pending) h += rpPending(pendingView());
-  if (o.trend) h += rpTrend(v);
-  if (o.matrix) h += rpMatrix(v, o.matrixBy);
-  if (o.holders) h += rpHolders(s);
-  if (o.attention) {
-    var att = v.filter(function (x) { return x.r && !x.r.isClosed && (x.b === "breached" || x.b === "danger" || x.b === "warning"); }).sort(function (a, b) { return (b.b === "breached") - (a.b === "breached") || (b.r.pct || 0) - (a.r.pct || 0); });
-    h += "<h2>Breached and at-risk open tickets (" + att.length + ")</h2>" + (att.length ? '<div class="rp-note">Most urgent first. Breach times are exact, on each client’s working calendar.</div><table><thead><tr>' + RP_HEAD + "</tr></thead><tbody>" + rpRows(att) + "</tbody></table>" : '<div class="rp-note">Nothing is over target or at risk in this view.</div>');
+
+  var sn = (o.summary ? 1 : 0); function sec(t) { sn++; return '<h2><span class="n">' + sn + "</span>" + t + "</h2>"; }
+
+  /* ── 2. monthly ── */
+  if (o.trend && months.length) {
+    h += '<div class="rp-sec">' + sec("Monthly performance") + '<div class="rp-note">Tickets grouped by the month they were raised. Compliance = met ÷ (met + breached); tickets still open and within target are not yet counted.</div>' + rpChart(months) +
+      '<table class="rp-t">' + rpHead([["Month", 0], ["Raised", 1], ["Resolved", 1], ["Met", 1], ["Breached", 1], ["Open, within target", 1], ["Compliance", 1], ["vs target", 0], ["Avg resolution", 1]]) + "<tbody>" +
+      months.map(function (m) { var a = m.a; return "<tr><td><b>" + m.label + '</b></td><td class="num">' + a.n + '</td><td class="num">' + a.closed + '</td><td class="num">' + a.met + '</td><td class="num">' + (a.br ? '<span class="t-r">' + a.br + "</span>" : 0) + '</td><td class="num">' + a.within + "</td>" + rpCompCell(a) + '<td class="num">' + rpH(a.avg) + "</td></tr>"; }).join("") +
+      '<tr class="tot"><td>Total</td><td class="num">' + A.n + '</td><td class="num">' + A.closed + '</td><td class="num">' + A.met + '</td><td class="num">' + A.br + '</td><td class="num">' + A.within + "</td>" + rpCompCell(A) + '<td class="num">' + rpH(A.avg) + "</td></tr></tbody></table></div>";
   }
-  if (o.all) {
-    var all = vl.slice().sort(function (a, b) { return (b.r ? b.r.pct || 0 : -1) - (a.r ? a.r.pct || 0 : -1); }), CAP = 1500, shown = all.slice(0, CAP), chipOn = vl !== v && ST.f.result;
-    h += "<h2>" + (chipOn ? "Tickets shown: " + esc(RES_LABEL[ST.f.result] || ST.f.result) : "All tickets in this view") + " (" + all.length.toLocaleString() + ")</h2>" + (all.length > CAP ? '<div class="rp-note">Showing the first ' + CAP.toLocaleString() + " (most used first). Narrow the filters to see the rest.</div>" : "") + "<table><thead><tr>" + RP_HEAD + "</tr></thead><tbody>" + rpRows(shown) + "</tbody></table>";
+  /* ── 3. by priority ── */
+  if (o.priority) {
+    var pr2 = sevs.map(function (z) { return { z: z, a: rpAgg(H.filter(function (x) { return x.t.sev === z.id; })) }; }).filter(function (s) { return s.a.n; });
+    var cal1 = ST.cals.get(rpClients(H)[0] || ""), single = rpClients(H).length === 1 && cal1.dayMin < 1440;
+    h += '<div class="rp-sec">' + sec("Performance by priority") + '<table class="rp-t keep">' + rpHead([["Priority", 0], ["Resolution target", 1]].concat(RP_STD)) + "<tbody>" +
+      pr2.map(function (s) { var th = ST.cfg.targets.defaults[s.z.id], cx = rpClients(H).length === 1 && ST.cfg.targets.clients[rpClients(H)[0]], th2 = cx && cx[s.z.id] > 0 ? cx[s.z.id] : th;
+        return '<tr><td><span class="sevdot" style="background:' + s.z.color + '"></span><b>' + s.z.name + '</b></td><td class="num">' + th2 + " h" + (single ? ' <span class="mut">(' + Math.round(th2 * 60 / cal1.dayMin * 10) / 10 + " d)</span>" : "") + "</td>" + rpStdCells(s.a) + "</tr>"; }).join("") +
+      '<tr class="tot"><td>All priorities</td><td></td>' + rpStdCells(A) + "</tr></tbody></table></div>";
   }
-  h += '<div class="rp-foot"><b>How to read this report.</b> Each ticket’s SLA clock starts when it is created and counts working time while it is with Help Desk or Engineering. It is paused while the ticket is with the client and stops when the ticket is closed. A ticket is <b>met</b> if it closed within its target, <b>missed</b> if it closed over it, and <b>breached</b> if it is still open and already over. “Working time” follows each client’s own calendar (' + esc(calBar()) + "); a day is one working day of that calendar. Targets: " + Sla.SEVERITIES.map(function (z) { return z.name + " " + ST.cfg.targets.defaults[z.id] + "h"; }).join(", ") + (Object.keys(ST.cfg.targets.clients).length ? " (with exceptions for " + Object.keys(ST.cfg.targets.clients).join(", ") + ")" : "") + ".</div>";
+  /* ── 4. by request type ── */
+  if (o.type) {
+    var ty = {}; H.forEach(function (x) { (ty[x.t.type || "Other"] || (ty[x.t.type || "Other"] = [])).push(x); });
+    var tk = Object.keys(ty).sort(function (a, b) { return ty[b].length - ty[a].length; });
+    if (tk.length) h += '<div class="rp-sec">' + sec("Performance by request type") + '<table class="rp-t keep">' + rpHead([["Request type", 0]].concat(RP_STD)) + "<tbody>" + tk.map(function (k) { return "<tr><td><b>" + esc(k) + "</b></td>" + rpStdCells(rpAgg(ty[k])) + "</tr>"; }).join("") + (tk.length > 1 ? '<tr class="tot"><td>All</td>' + rpStdCells(A) + "</tr>" : "") + "</tbody></table></div>";
+  }
+  /* ── 5. by client (only when more than one) ── */
+  if (o.client && multi) {
+    var cl = {}; H.forEach(function (x) { (cl[x.t.prefix] || (cl[x.t.prefix] = [])).push(x); });
+    var ck = Object.keys(cl).sort(function (a, b) { return cl[b].length - cl[a].length; });
+    h += '<div class="rp-sec">' + sec("Performance by client") + '<table class="rp-t">' + rpHead([["Client", 0]].concat(RP_STD)) + "<tbody>" + ck.map(function (k) { return "<tr><td><b>" + esc(clientName(k)) + "</b></td>" + rpStdCells(rpAgg(cl[k])) + "</tr>"; }).join("") + '<tr class="tot"><td>All clients</td>' + rpStdCells(A) + "</tr></tbody></table></div>";
+  }
+  /* ── 6. open tickets ── */
+  if (o.open && openL.length) {
+    var row = function (lab, sub, l) { var b1 = l.filter(function (x) { return x.b === "breached"; }).length, r1 = l.filter(function (x) { return x.b === "warning" || x.b === "danger"; }).length;
+      return "<tr><td><b>" + lab + '</b><div class="mut">' + sub + '</div></td><td class="num"><b>' + l.length + '</b></td><td class="num">' + (b1 ? '<span class="t-r">' + b1 + "</span>" : 0) + '</td><td class="num">' + (r1 ? '<span class="t-a">' + r1 + "</span>" : 0) + '</td><td class="num">' + (l.length - b1 - r1) + "</td></tr>"; };
+    var rows = mgmt ? row("With Help Desk", "clock running", withUs.filter(function (x) { return x.r.currentKind === "hd"; })) + row("With Engineering", "clock running", withUs.filter(function (x) { return x.r.currentKind === "engg"; })) : row("With the support team", "clock running", withUs);
+    h += '<div class="rp-sec">' + sec("Open tickets at report date") + '<table class="rp-t keep">' + rpHead([["Where the ticket is", 0], ["Open", 1], ["Over target", 1], ["Close to target (" + ST.cfg.warnPct + "%+)", 1], ["Within target", 1]]) + "<tbody>" + rows +
+      row("Awaiting " + (multi || mgmt ? "client" : "your") + " response", "SLA clock paused", withClient) + '<tr class="tot"><td>Total open</td><td class="num">' + openL.length + "</td><td></td><td></td><td></td></tr></tbody></table></div>";
+  }
+  /* ── 7. management: team accountability ── */
+  if (o.team && mgmt) {
+    var ta = { hd: { n: 0, over: 0, open: 0 }, engg: { n: 0, over: 0, open: 0 } }, tm = { hd: 0, engg: 0, client: 0 };
+    H.forEach(function (x) { tm.hd += x.r.hdMin; tm.engg += x.r.enggMin; tm.client += x.r.pausedMin; if (!isBr(x)) return; var w = insOf(x); if (!w || !ta[w.at]) return; ta[w.at].n++; ta[w.at].over += x.r.elapsedMin - x.r.targetMin; if (x.b === "breached") ta[w.at].open++; });
+    var tt2 = ta.hd.n + ta.engg.n;
+    h += '<div class="rp-sec">' + sec("Team accountability") + '<div class="rp-note">Each breach is assigned to the team holding the ticket when its working time passed the target. Working time per ticket is the average across all tickets in the report.</div><table class="rp-t keep">' + rpHead([["Team", 0], ["Breaches", 1], ["Share", 1], ["Still open", 1], ["Avg overrun", 1], ["Avg working time per ticket", 1]]) + "<tbody>" +
+      [["hd", "Help Desk"], ["engg", "Engineering"]].map(function (k) { var o2 = ta[k[0]]; return "<tr><td><b>" + k[1] + '</b></td><td class="num">' + o2.n + '</td><td class="num">' + (tt2 ? Math.round(o2.n / tt2 * 100) + "%" : "—") + '</td><td class="num">' + o2.open + '</td><td class="num">' + (o2.n ? rpH(o2.over / o2.n) : "—") + '</td><td class="num">' + rpH(H.length ? tm[k[0]] / H.length : null) + "</td></tr>"; }).join("") +
+      '<tr><td><b>Client</b> <span class="mut">(not counted)</span></td><td class="num">—</td><td></td><td></td><td></td><td class="num">' + rpH(H.length ? tm.client / H.length : null) + "</td></tr></tbody></table></div>";
+  }
+  /* ── 8. breach register ── */
+  if (o.breaches) {
+    var bl = H.filter(isBr).sort(function (a, b) { return (b.b === "breached") - (a.b === "breached") || (b.r.elapsedMin - b.r.targetMin) - (a.r.elapsedMin - a.r.targetMin); }), CAP = o.brMax === "all" ? 400 : +o.brMax || 25;
+    h += '<div class="rp-sec">' + (bl.length ? '<div class="rp-hk">' + sec("Breach register") + '<div class="rp-note">Tickets that exceeded their SLA target: still open first, then by how far over target. Times are working time.' + (bl.length > CAP ? " Showing the " + CAP + " largest of " + bl.length + "; the full list is available on request." : "") + "</div></div>" +
+      '<table class="rp-t rp-list">' + rpHead([["Ticket", 0], ["Summary", 0], ["Priority", 0]].concat(multi ? [["Client", 0]] : []).concat([["Raised", 0], ["Target", 1], ["Time taken", 1], ["Over by", 1], ["Status", 0]]).concat(mgmt ? [["Broke with", 0]] : [])) + "<tbody>" +
+      bl.slice(0, CAP).map(function (x) { var t = x.t, rr = x.r, w = mgmt ? insOf(x) : null;
+        return '<tr><td class="key">' + esc(t.key) + '</td><td class="sum">' + esc(t.summary) + "</td><td>" + esc(t.sev ? Sla.sevName(t.sev) : t.priority || "—") + "</td>" + (multi ? "<td>" + esc(clientName(t.prefix)) + "</td>" : "") + "<td class=\"nw\">" + rpDs(t.created) + '</td><td class="num">' + rpH(rr.targetMin) + '</td><td class="num">' + rpH(rr.elapsedMin) + '</td><td class="num t-r">' + rpH(rr.elapsedMin - rr.targetMin) + "</td><td>" + (rr.isClosed ? "Closed" : '<b class="t-r">Open</b>') + "</td>" + (mgmt ? "<td>" + (w && w.at ? KN[w.at] : "—") + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table>" : sec("Breach register") + '<div class="rp-note">No ticket exceeded its SLA target in this period.</div>') + "</div>";
+  }
+  /* ── 9. SLA terms ── */
+  if (o.terms) {
+    var cs = rpClients(H), owns = cs.filter(function (p) { return ST.cals.has(p); });
+    var calDesc = function (p) { var B = Sla.basis(ST.cfg, ST.cals, p, null, null); return B.is247 ? "24 hours a day, 7 days a week" : B.days + ", " + B.hours + (B.offDays.length ? " (" + B.offDays.join(" and ") + " not counted)" : ""); };
+    var calLines = (cs.length - owns.length > 0 ? ["<tr><th>Working hours" + (owns.length ? " (standard)" : "") + "</th><td>" + calDesc("") + "</td></tr>"] : []).concat(owns.map(function (p) { return "<tr><th>Working hours — " + esc(clientName(p)) + "</th><td>" + calDesc(p) + "</td></tr>"; }));
+    h += '<div class="rp-sec rp-terms">' + sec("SLA terms and definitions") + '<div class="rp-cols"><table class="rp-t">' + rpHead([["Priority", 0], ["Resolution target", 1]]) + "<tbody>" +
+      sevs.map(function (z) { return '<tr><td><span class="sevdot" style="background:' + z.color + '"></span>' + z.name + '</td><td class="num">' + ST.cfg.targets.defaults[z.id] + " working hours</td></tr>"; }).join("") + "</tbody></table>" +
+      '<table class="rp-def"><tbody>' + calLines.join("") +
+      "<tr><th>Holidays</th><td>" + (ST.cfg.holidays.length ? ST.cfg.holidays.length + " listed holidays are not counted" : "No holidays configured") + "</td></tr>" +
+      "<tr><th>SLA clock</th><td>Starts when the ticket is raised and counts working time while the support team holds it. It is <b>paused</b> while the ticket awaits the client’s response and <b>stops</b> when the ticket is resolved.</td></tr>" +
+      "<tr><th>Compliance</th><td>Tickets resolved within target ÷ (tickets resolved within target + tickets that exceeded target, resolved or still open). Target: <b>" + goal + "%</b>.</td></tr>" +
+      (Object.keys(ST.cfg.targets.clients).some(function (p) { return cs.indexOf(p) > -1; }) ? "<tr><th>Client targets</th><td>Some clients in this report have agreed targets that differ from the table; those targets were applied.</td></tr>" : "") +
+      "</tbody></table></div></div>";
+  }
+  var foot = []; if (excl > 0) foot.push(excl + " ticket" + (excl === 1 ? "" : "s") + " raised in the period could not be measured at the time of reporting and " + (excl === 1 ? "is" : "are") + " excluded.");
+  var nt = H.filter(function (x) { return x.b === "none"; }).length; if (nt) foot.push(nt + " ticket" + (nt === 1 ? " has" : "s have") + " no priority set and no SLA target.");
+  h += '<div class="rp-foot">' + (foot.length ? foot.join(" ") + " " : "") + "Generated " + fdt(Date.now()) + " IST" + (o.confidential ? " · <b>Confidential</b>" : "") + "</div>";
   return h;
 }
-function rpViews() { var all = view(true); return { all: all, list: ST.tab === "tickets" ? view() : all }; }     // SLA figures: no chip. Ticket list: the chip you had on the Tickets tab
+function rpViews() { var all = view(true); return { all: all, list: all }; }
+function rpSaved() { try { return JSON.parse(localStorage.getItem("hd-sla-report") || "{}") || {}; } catch (e) { return {}; } }
+function rpSave() { try { var o = ST.rp; localStorage.setItem("hd-sla-report", JSON.stringify({ audience: o.audience, byName: o.byName, orient: o.orient, brMax: o.brMax, confidential: o.confidential })); } catch (e) {} }
 function openReport() {
-  var vs = rpViews(), v = vs.all; if (!v.some(function (x) { return x.r; })) { toast("Nothing to report yet — fetch status history for these tickets first.", true); return; }
-  ST.rp = { orient: "landscape", summary: 1, pending: 1, trend: 1, matrix: 1, matrixBy: ST.matrixBy, holders: 1, attention: 1, all: vs.list.length <= 200 ? 1 : 0 };
-  var o = ST.rp;
-  var tb = '<div class="rp-toolbar" role="group" aria-label="Report options"><b style="font-size:13px">🖨 PDF report</b>' +
-    [["summary", "Summary"], ["pending", "SVM pending"], ["trend", "SLA % by month"], ["matrix", "Heatmap"], ["holders", "Who has open tickets"], ["attention", "Breached & at-risk tickets"], ["all", "Ticket list (" + vs.list.length.toLocaleString() + ")"]].map(function (k) { return '<label class="ck"><input type="checkbox" data-rp="' + k[0] + '"' + (o[k[0]] ? " checked" : "") + "> " + k[1] + "</label>"; }).join("") +
-    '<label class="ck">Heatmap by <select data-rpsel="matrixBy" aria-label="Heatmap by"><option value="client">Client</option><option value="severity">Severity</option><option value="worker">Worker</option></select></label>' +
-    '<label class="ck">Page <select data-rpsel="orient" aria-label="Page orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></label><span class="sp"></span>' +
-    '<button class="ghost" data-closereport>Close</button><button class="primary" id="rpPrint">Print / Save as PDF</button></div>';
-  overlay("reportov", tb + '<div class="paper" id="rpPaper"></div>');
-  $("reportov").querySelector('[data-rpsel="matrixBy"]').value = o.matrixBy;
-  document.body.classList.add("printing-report"); renderReportBody();
+  var vs = rpViews(), v = vs.all; if (!v.some(function (x) { return x.r; })) { toast("Nothing to report yet — status history for these tickets is still being fetched.", true); return; }
+  var sv = rpSaved();
+  ST.rp = { audience: sv.audience || "client", byName: sv.byName || "SVM Help Desk", forName: "", orient: sv.orient || "portrait", brMax: sv.brMax || "25", confidential: sv.confidential == null ? 1 : sv.confidential };
+  RP_SEC.forEach(function (k) { ST.rp[k[0]] = 1; });
+  rpToolbar(); document.body.classList.add("printing-report"); renderReportBody();
   var x = $("rpPrint"); if (x) x.focus();
+}
+function rpToolbar() {
+  var o = ST.rp, v = rpViews().all;
+  var tb = '<div class="rp-toolbar" role="group" aria-label="Report options"><b style="font-size:13px">🖨 SLA report</b>' +
+    '<label class="ck">For <select data-rpsel="audience" aria-label="Audience"><option value="client">Client</option><option value="management">Management (internal)</option></select></label>' +
+    '<label class="ck">Prepared for <input data-rptext="forName" placeholder="' + esc(rpForName(v)) + '" value="' + esc(o.forName) + '" style="width:170px"></label>' +
+    '<label class="ck">Prepared by <input data-rptext="byName" value="' + esc(o.byName) + '" style="width:140px"></label>' +
+    '<label class="ck">Page <select data-rpsel="orient" aria-label="Page orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>' +
+    '<label class="ck">Breach register <select data-rpsel="brMax" aria-label="Breach register length"><option value="25">Top 25</option><option value="50">Top 50</option><option value="all">All</option></select></label>' +
+    '<label class="ck"><input type="checkbox" data-rp="confidential"' + (o.confidential ? " checked" : "") + "> Confidential</label>" +
+    '<span class="sp"></span><button class="ghost" data-closereport>Close</button><button class="primary" id="rpPrint">Print / Save as PDF</button>' +
+    '<div class="rp-secs">Sections: ' + RP_SEC.filter(function (k) { return !k[2] || o.audience === k[2]; }).map(function (k) { return '<label class="ck"><input type="checkbox" data-rp="' + k[0] + '"' + (o[k[0]] ? " checked" : "") + "> " + k[1] + "</label>"; }).join("") + "</div></div>";
+  overlay("reportov", tb + '<div class="paper" id="rpPaper"></div>');
+  $("reportov").querySelector('[data-rpsel="audience"]').value = o.audience; $("reportov").querySelector('[data-rpsel="orient"]').value = o.orient; $("reportov").querySelector('[data-rpsel="brMax"]').value = o.brMax;
 }
 function renderReportBody() {
   var o = ST.rp; if (!o || !$("rpPaper")) return; var st = $("rpPageStyle");
   if (!st) { st = document.createElement("style"); st.id = "rpPageStyle"; document.head.appendChild(st); }
-  st.textContent = "@media print{@page{size:A4 " + o.orient + ";margin:11mm 10mm 13mm;@bottom-center{content:\"Page \" counter(page) \" of \" counter(pages);font-size:9px;color:#6B7A90}}}";
-  var vs = rpViews(); $("rpPaper").innerHTML = reportHtml(vs.all, o, vs.list);
+  st.textContent = "@media print{@page{size:A4 " + o.orient + ";margin:13mm 12mm 14mm;@bottom-left{content:\"" + (o.byName || "").replace(/["\\]/g, "") + " · SLA Performance Report" + (o.confidential ? " · Confidential" : "") + "\";font-size:8.5px;color:#6B7A90;font-family:Inter,Segoe UI,Arial,sans-serif}@bottom-right{content:\"Page \" counter(page) \" of \" counter(pages);font-size:8.5px;color:#6B7A90;font-family:Inter,Segoe UI,Arial,sans-serif}}}";
+  $("rpPaper").className = "paper rp-doc " + o.orient;
+  $("rpPaper").innerHTML = reportHtml(rpViews().all, o);
 }
 function closeReport() { var o = $("reportov"); if (o) o.remove(); document.body.classList.remove("printing-report"); var st = $("rpPageStyle"); if (st) st.remove(); ST.rp = null; }
+function rpFileName() {
+  var r = rangeMs(), f = (ST.rp && ST.rp.forName) || rpForName(rpViews().all);
+  return ("SLA Report - " + f + " - " + rpD(r.from) + " to " + rpD(Math.min(r.to, Date.now()))).replace(/[\\\/:*?"<>|]/g, "-");
+}
 function printReport() {
   var old = document.title; document.title = rpFileName();
   var back = function () { document.title = old; window.removeEventListener("afterprint", back); }; window.addEventListener("afterprint", back);
@@ -1789,8 +1921,9 @@ document.addEventListener("change", function (e) {
   if (e.target && e.target.id === "chkAuto") { if (Hist.setAuto) Hist.setAuto(e.target.checked); if (e.target.checked) AUTO.tried = {}; renderBar(); scheduleAuto(300); return; }
   var t = e.target;
   if (t.id === "bkSkip" && ST.bk) { ST.bk.skip = t.checked; renderBulk(); return; }
-  if (t.dataset && t.dataset.rp && ST.rp) { ST.rp[t.dataset.rp] = t.checked ? 1 : 0; renderReportBody(); return; }
-  if (t.dataset && t.dataset.rpsel && ST.rp) { ST.rp[t.dataset.rpsel] = t.value; renderReportBody(); return; }
+  if (t.dataset && t.dataset.rp && ST.rp) { ST.rp[t.dataset.rp] = t.checked ? 1 : 0; rpSave(); renderReportBody(); return; }
+  if (t.dataset && t.dataset.rpsel && ST.rp) { ST.rp[t.dataset.rpsel] = t.value; rpSave(); if (t.dataset.rpsel === "audience") { rpToolbar(); } renderReportBody(); return; }
+  if (t.dataset && t.dataset.rptext && ST.rp) { ST.rp[t.dataset.rptext] = t.value.trim(); rpSave(); renderReportBody(); return; }
   if (t.name === "bkMode" && ST.bk) { ST.bk.mode = t.value; renderBulk(); return; }
   if (t.name === "rmMode" && ST.rm) { ST.rm.mode = t.value; document.querySelectorAll(".rm-opt").forEach(function (o) { o.classList.toggle("on", o.querySelector("input").checked); }); return; }
   if (t.id === "rFrom" || t.id === "rTo") { ST.ui.from = ($("rFrom") || {}).value || ""; ST.ui.to = ($("rTo") || {}).value || ""; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
