@@ -306,7 +306,7 @@
   }
   /* another page finished a fetch → reload the shared cache here */
   if (root.addEventListener) root.addEventListener("storage", function (e) {
-    if (e.key === "hd-sla-hist-ping" && L.loaded && !L.fetching) load().then(function () { if (AUTO.rows) autoFetch(AUTO.rows); });
+    if ((e.key === "hd-sla-hist-ping" || e.key === "hd-sla-cfg-ping") && L.loaded && !L.fetching) load().then(function () { if (AUTO.rows) autoFetch(AUTO.rows); });
     if (e.key === "hd-sla-auto" && AUTO.rows) { notify(); autoFetch(AUTO.rows); }
     if (e.key === "hd-sla-fetch-lock") pnotify();                   // another page started/stopped fetching → refresh "Calculating in …"
   });
