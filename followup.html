@@ -313,7 +313,8 @@ function fuOffTxt(o,C){var a=[];
   if(o.weekend>0.5){var wd=Object.keys(o.weekendDays).sort();a.push(C(o.weekend)+" weekend"+(wd.length<=4?" ("+wd.map(function(x){return FU_DOW[new Date(x+"T00:00:00Z").getUTCDay()]+" "+fuIso(x).slice(0,6);}).join(", ")+")":" ("+wd.length+" days)"));}
   if(o.holiday>0.5)a.push(C(o.holiday)+" holiday ("+Object.keys(o.holidayDays).sort().map(function(x){return fuIso(x).slice(0,6);}).join(", ")+")");
   if(o.night>0.5)a.push(C(o.night)+" off-hours");
-  return a.join(" · ");}
+  return a.length?a.map(function(x,i){return <div key={i} style={{lineHeight:1.45,marginTop:i?2:0}}>{x}</div>;}):"";}
+function fuDtS(ms){if(ms==null)return "—";var d=new Date(ms+330*60000),y=d.getUTCFullYear(),p2=function(n){return (n<10?"0":"")+n;};return p2(d.getUTCDate())+" "+FU_MON[d.getUTCMonth()]+(y!==new Date().getFullYear()?" "+String(y).slice(2):"")+", "+p2(d.getUTCHours())+":"+p2(d.getUTCMinutes());}
 function SlaBasis({d,row}){
   var B=d.basis,L=d.life,F=d.fmt,C=d.fcal,r=d.r; if(!B)return null; var cn=row.Project||B.prefix;
   var R=function(k,v){return <tr><th style={{width:120,textAlign:"left",fontWeight:600,color:"var(--t3)",padding:"4px 10px 4px 0",verticalAlign:"top",whiteSpace:"nowrap",fontSize:12}}>{k}</th><td style={{padding:"4px 0",fontSize:12.5,color:"var(--t2)"}}>{v}</td></tr>;};
@@ -414,7 +415,7 @@ function SlaDetailModal({row,onClose}){
       <SlaBasis d={d} row={row}/>
       <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",margin:"14px 0 6px"}}>Who had this ticket</div>
       <div style={{overflowX:"auto",border:"1px solid var(--border)",borderRadius:10}}><table style={{width:"100%",borderCollapse:"collapse"}}>
-        <thead><tr><th style={SLA_TH}>Held by</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Working time</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Calendar time</th><th style={SLA_TH}>Share of the ticket’s life</th><th style={SLA_TH}>Counts towards SLA?</th></tr></thead>
+        <thead><tr><th style={SLA_TH}>Held by</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Working time{d.cal.dayMin<1440?<span style={{textTransform:"none",fontWeight:500}}> (1d = {C(d.cal.dayMin).replace(/ 0m$/,"")})</span>:null}</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Calendar time<span style={{textTransform:"none",fontWeight:500}}> (1d = 24h)</span></th><th style={SLA_TH}>Share of the ticket’s life</th><th style={SLA_TH}>Counts towards SLA?</th></tr></thead>
         <tbody>{kinds.map(function(k){var o=r.byKind[k],counted=k==="hd"||k==="engg";return <tr key={k}>
           <td style={SLA_TD}><KindChip k={k}/></td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{k==="closed"?"—":F(o.biz)}</td>
@@ -427,15 +428,15 @@ function SlaDetailModal({row,onClose}){
       <div style={{display:"flex",gap:14,fontSize:11,color:"var(--t3)",marginBottom:6}}>{["hd","engg","client","closed"].map(function(k){return <span key={k} style={{display:"flex",alignItems:"center",gap:5}}><i style={{width:10,height:10,borderRadius:3,background:SLA_KIND[k][3],display:"inline-block"}}/>{SLA_KIND[k][0]}{k==="client"?" (paused)":""}</span>;})}</div>
       <div style={{display:"flex",gap:2,height:18,marginBottom:10}} aria-hidden="true">{r.segs.map(function(sg,i){return <i key={i} title={sg.status+" · "+SLA_KIND[sg.kind][0]} style={{flexGrow:Math.max(sg.calMin,tot*0.008),flexShrink:1,flexBasis:0,minWidth:3,background:SLA_KIND[sg.kind][3],borderRadius:4}}/>;})}</div>
       <div style={{overflowX:"auto",border:"1px solid var(--border)",borderRadius:10,maxHeight:340,overflowY:"auto"}}><table style={{width:"100%",borderCollapse:"collapse"}}>
-        <thead style={{position:"sticky",top:0}}><tr><th style={SLA_TH}>Status</th><th style={SLA_TH}>Held by</th><th style={SLA_TH}>From</th><th style={SLA_TH}>To</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Calendar</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Working time</th><th style={SLA_TH}>Not counted in this step</th><th style={SLA_TH}>Clock</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Counted so far</th></tr></thead>
+        <thead style={{position:"sticky",top:0}}><tr><th style={SLA_TH}>Status</th><th style={SLA_TH}>Held by</th><th style={SLA_TH}>From</th><th style={SLA_TH}>To</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Calendar</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Working time</th><th style={SLA_TH}>Not counted in this step</th><th style={SLA_TH}>Clock</th><th style={Object.assign({},SLA_TH,{textAlign:"right"})}>Counted so far{d.cal.dayMin<1440?<span style={{textTransform:"none",fontWeight:500}}> (1d = {C(d.cal.dayMin).replace(/ 0m$/,"")})</span>:null}</th></tr></thead>
         <tbody>{r.segs.map(function(sg,i){return <tr key={i} style={{background:sg.open?"#F8FAFF":""}}>
           <td style={SLA_TD}><b>{sg.status}</b>{!sg.mapped&&<span style={{marginLeft:6,fontSize:10,color:"#B45309",background:"#FEF3C7",padding:"1px 6px",borderRadius:5}}>unmapped</span>}</td>
           <td style={SLA_TD}><KindChip k={sg.kind}/></td>
-          <td style={SLA_TD}>{dt(sg.start)}</td>
-          <td style={SLA_TD}>{sg.open?"now":dt(sg.end)}</td>
+          <td style={SLA_TD} title={dt(sg.start)+" IST"}>{fuDtS(sg.start)}</td>
+          <td style={SLA_TD} title={sg.open?"":dt(sg.end)+" IST"}>{sg.open?"now":fuDtS(sg.end)}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{C(sg.calMin)}</td>
-          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{sg.kind==="closed"?"—":F(sg.bizMin)}</td>
-          <td style={Object.assign({},SLA_TD,{whiteSpace:"normal",fontSize:11.5,minWidth:150})}>{sg.kind==="client"?<span style={{color:"var(--t3)"}}>all of it — with the client</span>:sg.kind==="closed"?"—":(fuOffTxt(d.off(sg),C)||<span style={{color:"var(--t3)"}}>nothing</span>)}</td>
+          <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})} title="Working time inside this step, in hours">{sg.kind==="closed"?"—":window.HDSla.fmtDur(sg.bizMin,"h")}</td>
+          <td style={Object.assign({},SLA_TD,{whiteSpace:"normal",fontSize:11.5,minWidth:190,maxWidth:290})}>{sg.kind==="client"?<span style={{color:"var(--t3)"}}>all of it — with the client</span>:sg.kind==="closed"?"—":(fuOffTxt(d.off(sg),C)||<span style={{color:"var(--t3)"}}>nothing</span>)}</td>
           <td style={SLA_TD}>{sg.counted?"▶ counted":sg.kind==="client"?"⏸ paused":"■ stopped"}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{F(sg.elapsedAfter)}</td></tr>;})}</tbody>
       </table></div>
@@ -443,7 +444,7 @@ function SlaDetailModal({row,onClose}){
   }
   return(
     <div onClick={function(ev){if(ev.target===ev.currentTarget)onClose();}} role="dialog" aria-modal="true" style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:20,overflowY:"auto"}}>
-      <div style={{background:"#fff",borderRadius:18,boxShadow:"0 20px 60px rgba(0,0,0,.25)",width:"100%",maxWidth:1060,animation:"modalIn .25s cubic-bezier(.22,1,.36,1)"}}>
+      <div style={{background:"#fff",borderRadius:18,boxShadow:"0 20px 60px rgba(0,0,0,.25)",width:"100%",maxWidth:1180,animation:"modalIn .25s cubic-bezier(.22,1,.36,1)"}}>
         {head}
         {(busy||err)&&<div style={{padding:"8px 22px",fontSize:12,background:err?"#FEF2F2":"#EFF6FF",color:err?"#B91C1C":"#1D4ED8",borderBottom:"1px solid var(--border)"}}>{err||busy}</div>}
         {body}
