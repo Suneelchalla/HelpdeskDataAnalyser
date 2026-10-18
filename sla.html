@@ -257,6 +257,21 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 .clab{font-size:10.5px;color:var(--muted);margin-top:5px;white-space:nowrap}
 .crate{font-size:10px;color:var(--faint);font-family:var(--mono)}
 @media (max-width:1100px){.grid2{grid-template-columns:1fr}}
+
+/* calculation basis + day strip */
+.basis{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 14px;background:#fff}
+.basis-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-size:13px}
+.basis table{width:100%;border-collapse:collapse;font-size:12.5px}.basis th{width:120px;text-align:left;font-weight:600;color:var(--muted);padding:4px 10px 4px 0;vertical-align:top;white-space:nowrap;background:none;border:0;text-transform:none;letter-spacing:0;font-size:12px}.basis td{padding:4px 0;border:0;color:var(--ink2)}
+.basis-n{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--amber-soft);color:var(--amber);font-size:12px}
+.mut{color:var(--muted)}
+td.nc{font-size:11.5px;color:var(--ink2);white-space:normal;min-width:150px}
+.dstrip{display:flex;flex-direction:column;gap:3px;overflow-x:auto;padding-bottom:4px}
+.dsrow{display:flex;gap:2px;align-items:center}.dsm{width:52px;flex:0 0 52px;font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+.dc{flex:0 0 14px;width:14px;height:16px;border-radius:3px;display:inline-block}.dc.blank{background:none}
+.dc.we,.dc.ho{background:repeating-linear-gradient(135deg,#E2E8F0 0 3px,#fff 3px 6px);box-shadow:inset 0 -3px 0 var(--kc,#CBD5E1)}
+.dc.ho{background:repeating-linear-gradient(135deg,#E9D5FF 0 3px,#fff 3px 6px)}
+.dc.k2-hd{--kc:var(--hd2)}.dc.k2-engg{--kc:var(--engg)}.dc.k2-client{--kc:#F0A838}.dc.k2-closed{--kc:#B8C2CF}
+.legend .lg-we::before{background:repeating-linear-gradient(135deg,#CBD5E1 0 3px,#fff 3px 6px)!important}.legend .lg-ho::before{background:repeating-linear-gradient(135deg,#D8B4FE 0 3px,#fff 3px 6px)!important}
 </style>
 </head>
 <body>
@@ -621,6 +636,7 @@ function reloadHist() {
 }
 window.addEventListener("storage", function (e) {
   if (!ST.cfg) return;
+  if (e.key === "hd-sla-cfg-ping") { HDStore.loadSlaConfig().then(function (c) { ST.cfg = Sla.mergeConfig(c); setCalendars(); ST.draft = null; recompute(); buildOptions(); buildFilters(); renderAll(); if (ST.detail) renderDetail(); }); return; }
   if (e.key === "hd-sla-hist-ping" && !ST.fetching) reloadHist();
   else if (e.key === "hd-sla-fetch-lock") { if (!ST.fetching) renderBar(); }
   else if (e.key === "hd-sla-auto") { renderBar(); scheduleAuto(); }
@@ -979,6 +995,54 @@ function exportList(v, name) {
 /* ═════════ ticket detail ═════════ */
 function overlay(id, html) { var o = $(id); if (!o) { o = document.createElement("div"); o.id = id; o.className = "ov"; document.body.appendChild(o); } o.innerHTML = html; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); return o; }
 function closeOv(id) { var o = $(id); if (o) o.remove(); if (id === "detail") ST.detail = null; if (id === "remind") { clearInterval(ST.rmTimer); ST.rm = null; } if (id === "drill") ST.dr = null; if (id === "bulk") ST.bk = null; if (id === "reportov") closeReport(); }
+
+/* ── "How this SLA was calculated" + day-by-day strip (ticket view) ── */
+var DOWN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function isoNice(iso) { var p = iso.split("-"); return p[2] + " " + MON3[+p[1] - 1] + " " + p[0].slice(2); }
+function offTxt(o) {
+  var a = [];
+  if (o.weekend > 0.5) { var wd = Object.keys(o.weekendDays).sort(), when = wd.length <= 4 ? " (" + wd.map(function (d) { return DOWN[new Date(d + "T00:00:00Z").getUTCDay()] + " " + isoNice(d).slice(0, 6); }).join(", ") + ")" : " (" + wd.length + " days)";
+    a.push('<span title="non-working days">' + fcal(o.weekend) + " weekend" + when + "</span>"); }
+  if (o.holiday > 0.5) a.push('<span title="listed holidays">' + fcal(o.holiday) + " holiday (" + Object.keys(o.holidayDays).sort().map(function (d) { return isoNice(d).slice(0, 6); }).join(", ") + ")</span>");
+  if (o.night > 0.5) a.push('<span title="working days, outside working hours">' + fcal(o.night) + " off-hours</span>");
+  return a.join(" · ");
+}
+function basisHtml(t, r) {
+  var cal = calFor(t), B = Sla.basis(ST.cfg, ST.cals, t.prefix, t.sev, r), a = r.segs[0].start, z = r.segs[r.segs.length - 1].end, L = Sla.offBreakdown(a, z, cal);
+  var row = function (k, v) { return "<tr><th>" + k + "</th><td>" + v + "</td></tr>"; }, cn = esc(clientName(t.prefix));
+  var h = '<div class="basis"><div class="basis-h"><b>How this SLA was calculated</b><button class="quiet" data-tab="settings" title="Open SLA settings">Settings →</button></div><table>';
+  h += row("Calendar", B.own ? "<b>" + cn + "’s own calendar</b> <span class=\"mut\">(Settings → Client calendars · " + esc(t.prefix) + ")</span>" : "<b>Default working calendar</b> <span class=\"mut\">(" + cn + " has no calendar of its own)</span>");
+  h += row("Working days", "<b>" + B.days + "</b>" + (B.offDays.length ? ' · <span class="mut">not counted: ' + B.offDays.join(", ") + "</span>" : ' · <span class="mut">weekends count</span>'));
+  h += row("Working hours", "<b>" + B.hours + "</b>" + (B.dayMin < 1440 ? ' · <span class="mut">1 working day = ' + fcal(B.dayMin).replace(/ 0m$/, "") + "</span>" : ""));
+  h += row("Holidays", B.holidaysSkipped ? "<b>Skipped</b> · " + B.holidaysListed + " listed" + (B.holidaysInLife.length ? " · in this ticket’s life: " + B.holidaysInLife.map(function (x) { return "<b>" + isoNice(x.date) + "</b>" + (x.name ? " " + esc(x.name) : ""); }).join(", ") : ' · <span class="mut">none fell in this ticket’s life</span>') : "<b>Not skipped</b> <span class=\"mut\">(this client’s calendar works on holidays)</span>");
+  h += row("Target", B.targetH ? "<b>" + esc(B.sevName) + " → " + B.targetH + "h of working time</b>" + (B.dayMin < 1440 && B.targetH * 60 >= B.dayMin ? " = " + fdur(B.targetH * 60) : "") + ' · <span class="mut">' + (B.targetSrc === "client" ? cn + "’s own target (Settings → Resolution targets)" : "default target for " + esc(B.sevName)) + "</span>" : "<b>None</b> <span class=\"mut\">(priority “" + esc(t.priority || "blank") + "” has no target)</span>");
+  h += row("Clock", "Runs while with <b>Help Desk</b> or <b>Engineering</b> · pauses while with the <b>client</b> · stops when <b>closed</b> · <span class=\"mut\">At risk from " + B.warnPct + "%, Due soon from " + B.dangerPct + "% of the target</span>");
+  var parts = [];
+  if (L.weekend > 0.5) parts.push("<b>" + L.nWeekendDays + " weekend day" + (L.nWeekendDays === 1 ? "" : "s") + "</b> (" + fcal(L.weekend) + ")");
+  if (L.holiday > 0.5) parts.push("<b>" + L.nHolidayDays + " holiday" + (L.nHolidayDays === 1 ? "" : "s") + "</b> (" + fcal(L.holiday) + ")");
+  if (L.night > 0.5) parts.push("<b>" + fcal(L.night) + "</b> outside working hours");
+  if (r.pausedMin > 0) parts.push("<b>" + fdur(r.pausedMin) + "</b> of working time with the client");
+  h += row("Not counted", parts.length ? parts.join(" · ") : "Nothing — every minute of this ticket’s life was working time with Help Desk or Engineering.");
+  h += "</table>";
+  if (!B.is247 && B.dayMin >= 1440 && B.offDays.length) h += '<div class="basis-n">ⓘ This calendar runs <b>24 hours a day</b> but only on <b>' + B.days + "</b>, so " + B.offDays.join(" and ") + " are still not counted. For a true 24/7 contract tick every day (or use the 24/7 button) in Settings.</div>";
+  return h + "</div>";
+}
+function stripHtml(t, r) {
+  var cal = calFor(t), S = Sla.dayStrip(r, cal, 400); if (!S.days.length) return "";
+  var KL = { hd: "Help Desk", engg: "Engineering", client: "Client", closed: "Closed" }, rows = {}, ord = [];
+  S.days.forEach(function (d) { var m = d.iso.slice(0, 7); if (!rows[m]) { rows[m] = []; ord.push(m); } rows[m].push(d); });
+  var h = '<h3 style="font-size:13px;margin:16px 0 4px">Day by day</h3><div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">Each square is one day (IST). Coloured = a working day, by who held the ticket; <b>striped = not a working day</b> (weekend or holiday), so nothing counted. Hover a day for details.' + (S.truncated ? " Showing the last 400 days." : "") + '</div><div class="legend" style="margin-bottom:6px"><span style="--c:var(--hd2)">Help Desk</span><span style="--c:var(--engg)">Engineering</span><span style="--c:#F0A838">Client (paused)</span><span style="--c:#B8C2CF">Closed</span><span class="lg-we">Weekend (not counted)</span><span class="lg-ho">Holiday (not counted)</span></div><div class="dstrip">';
+  ord.forEach(function (m) {
+    var p = m.split("-"), first = rows[m][0], lead = "";
+    for (var i = 0; i < +first.iso.slice(8) - 1; i++) lead += '<i class="dc blank"></i>';
+    h += '<div class="dsrow"><span class="dsm">' + MON3[+p[1] - 1] + " " + p[0].slice(2) + "</span>" + lead + rows[m].map(function (d) {
+      var held = ["hd", "engg", "client", "closed"].filter(function (k) { return d.by[k] > 0.5; }).map(function (k) { return KL[k] + " " + fcal(d.by[k]); }).join(", ");
+      var tip = DOWN[d.dow] + " " + isoNice(d.iso) + " — " + (d.type === "weekend" ? "weekend, not counted" : d.type === "holiday" ? "holiday, not counted" : d.counted > 0.5 ? "working day, counted " + fdur(d.counted) : d.kind === "client" ? "working day, paused (with client)" : d.kind === "closed" ? "closed" : "working day, nothing counted") + (held ? " · " + held : "");
+      return '<i class="dc ' + (d.type === "work" ? "k-" + d.kind + " bgc" : d.type === "weekend" ? "we k2-" + d.kind : "ho k2-" + d.kind) + '" title="' + esc(tip) + '"></i>'; }).join("") + "</div>";
+  });
+  return h + "</div>";
+}
+
 function renderDetail() { var t = ST.byKey[ST.detail]; if (t) withCal(t, renderDetailInner); }
 function renderDetailInner() {
   var t = ST.byKey[ST.detail]; if (!t) return;
@@ -999,15 +1063,17 @@ function renderDetailInner() {
       (e && e.suspect ? '<br><span style="color:var(--amber)"><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</span> ' : "") +
       (r.statusMismatch ? '<br><span style="color:var(--amber)">ⓘ Jira’s history ends in <b>“' + esc(r.statusMismatch.history) + "”</b>, but the ticket is now in <b>“" + esc(r.statusMismatch.current) + "”</b> (Jira’s own status). The time since the last recorded change is counted under the current status.</span>" : "") +
       (r.unmapped.length ? '<br><span style="color:var(--amber)">Status(es) not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</span>" : "") + "</div>";
+    h += basisHtml(t, r);
     /* who had it */
     var kinds = [["hd", "Help Desk"], ["engg", "Engineering"], ["client", "Client"], ["closed", "Closed"]].filter(function (k) { return r.byKind[k[0]].cal > 0.5; });
     h += '<h3 style="font-size:13px;margin:4px 0 6px">Who had this ticket</h3><div class="tw"><table><thead><tr><th>Held by</th><th class="num">Working time</th><th class="num">Calendar time</th><th>Share of the ticket’s life</th><th>Counts towards SLA?</th></tr></thead><tbody>' +
       kinds.map(function (k) { var o = r.byKind[k[0]], counted = k[0] === "hd" || k[0] === "engg";
         return "<tr><td>" + kchip(k[0]) + '</td><td class="num">' + (k[0] === "closed" ? "—" : fdur(o.biz)) + '</td><td class="num">' + fcal(o.cal) + '</td><td><div class="hb" style="min-width:160px"><i class="k-' + k[0] + ' bgc" style="width:' + Math.max(1, o.cal / tot * 100) + '%"></i></div></td><td>' + (counted ? "Yes — counted" : k[0] === "client" ? "No — clock paused" : "No — clock stopped") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+    h += stripHtml(t, r);
     h += '<h3 style="font-size:13px;margin:16px 0 6px">Status by status (' + r.segs.length + ' step' + (r.segs.length === 1 ? "" : "s") + ')</h3><div class="legend"><span style="--c:var(--hd2)">Help Desk</span><span style="--c:var(--engg)">Engineering</span><span style="--c:#F0A838">Client (paused)</span><span style="--c:#B8C2CF">Closed</span></div><div class="tl" aria-hidden="true">' +
       r.segs.map(function (sg) { return '<i class="k-' + sg.kind + ' bgc" style="width:' + Math.max(0.8, sg.calMin / tot * 100) + '%" title="' + esc(sg.status + " · " + KN[sg.kind]) + '"></i>'; }).join("") + "</div>";
-    h += '<div class="tw"><table><thead><tr><th>Status</th><th>Held by</th><th>From</th><th>To</th><th class="num">Calendar</th><th class="num">Working time</th><th>Clock</th><th class="num">Counted so far</th></tr></thead><tbody>' +
-      r.segs.map(function (sg) { return "<tr><td><b>" + esc(sg.status) + "</b>" + (sg.mapped ? "" : ' <span class="chip2 a">unmapped</span>') + "</td><td>" + kchip(sg.kind) + "</td><td>" + fdt(sg.start) + "</td><td>" + (sg.open ? "now" : fdt(sg.end)) + '</td><td class="num">' + fcal(sg.calMin) + '</td><td class="num">' + (sg.kind === "closed" ? "—" : fdur(sg.bizMin)) + "</td><td>" + (sg.counted ? "▶ counted" : sg.kind === "client" ? "⏸ paused" : "■ stopped") + '</td><td class="num">' + fdur(sg.elapsedAfter) + "</td></tr>"; }).join("") + "</tbody></table></div>";
+    h += '<div class="tw"><table><thead><tr><th>Status</th><th>Held by</th><th>From</th><th>To</th><th class="num">Calendar</th><th class="num">Working time</th><th>Not counted in this step</th><th>Clock</th><th class="num">Counted so far</th></tr></thead><tbody>' +
+      r.segs.map(function (sg) { var ob = Sla.offBreakdown(sg.start, sg.end, calFor(t)), nc = sg.kind === "client" ? '<span class="mut">all of it — with the client</span>' : sg.kind === "closed" ? "—" : (offTxt(ob) || '<span class="mut">nothing</span>'); return "<tr><td><b>" + esc(sg.status) + "</b>" + (sg.mapped ? "" : ' <span class="chip2 a">unmapped</span>') + "</td><td>" + kchip(sg.kind) + "</td><td>" + fdt(sg.start) + "</td><td>" + (sg.open ? "now" : fdt(sg.end)) + '</td><td class="num">' + fcal(sg.calMin) + '</td><td class="num">' + (sg.kind === "closed" ? "—" : fdur(sg.bizMin)) + '</td><td class="nc">' + nc + "</td><td>" + (sg.counted ? "▶ counted" : sg.kind === "client" ? "⏸ paused" : "■ stopped") + '</td><td class="num">' + fdur(sg.elapsedAfter) + "</td></tr>"; }).join("") + "</tbody></table></div>";
     h += "</div></div>";
   }
   overlay("detail", h);
@@ -1402,7 +1468,11 @@ function saveSettings() {
   var out = JSON.parse(JSON.stringify(d)); delete out._hol; out.holidays = hol;
   Object.keys(out.targets.clients).forEach(function (p) { if (!Object.keys(out.targets.clients[p]).length) delete out.targets.clients[p]; });
   ST.cfg = Sla.mergeConfig(out); setCalendars(); ST.draft = null;
-  HDStore.saveSlaConfig(ST.cfg).then(function () { toast("Settings saved."); }, function () { toast("Could not save settings in this browser.", true); });
+  HDStore.saveSlaConfig(ST.cfg).then(function () {
+    /* tell other open pages (Follow-up Tracker tab, another SLA tab) to recalculate with the new settings now */
+    try { localStorage.setItem("hd-sla-cfg-ping", String(Date.now())); } catch (e) {}
+    toast("Settings saved — every ticket recalculated.");
+  }, function () { toast("Could not save settings in this browser.", true); });
   recompute(); buildOptions(); buildFilters(); renderAll();
 }
 
@@ -1617,7 +1687,7 @@ document.addEventListener("click", function (e) {
   if ((x = q(".ms-opt"))) { var k3 = x.dataset.msk, val = x.dataset.msv, ix = ST.f[k3].indexOf(val); if (ix > -1) ST.f[k3].splice(ix, 1); else ST.f[k3].push(val); msUpdate(k3); ST.page = 1; renderAll(); return; }
   if ((x = q("[data-preset]"))) { ST.ui.preset = x.dataset.preset; saveUi(); recompute(); buildOptions(); buildFilters(); ST.page = 1; renderAll(); return; }
   if ((x = q("[data-res]"))) { ST.f.result = x.dataset.res; ST.page = 1; buildFilters(); renderAll(); return; }
-  if ((x = q("[data-tab]"))) { ST.tab = x.dataset.tab; if (ST.tab === "settings") ST.draft = null; renderAll(); return; }
+  if ((x = q("[data-tab]"))) { if (x.closest("#detail")) closeOv("detail"); if (x.closest("#drill")) closeOv("drill"); ST.tab = x.dataset.tab; if (ST.tab === "settings") ST.draft = null; renderAll(); return; }
   if ((x = q("[data-trend]"))) { ST.trendBy = x.dataset.trend; renderAll(); return; }
   if ((x = q("[data-matrix]"))) { ST.matrixBy = x.dataset.matrix; renderAll(); return; }
   if ((x = q("[data-ins]"))) { var iv = x.dataset.ins.split(":"), ik = iv[0], ivv = iv.slice(1).join(":"); ST.ins[ik] = ik === "stAll" ? ivv === "1" : ivv; renderAll(); return; }
