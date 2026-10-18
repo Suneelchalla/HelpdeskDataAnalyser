@@ -406,6 +406,7 @@ function SlaDetailModal({row,onClose}){
         <SlaKpi label="Age since created" value={C(r.ageCalMin)} sub="calendar time, incl. weekends" color="#334155"/>
       </div>
       <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:10,padding:"11px 14px",fontSize:12.5,color:"var(--t2)",lineHeight:1.65,marginBottom:10}}>
+        {!r.isClosed&&!r.isPaused&&r.elapsedMin<0.5&&(function(){var nw=window.HDSla.nextWorkStart(d.now,d.cal);return nw?<span><b>No working time has passed yet</b> — the ticket was raised outside working hours, so the clock starts <b>{new Date(nw).toLocaleString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false})} IST</b>. </span>:null;})()}
         {bi&&slaBreachSentence(bi,d)}{r.isClosed?"Closed "+dt(r.closedAt)+". ":""}Created <b>{C(r.ageCalMin)}</b> ago on the calendar. Only working time counts ({d.calText}), which came to <b>{F(r.elapsedMin)}</b>{r.targetMin!=null?<span> against a target of <b>{F(r.targetMin)}</b></span>:null}. {r.pausedMin>0?<span><b>{F(r.pausedMin)}</b> of working time was spent with the client and was <b>not</b> counted.</span>:"This ticket has not been with the client."}
         <div style={{marginTop:6}}>Current status <b>“{row.Status}”</b> is classified as <KindChip k={cur.kind}/> in Master Data → clock {cur.kind==="client"?"paused":cur.kind==="closed"?"stopped":"running"}.{r.statusMismatch&&<span style={{color:"#B45309"}}> ⓘ Jira’s history ends in “{r.statusMismatch.history}” (usually an old name of a renamed status); the time since that last recorded change is counted under the current status.</span>}</div>
         {e&&e.suspect&&<div style={{color:"#B45309",marginTop:6}}><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</div>}
@@ -421,7 +422,7 @@ function SlaDetailModal({row,onClose}){
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{k==="closed"?"—":F(o.biz)}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{C(o.cal)}</td>
           <td style={SLA_TD}><div style={{minWidth:160,height:10,background:"#E8EDF3",borderRadius:5,overflow:"hidden"}}><div style={{width:Math.max(1,o.cal/tot*100)+"%",height:"100%",background:SLA_KIND[k][3]}}/></div></td>
-          <td style={SLA_TD}>{counted?"Yes — counted":k==="client"?"No — clock paused":"No — clock stopped"}</td></tr>;})}</tbody>
+          <td style={SLA_TD}>{counted?(o.biz>=0.5?"Yes — counted":<span title="This team’s time counts, but none of it fell in working hours">Yes — none in working hours yet</span>):k==="client"?"No — clock paused":"No — clock stopped"}</td></tr>;})}</tbody>
       </table></div>
       <SlaDayStrip d={d}/>
       <div style={{fontSize:13,fontWeight:700,color:"var(--t1)",margin:"16px 0 6px"}}>Status by status ({r.segs.length} step{r.segs.length===1?"":"s"})</div>
@@ -437,7 +438,7 @@ function SlaDetailModal({row,onClose}){
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{C(sg.calMin)}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})} title="Working time inside this step, in hours">{sg.kind==="closed"?"—":window.HDSla.fmtDur(sg.bizMin,"h")}</td>
           <td style={Object.assign({},SLA_TD,{whiteSpace:"normal",fontSize:11.5,minWidth:190,maxWidth:290})}>{sg.kind==="client"?<span style={{color:"var(--t3)"}}>all of it — with the client</span>:sg.kind==="closed"?"—":(fuOffTxt(d.off(sg),C)||<span style={{color:"var(--t3)"}}>nothing</span>)}</td>
-          <td style={SLA_TD}>{sg.counted?"▶ counted":sg.kind==="client"?"⏸ paused":"■ stopped"}</td>
+          <td style={SLA_TD}>{sg.counted?(sg.bizMin>=0.5?"▶ counted":<span style={{color:"var(--t3)"}} title="This team’s time counts, but this step fell outside working hours (night, weekend or holiday)">▷ nothing counted</span>):sg.kind==="client"?"⏸ paused":"■ stopped"}</td>
           <td style={Object.assign({},SLA_TD,{textAlign:"right",fontFamily:"var(--mono)"})}>{F(sg.elapsedAfter)}</td></tr>;})}</tbody>
       </table></div>
     </div>;
