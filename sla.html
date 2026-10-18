@@ -308,7 +308,9 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 @media print{.rp-doc{padding:0!important;width:auto!important}}
 .rp-title>div:first-child{flex:1;min-width:0}.rp-doc h1{white-space:nowrap}.rp-meta{width:auto!important;flex:0 0 auto}
 .rp-doc,.rp-doc table,.rp-doc th,.rp-doc td,.rp-doc .num{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important}
-.rp-t.keep,.rp-terms,.rp-exec,.rp-points{break-inside:avoid}.rp-t td:first-child{white-space:nowrap}.rp-t td.nw{white-space:nowrap}.rp-list td.sum{max-width:none;min-width:200px}
+.rp-t.keep,.rp-terms,.rp-exec,.rp-points{break-inside:avoid}.rp-t td:first-child{white-space:nowrap}.rp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:4px 0 6px}.rp-mini .hd{font-size:10.5px;font-weight:800;color:#334155;margin-bottom:3px}.rp-mini .rp-t td{padding:3px 6px}
+.rp-list td .mut{font-size:9.5px}
+.rp-t td.nw{white-space:nowrap}.rp-list td.sum{max-width:none;min-width:200px}
 .rp-def{width:100%}.rp-def th{width:190px;white-space:normal!important}
 .rp-cols{grid-template-columns:250px 1fr}
 @media print{.rp-doc h2,.rp-doc .rp-note{break-after:avoid}.rp-sec{break-inside:auto}.rp-doc .rp-hk{break-inside:avoid}}
@@ -445,7 +447,8 @@ function normalize(rows) {
     out.push({ key: key, summary: String(g(r, "summary") || ""), status: String(g(r, "status") || "").trim(), priority: pr, sev: Sla.normSev(pr),
       project: String(g(r, "project") || "").trim(), type: String(g(r, "issue type") || "").trim(), created: created,
       resolved: Sla.parseTs(g(r, "resolved")), updated: Sla.parseTs(g(r, "updated")),
-      svm: String(g(r, "svm in charge") || "").trim(), worker: String(g(r, "current worker") || "").trim(), prefix: Sla.prefixOf(key) });
+      svm: String(g(r, "svm in charge") || "").trim(), worker: String(g(r, "current worker") || "").trim(), prefix: Sla.prefixOf(key),
+      rootCause: String(g(r, "root cause") || "").trim(), nextAction: String(g(r, "next action") || "").trim() });
   });
   return out;
 }
@@ -1341,10 +1344,18 @@ function runBulk() {
      management — the same, plus Help Desk vs Engineering accountability, SVM pending and a by-SVM view.
    All durations are WORKING time in hours (no "day" of ambiguous length). "Save as PDF" uses the print dialog. */
 var RP_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-var RP_SEC = [["summary", "Executive summary"], ["trend", "Monthly performance"], ["priority", "By priority"], ["type", "By request type"], ["client", "By client"], ["open", "Open tickets"], ["team", "Team accountability", "management"], ["breaches", "Breach register"], ["terms", "SLA terms"]];
+var RP_SEC = [["summary", "Executive summary"], ["trend", "Monthly performance"], ["priority", "By priority"], ["type", "By request type"], ["client", "By client"], ["open", "Open tickets"], ["team", "Team accountability", "management"], ["breaches", "Breach analysis & register"], ["terms", "SLA terms"]];
 function rpH(m) { return m == null || isNaN(m) ? "—" : Sla.fmtDur(m, "h").replace(/ 0m$/, ""); }
 function rpD(ms) { if (ms == null) return "—"; var d = new Date(ms + 330 * 60000); return ("0" + d.getUTCDate()).slice(-2) + " " + RP_MON[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
 function rpDs(ms) { if (ms == null) return "—"; var d = new Date(ms + 330 * 60000); return ("0" + d.getUTCDate()).slice(-2) + " " + RP_MON[d.getUTCMonth()] + " " + String(d.getUTCFullYear()).slice(2); }
+/* Status → plain activity stage for reports: the Master Data stage (Analysis & Study, Fix in Progress, Under Delivery…);
+   statuses with no stage are grouped by who holds them, so a report never mixes raw status names with stage names. */
+function rpStage(st) {
+  if (!st) return "—";
+  var g = window.HDStages ? HDStages.stageOf(st) : "Other";
+  if (g !== "Other") return g.replace(/^Stage\s*\d+\s*-\s*/i, "");
+  var k = classify(st).kind; return k === "engg" ? "Fix in Progress" : k === "client" ? "Awaiting Client" : k === "closed" ? "Closed" : "Initial review (Help Desk)";
+}
 function rpPct(n, d) { return d ? Math.round(n / d * 1000) / 10 : null; }
 function rpPctTxt(p) { return p == null ? "—" : (Math.round(p) === p ? p : p.toFixed(1)) + "%"; }
 function rpTone(p) { var g = ST.cfg.goalPct; return p == null ? "n" : p >= g ? "g" : p >= g - 10 ? "a" : "r"; }
@@ -1421,6 +1432,8 @@ function reportHtml(v, o) {
     var bySev = sevs.map(function (z) { return { z: z, a: rpAgg(H.filter(function (x) { return x.t.sev === z.id; })) }; }).filter(function (s) { return s.a.dec >= 5; });
     if (bySev.length >= 2) { var ws = bySev.slice().sort(function (a, b) { return a.a.comp - b.a.comp; })[0]; if (ws.a.comp < goal) pts.push("Lowest compliance by priority: <b>" + ws.z.name + "</b> at " + rpPctTxt(ws.a.comp) + " (" + ws.a.br + " breach" + (ws.a.br === 1 ? "" : "es") + ")."); }
     if (openL.length) pts.push("At the report date <b>" + openL.length.toLocaleString() + "</b> tickets were open: <b>" + withUs.length.toLocaleString() + "</b> with the support team" + (ob ? " (" + ob + " already over target" + (risk ? ", " + risk + " close to target" : "") + ")" : risk ? " (" + risk + " close to target)" : "") + " and <b>" + withClient.length.toLocaleString() + "</b> awaiting " + (multi || mgmt ? "client" : "your") + " response, for which the SLA clock is paused.");
+    var brs = H.filter(isBr), stc = {}; brs.forEach(function (x) { var w = insOf(x); if (w && w.atStatus) { var g = rpStage(w.atStatus); stc[g] = (stc[g] || 0) + 1; } });
+    var tsg = Object.keys(stc).sort(function (a, b) { return stc[b] - stc[a]; })[0]; if (tsg && brs.length >= 5) pts.push("Most breaches occurred while tickets were in <b>" + esc(tsg) + "</b> (" + Math.round(stc[tsg] / brs.length * 100) + "% of " + brs.length + ").");
     if (mgmt) { var tb = { hd: 0, engg: 0 }; H.filter(isBr).forEach(function (x) { var w = insOf(x); if (w && tb[w.at] != null) tb[w.at]++; }); var tt = tb.hd + tb.engg;
       if (tt) pts.push("Breaches by team holding the ticket when the target was exceeded: Engineering <b>" + tb.engg + "</b> (" + Math.round(tb.engg / tt * 100) + "%), Help Desk <b>" + tb.hd + "</b> (" + Math.round(tb.hd / tt * 100) + "%)."); }
     if (pts.length) h += '<div class="rp-points"><div class="hd">Key points</div><ul>' + pts.map(function (p) { return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
@@ -1473,13 +1486,56 @@ function reportHtml(v, o) {
       [["hd", "Help Desk"], ["engg", "Engineering"]].map(function (k) { var o2 = ta[k[0]]; return "<tr><td><b>" + k[1] + '</b></td><td class="num">' + o2.n + '</td><td class="num">' + (tt2 ? Math.round(o2.n / tt2 * 100) + "%" : "—") + '</td><td class="num">' + o2.open + '</td><td class="num">' + (o2.n ? rpH(o2.over / o2.n) : "—") + '</td><td class="num">' + rpH(H.length ? tm[k[0]] / H.length : null) + "</td></tr>"; }).join("") +
       '<tr><td><b>Client</b> <span class="mut">(not counted)</span></td><td class="num">—</td><td></td><td></td><td></td><td class="num">' + rpH(H.length ? tm.client / H.length : null) + "</td></tr></tbody></table></div>";
   }
-  /* ── 8. breach register ── */
+  /* ── 8. breach analysis + register ──
+     Each breach: when the target ran out, how far over it went, the activity stage it was in at that moment
+     (Master Data stages), and — for resolved ones — the Root Cause; for open ones — where it is now and the Next Action. */
   if (o.breaches) {
-    var bl = H.filter(isBr).sort(function (a, b) { return (b.b === "breached") - (a.b === "breached") || (b.r.elapsedMin - b.r.targetMin) - (a.r.elapsedMin - a.r.targetMin); }), CAP = o.brMax === "all" ? 400 : +o.brMax || 25;
-    h += '<div class="rp-sec">' + (bl.length ? '<div class="rp-hk">' + sec("Breach register") + '<div class="rp-note">Tickets that exceeded their SLA target: still open first, then by how far over target. Times are working time.' + (bl.length > CAP ? " Showing the " + CAP + " largest of " + bl.length + "; the full list is available on request." : "") + "</div></div>" +
-      '<table class="rp-t rp-list">' + rpHead([["Ticket", 0], ["Summary", 0], ["Priority", 0]].concat(multi ? [["Client", 0]] : []).concat([["Raised", 0], ["Target", 1], ["Time taken", 1], ["Over by", 1], ["Status", 0]]).concat(mgmt ? [["Broke with", 0]] : [])) + "<tbody>" +
-      bl.slice(0, CAP).map(function (x) { var t = x.t, rr = x.r, w = mgmt ? insOf(x) : null;
-        return '<tr><td class="key">' + esc(t.key) + '</td><td class="sum">' + esc(t.summary) + "</td><td>" + esc(t.sev ? Sla.sevName(t.sev) : t.priority || "—") + "</td>" + (multi ? "<td>" + esc(clientName(t.prefix)) + "</td>" : "") + "<td class=\"nw\">" + rpDs(t.created) + '</td><td class="num">' + rpH(rr.targetMin) + '</td><td class="num">' + rpH(rr.elapsedMin) + '</td><td class="num t-r">' + rpH(rr.elapsedMin - rr.targetMin) + "</td><td>" + (rr.isClosed ? "Closed" : '<b class="t-r">Open</b>') + "</td>" + (mgmt ? "<td>" + (w && w.at ? KN[w.at] : "—") + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table>" : sec("Breach register") + '<div class="rp-note">No ticket exceeded its SLA target in this period.</div>') + "</div>";
+    var stName = rpStage;
+    var stOrd = function (n) { var L = window.HDStages ? HDStages.ORDER.map(function (g) { return g.replace(/^Stage\s*\d+\s*-\s*/i, ""); }) : []; var i = n === "Initial review (Help Desk)" ? -1 : L.indexOf(n); return i < -1 ? 99 : i === -1 && n !== "Initial review (Help Desk)" ? 99 : i; };
+    var BR = H.filter(isBr).map(function (x) { var bi = Sla.breachInfo(x.r, calFor(x.t), ST.now), w = insOf(x) || {};
+      return { x: x, at: bi.breachedAt, over: x.r.elapsedMin - x.r.targetMin, ratio: x.r.targetMin ? x.r.elapsedMin / x.r.targetMin : null, stage: stName(w.atStatus), now: stName(x.t.status), team: w.at }; });
+    var openB = BR.filter(function (b) { return !b.x.r.isClosed; }).sort(function (a, b) { return b.over - a.over; });
+    var lateB = BR.filter(function (b) { return b.x.r.isClosed; }).sort(function (a, b) { return b.over - a.over; });
+    var CAP = o.brMax === "all" ? 400 : +o.brMax || 25;
+    var overTxt = function (b) { var rel = b.ratio == null ? "" : b.ratio >= 2 ? (Math.round(b.ratio * 10) / 10) + "× target" : "+" + Math.round((b.ratio - 1) * 100) + "%"; return '<b class="t-r">' + rpH(b.over) + "</b>" + (rel ? '<div class="mut">' + rel + "</div>" : ""); };
+    var prioTxt = function (t, rr) { return esc(t.sev ? Sla.sevName(t.sev) : t.priority || "—") + '<div class="mut">target ' + rpH(rr.targetMin) + "</div>"; };
+    var cnt = function (list, f) { var m = {}; list.forEach(function (b) { var k = f(b); if (k) m[k] = (m[k] || 0) + 1; }); return m; };
+    var miniT = function (title, m, order, max) { var ks = Object.keys(m).sort(order || function (a, b) { return m[b] - m[a]; }).slice(0, max || 8), tot = 0; Object.keys(m).forEach(function (k) { tot += m[k]; });
+      if (!ks.length) return ""; return '<div class="rp-mini"><div class="hd">' + title + '</div><table class="rp-t keep"><tbody>' + ks.map(function (k) { var p = Math.round(m[k] / tot * 100);
+        return "<tr><td>" + esc(k) + '</td><td class="num"><b>' + m[k] + '</b></td><td class="num mut">' + p + '%</td><td style="width:34%"><div class="rpbar"><i class="r" style="width:' + p + '%"></i></div></td></tr>'; }).join("") + "</tbody></table></div>"; };
+    h += '<div class="rp-sec">';
+    if (!BR.length) h += sec("Breaches") + '<div class="rp-note">No ticket exceeded its SLA target in this period.</div>';
+    else {
+      var byStage = cnt(BR, function (b) { return b.stage; });
+      var bands = { "Up to 25% over": 0, "25% – 100% over": 0, "2 – 5 × target": 0, "More than 5 × target": 0 };
+      BR.forEach(function (b) { var r0 = b.ratio || 1; bands[r0 <= 1.25 ? "Up to 25% over" : r0 <= 2 ? "25% – 100% over" : r0 <= 5 ? "2 – 5 × target" : "More than 5 × target"]++; });
+      Object.keys(bands).forEach(function (k) { if (!bands[k]) delete bands[k]; });
+      var bandOrd = ["Up to 25% over", "25% – 100% over", "2 – 5 × target", "More than 5 × target"];
+      var rc = cnt(lateB, function (b) { return b.x.t.rootCause; });
+      var topStage = Object.keys(byStage).sort(function (a, b) { return byStage[b] - byStage[a]; })[0];
+      h += '<div class="rp-hk">' + sec("Breach analysis") +
+        '<div class="rp-note"><b>' + BR.length + "</b> ticket" + (BR.length === 1 ? "" : "s") + " exceeded their SLA target: <b>" + lateB.length + "</b> resolved late and <b>" + openB.length + "</b> still open. " +
+        (topStage ? "Most breaches happened while the ticket was in <b>" + esc(topStage) + "</b> (" + Math.round(byStage[topStage] / BR.length * 100) + "%)." : "") + "</div>" +
+        '<div class="rp-grid">' + miniT("Where the SLA ran out (stage)", byStage, function (a, b) { return stOrd(a) - stOrd(b) || byStage[b] - byStage[a]; }) +
+        miniT("How far over target", bands, function (a, b) { return bandOrd.indexOf(a) - bandOrd.indexOf(b); }) +
+        (Object.keys(rc).length ? miniT("Root cause (resolved late)", rc, null, 6) : "") + "</div></div>";
+      var head = function (cols) { return rpHead(cols); };
+      if (openB.length) {
+        var hasNA = openB.some(function (b) { return b.x.t.nextAction; });
+        h += '<div class="rp-hk">' + sec("Open breaches — action required (" + openB.length + ")") + '<div class="rp-note">Still open and already over target, largest overrun first.' + (openB.length > CAP ? " Showing " + CAP + " of " + openB.length + "." : "") + "</div></div>" +
+          '<table class="rp-t rp-list">' + head([["Ticket", 0], ["Summary", 0], ["Priority", 0]].concat(multi ? [["Client", 0]] : []).concat([["Raised", 0], ["Breached on", 0], ["Over target", 1], ["Now at", 0]]).concat(hasNA ? [["Next action", 0]] : []).concat(mgmt ? [["With", 0]] : [])) + "<tbody>" +
+          openB.slice(0, CAP).map(function (b) { var t = b.x.t, rr = b.x.r;
+            return '<tr><td class="key">' + esc(t.key) + '</td><td class="sum">' + esc(t.summary) + "</td><td>" + prioTxt(t, rr) + "</td>" + (multi ? "<td>" + esc(clientName(t.prefix)) + "</td>" : "") + '<td class="nw">' + rpDs(t.created) + '</td><td class="nw">' + rpDs(b.at) + '</td><td class="num">' + overTxt(b) + "</td><td>" + esc(b.now) + (rr.isPaused ? '<div class="mut">awaiting ' + (multi || mgmt ? "client" : "your") + " response</div>" : "") + "</td>" + (hasNA ? "<td>" + esc(t.nextAction || "—") + "</td>" : "") + (mgmt ? "<td>" + esc(KN[rr.currentKind] || "—") + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table>";
+      }
+      if (lateB.length) {
+        var hasRC = lateB.some(function (b) { return b.x.t.rootCause; });
+        h += '<div class="rp-hk">' + sec("Resolved after target (" + lateB.length + ")") + '<div class="rp-note">Resolved, but later than the SLA target, largest overrun first.' + (lateB.length > CAP ? " Showing " + CAP + " of " + lateB.length + "." : "") + "</div></div>" +
+          '<table class="rp-t rp-list">' + head([["Ticket", 0], ["Summary", 0], ["Priority", 0]].concat(multi ? [["Client", 0]] : []).concat([["Raised", 0], ["Breached on", 0], ["Resolved", 0], ["Over target", 1], ["SLA ran out at", 0]]).concat(hasRC ? [["Root cause", 0]] : []).concat(mgmt ? [["Broke with", 0]] : [])) + "<tbody>" +
+          lateB.slice(0, CAP).map(function (b) { var t = b.x.t, rr = b.x.r;
+            return '<tr><td class="key">' + esc(t.key) + '</td><td class="sum">' + esc(t.summary) + "</td><td>" + prioTxt(t, rr) + "</td>" + (multi ? "<td>" + esc(clientName(t.prefix)) + "</td>" : "") + '<td class="nw">' + rpDs(t.created) + '</td><td class="nw">' + rpDs(b.at) + '</td><td class="nw">' + rpDs(rr.closedAt) + '</td><td class="num">' + overTxt(b) + "</td><td>" + esc(b.stage) + "</td>" + (hasRC ? "<td>" + esc(t.rootCause || "—") + "</td>" : "") + (mgmt ? "<td>" + esc(KN[b.team] || "—") + "</td>" : "") + "</tr>"; }).join("") + "</tbody></table>";
+      }
+    }
+    h += "</div>";
   }
   /* ── 9. SLA terms ── */
   if (o.terms) {
@@ -1518,7 +1574,7 @@ function rpToolbar() {
     '<label class="ck">Prepared for <input data-rptext="forName" placeholder="' + esc(rpForName(v)) + '" value="' + esc(o.forName) + '" style="width:170px"></label>' +
     '<label class="ck">Prepared by <input data-rptext="byName" value="' + esc(o.byName) + '" style="width:140px"></label>' +
     '<label class="ck">Page <select data-rpsel="orient" aria-label="Page orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>' +
-    '<label class="ck">Breach register <select data-rpsel="brMax" aria-label="Breach register length"><option value="25">Top 25</option><option value="50">Top 50</option><option value="all">All</option></select></label>' +
+    '<label class="ck">Breach lists <select data-rpsel="brMax" aria-label="Breach register length"><option value="25">Top 25</option><option value="50">Top 50</option><option value="all">All</option></select></label>' +
     '<label class="ck"><input type="checkbox" data-rp="confidential"' + (o.confidential ? " checked" : "") + "> Confidential</label>" +
     '<span class="sp"></span><button class="ghost" data-closereport>Close</button><button class="primary" id="rpPrint">Print / Save as PDF</button>' +
     '<div class="rp-secs">Sections: ' + RP_SEC.filter(function (k) { return !k[2] || o.audience === k[2]; }).map(function (k) { return '<label class="ck"><input type="checkbox" data-rp="' + k[0] + '"' + (o[k[0]] ? " checked" : "") + "> " + k[1] + "</label>"; }).join("") + "</div></div>";
