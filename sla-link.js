@@ -243,7 +243,7 @@
     if (!H) return Promise.reject(new Error("sla-history.js did not load."));
     if (!bridgeReady()) return Promise.reject(new Error("HD Jira Bridge extension not detected. Enable it and reload the page."));
     if (L.fetching) return Promise.reject(new Error("An SLA calculation is already running on this page."));
-    if (H.lock && !H.lock.acquire(myId, "Follow-up Tracker")) { var h = H.lock.holder(); return Promise.reject(new Error("BUSY:" + ((h && h.label) || "another page") + " is already fetching status history. It will finish there and appear here automatically.")); }
+    if (H.lock && !H.lock.acquire(myId, opts.label || "Follow-up Tracker")) { var h = H.lock.holder(); return Promise.reject(new Error("BUSY:" + ((h && h.label) || "another page") + " is already fetching status history. It will finish there and appear here automatically.")); }
     var got = {}, beat = setInterval(function () { if (H.lock) H.lock.beat(myId); }, 5000), nb = 0, lastPaint = Date.now();
     L.fetching = true; PROG = { done: 0, total: keys.length, auto: !!opts.auto }; pnotify();
     function persist() {
