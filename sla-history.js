@@ -40,7 +40,8 @@
   function errText(e) { return String((e && e.message) || e || ""); }
   function isTransient(e) { return /timed out|EXTENSION_NOT_FOUND|Failed to fetch|network/i.test(errText(e)); }
 
-  /* Status transitions out of a list of Jira changelog histories. */
+  /* Status transitions out of a list of Jira changelog histories. `by` = who made the change (Jira's author;
+     "" when Jira gives none). Histories saved before this field existed simply have no `by`. */
   function statusTransitions(histories) {
     var out = [];
     (histories || []).forEach(function (h) {
@@ -48,7 +49,7 @@
       if (t == null) return;
       (h.items || []).forEach(function (it) {
         if (it.fieldId === "status" || String(it.field || "").toLowerCase() === "status")
-          out.push({ t: t, from: it.fromString || "", to: it.toString || "", _n: Number(h.id) || 0 });
+          out.push({ t: t, from: it.fromString || "", to: it.toString || "", by: h.author ? (h.author.displayName || h.author.name || h.author.emailAddress || "") : "", _n: Number(h.id) || 0 });
       });
     });
     out.sort(function (a, b) { return a.t - b.t || a._n - b._n; });
@@ -159,19 +160,22 @@
       });
     }
 
-    var batches = chunk(keys, batchSize);
+    var batches = chunk(keys, batchSize), deadRun = 0, aborted = null;
     function loop(i) {
       if (i >= batches.length || cancel()) return Promise.resolve();
-      return doBatch(batches[i]).catch(function () {
-        return doBatch(batches[i]).catch(function (e2) {                                // one retry, then mark the batch failed and carry on
+      return doBatch(batches[i]).then(function () { deadRun = 0; }, function () {
+        return doBatch(batches[i]).then(function () { deadRun = 0; }, function (e2) {   // one retry, then mark the batch failed and carry on
           batches[i].forEach(function (k) { if (!results[k]) failed.push({ key: k, reason: errText(e2) }); });
           done += batches[i].length; progress();
+          /* two batches in a row lost to "no answer" errors = the extension / Jira tab is gone. Stop instead of
+             waiting out every remaining batch (that kept the shared fetch lock busy for an hour doing nothing). */
+          if (isTransient(e2) && ++deadRun >= 2) aborted = errText(e2) || "no answer from the HD Jira Bridge";
         });
-      }).then(function () { return loop(i + 1); });
+      }).then(function () { if (aborted) { cancelled = true; return; } return loop(i + 1); });
     }
     progress();
     return loop(0).then(function () {
-      return { results: results, failed: failed, mode: mode, cancelled: cancelled, verifiedCount: verified, suspectCount: suspects };
+      return { results: results, failed: failed, mode: mode, cancelled: cancelled, aborted: aborted, verifiedCount: verified, suspectCount: suspects };
     });
   }
 
