@@ -267,6 +267,7 @@
       });
     }
     function done() { clearInterval(beat); if (H.lock) H.lock.release(myId); L.fetching = false; PROG = { done: 0, total: 0, auto: false }; pnotify(); }
+    if (H.lock && !L.unloadHooked && root.addEventListener) { L.unloadHooked = true; root.addEventListener("pagehide", function () { if (L.fetching && H.lock) H.lock.release(myId); }); }
     return H.fetchHistory(keys, {
       call: bridgeCall, host: jiraHost(), batch: 50, concurrency: 4, mode: "auto",
       onProgress: function (d, t) { PROG = { done: d, total: t, auto: !!opts.auto }; pnotify(); if (opts.onProgress) opts.onProgress(d, t); },
@@ -280,7 +281,7 @@
         if (++nb % 4 === 0 && Date.now() - lastPaint > 4000) { lastPaint = Date.now(); return persist().then(function () { L.now = Date.now(); notify(); }).catch(function () {}); }
       }
     }).then(function (r) {
-      return persist().then(function () { done(); L.now = Date.now(); notify(); return { fetched: Object.keys(r.results).length, failed: r.failed, cancelled: r.cancelled }; });
+      return persist().then(function () { done(); L.now = Date.now(); notify(); return { fetched: Object.keys(r.results).length, failed: r.failed, cancelled: r.cancelled, aborted: r.aborted || null }; });
     }, function (err) {
       return persist().catch(function () {}).then(function () { done(); notify(); throw err; });
     });
@@ -335,6 +336,8 @@
     autoError: function () { return AUTO.lastErr; },
     progress: function () { return PROG; },
     onProgress: function (fn) { psubs.push(fn); return function () { psubs = psubs.filter(function (f) { return f !== fn; }); }; },
+    /* clear another page's fetch lock (it may be stuck or orphaned); that page, if still alive, simply carries on */
+    takeOver: function () { try { localStorage.removeItem("hd-sla-fetch-lock"); localStorage.setItem("hd-sla-hist-ping", String(Date.now())); } catch (e) {} },
     otherFetching: function () { var H = root.HDSlaHistory, h = H && H.lock ? H.lock.holder() : null; return h && h.id !== myId ? (h.label || "another page") : null; }
   };
 })(typeof self !== "undefined" ? self : this);
