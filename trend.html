@@ -321,6 +321,18 @@ tbody tr.rowlink:hover{background:var(--hd-bg)}
 @media (min-width: 3840px) { body { zoom: 1.9; } }
 
 /* ── NIGHT SHIFT tab ── */
+.nspick{flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:10px;margin-top:2px;border-top:1px dashed var(--line)}
+.nsstep{padding:4px 10px;font-size:14px;line-height:1}.nsstep:disabled{opacity:.4;cursor:default}
+.nslive{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.3px;padding:1px 6px;border-radius:10px;background:var(--rose-bg);color:var(--rose);vertical-align:1px}
+.chip.on .nslive{background:rgba(255,255,255,.2);color:#fff}
+.nsdays{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:6px}
+.nsday{display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 4px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink2)}
+.nsday:hover{border-color:var(--hd);background:var(--hd-bg)}
+.nsday.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.nsday.on .nsday-s i{color:#fff!important}
+.nsday-d{font-size:10px;font-weight:600}.nsday-n{font-size:16px;font-weight:700}.nsday-s{font-size:10px}.nsday-s i{font-style:normal;font-weight:700}
+.nshit{cursor:pointer}.nshit:hover{fill:rgba(15,118,110,.08)}
+
 .nskpis{grid-template-columns:repeat(7,minmax(0,1fr))}
 @media(max-width:1240px){.nskpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:680px){.nskpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -496,7 +508,7 @@ var S = {
   weekA:"", weekB:"",
   dType:"",  // daily flow type filter: "" = all, "Incident", "Service Request"
   // night shift tab: window (IST hours), type chip, trend grouping, ticket-list filter/search/page, client-table sort
-  ns:{start:21,end:6,type:"",trend:"day",out:"",q:"",page:0,csort:"all",cdir:"desc"}
+  ns:{start:21,end:6,type:"",trend:"day",out:"",q:"",page:0,csort:"all",cdir:"desc",day:""}   // day = one night (its evening date, YYYY-MM-DD); "" = every night in the date range
 };
 
 /* ═══════════════════════════════ HELPERS ═══════════════════════════════ */
@@ -1794,10 +1806,10 @@ function nsInfo(t) {
 }
 
 /* ── scope: top filters + date range; Incident & Service Request unless the Type filter says otherwise ── */
-function nsPool() {
+function nsPool(noRange) {
   var tp = S.ns.type;
   return RAW.filter(function (t) {
-    if (!inRange(t)) return false;
+    if (!noRange && !S.ns.day && !inRange(t)) return false;
     if (S.svm.length && S.svm.indexOf(t.svm) < 0) return false;
     if (S.cw.length && S.cw.indexOf(t.currentWorker) < 0) return false;
     if (S.rc.length && S.rc.indexOf(t.rc) < 0) return false;
@@ -1808,7 +1820,25 @@ function nsPool() {
     return true;
   });
 }
-function nsList() { var out = []; nsPool().forEach(function (t) { var o = nsInfo(t); if (o) out.push(o); }); return out; }
+function nsList() { var d = S.ns.day, out = []; nsPool().forEach(function (t) { var o = nsInfo(t); if (o && (!d || o.shift === d)) out.push(o); }); return out; }
+/* every night ticket regardless of the date range (for the night picker and the "vs previous nights" comparison) */
+function nsListAll() { var out = []; nsPool(true).forEach(function (t) { var o = nsInfo(t); if (o) out.push(o); }); return out; }
+/* ── picking one night ── */
+function nsKeyAdd(key, n) { var p = key.split("-"); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)).toISOString().slice(0, 10); }
+function nsLastNight() { var l = Date.now() + NS_IST - S.ns.end * 3600000; return nsDayKey(Math.floor(l / NS_DAY) - 1); }   // last COMPLETED night
+function nsTonight() { var sh = nsShift(Date.now()); return sh ? sh.key : null; }                                           // night in progress right now
+function nsShiftEnd(key) { var p = key.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2] + (S.ns.start > S.ns.end ? 1 : 0)) + S.ns.end * 3600000 - NS_IST; }
+function nsNightLabel(key, long) {
+  var p = key.split("-"), a = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])), b = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + (S.ns.start > S.ns.end ? 1 : 0)));
+  var f = function (d) { return d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" }); };
+  return long ? f(a) + ", " + nsHH(S.ns.start) + " → " + f(b) + ", " + nsHH(S.ns.end) + " IST" : f(a);
+}
+/* what the fetcher should cover: the picked night + the 7 before it (for the comparison), or every night in the range */
+function nsFetchScope() {
+  if (!S.ns.day) return nsList();
+  var lo = nsKeyAdd(S.ns.day, -7), d = S.ns.day;
+  return nsListAll().filter(function (o) { return o.shift >= lo && o.shift <= d; });
+}
 function nsCount() { try { return nsList().length; } catch (e) { return ""; } }
 
 /* ── history: load, fetch, keep in sync with other pages ── */
@@ -1826,7 +1856,7 @@ function nsSig(o) { return o.t.key + "|" + o.t._nsU + "|" + o.t.status; }
 function nsNeed(all, retry) { return all.filter(function (o) { return o.out === "nohist" && (retry || !NS.tried[nsSig(o)]); }); }
 function nsFetch(retry) {
   if (NS.fetching || !window.HDSlaLink || !NS.loaded) return;
-  var need = nsNeed(nsList(), retry);
+  var need = nsNeed(nsFetchScope(), retry);
   if (!need.length) return;
   if (!nsBridge()) { NS.err = "The HD Jira Bridge extension is not connected, so status history can't be fetched here. Enable it and reload the page."; nsPaintBar(); return; }
   need = need.slice(0, 1500);
@@ -1838,7 +1868,7 @@ function nsFetch(retry) {
   }).then(function (r) {
     NS.fetching = false; NS.prog = null;
     if (r.failed && r.failed.length) NS.err = r.failed.length + " ticket(s) could not be fetched, e.g. " + r.failed[0].key + ": " + r.failed[0].reason;
-    return nsLoad().then(function () { if (nsNeed(nsList()).length) nsSchedule(800); });
+    return nsLoad().then(function () { if (nsNeed(nsFetchScope()).length) nsSchedule(800); });
   }, function (e) {
     NS.fetching = false; NS.prog = null;
     need.forEach(function (o) { delete NS.tried[nsSig(o)]; });
@@ -1950,7 +1980,8 @@ function nsTrendSVG(groups) {
     });
     var known = gr.all.length - gr.by.nohist.length;
     if (known) pts.push([x + bw / 2, T + ph - gr.solved.length / known * ph, gr.label, pct(gr.solved.length, known), gr.solved.length, known]);
-    if (i % every === 0) s += '<text x="' + (x + bw / 2) + '" y="' + (H - B + 14) + '" text-anchor="middle" font-size="10" fill="#6B7A90">' + esc(gr.short) + "</text>";
+    if (gr.day) s += '<rect class="nshit" x="' + (L + i * slot).toFixed(1) + '" y="' + (H - B + 2) + '" width="' + slot.toFixed(1) + '" height="18" fill="transparent" data-nsday="' + gr.day + '"><title>Open the night of ' + esc(nsNightLabel(gr.day)) + "</title></rect>";
+    if (i % every === 0) s += '<text x="' + (x + bw / 2) + '" y="' + (H - B + 14) + '" text-anchor="middle" font-size="10" fill="#6B7A90" style="pointer-events:none">' + esc(gr.short) + "</text>";
     s += '<text x="' + (x + bw / 2) + '" y="' + (y0 - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#3E4C63">' + (n <= 31 ? gr.all.length : "") + "</text>";
   });
   if (pts.length > 1) s += '<polyline points="' + pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ") + '" fill="none" stroke="#BE1D42" stroke-width="1.6" stroke-dasharray="4 3"/>';
@@ -1980,7 +2011,17 @@ function viewNight() {
     '<span class="flabel">Shift</span><select class="dinput" id="ns-start" aria-label="Shift starts">' + hrsS + '</select><span class="sub">→</span><select class="dinput" id="ns-end" aria-label="Shift ends">' + hrsE + "</select>" +
     '<span style="width:1px;height:22px;background:var(--line);margin:0 4px"></span><span class="flabel">Type</span>' +
     (S.issue.length ? '<span class="sub">Using the top Type filter: <b>' + esc(S.issue.join(", ")) + "</b></span>" : types.map(function (x) { return '<button class="chip' + (c.type === x[0] ? " on" : "") + '" data-nstype="' + esc(x[0]) + '">' + x[1] + "</button>"; }).join("")) +
-    '<span class="sub" style="margin-left:auto">SVM, Worker, Root cause, Project &amp; date (Created) use the top filters</span></div>';
+    '<span class="sub" style="margin-left:auto">SVM, Worker, Root cause, Project &amp; date (Created) use the top filters</span>' +
+    '<div class="nspick"><span class="flabel">Night</span>' +
+    '<button class="chip' + (!c.day ? " on" : "") + '" data-nsday="">Every night in the date range</button>' +
+    (nsTonight() ? '<button class="chip' + (c.day === nsTonight() ? " on" : "") + '" data-nsday="' + nsTonight() + '">Tonight <span class="nslive">live</span></button>' : "") +
+    '<button class="chip' + (c.day === nsLastNight() ? " on" : "") + '" data-nsday="' + nsLastNight() + '">Last night</button>' +
+    '<span class="sub">or the night starting on</span>' +
+    '<button class="ghost nsstep" data-nsstep="-1" title="Previous night" aria-label="Previous night"' + (c.day ? "" : " disabled") + '>‹</button>' +
+    '<input type="date" class="dinput" id="ns-day" value="' + esc(c.day) + '" aria-label="Night starting on">' +
+    '<button class="ghost nsstep" data-nsstep="1" title="Next night" aria-label="Next night"' + (c.day && c.day < (nsTonight() || nsLastNight()) ? "" : " disabled") + '>›</button>' +
+    (c.day ? '<span class="sub"><b>' + esc(nsNightLabel(c.day, true)) + "</b> · the top date range is ignored while a night is picked</span>" : "") +
+    "</div></div>";
 
   var all = nsList(); NS.all = all;
   out += '<div class="card up d1" id="ns-bar" style="margin-bottom:9px">' + nsBarHTML(all) + "</div>";
@@ -2000,12 +2041,49 @@ function viewNight() {
 
   if (!K) return out + '<div class="card pad"><div class="empty"><b>' + all.length.toLocaleString() + " night tickets found, but none has status history yet.</b><br>" + (nsBridge() ? "Fetching starts automatically when Auto-fetch is on, or use the Fetch button above." : "Connect the HD Jira Bridge extension to fetch it.") + "</div></div>";
 
+  /* one night picked: how it compares with the 7 nights before it, and a strip to jump between nights */
+  if (c.day) {
+    var running = nsShiftEnd(c.day) > Date.now(), lo = nsKeyAdd(c.day, -7), prev = {}, around = {}, every = nsListAll();
+    every.forEach(function (o) {
+      if (o.shift >= lo && o.shift < c.day) (prev[o.shift] = prev[o.shift] || []).push(o);
+      if (o.shift >= nsKeyAdd(c.day, -13) && o.shift <= nsKeyAdd(c.day, 1)) (around[o.shift] = around[o.shift] || []).push(o);
+    });
+    var pl = [].concat.apply([], Object.keys(prev).map(function (k0) { return prev[k0]; })), pk = pl.filter(function (o) { return o.out !== "nohist"; });
+    var M = [
+      ["Created", function (l) { return l; }, false],
+      ["Actioned in shift", function (l) { return l.filter(function (o) { return o.out !== "none" && o.out !== "nohist"; }); }, false],
+      ["Handed to client", function (l) { return l.filter(function (o) { return o.out === "client"; }); }, false],
+      ["Solved by night HD", function (l) { return l.filter(function (o) { return o.hdSolved; }); }, false],
+      ["Sent to Engineering", function (l) { return l.filter(function (o) { return o.out === "engg"; }); }, true],
+      ["Not touched in shift", function (l) { return l.filter(function (o) { return o.out === "none"; }); }, true],
+      ["Came back", function (l) { return l.filter(function (o) { return o.follow === "returned"; }); }, true]
+    ];
+    var cmp = M.map(function (m) {
+      var mine = m[1](all), avg = Math.round(m[1](m[0] === "Created" ? pl : pk).length / 7 * 10) / 10, d = mine.length - avg, bad = m[2] ? d > 0 : d < 0;
+      var chip = Math.abs(d) < 0.5 ? '<span class="dchip flat">≈ usual</span>' : '<span class="dchip ' + (bad ? "down" : "up") + '">' + (d > 0 ? "▲ +" : "▼ ") + (Math.round(d * 10) / 10) + "</span>";
+      return '<tr><td>' + m[0] + '</td><td class="num" style="font-weight:700;font-size:13px">' + nsN(mine.length, nsNightLabel(c.day) + " — " + m[0].toLowerCase(), mine) + '</td><td class="num mono" style="color:var(--muted)">' + avg + "</td><td>" + (m[0] === "Created" ? '<span class="dchip flat">' + (Math.abs(d) < 0.5 ? "≈ usual" : (d > 0 ? "▲ +" : "▼ ") + Math.round(d * 10) / 10) + "</span>" : chip) + "</td></tr>";
+    }).join("");
+    var strip = "";
+    for (var si = -13; si <= 1; si++) {
+      var dk = nsKeyAdd(c.day, si), lst = around[dk] || [], future = dk > (nsTonight() || nsLastNight());
+      if (future) continue;
+      var sv = lst.filter(function (o) { return o.hdSolved; }).length, eg = lst.filter(function (o) { return o.out === "engg"; }).length;
+      strip += '<button class="nsday' + (dk === c.day ? " on" : "") + '" data-nsday="' + dk + '" title="' + esc(nsNightLabel(dk, true)) + " · " + lst.length + " created · " + sv + " solved by night HD · " + eg + ' to Engineering"><span class="nsday-d">' + esc(nsNightLabel(dk)) + '</span><span class="nsday-n mono">' + lst.length + '</span><span class="nsday-s"><i style="color:#047857">' + sv + '</i> · <i style="color:#5B57D8">' + eg + "</i></span></button>";
+    }
+    out += '<div class="grid up d2" style="grid-template-columns:1fr 1.15fr;margin-bottom:9px">' +
+      '<div class="card pad"><div class="sec-title">Night of ' + esc(nsNightLabel(c.day)) + (running ? ' <span class="nslive">still running</span>' : "") + "</div>" +
+      '<div class="sub" style="margin:2px 0 10px">' + esc(nsNightLabel(c.day, true)) + ". Compared with the average of the 7 nights before it." + (running ? " The numbers will change until " + nsHH(c.end) + "." : "") + "</div>" +
+      '<table><thead><tr><th class="static">This night</th><th class="static num">Count</th><th class="static num">7-night avg</th><th class="static">vs usual</th></tr></thead><tbody>' + cmp + "</tbody></table>" +
+      (pl.length - pk.length ? '<div class="sub" style="margin-top:8px">' + (pl.length - pk.length) + " ticket(s) from the previous nights have no history yet, so the averages after “Created” may be low.</div>" : "") + "</div>" +
+      '<div class="card pad"><div class="sec-title">Nights around it</div><div class="sub" style="margin:2px 0 10px">Created per night · <b style="color:#047857">solved by night HD</b> · <b style="color:#5B57D8">to Engineering</b>. Click a night to open it.</div><div class="nsdays">' + strip + "</div></div></div>";
+  }
+
   /* KPIs */
   function k(ic, label, n, color, sub, title, list) {
     return '<div class="card kpi' + (n ? " clickable" : "") + '"' + (n ? ' data-nsd="' + nsD(title, list, color) + '"' : "") + '><div class="tag">' + ic + '</div><div class="kv" style="color:' + color + '">' + n.toLocaleString() + '</div><div class="kl">' + label + '</div><div class="ks">' + sub + "</div></div>";
   }
   out += '<div class="grid up d2 nskpis" style="margin-bottom:9px">' +
-    k("🌙", "Night tickets", all.length, "var(--ink)", (nN ? (Math.round(all.length / nN * 10) / 10) + " per night · " + nN + " nights" : ""), "All night tickets", all) +
+    k("🌙", "Night tickets", all.length, "var(--ink)", (c.day ? "created " + nsNightLabel(c.day) + " night" : nN ? (Math.round(all.length / nN * 10) / 10) + " per night · " + nN + " night" + (nN > 1 ? "s" : "") : ""), "All night tickets", all) +
     k("⚡", "Actioned in shift", acted.length, "var(--ink2)", pct(acted.length, K) + "% · median first change " + nsDur(med), "Actioned during the shift", acted) +
     k("💬", "Handed to client", hand.length, "#0F766E", pct(hand.length, K) + "% of night tickets", "Handed to the client during the shift", hand) +
     k("🏆", "Solved by night HD", solved.length, "#047857", pct(solved.length, K) + "% · no link, client didn’t come back", "Solved by night HD", solved) +
@@ -2043,14 +2121,15 @@ function viewNight() {
     (hsRows ? '<div style="overflow-x:auto"><table><thead><tr><th class="static">Handed over as</th><th class="static num">Tickets</th><th class="static num">Closed</th><th class="static num">With client</th><th class="static num">Came back</th><th class="static num">Return rate</th></tr></thead><tbody>' + hsRows + "</tbody></table></div>" : '<div class="empty">No hand-overs to the client yet.</div>') +
     "</div></div>";
 
-  /* per shift / week / month */
+  /* per shift / week / month (range mode only — a single night has the cards above instead) */
   var gmap = {}, mode = c.trend;
+  if (!c.day) {
   all.forEach(function (o) {
-    var key, label, short;
+    var key, label, short, gday = "";
     if (mode === "month") { key = o.shift.slice(0, 7); var p = key.split("-"); label = new Date(Date.UTC(+p[0], +p[1] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }); short = label; }
     else if (mode === "week") { var q = o.shift.split("-"), iw = isoWeek(new Date(+q[0], +q[1] - 1, +q[2])); key = iw.year + "-W" + String(iw.week).padStart(2, "0"); label = "W" + iw.week + " " + iw.year + " (" + weekDates(iw.year, iw.week) + ")"; short = "W" + iw.week; }
-    else { key = o.shift; label = "Shift of " + nsDate(o.shift); short = nsDate(o.shift).slice(0, 6); }
-    if (!gmap[key]) gmap[key] = { key: key, label: label, short: short, all: [], solved: [], by: { client: [], engg: [], hd: [], none: [], nohist: [] } };
+    else { key = o.shift; label = "Shift of " + nsDate(o.shift); short = nsDate(o.shift).slice(0, 6); gday = o.shift; }
+    if (!gmap[key]) gmap[key] = { key: key, day: gday, label: label, short: short, all: [], solved: [], by: { client: [], engg: [], hd: [], none: [], nohist: [] } };
     gmap[key].all.push(o); gmap[key].by[o.out].push(o); if (o.hdSolved) gmap[key].solved.push(o);
   });
   var groups = Object.keys(gmap).sort().map(function (k2) { return gmap[k2]; });
@@ -2059,7 +2138,8 @@ function viewNight() {
     '<div style="margin-left:auto;display:flex;gap:6px">' + [["day", "Per shift"], ["week", "Weekly"], ["month", "Monthly"]].map(function (x) { return '<button class="chip' + (mode === x[0] ? " on" : "") + '" data-nstrend="' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</div></div>" +
     (mode === "day" && Object.keys(gmap).length > 92 ? '<div class="sub" style="margin-bottom:6px">Showing the latest 92 shifts — switch to Weekly or Monthly for the full range.</div>' : "") +
     '<div style="overflow-x:auto">' + nsTrendSVG(groups) + "</div>" +
-    '<div class="legend" style="margin-top:6px">' + NS_ORDER.map(function (kk) { return '<span class="li"><span class="sw" style="background:' + NS_OUT[kk].c + '"></span>' + NS_OUT[kk].l + "</span>"; }).join("") + '<span class="li"><span class="sw" style="background:#fff;border:1.6px solid #BE1D42;border-radius:50%"></span>Solved by night HD %</span></div></div>';
+    '<div class="legend" style="margin-top:6px">' + NS_ORDER.map(function (kk) { return '<span class="li"><span class="sw" style="background:' + NS_OUT[kk].c + '"></span>' + NS_OUT[kk].l + "</span>"; }).join("") + '<span class="li"><span class="sw" style="background:#fff;border:1.6px solid #BE1D42;border-radius:50%"></span>Solved by night HD %</span>' + (mode === "day" ? '<span class="sub" style="margin-left:auto">Click a date under the bars to open that night</span>' : "") + "</div></div>";
+  }
 
   /* by arrival hour + time to first status change */
   var hrs = nsHours(), hmax = 1, hb = {};
@@ -2197,13 +2277,17 @@ function bindNight() {
   nsBindIn(m.querySelector(".nskpis")); 
   m.querySelectorAll("[data-nsd]").forEach(function (x) { if (x.closest("#ns-list") || x.closest(".nskpis")) return; x.addEventListener("click", function (e) { e.stopPropagation(); nsModal(x.getAttribute("data-nsd")); }); });
   nsBindBar(); nsBindList();
+  function pickDay(d) { S.ns.day = d || ""; S.ns.out = ""; S.ns.page = 0; S.ns.q = ""; renderMain(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  m.querySelectorAll("[data-nsday]").forEach(function (b) { b.addEventListener("click", function () { pickDay(b.getAttribute("data-nsday")); }); });
+  m.querySelectorAll("[data-nsstep]").forEach(function (b) { b.onclick = function () { if (S.ns.day) pickDay(nsKeyAdd(S.ns.day, +b.getAttribute("data-nsstep"))); }; });
+  var dIn = el("ns-day"); if (dIn) dIn.onchange = function () { if (/^\d{4}-\d{2}-\d{2}$/.test(dIn.value)) pickDay(dIn.value); };
   var s = el("ns-start"), e2 = el("ns-end");
   if (s) s.onchange = function () { S.ns.start = +s.value; nsSaveCfg(); renderMain(); };
   if (e2) e2.onchange = function () { S.ns.end = +e2.value; nsSaveCfg(); renderMain(); };
   m.querySelectorAll("[data-nstype]").forEach(function (b) { b.onclick = function () { S.ns.type = b.getAttribute("data-nstype"); S.ns.page = 0; renderMain(); }; });
   m.querySelectorAll("[data-nstrend]").forEach(function (b) { b.onclick = function () { S.ns.trend = b.getAttribute("data-nstrend"); renderMain(); }; });
   m.querySelectorAll("[data-nssort]").forEach(function (h) { h.onclick = function () { var col = h.getAttribute("data-nssort"); if (S.ns.csort === col) S.ns.cdir = S.ns.cdir === "asc" ? "desc" : "asc"; else { S.ns.csort = col; S.ns.cdir = col === "name" ? "asc" : "desc"; } renderMain(); }; });
-  if (NS.loaded && !NS.fetching && nsAutoOn() && nsNeed(NS.all).length) nsSchedule();
+  if (NS.loaded && !NS.fetching && nsAutoOn() && nsNeed(nsFetchScope()).length) nsSchedule();
 }
 
 nsLoad();
