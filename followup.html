@@ -181,6 +181,12 @@ const classify=s=>window.HDClass.classify3(s);
    Change Request (and any other issue types) are handled in the Change module,
    so they're scoped out of every count, category, modal and report here. */
 const isFollowupType=function(t){var it=String((t&&t["Issue Type"])||"").toLowerCase();return it.indexOf("incident")>-1||it.indexOf("service request")>-1||it.indexOf("service req")>-1;};
+/* Request type (Incident / Service Request) — shown as a column in every ticket table.
+   typeShort() is the compact form used in mail drafts ("INC" / "SR"). */
+const TYPE_STY={inc:{bg:"#FEF2F2",fg:"#B91C1C",br:"#FECACA",lbl:"Incident"},sr:{bg:"#EFF6FF",fg:"#1D4ED8",br:"#BFDBFE",lbl:"Service Req"},other:{bg:"var(--bg)",fg:"var(--t3)",br:"var(--border)",lbl:""}};
+const typeKind=function(t){var it=String((t&&t["Issue Type"])||"").toLowerCase();return it.indexOf("incident")>-1?"inc":(it.indexOf("service req")>-1?"sr":"other");};
+const typeShort=function(t){var k=typeKind(t);return k==="inc"?"INC":k==="sr"?"SR":(String((t&&t["Issue Type"])||"").trim()||"—");};
+function TypeChip({t}){var it=String((t&&t["Issue Type"])||"").trim();if(!it)return <span style={{color:"var(--t4)"}}>—</span>;var c=TYPE_STY[typeKind(t)];return <span title={it} style={{background:c.bg,color:c.fg,border:"1px solid "+c.br,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{c.lbl||it}</span>;}
 /* Priority ordering + a plain next-step hint per status, for the Action Queue. */
 const PRIO_ORD={"Show Stopper":0,"Critical":1,"High":2,"Medium":3,"Low":4};
 const prioRank=p=>(PRIO_ORD[p]!==undefined?PRIO_ORD[p]:5);
@@ -679,7 +685,7 @@ function exportCSV(tickets,filename){ exportFullCSV(tickets,filename); }
    ═══════════════════════════════════════════════════════════════════════════ */
 function ticketRow(t){
   var c=classify(t.Status),crAge=ds(t.Created),upAge=idle(t),sla=checkSLA(t);
-  return{"Key":t.Key||"","Summary":t.Summary||"","Status":t.Status||"","Category":CL[c]||c,
+  return{"Key":t.Key||"","Type":t["Issue Type"]||"","Summary":t.Summary||"","Status":t.Status||"","Category":CL[c]||c,
     "Priority":t.Priority||"","SVM In Charge":t["SVM In Charge"]||"","Current Worker":t["Current Worker"]||"",
     "Project":t.Project||"","Components":t.Components||"","Root Cause":t["Root Cause"]||"",
     "Type of Fix":t["Type of Fix"]||"","Created":t.Created?fd(t.Created):"","Updated":t.Updated?fd(t.Updated):"",
@@ -749,11 +755,11 @@ function _xlDl(wb,fname){var out=XLSX.write(wb,{bookType:"xlsx",type:"array"});v
 function _trow(t,alt,reason){
   var si=alt?"a":"n",sr=alt?"ar":"nr",sw=alt?"aw":"nw";
   var ca=ds(t.Created),ua=idle(t);
-  var r=[_v(t.Key,si),_v((t.Summary||"").substring(0,100),sw),_v(t.Status,si),_v(t.Priority,si),_v(t["SVM In Charge"]||"",si),_v(t["Current Worker"]||"",si),_v(t.Project||"",si),_v(t.Created?fd(t.Created):"",si),_v(t.Updated?fd(t.Updated):"",si),_v(ca===999?0:ca,sr),_v(ua===999?0:ua,sr),_v(slaText(t),si),_v(t["Linked Issues"]||"",si)];
+  var r=[_v(t.Key,si),_v(t["Issue Type"]||"",si),_v((t.Summary||"").substring(0,100),sw),_v(t.Status,si),_v(t.Priority,si),_v(t["SVM In Charge"]||"",si),_v(t["Current Worker"]||"",si),_v(t.Project||"",si),_v(t.Created?fd(t.Created):"",si),_v(t.Updated?fd(t.Updated):"",si),_v(ca===999?0:ca,sr),_v(ua===999?0:ua,sr),_v(slaText(t),si),_v(t["Linked Issues"]||"",si)];
   r.push(reason!==undefined?_v(reason,sw):_v(nextStep(t.Status,classify(t.Status)),si));return r;}
 function _thdr(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
-  return[_v("Key",lid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("No status change (days)",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
-var _DW=[15,52,22,14,20,20,26,12,12,13,13,24,16,30];
+  return[_v("Key",lid),_v("Type",hid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("No status change (days)",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
+var _DW=[15,16,52,22,14,20,20,26,12,12,13,13,24,16,30];
 
 /* ═══ 1. ENGINEERING REPORT ═══ */
 function generateEnggReport(p){
@@ -881,7 +887,7 @@ function buildEnggMailDraft(p){
   var ick=Object.keys(icm).sort(function(a,b){return icm[b]-icm[a];});
   var pad=function(s,n){s=String(s);while(s.length<n)s+=" ";return s;},rpad=function(s,n){s=String(s);while(s.length<n)s=" "+s;return s;};
   var subject="Engineering Follow-up (Incidents & SRs) | "+today+" | "+N+" Tickets Pending";
-  var body="Dear Engineering Team,\n\nThis is the daily follow-up on "+N+" tickets (Incidents & Service Requests only) pending with your team as of "+today+".\n\n  Total: "+N+"  |  Fires: "+fires.length+(fires.length?" << URGENT":"")+"  |  Stale 30+d: "+stale30.length+"  |  Danger 90+d: "+danger.length+"\n  Priority: SS:"+pri["Show Stopper"]+" Crit:"+pri["Critical"]+" High:"+pri["High"]+" Med:"+pri["Medium"]+" Low:"+pri["Low"]+"\n\n  TEAM-WISE\n"+ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],4);}).join("\n")+"\n\n"+(fires.length?"  FIRES\n"+fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,50)+" ("+idle(t)+"d)";}).join("\n")+"\n\n":"")+"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":"2")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nExcel attached.\n\nRegards,\nSVM Help Desk Operations\n";
+  var body="Dear Engineering Team,\n\nThis is the daily follow-up on "+N+" tickets (Incidents & Service Requests only) pending with your team as of "+today+".\n\n  Total: "+N+"  |  Fires: "+fires.length+(fires.length?" << URGENT":"")+"  |  Stale 30+d: "+stale30.length+"  |  Danger 90+d: "+danger.length+"\n  Priority: SS:"+pri["Show Stopper"]+" Crit:"+pri["Critical"]+" High:"+pri["High"]+" Med:"+pri["Medium"]+" Low:"+pri["Low"]+"\n\n  TEAM-WISE\n"+ick.map(function(k){return"  "+pad(k,22)+rpad(icm[k],4);}).join("\n")+"\n\n"+(fires.length?"  FIRES\n"+fires.slice(0,10).map(function(t){return"  * "+t.Key+" | "+typeShort(t)+" | "+t.Priority+" | "+(t.Summary||"").substring(0,50)+" ("+idle(t)+"d)";}).join("\n")+"\n\n":"")+"REQUESTED ACTIONS:\n"+(fires.length?"  1. Status on "+fires.length+" fire tickets by EOD\n":"")+(stale30.length?"  "+(fires.length?"2":"1")+". Update "+stale30.length+" stale tickets\n":"")+(danger.length?"  "+(fires.length&&stale30.length?"3":"2")+". Review "+danger.length+" danger-zone tickets\n":"")+"\nExcel attached.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
 function buildDailyMailDraft(p){
@@ -895,7 +901,7 @@ function buildClientMailDraft(p){
   var project=p.project,tix=p.tickets,N=tix.length,today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var urgent=tix.filter(function(t){return t.Priority==="Show Stopper"||t.Priority==="Critical"||t.Priority==="High";});
   var subject="Action Required: "+N+" Tickets Pending | "+project+" | "+today;
-  var body="Dear "+project+" Team,\n\nWe have "+N+" tickets awaiting your response as of "+today+"."+(urgent.length?" Of these, "+urgent.length+" are HIGH priority or above.":"")+"\n\n"+(urgent.length?"  URGENT TICKETS\n"+urgent.slice(0,10).map(function(t){return"  * "+t.Key+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55);}).join("\n")+"\n\n":"")+"Please update the tickets in Jira or reply to this email.\n\nRegards,\nSVM Help Desk Operations\n";
+  var body="Dear "+project+" Team,\n\nWe have "+N+" tickets awaiting your response as of "+today+"."+(urgent.length?" Of these, "+urgent.length+" are HIGH priority or above.":"")+"\n\n"+(urgent.length?"  URGENT TICKETS\n"+urgent.slice(0,10).map(function(t){return"  * "+t.Key+" | "+typeShort(t)+" | "+t.Priority+" | "+(t.Summary||"").substring(0,55);}).join("\n")+"\n\n":"")+"Please update the tickets in Jira or reply to this email.\n\nRegards,\nSVM Help Desk Operations\n";
   return{subject:subject,body:body};
 }
 /* ═══ SINGLE-TICKET MAIL DRAFT (for Global Search) ═══ */
@@ -907,6 +913,7 @@ function buildSingleTicketMailDraft(t){
   var subject="Follow-up: "+t.Key+" | "+(t.Summary||"").substring(0,60)+" | "+today;
   var body="Dear Team,\n\nThis is a follow-up regarding the below ticket:\n\n"
     +"  Ticket:    "+t.Key+"\n"
+    +"  Type:      "+(t["Issue Type"]||"—")+"\n"
     +"  Summary:   "+(t.Summary||"")+"\n"
     +"  Status:    "+(t.Status||"")+(isOpen?" ("+catLabel+")":"")+"\n"
     +"  Priority:  "+(t.Priority||"")+"\n"
@@ -1157,6 +1164,7 @@ function TicketModal({data,onClose}){
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
             <thead><tr style={{background:"var(--bg)",position:"sticky",top:0,zIndex:2}}>
               <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Key</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Type</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Summary</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Status</th>
               <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Project</th>
@@ -1176,6 +1184,7 @@ function TicketModal({data,onClose}){
                   <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
                     <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12,color:"var(--blue)"}}>{t.Key}</a>
                   </td>
+                  <td style={{padding:"6px 10px"}}><TypeChip t={t}/></td>
                   <td style={{padding:"6px 10px",color:"var(--t2)",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
                   <td style={{padding:"6px 10px"}}><span style={{background:cs.badge,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
                   <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
@@ -1366,7 +1375,8 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr style={{background:"var(--bg)",position:"sticky",top:0,zIndex:2}}>
             <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Key</th>
-            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Summary</th>
+            <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Type</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Summary</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Status</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Project</th>
             <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Priority</th>
@@ -1385,6 +1395,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                 <td style={{padding:"6px 12px",whiteSpace:"nowrap"}}>
                   <a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12,color:"var(--blue)"}}>{t.Key}</a>
                 </td>
+                <td style={{padding:"6px 10px"}}><TypeChip t={t}/></td>
                 <td style={{padding:"6px 10px",color:"var(--t2)",maxWidth:280,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
                 <td style={{padding:"6px 10px"}}><span style={{background:badgeColor,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
                 <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{(t.Project||"").split(" ").slice(0,2).join(" ")}</td>
@@ -1706,12 +1717,12 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             var linkedCount=tix.filter(function(t){var l=String(t["Linked Issues"]||"").trim();return l&&l.toLowerCase()!=="nan";}).length;
             /* ── export the current (filtered) view to CSV ── */
             function exportEnggCSV(){
-              var rows=[["Engg Assignee","Key","Summary","Status","Priority","Project","Linked Issue","Created","Updated","Age (Updated, days)","SLA","Next Action"]];
+              var rows=[["Engg Assignee","Key","Type","Summary","Status","Priority","Project","Linked Issue","Created","Updated","Age (Updated, days)","SLA","Next Action"]];
               entries.slice().sort(function(a,b){return b[1].n-a[1].n;}).forEach(function(e){
                 var nm=e[0];
                 e[1].tickets.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t){
                   var ua=idle(t);
-                  rows.push([nm,t.Key||"",t.Summary||"",t.Status||"",t.Priority||"",t.Project||"",String(t["Linked Issues"]||"").split(/[;,]/)[0].trim(),t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ua===999?"":ua,slaText(t),nextStep(t.Status,classify(t.Status))]);
+                  rows.push([nm,t.Key||"",t["Issue Type"]||"",t.Summary||"",t.Status||"",t.Priority||"",t.Project||"",String(t["Linked Issues"]||"").split(/[;,]/)[0].trim(),t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ua===999?"":ua,slaText(t),nextStep(t.Status,classify(t.Status))]);
                 });
               });
               var csv=rows.map(function(r){return r.map(escCSV).join(",");}).join("\n");
@@ -2650,6 +2661,7 @@ function App(){
       if(sortCol==="priority"){const po={Critical:0,"Show Stopper":0,High:1,Medium:2,Low:3};return dir*((po[a.Priority]??4)-(po[b.Priority]??4));}
       if(sortCol==="created")return dir*(ds(b.Created)-ds(a.Created));
       if(sortCol==="project")return dir*(a.Project||"").localeCompare(b.Project||"");
+      if(sortCol==="type")return dir*String(a["Issue Type"]||"").localeCompare(String(b["Issue Type"]||""));
       return 0;
     });
     return l;
@@ -3002,6 +3014,7 @@ function App(){
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr>
                 <TH col="key">Key</TH>
+                <TH col="type">Type</TH>
                 <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Summary</th>
                 <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Category</th>
                 <TH col="status">Status</TH>
@@ -3017,6 +3030,7 @@ function App(){
                 const linked=t["Linked Issues"]||"";const linkedSt=t["Linked Ticket status"]||"";
                 return(<tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
                   <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}><a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12}}>{t.Key}</a></td>
+                  <td style={{padding:"7px 10px"}}><TypeChip t={t}/></td>
                   <td style={{padding:"7px 10px",color:"var(--t2)",maxWidth:240,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.Summary}>{t.Summary}</td>
                   <td style={{padding:"7px 10px"}}><span style={{background:cs.bg,color:cs.badge,border:`1px solid ${cs.br}`,padding:"3px 9px",borderRadius:6,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{cs.icon} {cs.tag}</span></td>
                   <td style={{padding:"7px 10px"}}><span style={{background:cs.badge,color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{t.Status}</span></td>
@@ -3028,6 +3042,7 @@ function App(){
                   </td>
                   <td style={{padding:"7px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
                   <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
+                  <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"No status change for "+dTxt(ia)+" — counted "+idleSrc(t)+". Comments and reminders don't reset this."}>{dTxt(ia)}</td>
                 </tr>);
               })}</tbody>
             </table>
@@ -3096,6 +3111,7 @@ function App(){
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
               <thead><tr style={{borderBottom:"2px solid var(--border)",background:"var(--bg)"}}>
                 <th style={{padding:"7px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Key</th>
+                <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Type</th>
                 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Summary</th>
                 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Status</th>
                 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",position:"sticky",top:0,background:"var(--bg)",zIndex:2}}>Missing Fields</th>
@@ -3103,6 +3119,7 @@ function App(){
               <tbody>{dg.slice(0,400).map((t,i)=>(
                 <tr key={i} style={{borderBottom:"1px solid var(--border)"}}>
                   <td style={{padding:"7px 12px",whiteSpace:"nowrap"}}><a href={J+t.Key} target="_blank" rel="noreferrer" style={{fontWeight:700,fontFamily:"var(--mono)",fontSize:12}}>{t.Key}</a></td>
+                  <td style={{padding:"7px 10px"}}><TypeChip t={t}/></td>
                   <td style={{padding:"7px 10px",color:"var(--t2)",maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.Summary}</td>
                   <td style={{padding:"7px 10px",color:"var(--t3)",fontSize:11}}>{t.Status}</td>
                   <td style={{padding:"7px 10px"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{t._g.map(g=>(<span key={g} style={{background:"var(--rose-bg)",color:"var(--rose)",border:"1px solid var(--rose-border)",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600}}>{g}</span>))}</div></td>
