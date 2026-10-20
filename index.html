@@ -388,6 +388,19 @@ body.hastabs .shell{height:calc(100vh - 38px);height:calc(100dvh - 38px)}
 #tabFrames .tframe{position:fixed;top:38px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 38px);border:0;background:#fff;z-index:900;visibility:hidden;pointer-events:none}
 #tabFrames .tframe.on{visibility:visible;pointer-events:auto}
 body.intab .shell,body.intab .statsbg{visibility:hidden}
+/* refresh-from-any-tab button (right end of the tab bar) */
+#tabRefresh{display:none;margin-left:auto;align-self:center;flex:none;align-items:center;gap:6px;height:26px;padding:0 11px;border:1px solid var(--line2);border-radius:7px;background:#fff;color:var(--ink2);font:600 12px var(--sans);cursor:pointer;white-space:nowrap}
+body.canrefresh #tabRefresh{display:flex}
+#tabRefresh:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+#tabRefresh:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+#tabRefresh:disabled{cursor:default}
+#tabRefresh .ic{display:inline-block;font-size:14px;line-height:1}
+#tabRefresh.busy .ic{animation:trSpin 1s linear infinite}
+#tabRefresh.busy{color:var(--blue);border-color:rgba(37,99,235,.35);background:rgba(37,99,235,.05)}
+#tabRefresh.ok{color:#047857;border-color:rgba(4,120,87,.35);background:rgba(4,120,87,.06)}
+#tabRefresh.bad{color:#B91C1C;border-color:rgba(185,28,28,.35);background:rgba(185,28,28,.05)}
+@keyframes trSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#tabRefresh.busy .ic{animation:none}}
 </style>
 </head>
 <body>
@@ -396,6 +409,7 @@ body.intab .shell,body.intab .statsbg{visibility:hidden}
 <div id="tabbar" role="tablist" aria-label="Open dashboards">
   <div class="hdtab on" id="tabHome" role="tab" aria-selected="true" tabindex="0"><span>🏠</span><span class="tt">Dashboard</span></div>
   <span id="tabList" style="display:contents"></span>
+  <button type="button" id="tabRefresh" title="Pull the latest changes from Jira and reload the open tab"><span class="ic">⟳</span><span class="tl">Refresh data</span></button>
 </div>
 <div id="tabFrames"></div>
 
@@ -792,9 +806,15 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   };
 
   /* ── FETCH (shared by first-fetch, Refresh and Full) ── */
+  /* Fetch progress is broadcast as "hd-fetch" events so the tab-bar Refresh button can show it
+     while a dashboard tab covers the launcher. detail.phase: start | progress | done | error */
+  var _busy=false;
+  function emit(d){ try{ window.dispatchEvent(new CustomEvent("hd-fetch",{detail:d})); }catch(e){} }
   function runFetch(opts){
     opts = opts || {};
+    if(_busy) return;
     if(!HJ.isBridgeAvailable()){ openSetup(); return; }
+    _busy=true; emit({phase:"start", full:!!opts.full});
     var cfg=HJ.loadConfig();
     var jql=cfg.jql||QUERY;
     var wasLoaded = !el("loaded").classList.contains("hidden");
@@ -812,10 +832,14 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
       el("fetchPct").textContent=p+" %"; el("fetchFill").style.width=p+"%";
       var verb = opts.refresh && !opts.full ? "Updated" : "Fetched";
       el("fetchMsg").textContent=verb+" "+fetched.toLocaleString()+" of "+total.toLocaleString()+" tickets…";
+      emit({phase:"progress", pct:p});
     }, { full: !!opts.full }).then(function(info){
+      _busy=false;
       el("fetching").classList.add("hidden");
       if(window.HDTabs) HDTabs.markStale(); showLoaded(info.fileName, info);
+      emit({phase:"done", info:info});
     }).catch(function(err){
+      _busy=false; emit({phase:"error", message:err.message});
       el("fetching").classList.add("hidden");
       if(err.message==="EXTENSION_NOT_FOUND"){ el("empty").classList.remove("hidden"); openSetup(); return; }
       // On a refresh error keep the existing data visible; otherwise fall back to empty.
@@ -824,6 +848,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
     });
   }
   el("jiraFetchBtn").onclick=function(){ runFetch({}); };
+  window.HDRefresh={ run:function(){ runFetch({refresh:true}); }, busy:function(){ return _busy; } };
   var _rb=el("refreshBtn"); if(_rb) _rb.onclick=function(){ runFetch({refresh:true}); };
   var _fb=el("fullBtn"); if(_fb) _fb.onclick=function(){ runFetch({full:true, refresh:true}); };
   el("fetchCancel").onclick=function(){
@@ -972,6 +997,7 @@ function showLoaded(name,info){
     var rb=el("refreshBtn"), fb=el("fullBtn");
     if(rb)rb.style.display=has?"":"none";
     if(fb)fb.style.display=has?"":"none";
+    document.body.classList.toggle("canrefresh",has);
   }); }
   requestAnimationFrame(function(){requestAnimationFrame(drawWires);});
 }
@@ -1416,7 +1442,39 @@ if(HS){
     HDStore.saveConfig=function(){ markStale(); return oc.apply(this,arguments); };
   }
 
-  window.HDTabs={open:openTab,close:closeTab,activate:activate,markStale:markStale};
+  /* reload the tab being looked at right now (the others reload when opened, via the stale dot) */
+  function refreshActive(){ var t=active==="home"?null:find(active); if(t&&t.frame){ reload(t); t.stale=false; t.btn.classList.remove("stale"); } }
+
+  /* ── Refresh data from any tab ──
+     Runs the launcher's normal incremental Jira refresh (same as "⟳ Refresh" on the Dashboard),
+     shows progress on the button, then reloads the open tab so it shows the new data. */
+  var rbtn=document.getElementById("tabRefresh"), rlbl=rbtn&&rbtn.querySelector(".tl"), rTimer=null;
+  function rState(cls,txt,title){
+    clearTimeout(rTimer);
+    rbtn.classList.remove("busy","ok","bad"); if(cls) rbtn.classList.add(cls);
+    rlbl.textContent=txt; rbtn.disabled=cls==="busy";
+    rbtn.title=title||"Pull the latest changes from Jira and reload the open tab";
+  }
+  if(rbtn){
+    rbtn.addEventListener("click",function(){ if(window.HDRefresh&&!HDRefresh.busy()) HDRefresh.run(); });
+    window.addEventListener("hd-fetch",function(e){
+      var d=e.detail||{};
+      if(d.phase==="start") rState("busy","Updating…","Fetching the latest changes from Jira");
+      else if(d.phase==="progress") rState("busy","Updating "+(d.pct||0)+"%","Fetching the latest changes from Jira");
+      else if(d.phase==="done"){
+        refreshActive();
+        var n=d.info&&d.info.mode==="incremental"&&d.info.changed!=null?d.info.changed:null;
+        rState("ok", n==null?"✓ Updated":"✓ "+n.toLocaleString()+" updated", "Updated "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}));
+        rTimer=setTimeout(function(){ rState(null,"Refresh data","Last updated "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})+" · click to pull the latest changes from Jira"); },5000);
+      }
+      else if(d.phase==="error"){
+        rState("bad","Refresh failed",d.message||"");
+        rTimer=setTimeout(function(){ rState(null,"Refresh data"); },6000);
+      }
+    });
+  }
+
+  window.HDTabs={open:openTab,close:closeTab,activate:activate,markStale:markStale,refreshActive:refreshActive};
 
   // restore tabs after a page refresh (same browser tab only)
   try{
