@@ -1474,6 +1474,36 @@ if(HS){
     });
   }
 
+  /* ── Jira bridge relay for dashboard tabs ──
+     The HD Jira Bridge extension only runs on the pages its manifest lists. A dashboard tab whose page it does
+     not run on (e.g. the Trend Tracker) asks THIS page instead: it posts HD_RELAY_PING / HD_RELAY_CALL to its
+     parent, we re-issue them to the extension here and pass the answers back. Own message types, so the extension
+     never sees (and never runs) a tab's request twice. Only our own tab frames, same origin, are served. */
+  var RL={ready:false,seq:900000000,map:{},waiting:[]};
+  function isTabFrame(src){ for(var i=0;i<tabs.length;i++) if(tabs[i].frame&&tabs[i].frame.contentWindow===src) return true; return false; }
+  window.addEventListener("message",function(e){
+    var d=e.data; if(!d||typeof d!=="object") return;
+    if(e.source===window){
+      if(d.type==="HD_BRIDGE_READY"){ if(!RL.ready){ RL.ready=true; RL.waiting.splice(0).forEach(function(w){ try{ w.postMessage({type:"HD_BRIDGE_READY",relay:true},location.origin); }catch(x){} }); } return; }
+      if(d.type==="HD_BRIDGE_RESULT"&&RL.map[d.id]){ var m=RL.map[d.id]; delete RL.map[d.id];
+        try{ m.src.postMessage({type:"HD_BRIDGE_RESULT",id:m.id,ok:d.ok,data:d.data,error:d.error,relay:true},location.origin); }catch(x){} }
+      return;
+    }
+    if(e.origin!==location.origin||!isTabFrame(e.source)) return;
+    if(d.type==="HD_RELAY_PING"){
+      if(RL.ready){ e.source.postMessage({type:"HD_BRIDGE_READY",relay:true},location.origin); }
+      else { if(RL.waiting.indexOf(e.source)<0) RL.waiting.push(e.source); window.postMessage({type:"HD_BRIDGE_PING"},"*"); }
+      return;
+    }
+    if(d.type==="HD_RELAY_CALL"){
+      if(!RL.ready){ e.source.postMessage({type:"HD_BRIDGE_RESULT",id:d.id,ok:false,error:"EXTENSION_NOT_FOUND",relay:true},location.origin); return; }
+      var id=++RL.seq; RL.map[id]={src:e.source,id:d.id};
+      setTimeout(function(){ delete RL.map[id]; },120000);
+      window.postMessage({type:"HD_BRIDGE_CALL",id:id,host:d.host,path:d.path,method:d.method||"GET",body:d.body||null},"*");
+    }
+  });
+  window.postMessage({type:"HD_BRIDGE_PING"},"*");
+
   window.HDTabs={open:openTab,close:closeTab,activate:activate,markStale:markStale,refreshActive:refreshActive};
 
   // restore tabs after a page refresh (same browser tab only)
