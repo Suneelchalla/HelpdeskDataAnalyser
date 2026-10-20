@@ -266,8 +266,11 @@
      and merged by Key (incremental). Returns {..., mode, changed}. */
   /* Fields added in a later version (e.g. Chargeable) are mapped automatically on the next fetch, so nobody has to
      re-open the setup: missing keys are auto-detected from the saved field list, or from Jira if there is none. */
-  /* bump when the way Jira fields are turned into text changes → the next fetch is a full one (old rows have the old text) */
-  var RICH_VER = "|text-v2";
+  /* Version of the Jira rich-text → plain-text conversion. It is recorded with the cache for information only and does
+     NOT force a full fetch: tickets pick up the new text as they are updated in Jira, and the launcher's "Full" button
+     re-reads everything when wanted. (Forcing a full fetch made every Refresh restart a long full download until one
+     finally completed.) */
+  var TEXT_VER = 2;
   var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType"];
   function ensureFieldMap(cfg) {
     var fm = cfg.fieldMap || {}, need = NEW_KEYS.filter(function (k) { return !(k in fm); });
@@ -292,12 +295,15 @@
       .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
 
     var loadCache = (window.HDStore && window.HDStore.loadFetchCache) ? window.HDStore.loadFetchCache() : Promise.resolve(null);
+    var prevTextVer = 1;
     return loadCache.then(function (cache) {
       var fetchStart = Date.now();
+      prevTextVer = (cache && cache.textVer) || 1;
       /* the cached rows only hold the fields that were fetched then — if the field set changed (a field was added or
          re-mapped), unchanged tickets would never get the new columns, so do one full fetch instead of a delta */
-      var fieldSig = fields.join(",") + RICH_VER;
-      var canDelta = !opts.full && cache && cache.rows && cache.rows.length && cache.jql === jql && cache.host === host && cache.lastFetch && cache.fieldSig === fieldSig;
+      var fieldSig = fields.join(",");
+      var cachedSig = String((cache && cache.fieldSig) || "").replace(/\|text-v\d+$/, "");   // accept caches saved by the short-lived "|text-v2" build
+      var canDelta = !opts.full && cache && cache.rows && cache.rows.length && cache.jql === jql && cache.host === host && cache.lastFetch && cachedSig === fieldSig;
       if (canDelta) {
         /* relative minutes are evaluated against Jira's own clock, so this is safe
            regardless of the browser's timezone; +5 min guards against clock skew. */
@@ -321,7 +327,7 @@
       var blob = toBlob(rows);
       var name = "Jira Live \u00B7 " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + ".xlsx";
       var saveCache = (window.HDStore && window.HDStore.saveFetchCache)
-        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart, fieldSig: fields.join(",") + RICH_VER })
+        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart, fieldSig: fields.join(","), textVer: mode === "full" ? TEXT_VER : prevTextVer })
         : Promise.resolve();
       return saveCache
         .then(function () { return window.HDStore.saveFile(blob, name); })
