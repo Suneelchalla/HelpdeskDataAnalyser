@@ -309,6 +309,18 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .stf-ref{margin-bottom:4px;line-height:1.5}.stf-ref em{font-style:normal;font-size:10px;font-weight:700;color:#059669;background:#ECFDF5;padding:1px 6px;border-radius:10px}
 .stf-rl code{font-family:var(--mono);font-size:11px;background:var(--paper);border:1px solid var(--line);padding:1px 6px;border-radius:5px;display:inline-block;margin:0 4px 4px 0}
 .stf-k{font-family:var(--mono);font-weight:700}
+.stf-obj{display:inline-flex;align-items:center;gap:6px;margin:0 6px 6px 0;padding:2px 8px 2px 2px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:11px;color:var(--ink2)}
+button.stf-obj:hover,button.stf-obj.on{border-color:var(--cy);background:#ECFEFF}
+button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
+.stf-obj code{margin:0!important}.stf-obj.nomore i{font-style:normal;color:var(--faint);font-size:10.5px}
+.stf-ol{margin-top:8px;border:1px solid #A5F3FC;border-radius:10px;background:#F7FEFF;overflow:hidden}
+.stf-ol-h{padding:8px 12px;border-bottom:1px solid #CFFAFE;font-size:12px}
+.stf-or{padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;background:#fff}
+.stf-or:last-child{border-bottom:none}.stf-or:hover{background:#ECFEFF}
+.stf-or-s{font-size:12.5px;font-weight:600;color:var(--ink);margin-top:2px}
+.stf-or-x{font-size:11.5px;color:var(--ink2);line-height:1.5;margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere}
+.stf-or-x mark{background:#FEF3C7;border-radius:3px;padding:0 2px}
+
 @media(max-width:700px){.stf-rl{grid-template-columns:1fr}.stf-part{grid-template-columns:90px 1fr 34px}}
 </style>
 </head>
@@ -439,6 +451,25 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 (function () {
   var HS = window.HDStore;
   var IX = null;   // similarity index (built on load)
+
+  /* ── Code / database objects mentioned in a ticket ──
+     A word that starts with a letter and contains an underscore (usp_createBIFORSPLIT, bl_chargenew …) in the
+     analysis, solution or description. OBJIX maps each object (lower-case) to every ticket that mentions it, so a
+     popup can list "other tickets about the same procedure / table" and a search for an object finds them. Built
+     lazily on first use, reset whenever the data is re-indexed. */
+  var OBJ_RX = /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]{2,}\b/g, OBJ_URL_RX = /https?:\/\/[^\s<>"')]+/g, OBJIX = null;
+  function objsOf(t) {
+    if (t._objs) return t._objs;
+    var txt = [t.analysis, t.solutionSummary, t.description].join("\n").replace(OBJ_URL_RX, " "), seen = {}, out = [];
+    (txt.match(OBJ_RX) || []).forEach(function (o) { var k = o.toLowerCase(); if (!seen[k] && !/_+$/.test(o)) { seen[k] = 1; out.push(o); } });
+    t._objs = out; t._objSet = seen; return out;
+  }
+  function objIndex() {
+    if (OBJIX) return OBJIX;
+    OBJIX = {};
+    IX.tickets.forEach(function (t, i) { objsOf(t).forEach(function (o) { var k = o.toLowerCase(); (OBJIX[k] = OBJIX[k] || { name: o, list: [] }).list.push(i); }); });
+    return OBJIX;
+  }
   var CL = null;   // cluster cache (built on demand)
 
   /* ═══ MULTI-SELECT DROPDOWN — stays open during selection ═══ */
@@ -993,6 +1024,9 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     Object.keys(IX.byRelease).forEach(function (rk) {
       if (qSet.has(rk) || (qLowerRaw && qLowerRaw.indexOf(rk) > -1)) IX.byRelease[rk].forEach(function (i) { candidates.add(i); });
     });
+    /* Code / database object named in the query (e.g. pasting usp_createBIFORSPLIT) */
+    var qObjs = (String(query || "").match(OBJ_RX) || []).map(function (o) { return o.toLowerCase(); });
+    if (qObjs.length) { var oix = objIndex(); qObjs.forEach(function (o) { if (oix[o]) oix[o].list.forEach(function (i) { candidates.add(i); }); }); }
     /* Pasted / referenced ticket key */
     Object.keys(IX.byKey).forEach(function (key) {
       if (qLowerRaw && qLowerRaw.indexOf(key.toLowerCase()) > -1) candidates.add(IX.byKey[key]);
@@ -1040,6 +1074,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       if (cand.components && cand.components.toLowerCase().split(/[;,]/).some(function (c) { return fieldHit(c.trim()); })) { struct += 6; reasons.push({ c: "r-comp", t: "Component" }); }
       if (cand.labelList && cand.labelList.some(function (l) { return fieldHit(l); })) { struct += 5; reasons.push({ c: "r-lbl", t: "Label" }); }
       if (fieldHit(cand.project)) { struct += 4; reasons.push({ c: "r-proj", t: cand.project }); }
+      if (qObjs.length) { objsOf(cand); var hitObj = qObjs.filter(function (o) { return cand._objSet[o]; }); if (hitObj.length) { struct += 40 + 6 * (hitObj.length - 1); reasons.push({ c: "r-scr", t: "Mentions " + objIndex()[hitObj[0]].name + (hitObj.length > 1 ? " +" + (hitObj.length - 1) : "") }); } }
       if (cand.releaseKeys && cand.releaseKeys.some(function (rk) { return qSet.has(rk) || (qLowerRaw && qLowerRaw.indexOf(rk) > -1); })) { struct += 10; reasons.push({ c: "r-lnk", t: "Release" }); }
 
       /* Prefer a documented solution — but only as a gated tiebreaker on top of
@@ -1679,7 +1714,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     var text = [t.analysis, t.solutionSummary, t.description].join("\n"), keys = {}, urls = {}, objs = {}, ppl = {};
     (text.match(URL_RE) || []).forEach(function (u) { u = u.replace(/[.,;:]+$/, ""); urls[u] = 1; var k = u.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/); if (k) keys[k[1]] = 1; });
     (text.replace(URL_RE, " ").match(KEY_RE) || []).forEach(function (k) { if (k !== t.key) keys[k] = 1; });
-    (text.replace(URL_RE, " ").match(OBJ_RE) || []).forEach(function (o) { if (!/^\d/.test(o)) objs[o] = 1; });
+    objsOf(t).forEach(function (o) { objs[o] = 1; });
     (text.match(AT_RE) || []).forEach(function (p) { ppl[p] = 1; });
     delete keys[t.key];
     return { keys: Object.keys(keys), urls: Object.keys(urls).filter(function (u) { return !/\/browse\/[A-Z][A-Z0-9]+-\d+$/.test(u); }), objs: Object.keys(objs), ppl: Object.keys(ppl) };
@@ -1732,7 +1767,14 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       var i = IX.byKey[k], o = i != null ? IX.tickets[i] : null;
       return '<div class="stf-ref"><a class="stf-k" data-stfkey="' + k + '" href="https://svmhelpdesk.atlassian.net/browse/' + k + '" target="_blank" rel="noreferrer">' + k + "</a> " + (o ? sPill(o.status, o.isChange) + " <span>" + clip(o.summary, 110) + "</span>" + (o.analysis || o.solutionSummary ? ' <em>has analysis</em>' : "") : '<span class="stf-sub">not in the loaded data</span>') + "</div>";
     }).join("") + "</div></div>";
-    if (refs.objs.length) refHtml += '<div class="stf-rl"><span>Code / database objects</span><div>' + refs.objs.map(function (o) { return '<code>' + esc(o) + "</code>"; }).join(" ") + "</div></div>";
+    if (refs.objs.length) {
+      var oix = objIndex();
+      refHtml += '<div class="stf-rl"><span>Code / database objects</span><div><div>' + refs.objs.map(function (o) {
+        var e = oix[o.toLowerCase()], n = e ? e.list.filter(function (i) { return i !== t.idx; }).length : 0;
+        return n ? '<button class="stf-obj" data-stfobj="' + esc(o.toLowerCase()) + '" title="Show the other tickets that mention ' + esc(o) + '"><code>' + esc(o) + "</code><b>" + n + " other ticket" + (n > 1 ? "s" : "") + "</b></button>"
+                 : '<span class="stf-obj nomore" title="No other ticket mentions it"><code>' + esc(o) + "</code><i>only here</i></span>";
+      }).join(" ") + '</div><div id="stfObjList"></div></div></div>';
+    }
     if (refs.urls.length) refHtml += '<div class="stf-rl"><span>Links</span><div>' + refs.urls.map(function (u) { return '<div><a href="' + esc(u) + '" target="_blank" rel="noreferrer">' + esc(u) + "</a></div>"; }).join("") + "</div></div>";
     if (refs.ppl.length) refHtml += '<div class="stf-rl"><span>People mentioned</span><div>' + refs.ppl.map(esc).join(", ") + "</div></div>";
     var links = [];
@@ -1762,6 +1804,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     var ov = el("stfOv");
     ov.addEventListener("click", function (e) {
       if (e.target === ov) { stfClose(); return; }
+      var ob = e.target.closest && e.target.closest("[data-stfobj]");
+      if (ob) { e.preventDefault(); stfObjList(ob.getAttribute("data-stfobj"), idx); return; }
       var a = e.target.closest && e.target.closest("[data-stfkey]");
       if (a && IX.byKey[a.getAttribute("data-stfkey")] != null && !(e.ctrlKey || e.metaKey)) { e.preventDefault(); stfOpen(IX.byKey[a.getAttribute("data-stfkey")]); }
     });
@@ -1769,6 +1813,37 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     var cp = el("stfCopy"); if (cp) cp.onclick = function () { try { navigator.clipboard.writeText(t.analysis).then(function () { cp.textContent = "✓ Copied"; }); } catch (e) {} };
     el("stfX").focus();
   }
+  function stfObjList(key, selfIdx) {
+    var e = objIndex()[key], box = el("stfObjList"); if (!e || !box) return;
+    if (box.getAttribute("data-open") === key) { box.innerHTML = ""; box.removeAttribute("data-open"); stfObjMark(""); return; }
+    var list = e.list.filter(function (i) { return i !== selfIdx; }).map(function (i) { return IX.tickets[i]; });
+    list.sort(function (a, b) {
+      var sa = (a.isResolved && a.hasSolution ? 2 : a.hasSolution ? 1 : 0), sb = (b.isResolved && b.hasSolution ? 2 : b.hasSolution ? 1 : 0);
+      if (sa !== sb) return sb - sa;
+      return (new Date(b.resolved || b.created).getTime() || 0) - (new Date(a.resolved || a.created).getTime() || 0);
+    });
+    var rx = new RegExp(e.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    function snip(x) {
+      var src = [x.analysis, x.solutionSummary, x.description].filter(Boolean).join("\n"), m = rx.exec(src); if (!m) return "";
+      var a = Math.max(0, m.index - 90), b = Math.min(src.length, m.index + m[0].length + 110);
+      return (a ? "…" : "") + esc(src.slice(a, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(src.slice(m.index + m[0].length, b)) + (b < src.length ? "…" : "");
+    }
+    var withSol = list.filter(function (x) { return x.hasSolution; }).length, shown = list.slice(0, 60);
+    box.innerHTML = '<div class="stf-ol"><div class="stf-ol-h"><b>' + list.length + " other ticket" + (list.length > 1 ? "s" : "") + " mention <code>" + esc(e.name) + "</code></b>" +
+      '<span class="stf-sub"> · ' + withSol + " with a recorded analysis / solution · solved ones first</span></div>" +
+      shown.map(function (x) {
+        return '<div class="stf-or" data-stfkey="' + esc(x.key) + '" title="Open ' + esc(x.key) + '">' +
+          '<div class="sim-k"><a class="stf-k" data-stfkey="' + esc(x.key) + '" href="https://svmhelpdesk.atlassian.net/browse/' + esc(x.key) + '" target="_blank" rel="noreferrer">' + esc(x.key) + "</a> " + sPill(x.status, x.isChange) + " " + tPill(x) +
+          ' <span style="color:var(--faint);font-size:10px">' + fmtD(x.resolved || x.created) + "</span>" + (x.project ? ' <span style="color:var(--muted);font-size:10.5px">· ' + esc(x.project) + "</span>" : "") + "</div>" +
+          '<div class="stf-or-s">' + esc(x.summary) + "</div>" +
+          ((x.rootCause || x.typeOfFix) ? '<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">' + (x.rootCause ? '<span class="stag rc">' + esc(x.rootCause) + "</span>" : "") + (x.typeOfFix ? '<span class="stag fx">' + esc(x.typeOfFix) + "</span>" : "") + "</div>" : "") +
+          '<div class="stf-or-x">' + snip(x) + "</div></div>";
+      }).join("") +
+      (list.length > shown.length ? '<div class="stf-sub" style="padding:6px 2px">Showing 60 of ' + list.length + ' — search for <code>' + esc(e.name) + "</code> to see them all.</div>" : "") + "</div>";
+    box.setAttribute("data-open", key); stfObjMark(key);
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  function stfObjMark(key) { document.querySelectorAll("#stfOv .stf-obj").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-stfobj") === key); }); }
   function stfClose() { var o = el("stfOv"); if (o) o.remove(); }
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") stfClose(); });
   /* any element carrying data-stf opens the popup — except real links and buttons inside it */
@@ -1960,7 +2035,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 
   function boot(rows) {
     initCols(rows);
-    IX = buildIndex(rows);
+    IX = buildIndex(rows); OBJIX = null;
     CL = null;   // rebuild clusters on demand
 
     // Populate global client dropdown
