@@ -196,9 +196,44 @@
   function person(v) { if (!v) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.map(function (x) { return x.displayName || x.name || ""; }).join(", "); return v.displayName || v.name || v.value || ""; }
   function choice(v) { if (!v) return ""; if (typeof v === "string") return v; return v.value || v.name || ""; }
   function txt(v) { if (v == null) return ""; if (typeof v === "object") return v.value || v.name || v.displayName || (Array.isArray(v) ? v.map(function (x) { return x.value || x.name || x; }).join(", ") : ""); return String(v); }
+  /* Jira rich text (ADF) → readable plain text. Keeps what the old version dropped: line breaks, list bullets,
+     links (as "text (url)"), @mentions, ticket smart-links / cards (their URL, so referenced tickets survive),
+     status lozenges, dates, table cells and code blocks. */
   function rich(v) { if (v == null) return ""; if (typeof v === "string") return v;
-    if (typeof v === "object") { if (Array.isArray(v.content)) { var out = ""; (function walk(n) { if (!n) return; if (n.text) out += n.text; if (Array.isArray(n.content)) n.content.forEach(walk); if (n.type === "paragraph") out += "\n"; })(v); return out.trim(); } return v.value || v.name || ""; }
+    if (typeof v === "object") { if (Array.isArray(v.content)) return adfText(v).replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim(); return v.value || v.name || ""; }
     return String(v); }
+  var ADF_BLOCK = { paragraph: 1, heading: 1, codeBlock: 1, blockquote: 1, panel: 1, listItem: 1, decisionItem: 1, taskItem: 1 };
+  function adfText(root) {
+    var out = "";
+    function nl() { if (out && !/\n$/.test(out)) out += "\n"; }
+    function walk(n, list) {
+      if (!n) return;
+      var a = n.attrs || {};
+      switch (n.type) {
+        case "text":
+          var t = n.text || "", lk = (n.marks || []).filter(function (m) { return m.type === "link" && m.attrs && m.attrs.href; })[0];
+          out += t; if (lk && lk.attrs.href !== t) out += " (" + lk.attrs.href + ")"; return;
+        case "hardBreak": out += "\n"; return;
+        case "mention": out += a.text || (a.id ? "@user" : ""); return;
+        case "emoji": out += a.text || a.shortName || ""; return;
+        case "inlineCard": out += a.url || (a.data && a.data.url) || ""; return;
+        case "blockCard": case "embedCard": nl(); out += a.url || (a.data && a.data.url) || ""; out += "\n"; return;
+        case "status": out += "[" + (a.text || "") + "]"; return;
+        case "date": out += a.timestamp ? new Date(+a.timestamp).toISOString().slice(0, 10) : ""; return;
+        case "rule": nl(); out += "———\n"; return;
+        case "mediaSingle": case "mediaGroup": case "mediaInline": nl(); out += "[attachment]\n"; return;
+      }
+      var kids = n.content || [], sub = list;
+      if (n.type === "bulletList") sub = { ordered: false };
+      else if (n.type === "orderedList") sub = { ordered: true, i: a.order || 1 };
+      if (n.type === "listItem") { nl(); out += list && list.ordered ? (list.i++) + ". " : "• "; }
+      if (n.type === "tableRow") { nl(); kids.forEach(function (c, ix) { if (ix) out += " | "; walk(c, sub); out = out.replace(/\n+$/, ""); }); out += "\n"; return; }
+      kids.forEach(function (c) { walk(c, sub); });
+      if (ADF_BLOCK[n.type]) nl();
+    }
+    walk(root, null);
+    return out;
+  }
   /* select / multi-select / cascading / text / number → plain text */
   function anyVal(v) { if (v == null || v === "") return ""; if (Array.isArray(v)) return v.map(anyVal).filter(Boolean).join("; ");
     if (typeof v === "object") { var b = v.value || v.name || v.displayName || ""; return v.child && v.child.value ? b + " - " + v.child.value : b; } return String(v); }
@@ -231,6 +266,8 @@
      and merged by Key (incremental). Returns {..., mode, changed}. */
   /* Fields added in a later version (e.g. Chargeable) are mapped automatically on the next fetch, so nobody has to
      re-open the setup: missing keys are auto-detected from the saved field list, or from Jira if there is none. */
+  /* bump when the way Jira fields are turned into text changes → the next fetch is a full one (old rows have the old text) */
+  var RICH_VER = "|text-v2";
   var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType"];
   function ensureFieldMap(cfg) {
     var fm = cfg.fieldMap || {}, need = NEW_KEYS.filter(function (k) { return !(k in fm); });
@@ -259,7 +296,7 @@
       var fetchStart = Date.now();
       /* the cached rows only hold the fields that were fetched then — if the field set changed (a field was added or
          re-mapped), unchanged tickets would never get the new columns, so do one full fetch instead of a delta */
-      var fieldSig = fields.join(",");
+      var fieldSig = fields.join(",") + RICH_VER;
       var canDelta = !opts.full && cache && cache.rows && cache.rows.length && cache.jql === jql && cache.host === host && cache.lastFetch && cache.fieldSig === fieldSig;
       if (canDelta) {
         /* relative minutes are evaluated against Jira's own clock, so this is safe
@@ -284,7 +321,7 @@
       var blob = toBlob(rows);
       var name = "Jira Live \u00B7 " + new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) + ".xlsx";
       var saveCache = (window.HDStore && window.HDStore.saveFetchCache)
-        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart, fieldSig: fields.join(",") })
+        ? window.HDStore.saveFetchCache({ rows: rows, jql: jql, host: host, lastFetch: fetchStart, fieldSig: fields.join(",") + RICH_VER })
         : Promise.resolve();
       return saveCache
         .then(function () { return window.HDStore.saveFile(blob, name); })
