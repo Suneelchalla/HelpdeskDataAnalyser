@@ -206,24 +206,37 @@
   if (root.addEventListener) root.addEventListener("focus", function () { if (L.loaded && !L.fetching && Date.now() - L.now > 60000) load(); });
 
   /* ── extension bridge (same protocol as sla.html; own id range so replies never collide) ── */
-  var BR = { ready: false, seq: 7000000, pend: {} };
+  /* The extension answers on this page directly (own) — or, when this page runs as a tab inside the launcher and
+     the extension doesn't run here, through the launcher's relay (par). Own wins when both answer. */
+  var BR = { ready: false, own: false, par: false, seq: 7000000, pend: {} };
+  var PARENT = null; try { if (root.parent && root.parent !== root) PARENT = root.parent; } catch (e) {}
   if (root.addEventListener) {
     root.addEventListener("message", function (e) {
       if (!e.data) return;
-      if (e.data.type === "HD_BRIDGE_READY") { if (!BR.ready) { BR.ready = true; notify(); } return; }
+      if (e.data.type === "HD_BRIDGE_READY") {
+        if (e.source === root || !e.data.relay) BR.own = true; else if (PARENT && e.source === PARENT) BR.par = true; else return;
+        if (!BR.ready) { BR.ready = true; notify(); } return;
+      }
       if (e.data.type !== "HD_BRIDGE_RESULT") return;
       var p = BR.pend[e.data.id]; if (!p) return; delete BR.pend[e.data.id];
       if (e.data.ok) p.res(e.data.data); else p.rej(new Error(e.data.error || "Bridge error"));
     });
-    [0, 300, 1000, 3000].forEach(function (ms) { setTimeout(function () { root.postMessage({ type: "HD_BRIDGE_PING" }, "*"); }, ms); });
+    [0, 300, 1000, 3000, 6000].forEach(function (ms) { setTimeout(function () { ping(); }, ms); });
   }
-  function bridgeReady() { return BR.ready || !!root._rmBridge; }
+  function ping() {
+    if (BR.ready) return;
+    root.postMessage({ type: "HD_BRIDGE_PING" }, "*");
+    if (PARENT) try { PARENT.postMessage({ type: "HD_RELAY_PING" }, root.location.origin); } catch (e) {}
+  }
+  function bridgeReady() { if (!BR.ready && !root._rmBridge) ping(); return BR.ready || !!root._rmBridge; }
   function jiraHost() { try { var c = JSON.parse(localStorage.getItem("hd-jira-cfg") || "{}"); if (c.jiraHost) return c.jiraHost; } catch (e) {} return "svmhelpdesk.atlassian.net"; }
   function bridgeCall(host, path, method, body) {
     if (!bridgeReady()) return Promise.reject(new Error("EXTENSION_NOT_FOUND"));
     return new Promise(function (res, rej) {
       var id = ++BR.seq; BR.pend[id] = { res: res, rej: rej };
-      root.postMessage({ type: "HD_BRIDGE_CALL", id: id, host: host, path: path, method: method || "GET", body: body || null }, "*");
+      var msg = { type: "HD_BRIDGE_CALL", id: id, host: host, path: path, method: method || "GET", body: body || null };
+      if (BR.own || root._rmBridge || !BR.par || !PARENT) root.postMessage(msg, "*");
+      else { msg.type = "HD_RELAY_CALL"; PARENT.postMessage(msg, root.location.origin); }
       setTimeout(function () { if (BR.pend[id]) { delete BR.pend[id]; rej(new Error("Request timed out.")); } }, 90000);
     });
   }
