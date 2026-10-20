@@ -276,6 +276,40 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 }
 @media (min-width: 1921px) { body { zoom: 1.18 } }
 @media (min-width: 2560px) { body { zoom: 1.42 } }
+
+/* ── ticket detail popup ── */
+.stf-click{cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.stf-click:hover{border-color:var(--cy);box-shadow:var(--sh2)}
+.stf-more{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:var(--cy);padding:2px 0}
+.stf-more:hover{text-decoration:underline}
+.stf-ov{position:fixed;inset:0;z-index:500;background:rgba(17,26,43,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:22px}
+.stf-box{background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(16,24,40,.25);width:100%;max-width:980px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.stf-top{display:flex;gap:14px;align-items:flex-start;padding:16px 20px;border-bottom:1px solid var(--line)}
+.stf-title{font-family:var(--disp);font-size:16px;font-weight:700;margin-top:4px;line-height:1.35}
+.stf-act{margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0}
+.stf-b{padding:6px 12px;border:1px solid var(--line);border-radius:8px;font-size:11.5px;font-weight:600;color:var(--ink2);background:var(--paper)}
+.stf-x{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);font-size:14px;color:var(--ink2)}
+.stf-x:focus-visible,.stf-b:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+.stf-body{overflow-y:auto;padding:14px 20px 20px}
+.stf-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;padding:10px 12px;background:var(--paper);border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+.stf-m{display:flex;flex-direction:column;gap:1px;min-width:0}.stf-m span{font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px}
+.stf-m b{font-size:12px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.stf-sec{margin-bottom:16px}
+.stf-h{font-family:var(--disp);font-size:11px;font-weight:700;color:var(--cy);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.stf-txt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.6;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stf-desc{max-height:320px;overflow-y:auto;color:var(--ink2)}
+.stf-txt mark,.stf-sub mark{background:#FEF3C7;color:inherit;border-radius:3px;padding:0 2px}
+.stf-sub{font-size:11.5px;color:var(--muted);line-height:1.5}
+.stf-score{display:flex;gap:12px;align-items:center}.stf-score .sim-sc{width:48px;height:48px;font-size:13px;flex-shrink:0}
+.stf-parts{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.stf-part{display:grid;grid-template-columns:120px 1fr 40px;gap:10px;align-items:center;font-size:11.5px;color:var(--ink2)}
+.stf-part i{display:block;height:9px;border-radius:5px}.stf-part b{text-align:right;font-family:var(--mono)}
+.stf-rl{display:grid;grid-template-columns:170px 1fr;gap:10px;padding:7px 0;border-top:1px dashed var(--line);font-size:12px}
+.stf-rl:first-child{border-top:none}.stf-rl>span{font-size:10.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;padding-top:2px}
+.stf-ref{margin-bottom:4px;line-height:1.5}.stf-ref em{font-style:normal;font-size:10px;font-weight:700;color:#059669;background:#ECFDF5;padding:1px 6px;border-radius:10px}
+.stf-rl code{font-family:var(--mono);font-size:11px;background:var(--paper);border:1px solid var(--line);padding:1px 6px;border-radius:5px;display:inline-block;margin:0 4px 4px 0}
+.stf-k{font-family:var(--mono);font-weight:700}
+@media(max-width:700px){.stf-rl{grid-template-columns:1fr}.stf-part{grid-template-columns:90px 1fr 34px}}
 </style>
 </head>
 <body>
@@ -852,7 +886,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     candidates.forEach(function (i) {
       var match = scorePair(ticket, IX.tickets[i]);
       if (match && match.score >= minScore) {
-        results.push({ t: IX.tickets[i], s: match.score, rs: match.rs, tier: match.tier });
+        results.push({ t: IX.tickets[i], s: match.score, rs: match.rs, tier: match.tier, ref: ticket });
       }
     });
 
@@ -899,7 +933,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       match.tier = match.score >= 65 ? "s" : match.score >= 40 ? "l" : "a";
 
       if (match.score >= 12) {
-        results.push({ t: change, s: match.score, rs: match.rs, tier: match.tier });
+        results.push({ t: change, s: match.score, rs: match.rs, tier: match.tier, ref: ticket });
       }
     });
 
@@ -972,8 +1006,8 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       var sC = new Set(cand.tokens);
 
       /* Text: cumulative IDF of matched query tokens (rare words weigh more). */
-      var matchIdf = 0, matched = 0;
-      qSet.forEach(function (tok) { if (sC.has(tok)) { matchIdf += (IX.idf[tok] || 0); matched++; } });
+      var matchIdf = 0, matched = 0, words = [];
+      qSet.forEach(function (tok) { if (sC.has(tok)) { matchIdf += (IX.idf[tok] || 0); matched++; words.push(tok); } });
       text += Math.min(40, matchIdf * 4);
       /* Coverage: reward matching MORE of the query. */
       if (qSet.size) text += (matched / qSet.size) * 12;
@@ -983,7 +1017,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       /* Query ↔ description cross-match. */
       if (cand.descTokens.length) {
         var dC = new Set(cand.descTokens), mdi = 0;
-        qSet.forEach(function (tok) { if (dC.has(tok)) mdi += (IX.idf[tok] || 0); });
+        qSet.forEach(function (tok) { if (dC.has(tok)) { mdi += (IX.idf[tok] || 0); if (words.indexOf(tok) < 0) words.push(tok); } });
         text += Math.min(8, mdi * 2);
       }
       if (text >= 8) reasons.push({ c: "r-txt", t: "Text match" });
@@ -1010,10 +1044,10 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 
       /* Prefer a documented solution — but only as a gated tiebreaker on top of
          a genuine match, never as free credit. */
-      var base = struct + text + bonus;
+      var base = struct + text + bonus, titleBonus = bonus, solBonus = 0;
       if (base >= 12) {
-        if (cand.isResolved && cand.hasSolution) { bonus += 6; reasons.push({ c: "r-comp", t: "Has solution" }); }
-        else if (cand.isResolved) bonus += 3;
+        if (cand.isResolved && cand.hasSolution) { bonus += 6; solBonus = 6; reasons.push({ c: "r-comp", t: "Has solution" }); }
+        else if (cand.isResolved) { bonus += 3; solBonus = 3; }
       }
 
       var score = Math.min(100, Math.round(struct + text + bonus));
@@ -1022,7 +1056,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
       /* Gate: require a real signal (meaningful text, any structural match, or a
          strong bonus). Suppresses weak token-only noise. */
       if (score >= 12 && (text >= 6 || struct > 0 || bonus >= 15)) {
-        results.push({ t: cand, s: score, rs: reasons, tier: tier });
+        results.push({ t: cand, s: score, rs: reasons, tier: tier, words: words, parts: { text: text, title: titleBonus, struct: struct, solution: solBonus } });
       }
     });
 
@@ -1212,18 +1246,12 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 
     if (t.analysis || t.solutionSummary) {
       sol = '<div class="sim-sol">';
-      if (t.analysis) {
-        sol += '<b>Analysis:</b> ' + esc(t.analysis).substring(0, 180) +
-          (t.analysis.length > 180 ? "…" : "") + '<br>';
-      }
-      if (t.solutionSummary) {
-        sol += '<b>Solution:</b> ' + esc(t.solutionSummary).substring(0, 250) +
-          (t.solutionSummary.length > 250 ? "…" : "");
-      }
-      sol += '</div>';
+      if (t.analysis) sol += '<b>Analysis:</b> ' + clip(t.analysis, 180) + '<br>';
+      if (t.solutionSummary) sol += '<b>Solution:</b> ' + clip(t.solutionSummary, 250);
+      sol += '<button class="stf-more">' + ((t.analysis || "").length > 180 || (t.solutionSummary || "").length > 250 ? "Read full analysis" : "Full details") + ' ›</button></div>';
     }
 
-    return '<div class="sim-row' + (t.isChange ? " is-chg" : "") + '">' +
+    return '<div class="sim-row stf-click' + (t.isChange ? " is-chg" : "") + '" data-stf="' + stfReg(m) + '" title="Click for full details">' +
       '<div class="sim-sc ' + scCls(m.s) + '">' + m.s + '%</div>' +
       '<div class="sim-i">' +
         '<div class="sim-k">' +
@@ -1638,6 +1666,119 @@ h1, h2, h3, .disp { font-family: var(--disp) }
     XLSX.writeFile(wb, "Clarify-" + slug + "-" + new Date().toISOString().slice(0, 10) + ".xlsx");
   }
 
+  /* ══════════════════════ Ticket detail popup ══════════════════════
+     Opens from any search result or similar-ticket row. Shows the COMPLETE text (the cards only preview it),
+     WHY the ticket matched (score parts, words in common, signals) and WHAT the analysis refers to (tickets,
+     links, database / code objects, people) so you can see what the analysis was based on. */
+  var STF = {};                                   // ticket idx → the match object it was last shown with
+  function stfReg(m) { STF[m.t.idx] = m; return m.t.idx; }
+  function clip(s, n) { s = String(s || ""); return esc(s.length > n ? s.slice(0, n).replace(/\s+\S*$/, "") : s) + (s.length > n ? "…" : ""); }
+
+  var KEY_RE = /\b[A-Z][A-Z0-9]{1,11}-\d{1,7}\b/g, URL_RE = /https?:\/\/[^\s<>"')]+/g, OBJ_RE = /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]{2,}\b/g, AT_RE = /@[A-Z][\w.]*(?: [A-Z][\w.]*)?/g;
+  function stfRefs(t) {
+    var text = [t.analysis, t.solutionSummary, t.description].join("\n"), keys = {}, urls = {}, objs = {}, ppl = {};
+    (text.match(URL_RE) || []).forEach(function (u) { u = u.replace(/[.,;:]+$/, ""); urls[u] = 1; var k = u.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/); if (k) keys[k[1]] = 1; });
+    (text.replace(URL_RE, " ").match(KEY_RE) || []).forEach(function (k) { if (k !== t.key) keys[k] = 1; });
+    (text.replace(URL_RE, " ").match(OBJ_RE) || []).forEach(function (o) { if (!/^\d/.test(o)) objs[o] = 1; });
+    (text.match(AT_RE) || []).forEach(function (p) { ppl[p] = 1; });
+    delete keys[t.key];
+    return { keys: Object.keys(keys), urls: Object.keys(urls).filter(function (u) { return !/\/browse\/[A-Z][A-Z0-9]+-\d+$/.test(u); }), objs: Object.keys(objs), ppl: Object.keys(ppl) };
+  }
+  /* full text → safe HTML: line breaks kept, ticket keys / links clickable, matched words highlighted */
+  function stfText(s, words) {
+    var h = esc(s || "");
+    h = h.replace(/https?:\/\/[^\s<>"')]+/g, function (u) { var x = u.replace(/[.,;:]+$/, ""), tail = u.slice(x.length); return '<a href="' + x + '" target="_blank" rel="noreferrer">' + x + "</a>" + tail; });
+    h = h.replace(/(^|[^\w\/-])([A-Z][A-Z0-9]{1,11}-\d{1,7})\b/g, function (all, pre, k) { return pre + '<a class="stf-k" data-stfkey="' + k + '" href="https://svmhelpdesk.atlassian.net/browse/' + k + '" target="_blank" rel="noreferrer">' + k + "</a>"; });
+    if (words && words.length) {
+      var re = new RegExp("\\b(" + words.filter(function (w) { return w.length > 2; }).map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")\\w*", "gi");
+      if (words.some(function (w) { return w.length > 2; })) var inA = 0; h = h.split(/(<[^>]+>)/).map(function (part) { if (part.charAt(0) === "<") { if (/^<a\b/.test(part)) inA++; else if (/^<\/a>/.test(part)) inA--; return part; } return inA ? part : part.replace(re, "<mark>$&</mark>"); }).join("");
+    }
+    return h;
+  }
+  function stfWords(m) {
+    if (m.words) return m.words;
+    if (m.ref) { var a = new Set(m.ref.tokens.concat(m.ref.descTokens || [])), out = []; m.t.tokens.forEach(function (w) { if (a.has(w) && out.indexOf(w) < 0) out.push(w); }); return out; }
+    return [];
+  }
+  function stfOpen(idx) {
+    var t = IX.tickets[idx]; if (!t) return;
+    var m = STF[idx] || { t: t, s: null, rs: [], tier: null }, words = stfWords(m), refs = stfRefs(t);
+    var meta = [["Client", t.project], ["Priority", t.priority], ["Severity", t.severity], ["Created", fmtD(t.created)], ["Resolved", fmtD(t.resolved)], ["Updated", fmtD(t.updated)],
+      ["SVM in charge", t.svmInCharge], ["Current worker", t.currentWorker], ["Screen", t.screenName], ["Menu", t.menuHead], ["Components", t.components], ["Labels", t.labels],
+      ["Root cause", t.rootCause], ["Type of fix", t.typeOfFix], ["Release", t.releaseNumber], ["Release (data fix)", t.releaseDataFix], ["Parent release", t.parentRelease], ["Delivered", t.deliveredDate ? fmtD(t.deliveredDate) : ""]]
+      .filter(function (x) { return x[1] && x[1] !== "—"; })
+      .map(function (x) { return '<div class="stf-m"><span>' + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b></div>"; }).join("");
+    function sec(title, body, id) { return body ? '<div class="stf-sec"' + (id ? ' id="' + id + '"' : "") + '><div class="stf-h">' + title + "</div>" + body + "</div>" : ""; }
+    function txt(s, cls) { return s ? '<div class="stf-txt' + (cls ? " " + cls : "") + '">' + stfText(s, words) + "</div>" : ""; }
+
+    /* why it matched */
+    var why = "";
+    if (m.s != null) {
+      var p = m.parts;
+      why += '<div class="stf-score"><div class="sim-sc ' + scCls(m.s) + '">' + m.s + "%</div><div>" + (m.tier ? tierB(m.tier) : "") +
+        '<div class="stf-sub">' + (m.ref ? "Similarity to <b>" + esc(m.ref.key) + "</b> — " + esc(m.ref.summary) : "Match to your search <b>“" + esc(_lastSearchQuery) + "”</b>") + "</div></div></div>";
+      if (p) {
+        var tot = Math.max(1, p.text + p.title + p.struct + p.solution);
+        why += '<div class="stf-parts">' + [["Words in the summary / description", p.text, "#0891B2"], ["Title / ticket-key match", p.title, "#B45309"], ["Same screen, menu, cause, component…", p.struct, "#7C3AED"], ["Resolved with a documented solution", p.solution, "#059669"]]
+          .filter(function (x) { return x[1] > 0; }).map(function (x) { return '<div class="stf-part"><i style="width:' + Math.max(3, x[1] / tot * 100) + "%;background:" + x[2] + '"></i><span>' + x[0] + "</span><b>+" + Math.round(x[1]) + "</b></div>"; }).join("") + "</div>";
+      }
+      if (words.length) why += '<div class="stf-sub" style="margin-top:8px">Words in common: ' + words.slice(0, 25).map(function (w) { return '<mark>' + esc(w) + "</mark>"; }).join(" ") + "</div>";
+      if (m.rs && m.rs.length) why += '<div class="sim-rs" style="margin-top:8px">' + rTags(m.rs) + "</div>";
+    }
+
+    /* what the analysis is based on */
+    var refHtml = "";
+    if (refs.keys.length) refHtml += '<div class="stf-rl"><span>Tickets referred to</span><div>' + refs.keys.map(function (k) {
+      var i = IX.byKey[k], o = i != null ? IX.tickets[i] : null;
+      return '<div class="stf-ref"><a class="stf-k" data-stfkey="' + k + '" href="https://svmhelpdesk.atlassian.net/browse/' + k + '" target="_blank" rel="noreferrer">' + k + "</a> " + (o ? sPill(o.status, o.isChange) + " <span>" + clip(o.summary, 110) + "</span>" + (o.analysis || o.solutionSummary ? ' <em>has analysis</em>' : "") : '<span class="stf-sub">not in the loaded data</span>') + "</div>";
+    }).join("") + "</div></div>";
+    if (refs.objs.length) refHtml += '<div class="stf-rl"><span>Code / database objects</span><div>' + refs.objs.map(function (o) { return '<code>' + esc(o) + "</code>"; }).join(" ") + "</div></div>";
+    if (refs.urls.length) refHtml += '<div class="stf-rl"><span>Links</span><div>' + refs.urls.map(function (u) { return '<div><a href="' + esc(u) + '" target="_blank" rel="noreferrer">' + esc(u) + "</a></div>"; }).join("") + "</div></div>";
+    if (refs.ppl.length) refHtml += '<div class="stf-rl"><span>People mentioned</span><div>' + refs.ppl.map(esc).join(", ") + "</div></div>";
+    var links = [];
+    String(t.linkDetails || "").split(/,\s*/).forEach(function (d) { var x = d.split(":"); if (x[0] && /-\d/.test(x[0])) links.push({ k: x[0].trim(), how: (x[1] || "").trim(), type: (x[2] || "").trim() }); });
+    if (!links.length) String(t.linkedIssues || "").split(/[;,]/).forEach(function (k) { k = k.trim(); if (k) links.push({ k: k, how: "", type: "" }); });
+    if (links.length) refHtml += '<div class="stf-rl"><span>Linked in Jira</span><div>' + links.map(function (l) {
+      var i = IX.byKey[l.k], o = i != null ? IX.tickets[i] : null;
+      return '<div class="stf-ref"><a class="stf-k" data-stfkey="' + esc(l.k) + '" href="https://svmhelpdesk.atlassian.net/browse/' + esc(l.k) + '" target="_blank" rel="noreferrer">' + esc(l.k) + "</a> <span class=\"stf-sub\">" + esc([l.how, l.type].filter(Boolean).join(" · ")) + "</span>" + (o ? " " + sPill(o.status, o.isChange) + " <span>" + clip(o.summary, 100) + "</span>" : "") + "</div>";
+    }).join("") + "</div></div>";
+    if (!refHtml && t.analysis) refHtml = '<div class="stf-sub">The analysis doesn’t name another ticket, link or code object — it is the engineer’s own write-up for this ticket.</div>';
+
+    var html = '<div class="stf-ov" id="stfOv" role="dialog" aria-modal="true" aria-label="Ticket ' + esc(t.key) + '"><div class="stf-box">' +
+      '<div class="stf-top"><div style="min-width:0"><div class="sim-k"><a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + " ↗</a> " + sPill(t.status, t.isChange) + " " + tPill(t) + "</div>" +
+      '<div class="stf-title">' + esc(t.summary) + "</div></div>" +
+      '<div class="stf-act">' + (t.analysis ? '<button class="stf-b" id="stfCopy">Copy analysis</button>' : "") + '<button class="stf-x" id="stfX" aria-label="Close">✕</button></div></div>' +
+      '<div class="stf-body">' +
+        (meta ? '<div class="stf-meta">' + meta + "</div>" : "") +
+        sec("Analysis", txt(t.analysis), "stfAna") +
+        sec("Solution summary", txt(t.solutionSummary)) +
+        sec("What the analysis is based on", refHtml) +
+        sec("Why this ticket matched", why) +
+        sec("Description", txt(t.description, "stf-desc")) +
+        (!t.analysis && !t.solutionSummary ? '<div class="stf-sub" style="margin-top:6px">No analysis or solution recorded for this ticket yet.</div>' : "") +
+      "</div></div></div>";
+    stfClose();
+    var w = document.createElement("div"); w.innerHTML = html; document.body.appendChild(w.firstChild);
+    var ov = el("stfOv");
+    ov.addEventListener("click", function (e) {
+      if (e.target === ov) { stfClose(); return; }
+      var a = e.target.closest && e.target.closest("[data-stfkey]");
+      if (a && IX.byKey[a.getAttribute("data-stfkey")] != null && !(e.ctrlKey || e.metaKey)) { e.preventDefault(); stfOpen(IX.byKey[a.getAttribute("data-stfkey")]); }
+    });
+    el("stfX").onclick = stfClose;
+    var cp = el("stfCopy"); if (cp) cp.onclick = function () { try { navigator.clipboard.writeText(t.analysis).then(function () { cp.textContent = "✓ Copied"; }); } catch (e) {} };
+    el("stfX").focus();
+  }
+  function stfClose() { var o = el("stfOv"); if (o) o.remove(); }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") stfClose(); });
+  /* any element carrying data-stf opens the popup — except real links and buttons inside it */
+  document.addEventListener("click", function (e) {
+    var hit = e.target.closest && e.target.closest("[data-stf]"); if (!hit || el("stfOv")) return;
+    if (e.target.closest("a, button, input, select") && !e.target.closest(".stf-more")) return;
+    if (window.getSelection && String(window.getSelection()).length > 2) return;         // selecting text, not clicking
+    e.preventDefault(); stfOpen(+hit.getAttribute("data-stf"));
+  });
+
   /* ══════════════════════ Render Search Results ══════════════════════ */
 
   function renderSearch(query) {
@@ -1685,18 +1826,12 @@ h1, h2, h3, .disp { font-family: var(--disp) }
           solBlock = '<div class="sr-sol"><h4>Resolution details</h4>';
           if (t.rootCause) solBlock += '<div class="r"><b>Root Cause:</b> ' + esc(t.rootCause) + '</div>';
           if (t.typeOfFix) solBlock += '<div class="r"><b>Fix:</b> ' + esc(t.typeOfFix) + '</div>';
-          if (t.analysis) {
-            solBlock += '<div class="r"><b>Analysis:</b> ' + esc(t.analysis).substring(0, 350) +
-              (t.analysis.length > 350 ? "…" : "") + '</div>';
-          }
-          if (t.solutionSummary) {
-            solBlock += '<div class="r"><b>Solution:</b> ' + esc(t.solutionSummary).substring(0, 400) +
-              (t.solutionSummary.length > 400 ? "…" : "") + '</div>';
-          }
-          solBlock += '</div>';
+          if (t.analysis) solBlock += '<div class="r"><b>Analysis:</b> ' + clip(t.analysis, 350) + '</div>';
+          if (t.solutionSummary) solBlock += '<div class="r"><b>Solution:</b> ' + clip(t.solutionSummary, 400) + '</div>';
+          solBlock += '<button class="stf-more">' + ((t.analysis || "").length > 350 || (t.solutionSummary || "").length > 400 ? "Read full analysis" : "Full details") + ' ›</button></div>';
         }
 
-        html += '<div class="sr-card"><div class="sr-top">' +
+        html += '<div class="sr-card stf-click" data-stf="' + stfReg(m) + '" title="Click for full details"><div class="sr-top">' +
           '<div class="sim-sc ' + scCls(m.s) + '">' + m.s + '%</div>' +
           '<div style="flex:1;min-width:0">' +
             '<div class="sim-k">' +
