@@ -996,7 +996,7 @@ function dateBar(){
     if(!maxD||d>maxD) maxD=d;
   });
   var rangeLabel="";
-  if(minD&&maxD) rangeLabel='<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:11px;color:var(--muted);background:var(--paper);border:1px solid var(--line);padding:4px 12px;border-radius:7px;white-space:nowrap">📊 Data range: <b style="color:var(--ink)">'+fdate(minD)+'</b> → <b style="color:var(--ink)">'+fdate(maxD)+'</b> <span style="color:var(--faint)">· '+RAW.length+' records (resolved date)</span></span>';
+  if(minD&&maxD) rangeLabel='<span style="display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:11px;color:var(--muted);background:var(--paper);border:1px solid var(--line);padding:4px 10px;border-radius:7px;white-space:nowrap" title="Data range by resolved date · '+RAW.length.toLocaleString()+' records">📊 <b style="color:var(--ink)">'+fdate(minD)+'</b> → <b style="color:var(--ink)">'+fdate(maxD)+'</b> <span style="color:var(--faint)">· '+RAW.length.toLocaleString()+'</span></span>';
   return '<div class="datebar">'+
     '<span class="flabel" style="margin-right:2px">📅 Range</span>'+
     presets.map(function(p){return '<button class="chip '+(S.dlabel===p?'on':'')+'" data-preset="'+p+'">'+p+'</button>';}).join("")+
@@ -1166,8 +1166,7 @@ function viewPerf(){
   // hero
   out+='<div class="up" style="margin-bottom:9px"><div class="eyebrow">HD Performance</div>'+
     '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">Who resolved the work?</h1>'+
-    '<div class="sub" style="margin-top:3px">Scope: '+esc(scopeTxt)+'. <b style="color:var(--hd)">HD</b> = closed by Help Desk (no linked ticket) · <b style="color:var(--engg)">ENGG</b> = escalated to Engineering (has linked ticket).</div>'+
-    '<button class="ghost" id="perfExport" style="margin-top:8px;display:inline-flex;align-items:center;gap:5px">\u2B07 Export Full Data ('+total.toLocaleString()+' tickets)</button></div>';
+    '<div class="sub" style="margin-top:3px">Scope: '+esc(scopeTxt)+'. <b style="color:var(--hd)">HD</b> = closed by Help Desk (no linked ticket) · <b style="color:var(--engg)">ENGG</b> = escalated to Engineering (has linked ticket).</div></div>';
 
   // hero card
   out+='<div class="card up d1 pad" style="margin-bottom:9px;display:flex;gap:28px;align-items:center;flex-wrap:wrap">'+
@@ -3018,7 +3017,6 @@ function bindMain(){
     document.querySelectorAll("tr.rowlink[data-svm]").forEach(function(r){
       r.onclick=function(){ var s=r.dataset.svm; openModal(s+" — all tickets in scope","👤","#0F766E",f.filter(function(t){return (t.svm||"(unassigned)")===s;})); };
     });
-    var pe=el("perfExport"); if(pe) pe.onclick=function(){ exportFullCSV(f,"hd-performance-full"); };
   }
 
   if(S.tab==="trend"){
