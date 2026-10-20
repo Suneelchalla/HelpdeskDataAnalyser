@@ -1716,6 +1716,7 @@ function viewTrend(){
    Status history is the SLA Tracker's shared cache (HDStore "sla-history"); missing histories are fetched
    through HDSlaLink.fetchMissing (same bridge, same one-fetch-at-a-time lock), so whatever is fetched here
    also serves the SLA Tracker and the Follow-up Tracker, and vice versa. */
+var NS_NOBRIDGE = "The HD Jira Bridge extension did not answer, so status history can't be fetched on this page. Check that the extension is enabled, then reload the page.";
 var NS_HIST_VER = 2, NS_IST = 330 * 60000, NS_DAY = 86400000;
 var NS = { hist: {}, loaded: false, ver: 0, fetching: false, prog: null, err: "", tried: {}, timer: null, all: [] };
 var NS_OUT = {
@@ -1857,7 +1858,15 @@ function nsFetch(retry) {
   if (NS.fetching || !window.HDSlaLink || !NS.loaded) return;
   var need = nsNeed(nsFetchScope(), retry);
   if (!need.length) return;
-  if (!nsBridge()) { NS.err = "The HD Jira Bridge extension is not connected, so status history can't be fetched here. Enable it and reload the page."; nsPaintBar(); return; }
+  if (!nsBridge()) {
+    /* The extension can answer a few seconds after the page loads (especially inside the launcher's tabs).
+       Ask again and retry for ~30 s before saying it isn't there. */
+    NS.wait = (NS.wait || 0) + 1;
+    try { window.postMessage({ type: "HD_BRIDGE_PING" }, "*"); } catch (e) {}
+    if (NS.wait <= 10) { NS.err = ""; nsPaintBar(); clearTimeout(NS.timer); NS.timer = setTimeout(function () { if (S.tab === "night") nsFetch(retry); }, 3000); return; }
+    NS.wait = 0; NS.err = NS_NOBRIDGE; nsPaintBar(); return;
+  }
+  NS.wait = 0;
   need = need.slice(0, 1500);
   need.forEach(function (o) { NS.tried[nsSig(o)] = 1; });
   NS.fetching = true; NS.err = ""; NS.prog = { done: 0, total: need.length }; nsPaintBar();
@@ -1878,7 +1887,7 @@ function nsFetch(retry) {
 }
 function nsSchedule(ms) { clearTimeout(NS.timer); NS.timer = setTimeout(function () { if (S.tab === "night" && nsAutoOn()) nsFetch(false); }, ms == null ? 900 : ms); }
 if (window.addEventListener) window.addEventListener("storage", function (e) { if (e.key === "hd-sla-hist-ping" && !NS.fetching) nsLoad(); });
-if (window.HDSlaLink) HDSlaLink.subscribe(function () { if (S.tab === "night") { nsPaintBar(); if (!NS.fetching) nsSchedule(); } });
+if (window.HDSlaLink) HDSlaLink.subscribe(function () { if (NS.err === NS_NOBRIDGE && nsBridge()) NS.err = ""; if (S.tab === "night") { nsPaintBar(); if (!NS.fetching) nsSchedule(); } });
 
 /* ── drill-downs: every number opens the tickets behind it ── */
 var nsSeq = 0;
@@ -1943,10 +1952,11 @@ function nsBarHTML(all) {
     var p = NS.prog.total ? Math.round(NS.prog.done / NS.prog.total * 100) : 0;
     h += '<div class="nsprog"><div class="nsprog-t">Fetching ' + NS.prog.done.toLocaleString() + " / " + NS.prog.total.toLocaleString() + '</div><div class="nsprog-b"><i style="width:' + p + '%"></i></div></div>';
   } else if (miss) {
-    h += '<button class="ghost" id="ns-fetch"' + (br ? "" : ' disabled title="HD Jira Bridge extension not connected"') + ">⟳ Fetch " + Math.min(miss, 1500).toLocaleString() + " histor" + (Math.min(miss, 1500) === 1 ? "y" : "ies") + "</button>";
+    h += '<button class="ghost" id="ns-fetch"' + (br ? "" : ' title="Waits for the HD Jira Bridge extension"') + ">⟳ Fetch " + Math.min(miss, 1500).toLocaleString() + " histor" + (Math.min(miss, 1500) === 1 ? "y" : "ies") + "</button>";
   }
   h += '<label class="nsauto"><input type="checkbox" id="ns-auto"' + (auto ? " checked" : "") + "> Auto-fetch</label></div>";
   if (NS.err) h += '<div class="nserr">' + esc(NS.err) + "</div>";
+  else if (miss && !br && NS.wait) h += '<div class="nserr" style="color:var(--engg);background:var(--engg-bg);border-color:var(--engg-soft)">Connecting to the HD Jira Bridge extension…</div>';
   else if (miss && !br) h += '<div class="nserr" style="color:var(--muted);background:var(--paper);border-color:var(--line)">The HD Jira Bridge extension isn’t connected on this page, so missing histories can’t be fetched. Open the SLA Tracker or reload with the extension enabled.</div>';
   return h;
 }
