@@ -7,6 +7,9 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F766E'/%3E%3Crect x='7' y='9' width='7' height='14' rx='2' fill='%235EEAD4'/%3E%3Crect x='18' y='9' width='7' height='14' rx='2' fill='%23A5B4FC'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
+<script src="sla-engine.js"></script>
+<script src="sla-history.js"></script>
+<script src="sla-link.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -316,6 +319,34 @@ tbody tr.rowlink:hover{background:var(--hd-bg)}
 @media (min-width: 2560px) { body { zoom: 1.42; } }
 @media (min-width: 3200px) { body { zoom: 1.65; } }
 @media (min-width: 3840px) { body { zoom: 1.9; } }
+
+/* ── NIGHT SHIFT tab ── */
+.nskpis{grid-template-columns:repeat(7,minmax(0,1fr))}
+@media(max-width:1240px){.nskpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:680px){.nskpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.nskpis .kv{font-size:22px}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.nsnum{cursor:pointer;font-weight:600;border-bottom:1px dotted var(--line2);padding:0 1px}
+.nsnum:hover{color:var(--hd);border-bottom-color:var(--hd)}
+.nschip{display:inline-block;white-space:nowrap;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;color:var(--c);background:color-mix(in srgb,var(--c) 12%,#fff);border:1px solid color-mix(in srgb,var(--c) 30%,#fff)}
+.nsbar-in{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:11px 18px;font-size:12px;color:var(--ink2)}
+.nsbar-in>div:first-child{flex:1}
+.nsprog{min-width:220px}.nsprog-t{font-size:11px;font-weight:600;color:var(--engg);margin-bottom:4px}
+.nsprog-b{height:7px;border-radius:5px;background:var(--engg-soft);overflow:hidden}.nsprog-b i{display:block;height:100%;background:var(--engg);transition:width .3s}
+.nsauto{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.nserr{margin:0 18px 11px;padding:7px 11px;border-radius:8px;font-size:11.5px;color:var(--rose);background:var(--rose-bg);border:1px solid var(--rose-soft)}
+.nsfun{display:grid;grid-template-columns:minmax(150px,38%) 1fr 92px;align-items:center;gap:10px;margin-bottom:8px}
+.nsfun-l{font-size:11.5px;color:var(--ink2)}
+.nsfun-t{height:22px;background:var(--paper);border-radius:6px;overflow:hidden}
+.nsfun-t i{display:block;height:100%;border-radius:6px;cursor:pointer;transition:filter .15s}
+.nsfun-t i:hover,.nsstack i:hover,.nsbar:hover{filter:brightness(1.12);cursor:pointer}
+.nsfun-n,.nshr-n{font-size:12px;font-weight:700;text-align:right;white-space:nowrap}
+.nsfun-n span,.nshr-n span{font-size:10.5px;font-weight:500;color:var(--muted)}
+.nsstack{display:flex;width:100%;border-radius:6px;overflow:hidden;background:var(--paper)}
+.nsstack i{display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:700;color:#fff;cursor:pointer;min-width:0;overflow:hidden}
+.nshr{display:grid;grid-template-columns:96px 1fr 110px;align-items:center;gap:10px;margin-bottom:6px}
+.nshr-l{font-size:11px;color:var(--ink2)}
+.nshr>div:nth-child(2){min-width:0}
 </style>
 </head>
 <body>
@@ -463,7 +494,9 @@ var S = {
   pivot:"hdworker",
   pIssue:"", pRc:"", pStatus:"", _pivFor:null,   // adjustable pivot filters
   weekA:"", weekB:"",
-  dType:""  // daily flow type filter: "" = all, "Incident", "Service Request"
+  dType:"",  // daily flow type filter: "" = all, "Incident", "Service Request"
+  // night shift tab: window (IST hours), type chip, trend grouping, ticket-list filter/search/page, client-table sort
+  ns:{start:21,end:6,type:"",trend:"day",out:"",q:"",page:0,csort:"all",cdir:"desc"}
 };
 
 /* ═══════════════════════════════ HELPERS ═══════════════════════════════ */
@@ -895,6 +928,7 @@ function renderShell(){
       '<nav class="tabs">'+
         tabBtn("perf","📊","HD Performance",f.length)+
         tabBtn("daily","📆","Daily Flow","")+
+        tabBtn("night","🌙","Night Shift",nsCount())+
         tabBtn("trend","📈","Trend Analysis","")+
         tabBtn("pending","📋","Pending",pendCount)+
         tabBtn("wow","🗓️","Week on Week","")+
@@ -1065,6 +1099,7 @@ function renderMain(){
   else if(S.tab==="wow") main.innerHTML=viewWoW();
   else if(S.tab==="pivots") main.innerHTML=viewPivots();
   else if(S.tab==="data"){ main.innerHTML=viewData(); bindData(); return; }
+  else if(S.tab==="night"){ main.innerHTML=viewNight(); bindMain(); bindNight(); animateMain(); return; }
   else main.innerHTML=viewExc();
   bindMain();
   animateMain();
@@ -1650,6 +1685,528 @@ function viewTrend(){
 
   return out;
 }
+
+/* ═══════════════════════════════ VIEW: NIGHT SHIFT ═══════════════════════════════
+   What the night team did with the tickets that arrived on their shift.
+
+   RULES (all times IST)
+   • Night ticket      created inside the shift window (default 21:00 → 06:00). A ticket created
+                       after midnight belongs to the PREVIOUS evening's shift.
+   • Handed to client  the first decisive status change made BEFORE the shift ended moved the ticket to a
+                       client-side status (Waiting for customer, Resolved With Clarification, …) or Closed.
+   • Sent to Engg      the first decisive change in the shift went to an Engineering status.
+   • Worked, still HD  it moved in the shift but only between Help Desk statuses.
+   • Not touched       no status change before the shift ended (the day team picked it up).
+   • Came back         after the hand-over the ticket later returned to Help Desk or Engineering
+                       (client replied / reopened). Closing it later — even days later — is NOT coming back.
+   • Solved by night HD  handed to client in the shift + NO linked ticket + did not come back.
+   Who-holds-what comes from Master Data (HDClass), exactly like the SLA Tracker.
+
+   Status history is the SLA Tracker's shared cache (HDStore "sla-history"); missing histories are fetched
+   through HDSlaLink.fetchMissing (same bridge, same one-fetch-at-a-time lock), so whatever is fetched here
+   also serves the SLA Tracker and the Follow-up Tracker, and vice versa. */
+var NS_HIST_VER = 2, NS_IST = 330 * 60000, NS_DAY = 86400000;
+var NS = { hist: {}, loaded: false, ver: 0, fetching: false, prog: null, err: "", tried: {}, timer: null, all: [] };
+var NS_OUT = {
+  client: { l: "Handed to client", c: "#0F766E" }, engg: { l: "Sent to Engineering", c: "#5B57D8" },
+  hd: { l: "Worked, still with HD", c: "#D97706" }, none: { l: "Not touched in shift", c: "#94A3B8" },
+  nohist: { l: "History not fetched", c: "#D5DCE5" }
+};
+var NS_ORDER = ["client", "engg", "hd", "none", "nohist"];
+var NS_FOL = { closed: { l: "Closed", c: "#047857" }, waiting: { l: "Still with client", c: "#D97706" }, returned: { l: "Came back", c: "#BE1D42" } };
+(function () { try { var c = JSON.parse(localStorage.getItem("hd-night-cfg") || "null"); if (c && c.start != null && c.end != null) { S.ns.start = +c.start; S.ns.end = +c.end; } } catch (e) {} })();
+function nsSaveCfg() { try { localStorage.setItem("hd-night-cfg", JSON.stringify({ start: S.ns.start, end: S.ns.end })); } catch (e) {} }
+
+/* ── time ── */
+function nsRawMs(t, col) {
+  var raw = t._raw || {}, v = null;
+  for (var k in raw) if (Object.prototype.hasOwnProperty.call(raw, k) && k.trim().toLowerCase() === col) { v = raw[k]; break; }
+  return window.HDSla ? HDSla.parseTs(v) : (v ? new Date(v).getTime() : null);
+}
+function nsDayKey(day0) { return new Date(day0 * NS_DAY).toISOString().slice(0, 10); }
+function nsShift(ms) {
+  if (ms == null || isNaN(ms)) return null;
+  var s = S.ns.start * 60, e = S.ns.end * 60, l = ms + NS_IST, day = Math.floor(l / NS_DAY), m = Math.floor((l - day * NS_DAY) / 60000), inN, endDay = day;
+  if (s > e) { inN = m >= s || m < e; if (m < e) day--; endDay = day + 1; } else inN = m >= s && m < e;
+  if (!inN) return null;
+  return { key: nsDayKey(day), day0: day, end: endDay * NS_DAY + e * 60000 - NS_IST, hour: Math.floor(m / 60) };
+}
+function nsFdt(ms) { return ms == null ? "—" : new Date(ms).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }); }
+function nsDate(key) { var p = key.split("-"); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit", timeZone: "UTC" }); }
+function nsDur(min) {
+  if (min == null || isNaN(min)) return "—"; min = Math.round(min);
+  if (min < 60) return min + "m"; var h = Math.floor(min / 60), m = min % 60;
+  if (h < 24) return h + "h" + (m ? " " + m + "m" : ""); var d = Math.floor(h / 24); return d + "d" + (h % 24 ? " " + (h % 24) + "h" : "");
+}
+function nsHH(h) { return String(h).padStart(2, "0") + ":00"; }
+function nsHours() { var out = [], h = S.ns.start; for (var i = 0; i < 24; i++) { out.push(h); h = (h + 1) % 24; if (h === S.ns.end) break; } return out; }
+function nsWindowTxt() { return nsHH(S.ns.start) + " → " + nsHH(S.ns.end) + (S.ns.start > S.ns.end ? " next morning" : "") + " IST"; }
+
+/* ── status → side (same rule as the SLA Tracker) ── */
+function nsKind(st) {
+  var C = window.HDClass; if (C.isTerminal(st)) return "closed";
+  var o = C.owner(st); if (o === "client") return "client";
+  return C.classify3(st) === "engg" ? "engg" : "hd";
+}
+
+/* ── a cached history is only used while it still describes the ticket in this data (same rule as sla.html) ── */
+function nsEntry(t, upd) {
+  var e = NS.hist[t.key]; if (!e) return null;
+  var tr = e.transitions || [], last = tr.length ? tr[tr.length - 1].to : e.status, js = e.status || last;
+  if (js !== t.status && last !== t.status) return null;
+  if (e.updated != null && upd != null && e.updated === upd) return e;
+  if (upd != null && e.fetchedAt && upd <= e.fetchedAt - 300000) return e;
+  if (upd == null) return e;
+  return null;
+}
+
+/* ── one night ticket → what happened to it ── */
+function nsInfo(t) {
+  if (t._nsC === undefined) { t._nsC = nsRawMs(t, "created"); if (t._nsC == null && t.created) t._nsC = t.created.getTime(); t._nsU = nsRawMs(t, "updated"); }
+  var ck = NS.ver + "|" + S.ns.start + "|" + S.ns.end;
+  if (t._nsK === ck) return t._ns;
+  var sh = nsShift(t._nsC), o = null;
+  if (sh) {
+    o = { t: t, c: t._nsC, shift: sh.key, day0: sh.day0, end: sh.end, hour: sh.hour, linked: !!t.linked, curKind: nsKind(t.status), out: "nohist" };
+    var e = nsEntry(t, t._nsU);
+    if (e) {
+      var tr = (e.transitions || []).slice().sort(function (a, b) { return a.t - b.t; }), i;
+      o.suspect = !!e.suspect; o.out = "none";
+      o.first = tr.length ? tr[0] : null; o.firstMin = o.first ? Math.max(0, (o.first.t - o.c) / 60000) : null;
+      for (i = 0; i < tr.length; i++) {
+        var x = tr[i]; if (x.t >= o.end) break;
+        var k = nsKind(x.to);
+        if (k === "client" || k === "closed") { o.out = "client"; o.hand = x; o.handIdx = i; break; }
+        if (k === "engg") { o.out = "engg"; o.hand = x; break; }
+        o.out = "hd";
+      }
+      if (o.out === "client") {
+        for (i = o.handIdx + 1; i < tr.length; i++) { var kk = nsKind(tr[i].to); if (kk === "hd" || kk === "engg") { o.back = tr[i]; break; } }
+        if (o.back) o.follow = "returned";
+        else if (o.curKind === "closed") { o.follow = "closed"; for (i = tr.length - 1; i >= 0; i--) if (nsKind(tr[i].to) === "closed") { o.closedAt = tr[i].t; break; } }
+        else o.follow = "waiting";
+        o.hdSolved = !o.linked && o.follow !== "returned";
+      }
+      if (o.out !== "engg") for (i = 0; i < tr.length; i++) if (tr[i].t >= o.end && nsKind(tr[i].to) === "engg") { o.enggLater = tr[i]; break; }
+    }
+  }
+  t._nsK = ck; t._ns = o; return o;
+}
+
+/* ── scope: top filters + date range; Incident & Service Request unless the Type filter says otherwise ── */
+function nsPool() {
+  var tp = S.ns.type;
+  return RAW.filter(function (t) {
+    if (!inRange(t)) return false;
+    if (S.svm.length && S.svm.indexOf(t.svm) < 0) return false;
+    if (S.cw.length && S.cw.indexOf(t.currentWorker) < 0) return false;
+    if (S.rc.length && S.rc.indexOf(t.rc) < 0) return false;
+    if (S.proj.length && S.proj.indexOf(t.project) < 0) return false;
+    if (S.issue.length) { if (S.issue.indexOf(t.issue) < 0) return false; }
+    else { var it = t.issue.toLowerCase(); if (it.indexOf("incident") < 0 && it.indexOf("service req") < 0) return false; }
+    if (tp && t.issue !== tp) return false;
+    return true;
+  });
+}
+function nsList() { var out = []; nsPool().forEach(function (t) { var o = nsInfo(t); if (o) out.push(o); }); return out; }
+function nsCount() { try { return nsList().length; } catch (e) { return ""; } }
+
+/* ── history: load, fetch, keep in sync with other pages ── */
+function nsLoad() {
+  if (!window.HDStore || !HDStore.loadSlaHistory) { NS.loaded = true; return Promise.resolve(); }
+  return HDStore.loadSlaHistory().then(function (h) {
+    NS.hist = h && h.v === NS_HIST_VER && h.tickets ? h.tickets : {};
+    NS.loaded = true; NS.ver++;
+    if (S.tab === "night" && !el("ov")) renderMain();
+  });
+}
+function nsBridge() { return !!(window.HDSlaLink && HDSlaLink.bridgeReady()); }
+function nsAutoOn() { return window.HDSlaLink ? HDSlaLink.autoOn() : false; }
+function nsSig(o) { return o.t.key + "|" + o.t._nsU + "|" + o.t.status; }
+function nsNeed(all, retry) { return all.filter(function (o) { return o.out === "nohist" && (retry || !NS.tried[nsSig(o)]); }); }
+function nsFetch(retry) {
+  if (NS.fetching || !window.HDSlaLink || !NS.loaded) return;
+  var need = nsNeed(nsList(), retry);
+  if (!need.length) return;
+  if (!nsBridge()) { NS.err = "The HD Jira Bridge extension is not connected, so status history can't be fetched here. Enable it and reload the page."; nsPaintBar(); return; }
+  need = need.slice(0, 1500);
+  need.forEach(function (o) { NS.tried[nsSig(o)] = 1; });
+  NS.fetching = true; NS.err = ""; NS.prog = { done: 0, total: need.length }; nsPaintBar();
+  HDSlaLink.fetchMissing(need.map(function (o) { return o.t._raw; }), {
+    force: true, label: "Trend Tracker · Night Shift",
+    onProgress: function (d, tt) { NS.prog = { done: d, total: tt }; nsPaintBar(); }
+  }).then(function (r) {
+    NS.fetching = false; NS.prog = null;
+    if (r.failed && r.failed.length) NS.err = r.failed.length + " ticket(s) could not be fetched, e.g. " + r.failed[0].key + ": " + r.failed[0].reason;
+    return nsLoad().then(function () { if (nsNeed(nsList()).length) nsSchedule(800); });
+  }, function (e) {
+    NS.fetching = false; NS.prog = null;
+    need.forEach(function (o) { delete NS.tried[nsSig(o)]; });
+    var m = String((e && e.message) || e);
+    if (/^BUSY:/.test(m)) { NS.err = m.slice(5); nsSchedule(15000); } else NS.err = m;
+    nsPaintBar();
+  });
+}
+function nsSchedule(ms) { clearTimeout(NS.timer); NS.timer = setTimeout(function () { if (S.tab === "night" && nsAutoOn()) nsFetch(false); }, ms == null ? 900 : ms); }
+if (window.addEventListener) window.addEventListener("storage", function (e) { if (e.key === "hd-sla-hist-ping" && !NS.fetching) nsLoad(); });
+if (window.HDSlaLink) HDSlaLink.subscribe(function () { if (S.tab === "night") { nsPaintBar(); if (!NS.fetching) nsSchedule(); } });
+
+/* ── drill-downs: every number opens the tickets behind it ── */
+var nsSeq = 0;
+function nsD(title, list, color) { var id = "n" + (nsSeq++); window.__ns[id] = { title: title, list: list, color: color || "#0F766E" }; return id; }
+function nsN(n, title, list, color, style) {
+  if (!n) return '<span style="color:var(--faint)">0</span>';
+  return '<span class="nsnum" data-nsd="' + nsD(title, list, color) + '"' + (style ? ' style="' + style + '"' : "") + ">" + n.toLocaleString() + "</span>";
+}
+function nsOutChip(o) { var m = NS_OUT[o.out]; return '<span class="nschip" style="--c:' + m.c + '">' + m.l + "</span>"; }
+function nsFolChip(o) { if (!o.follow) return '<span style="color:var(--faint)">—</span>'; var m = NS_FOL[o.follow]; return '<span class="nschip" style="--c:' + m.c + '">' + m.l + "</span>"; }
+function nsRowCells(o) {
+  var t = o.t, lk = t.linked ? t.linked.split(/[;,]/)[0].trim() : "";
+  return '<td style="white-space:nowrap"><a class="jkey" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + "</a></td>" +
+    '<td class="trunc" title="' + esc(t.summary) + '" style="color:var(--ink2);max-width:240px">' + esc(t.summary) + "</td>" +
+    '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + esc(t.issue === "Service Request" ? "SR" : t.issue || "—") + "</td>" +
+    '<td style="font-size:11px;color:var(--ink2);white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="' + esc(t.project) + '">' + esc(t.project || "—") + "</td>" +
+    '<td class="mono" style="font-size:11px;white-space:nowrap">' + nsFdt(o.c) + "</td>" +
+    '<td class="mono" style="font-size:11px;white-space:nowrap" title="' + (o.first ? esc(o.first.from + " → " + o.first.to) : "") + '">' + (o.first ? nsFdt(o.first.t) + ' <span style="color:var(--faint)">+' + nsDur(o.firstMin) + "</span>" : "—") + "</td>" +
+    "<td>" + nsOutChip(o) + (o.hand ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap">' + esc(o.hand.to) + " · " + nsFdt(o.hand.t) + "</div>" : "") + "</td>" +
+    "<td>" + nsFolChip(o) + (o.back ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap">' + esc(o.back.to) + " · " + nsFdt(o.back.t) + "</div>" : o.follow === "closed" && o.closedAt ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + nsFdt(o.closedAt) + "</div>" : "") + "</td>" +
+    '<td style="white-space:nowrap">' + (lk ? '<a class="jkey" style="color:var(--engg)" href="' + JIRA + encodeURIComponent(lk) + '" target="_blank" rel="noreferrer">' + esc(lk) + "</a>" : '<span style="color:var(--faint)">—</span>') + "</td>" +
+    '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + esc(t.status || "—") + "</td>";
+}
+var NS_HEAD = "<tr><th class=\"static\">Key</th><th class=\"static\">Summary</th><th class=\"static\">Type</th><th class=\"static\">Client</th><th class=\"static\">Created (IST)</th><th class=\"static\">First status change</th><th class=\"static\">In the shift</th><th class=\"static\">After hand-over</th><th class=\"static\">Linked</th><th class=\"static\">Status now</th></tr>";
+function nsModal(id) {
+  var d = window.__ns[id]; if (!d) return;
+  var rows = d.list.slice().sort(function (a, b) { return b.c - a.c; });
+  var html = '<div class="overlay" id="ov"><div class="modal" style="max-width:1280px">' +
+    '<div class="mh"><div class="ic" style="background:' + d.color + '1a;color:' + d.color + '">🌙</div>' +
+    '<div><div class="mt">' + esc(d.title) + '</div><div class="mc">' + rows.length + " ticket" + (rows.length !== 1 ? "s" : "") + " · night shift " + esc(nsWindowTxt()) + "</div></div>" +
+    '<button class="x" id="mx">✕</button></div>' +
+    '<div class="mb">' + (rows.length ? "<table><thead>" + NS_HEAD + "</thead><tbody>" + rows.map(function (o) { return "<tr>" + nsRowCells(o) + "</tr>"; }).join("") + "</tbody></table>" : '<div class="empty">No tickets match this selection.</div>') + "</div>" +
+    '<div class="mfoot"><span>Showing all ' + rows.length + ' tickets</span><button class="ghost" style="margin-left:auto" id="mcsv">⬇ Export CSV</button></div>' +
+    "</div></div>";
+  var w = document.createElement("div"); w.innerHTML = html; document.body.appendChild(w.firstChild);
+  var ov = el("ov"); ov.addEventListener("click", function (e) { if (e.target === ov) closeModal(); });
+  el("mx").onclick = closeModal;
+  el("mcsv").onclick = function () { nsCSV(rows, "night-shift-" + d.title.replace(/[^\w]+/g, "-").toLowerCase()); };
+}
+function nsCSV(list, name) {
+  if (!list.length) return;
+  var head = ["Key", "Summary", "Issue Type", "Client", "SVM In Charge", "Current Worker", "Created (IST)", "Shift date", "First status change (IST)", "Minutes to first change", "First change", "In the shift", "Hand-over status", "Hand-over at (IST)", "After hand-over", "Came back to", "Came back at (IST)", "Closed at (IST)", "Linked Issues", "Solved by night HD", "Escalated to Engg later", "Status now", "Jira URL"];
+  var lines = [head.map(escCSV).join(",")];
+  list.forEach(function (o) {
+    var t = o.t;
+    lines.push([t.key, t.summary, t.issue, t.project, t.svm, t.currentWorker, nsFdt(o.c), o.shift, o.first ? nsFdt(o.first.t) : "", o.firstMin == null ? "" : Math.round(o.firstMin),
+      o.first ? o.first.from + " → " + o.first.to : "", NS_OUT[o.out].l, o.hand ? o.hand.to : "", o.hand ? nsFdt(o.hand.t) : "", o.follow ? NS_FOL[o.follow].l : "",
+      o.back ? o.back.to : "", o.back ? nsFdt(o.back.t) : "", o.closedAt ? nsFdt(o.closedAt) : "", t.linked, o.hdSolved ? "Yes" : "No", o.enggLater ? o.enggLater.to + " · " + nsFdt(o.enggLater.t) : "", t.status, JIRA + t.key].map(escCSV).join(","));
+  });
+  var b = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8" }), u = URL.createObjectURL(b), a = document.createElement("a");
+  a.href = u; a.download = (name || "night-shift") + ".csv"; a.click(); URL.revokeObjectURL(u);
+}
+
+/* ── status / fetch bar ── */
+function nsBarHTML(all) {
+  var N = all.length, miss = all.filter(function (o) { return o.out === "nohist"; }).length, have = N - miss, h = "";
+  var auto = nsAutoOn(), br = nsBridge();
+  h += '<div class="nsbar-in"><div style="min-width:0"><b>Status history</b> · ' + have.toLocaleString() + " of " + N.toLocaleString() + " night tickets" +
+    (miss ? ' · <span style="color:var(--amber);font-weight:600">' + miss.toLocaleString() + " still needed</span>" : ' · <span style="color:var(--hd);font-weight:600">complete</span>') +
+    '<div class="sub" style="margin-top:2px">Shared with the SLA Tracker — anything fetched there is reused here, and the other way round. Percentages use only tickets with history.</div></div>';
+  if (NS.fetching && NS.prog) {
+    var p = NS.prog.total ? Math.round(NS.prog.done / NS.prog.total * 100) : 0;
+    h += '<div class="nsprog"><div class="nsprog-t">Fetching ' + NS.prog.done.toLocaleString() + " / " + NS.prog.total.toLocaleString() + '</div><div class="nsprog-b"><i style="width:' + p + '%"></i></div></div>';
+  } else if (miss) {
+    h += '<button class="ghost" id="ns-fetch"' + (br ? "" : ' disabled title="HD Jira Bridge extension not connected"') + ">⟳ Fetch " + Math.min(miss, 1500).toLocaleString() + " histor" + (Math.min(miss, 1500) === 1 ? "y" : "ies") + "</button>";
+  }
+  h += '<label class="nsauto"><input type="checkbox" id="ns-auto"' + (auto ? " checked" : "") + "> Auto-fetch</label></div>";
+  if (NS.err) h += '<div class="nserr">' + esc(NS.err) + "</div>";
+  else if (miss && !br) h += '<div class="nserr" style="color:var(--muted);background:var(--paper);border-color:var(--line)">The HD Jira Bridge extension isn’t connected on this page, so missing histories can’t be fetched. Open the SLA Tracker or reload with the extension enabled.</div>';
+  return h;
+}
+function nsPaintBar() {
+  var b = el("ns-bar"); if (!b) return;
+  var wasFetching = b.getAttribute("data-f") === "1";
+  b.innerHTML = nsBarHTML(NS.all); b.setAttribute("data-f", NS.fetching ? "1" : "0");
+  nsBindBar();
+  if (wasFetching && !NS.fetching) { /* the full view is re-rendered by nsLoad() once results are saved */ }
+}
+function nsBindBar() {
+  var f = el("ns-fetch"); if (f) f.onclick = function () { nsFetch(true); };
+  var a = el("ns-auto"); if (a) a.onchange = function () { if (window.HDSlaLink) HDSlaLink.setAuto(a.checked); if (a.checked) nsSchedule(200); };
+}
+
+/* ── charts ── */
+function nsTrendSVG(groups) {
+  var W = 1100, H = 250, L = 40, R = 40, T = 16, B = 42, pw = W - L - R, ph = H - T - B, n = groups.length;
+  var max = 1; groups.forEach(function (g) { max = Math.max(max, g.all.length); });
+  var step = max <= 5 ? 1 : max <= 12 ? 2 : max <= 30 ? 5 : max <= 80 ? 10 : max <= 200 ? 25 : max <= 500 ? 50 : 100, top = Math.ceil(max / step) * step;
+  var slot = pw / n, bw = Math.max(2, Math.min(36, slot * 0.68)), s = "";
+  for (var g = 0; g <= top; g += step) { var y = T + ph - g / top * ph; s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y + '" y2="' + y + '" stroke="#E3E8EE"/><text x="' + (L - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#9AA7B8">' + g + "</text>"; }
+  [0, 50, 100].forEach(function (p) { var y = T + ph - p / 100 * ph; s += '<text x="' + (W - R + 6) + '" y="' + (y + 3) + '" font-size="10" fill="#BE1D42">' + p + "%</text>"; });
+  var every = Math.max(1, Math.ceil(n / 18)), pts = [];
+  groups.forEach(function (gr, i) {
+    var x = L + i * slot + (slot - bw) / 2, y0 = T + ph;
+    NS_ORDER.forEach(function (k) {
+      var c = gr.by[k].length; if (!c) return; var hgt = c / top * ph; y0 -= hgt;
+      s += '<rect class="nsbar" x="' + x.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(1, hgt).toFixed(1) + '" fill="' + NS_OUT[k].c + '" rx="2" data-nsd="' + nsD(gr.label + " — " + NS_OUT[k].l, gr.by[k], NS_OUT[k].c) + '"><title>' + esc(gr.label) + " · " + NS_OUT[k].l + ": " + c + "</title></rect>";
+    });
+    var known = gr.all.length - gr.by.nohist.length;
+    if (known) pts.push([x + bw / 2, T + ph - gr.solved.length / known * ph, gr.label, pct(gr.solved.length, known), gr.solved.length, known]);
+    if (i % every === 0) s += '<text x="' + (x + bw / 2) + '" y="' + (H - B + 14) + '" text-anchor="middle" font-size="10" fill="#6B7A90">' + esc(gr.short) + "</text>";
+    s += '<text x="' + (x + bw / 2) + '" y="' + (y0 - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#3E4C63">' + (n <= 31 ? gr.all.length : "") + "</text>";
+  });
+  if (pts.length > 1) s += '<polyline points="' + pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ") + '" fill="none" stroke="#BE1D42" stroke-width="1.6" stroke-dasharray="4 3"/>';
+  pts.forEach(function (p) { s += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="#fff" stroke="#BE1D42" stroke-width="1.6"><title>' + esc(p[2]) + " · solved by night HD " + p[3] + "% (" + p[4] + " of " + p[5] + ")</title></circle>"; });
+  return '<svg viewBox="0 0 ' + W + " " + H + '" style="width:100%;height:auto;display:block" role="img" aria-label="Night tickets per shift by outcome">' + s + "</svg>";
+}
+function nsStack(parts, total, h) {
+  return '<div class="nsstack" style="height:' + (h || 22) + 'px">' + parts.map(function (p) {
+    if (!p.n) return ""; return '<i data-nsd="' + nsD(p.title, p.list, p.c) + '" style="width:' + (p.n / total * 100) + "%;background:" + p.c + '" title="' + esc(p.title + ": " + p.n) + '">' + (p.n / total > 0.07 ? p.n : "") + "</i>";
+  }).join("") + "</div>";
+}
+
+/* ── the tab ── */
+function viewNight() {
+  window.__ns = {}; nsSeq = 0;
+  var c = S.ns;
+  var out = '<div class="up" style="margin-bottom:9px"><div class="eyebrow">Night Shift</div>' +
+    '<h1 style="font-size:16px;font-weight:700;letter-spacing:-.3px;margin-top:2px">What the night team did with tickets that arrived on their shift</h1>' +
+    '<div class="sub" style="margin-top:3px">Tickets created <b>' + esc(nsWindowTxt()) + '</b>. A ticket created after midnight belongs to the previous evening’s shift. Built from each ticket’s real status history; who holds a status comes from Master Data.</div></div>';
+  if (!window.HDSla || !window.HDSlaLink) return out + '<div class="card pad"><div class="empty">The SLA scripts (sla-engine.js, sla-history.js, sla-link.js) did not load. Make sure they are in the same folder as this page.</div></div>';
+
+  var hrsS = "", hrsE = "";
+  for (var hs = 17; hs <= 23; hs++) hrsS += '<option value="' + hs + '"' + (c.start === hs ? " selected" : "") + ">" + nsHH(hs) + "</option>";
+  for (var he = 3; he <= 10; he++) hrsE += '<option value="' + he + '"' + (c.end === he ? " selected" : "") + ">" + nsHH(he) + "</option>";
+  var types = [["", "Incident + Service Request"], ["Incident", "Incident"], ["Service Request", "Service Request"]];
+  out += '<div class="card up d1 pad" style="margin-bottom:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+    '<span class="flabel">Shift</span><select class="dinput" id="ns-start" aria-label="Shift starts">' + hrsS + '</select><span class="sub">→</span><select class="dinput" id="ns-end" aria-label="Shift ends">' + hrsE + "</select>" +
+    '<span style="width:1px;height:22px;background:var(--line);margin:0 4px"></span><span class="flabel">Type</span>' +
+    (S.issue.length ? '<span class="sub">Using the top Type filter: <b>' + esc(S.issue.join(", ")) + "</b></span>" : types.map(function (x) { return '<button class="chip' + (c.type === x[0] ? " on" : "") + '" data-nstype="' + esc(x[0]) + '">' + x[1] + "</button>"; }).join("")) +
+    '<span class="sub" style="margin-left:auto">SVM, Worker, Root cause, Project &amp; date (Created) use the top filters</span></div>';
+
+  var all = nsList(); NS.all = all;
+  out += '<div class="card up d1" id="ns-bar" style="margin-bottom:9px">' + nsBarHTML(all) + "</div>";
+  if (!NS.loaded) return out + '<div class="card pad"><div class="empty">Loading status history…</div></div>';
+  if (!all.length) return out + '<div class="card pad"><div class="empty">No tickets were created in the night window for this date range and these filters.</div></div>';
+
+  var by = { client: [], engg: [], hd: [], none: [], nohist: [] }; all.forEach(function (o) { by[o.out].push(o); });
+  var known = all.filter(function (o) { return o.out !== "nohist"; }), K = known.length;
+  var acted = known.filter(function (o) { return o.out !== "none"; });
+  var hand = by.client, noLink = hand.filter(function (o) { return !o.linked; }), linkedHand = hand.filter(function (o) { return o.linked; });
+  var solved = hand.filter(function (o) { return o.hdSolved; }), solvedClosed = solved.filter(function (o) { return o.follow === "closed"; }), solvedWait = solved.filter(function (o) { return o.follow === "waiting"; });
+  var back = hand.filter(function (o) { return o.follow === "returned"; });
+  var enggLater = known.filter(function (o) { return o.enggLater; });
+  var nights = {}; all.forEach(function (o) { nights[o.shift] = 1; }); var nN = Object.keys(nights).length;
+  var fm = acted.filter(function (o) { return o.first && o.first.t < o.end; }).map(function (o) { return o.firstMin; }).sort(function (a, b) { return a - b; });
+  var med = fm.length ? fm[Math.floor(fm.length / 2)] : null;
+
+  if (!K) return out + '<div class="card pad"><div class="empty"><b>' + all.length.toLocaleString() + " night tickets found, but none has status history yet.</b><br>" + (nsBridge() ? "Fetching starts automatically when Auto-fetch is on, or use the Fetch button above." : "Connect the HD Jira Bridge extension to fetch it.") + "</div></div>";
+
+  /* KPIs */
+  function k(ic, label, n, color, sub, title, list) {
+    return '<div class="card kpi' + (n ? " clickable" : "") + '"' + (n ? ' data-nsd="' + nsD(title, list, color) + '"' : "") + '><div class="tag">' + ic + '</div><div class="kv" style="color:' + color + '">' + n.toLocaleString() + '</div><div class="kl">' + label + '</div><div class="ks">' + sub + "</div></div>";
+  }
+  out += '<div class="grid up d2 nskpis" style="margin-bottom:9px">' +
+    k("🌙", "Night tickets", all.length, "var(--ink)", (nN ? (Math.round(all.length / nN * 10) / 10) + " per night · " + nN + " nights" : ""), "All night tickets", all) +
+    k("⚡", "Actioned in shift", acted.length, "var(--ink2)", pct(acted.length, K) + "% · median first change " + nsDur(med), "Actioned during the shift", acted) +
+    k("💬", "Handed to client", hand.length, "#0F766E", pct(hand.length, K) + "% of night tickets", "Handed to the client during the shift", hand) +
+    k("🏆", "Solved by night HD", solved.length, "#047857", pct(solved.length, K) + "% · no link, client didn’t come back", "Solved by night HD", solved) +
+    k("🔁", "Came back", back.length, "#BE1D42", pct(back.length, hand.length) + "% of hand-overs", "Came back after the hand-over", back) +
+    k("🛠", "Sent to Engineering", by.engg.length, "#5B57D8", pct(by.engg.length, K) + "% · +" + enggLater.length + " escalated later", "Sent to Engineering during the shift", by.engg) +
+    k("⏳", "Not touched", by.none.length, "#64748B", pct(by.none.length, K) + "% · left for the day team", "No status change during the shift", by.none) +
+    "</div>";
+
+  /* funnel + where hand-overs ended up */
+  var stages = [
+    ["Night tickets with history", known, "#334155"],
+    ["Actioned in the shift", acted, "#475569"],
+    ["Handed to the client in the shift", hand, "#0F766E"],
+    ["…with no linked ticket", noLink, "#0D9488"],
+    ["…and the client didn’t come back = solved by night HD", solved, "#047857"],
+    ["…and already closed", solvedClosed, "#065F46"]
+  ];
+  var fun = stages.map(function (s) {
+    var w = K ? Math.max(1.5, s[1].length / K * 100) : 0;
+    return '<div class="nsfun"><div class="nsfun-l">' + esc(s[0]) + '</div><div class="nsfun-t"><i data-nsd="' + nsD(s[0], s[1], s[2]) + '" style="width:' + w + "%;background:" + s[2] + '"></i></div><div class="nsfun-n mono">' + s[1].length.toLocaleString() + ' <span>' + pct(s[1].length, K) + "%</span></div></div>";
+  }).join("");
+  var hs = {}; hand.forEach(function (o) { var st = o.hand.to; if (!hs[st]) hs[st] = { all: [], closed: [], waiting: [], returned: [], solved: [] }; hs[st].all.push(o); hs[st][o.follow].push(o); if (o.hdSolved) hs[st].solved.push(o); });
+  var hsRows = Object.keys(hs).sort(function (a, b) { return hs[b].all.length - hs[a].all.length; }).map(function (st) {
+    var x = hs[st], rr = pct(x.returned.length, x.all.length);
+    return "<tr><td><b>" + esc(st) + '</b></td><td class="num">' + nsN(x.all.length, "Handed over as " + st, x.all) + '</td><td class="num">' + nsN(x.closed.length, st + " — closed", x.closed, "#047857") + '</td><td class="num">' + nsN(x.waiting.length, st + " — still with client", x.waiting, "#D97706") + '</td><td class="num">' + nsN(x.returned.length, st + " — came back", x.returned, "#BE1D42", x.returned.length ? "color:var(--rose)" : "") + '</td><td class="num" style="color:' + (rr >= 25 ? "var(--rose)" : rr >= 10 ? "var(--amber)" : "var(--hd)") + ';font-weight:700">' + rr + "%</td></tr>";
+  }).join("");
+  out += '<div class="grid up d2" style="grid-template-columns:1.05fr 1fr;margin-bottom:9px">' +
+    '<div class="card pad"><div class="sec-title">From arrival to solved</div><div class="sub" style="margin:2px 0 12px">Each step is a subset of the one above. Click a bar for the tickets.</div>' + fun +
+    (linkedHand.length ? '<div class="sub" style="margin-top:10px">' + nsN(linkedHand.length, "Handed to client, but with a linked ticket", linkedHand, "#5B57D8") + " hand-over" + (linkedHand.length > 1 ? "s have" : " has") + " a linked ticket, so " + (linkedHand.length > 1 ? "they don’t" : "it doesn’t") + " count as solved by HD.</div>" : "") + "</div>" +
+    '<div class="card pad"><div class="sec-title">What happened after the hand-over</div><div class="sub" style="margin:2px 0 10px">The ' + hand.length.toLocaleString() + " tickets handed to the client in the shift, split by the status they were handed over in. Coming back = the client replied or it was reopened to Help Desk / Engineering.</div>" +
+    nsStack([{ n: hand.filter(function (o) { return o.follow === "closed"; }).length, list: hand.filter(function (o) { return o.follow === "closed"; }), c: NS_FOL.closed.c, title: "Hand-overs now closed" },
+      { n: hand.filter(function (o) { return o.follow === "waiting"; }).length, list: hand.filter(function (o) { return o.follow === "waiting"; }), c: NS_FOL.waiting.c, title: "Hand-overs still with the client" },
+      { n: back.length, list: back, c: NS_FOL.returned.c, title: "Hand-overs that came back" }], hand.length || 1, 24) +
+    '<div class="legend" style="margin:8px 0 10px"><span class="li"><span class="sw" style="background:' + NS_FOL.closed.c + '"></span>Closed</span><span class="li"><span class="sw" style="background:' + NS_FOL.waiting.c + '"></span>Still with client</span><span class="li"><span class="sw" style="background:' + NS_FOL.returned.c + '"></span>Came back</span></div>' +
+    (hsRows ? '<div style="overflow-x:auto"><table><thead><tr><th class="static">Handed over as</th><th class="static num">Tickets</th><th class="static num">Closed</th><th class="static num">With client</th><th class="static num">Came back</th><th class="static num">Return rate</th></tr></thead><tbody>' + hsRows + "</tbody></table></div>" : '<div class="empty">No hand-overs to the client yet.</div>') +
+    "</div></div>";
+
+  /* per shift / week / month */
+  var gmap = {}, mode = c.trend;
+  all.forEach(function (o) {
+    var key, label, short;
+    if (mode === "month") { key = o.shift.slice(0, 7); var p = key.split("-"); label = new Date(Date.UTC(+p[0], +p[1] - 1, 1)).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }); short = label; }
+    else if (mode === "week") { var q = o.shift.split("-"), iw = isoWeek(new Date(+q[0], +q[1] - 1, +q[2])); key = iw.year + "-W" + String(iw.week).padStart(2, "0"); label = "W" + iw.week + " " + iw.year + " (" + weekDates(iw.year, iw.week) + ")"; short = "W" + iw.week; }
+    else { key = o.shift; label = "Shift of " + nsDate(o.shift); short = nsDate(o.shift).slice(0, 6); }
+    if (!gmap[key]) gmap[key] = { key: key, label: label, short: short, all: [], solved: [], by: { client: [], engg: [], hd: [], none: [], nohist: [] } };
+    gmap[key].all.push(o); gmap[key].by[o.out].push(o); if (o.hdSolved) gmap[key].solved.push(o);
+  });
+  var groups = Object.keys(gmap).sort().map(function (k2) { return gmap[k2]; });
+  if (mode === "day" && groups.length > 92) groups = groups.slice(-92);
+  out += '<div class="card up d3 pad" style="margin-bottom:9px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px"><div><div class="sec-title">Night tickets per ' + (mode === "day" ? "shift" : mode) + '</div><div class="sub">Bars: what happened in the shift. Dashed line: share solved by night HD (right axis). Click a bar segment for its tickets.</div></div>' +
+    '<div style="margin-left:auto;display:flex;gap:6px">' + [["day", "Per shift"], ["week", "Weekly"], ["month", "Monthly"]].map(function (x) { return '<button class="chip' + (mode === x[0] ? " on" : "") + '" data-nstrend="' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</div></div>" +
+    (mode === "day" && Object.keys(gmap).length > 92 ? '<div class="sub" style="margin-bottom:6px">Showing the latest 92 shifts — switch to Weekly or Monthly for the full range.</div>' : "") +
+    '<div style="overflow-x:auto">' + nsTrendSVG(groups) + "</div>" +
+    '<div class="legend" style="margin-top:6px">' + NS_ORDER.map(function (kk) { return '<span class="li"><span class="sw" style="background:' + NS_OUT[kk].c + '"></span>' + NS_OUT[kk].l + "</span>"; }).join("") + '<span class="li"><span class="sw" style="background:#fff;border:1.6px solid #BE1D42;border-radius:50%"></span>Solved by night HD %</span></div></div>';
+
+  /* by arrival hour + time to first status change */
+  var hrs = nsHours(), hmax = 1, hb = {};
+  hrs.forEach(function (h) { hb[h] = { all: [], by: { client: [], engg: [], hd: [], none: [], nohist: [] } }; });
+  all.forEach(function (o) { if (hb[o.hour]) { hb[o.hour].all.push(o); hb[o.hour].by[o.out].push(o); } });
+  hrs.forEach(function (h) { hmax = Math.max(hmax, hb[h].all.length); });
+  var hourRows = hrs.map(function (h) {
+    var x = hb[h], kn = x.all.length - x.by.nohist.length, act = kn - x.by.none.length;
+    return '<div class="nshr"><div class="nshr-l mono">' + nsHH(h) + "–" + nsHH((h + 1) % 24) + '</div><div class="nshr-t" style="width:' + (x.all.length / hmax * 100) + '%">' +
+      nsStack(NS_ORDER.map(function (kk) { return { n: x.by[kk].length, list: x.by[kk], c: NS_OUT[kk].c, title: nsHH(h) + "–" + nsHH((h + 1) % 24) + " · " + NS_OUT[kk].l }; }), x.all.length || 1, 18) +
+      '</div><div class="nshr-n mono">' + x.all.length + (kn ? ' <span title="actioned in the shift">' + pct(act, kn) + "% actioned</span>" : "") + "</div></div>";
+  }).join("");
+  var bk = [["≤ 15 min", 0, 15], ["15–30 min", 15, 30], ["30–60 min", 30, 60], ["1–2 h", 60, 120], ["2–4 h", 120, 240], ["> 4 h (in shift)", 240, 1e9]], bl = bk.map(function () { return []; }), after = [], never = [];
+  known.forEach(function (o) {
+    if (!o.first) { never.push(o); return; }
+    if (o.first.t >= o.end) { after.push(o); return; }
+    for (var i = 0; i < bk.length; i++) if (o.firstMin < bk[i][2]) { bl[i].push(o); break; }
+  });
+  var rb = bk.map(function (b, i) { return [b[0], bl[i], "#0F766E"]; }).concat([["After the shift", after, "#94A3B8"], ["No change yet", never, "#CBD5E1"]]), rmax = 1;
+  rb.forEach(function (r) { rmax = Math.max(rmax, r[1].length); });
+  var rbHtml = rb.map(function (r) { return '<div class="nshr"><div class="nshr-l">' + r[0] + '</div><div class="nshr-t" style="width:' + (r[1].length / rmax * 100) + '%"><div class="nsstack" style="height:18px"><i data-nsd="' + nsD("First status change: " + r[0], r[1], r[2]) + '" style="width:100%;background:' + r[2] + '"></i></div></div><div class="nshr-n mono">' + r[1].length + " <span>" + pct(r[1].length, K) + "%</span></div></div>"; }).join("");
+  out += '<div class="grid up d3" style="grid-template-columns:1fr 1fr;margin-bottom:9px">' +
+    '<div class="card pad"><div class="sec-title">By arrival hour</div><div class="sub" style="margin:2px 0 10px">When night tickets arrive and how many get actioned before the shift ends.</div>' + hourRows + "</div>" +
+    '<div class="card pad"><div class="sec-title">Time to first status change</div><div class="sub" style="margin:2px 0 10px">From creation to the first status change. Median in the shift: <b>' + nsDur(med) + "</b>.</div>" + rbHtml + "</div></div>";
+
+  /* by client */
+  var cl = {};
+  all.forEach(function (o) {
+    var p = o.t.project || "(no project)";
+    if (!cl[p]) cl[p] = { name: p, all: [], known: [], hand: [], solved: [], waiting: [], closed: [], back: [], engg: [], later: [], none: [], nohist: [] };
+    var x = cl[p]; x.all.push(o);
+    if (o.out === "nohist") { x.nohist.push(o); return; }
+    x.known.push(o);
+    if (o.out === "client") { x.hand.push(o); if (o.hdSolved) x.solved.push(o); x[o.follow === "returned" ? "back" : o.follow].push(o); }
+    if (o.out === "engg") x.engg.push(o);
+    if (o.out === "none") x.none.push(o);
+    if (o.enggLater) x.later.push(o);
+  });
+  var cs = c.csort, cdir = c.cdir === "asc" ? 1 : -1;
+  var crows = Object.keys(cl).map(function (k3) { var x = cl[k3]; x.rr = x.hand.length ? x.back.length / x.hand.length : -1; x.sp = x.known.length ? x.solved.length / x.known.length : -1; return x; });
+  crows.sort(function (a, b) {
+    if (cs === "name") return cdir * a.name.localeCompare(b.name);
+    if (cs === "rr") return cdir * (a.rr - b.rr) || b.hand.length - a.hand.length;
+    if (cs === "sp") return cdir * (a.sp - b.sp) || b.known.length - a.known.length;
+    return cdir * ((a[cs] ? a[cs].length : 0) - (b[cs] ? b[cs].length : 0)) || a.name.localeCompare(b.name);
+  });
+  function sth(col, label, num) { var ar = cs === col ? (c.cdir === "asc" ? " ↑" : " ↓") : ""; return '<th data-nssort="' + col + '"' + (num ? ' class="num"' : "") + ">" + label + '<span style="color:var(--hd)">' + ar + "</span></th>"; }
+  var cbody = crows.map(function (x) {
+    var nm = x.name;
+    return '<tr><td style="white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis" title="' + esc(nm) + '"><b>' + esc(nm) + "</b></td>" +
+      '<td class="num">' + nsN(x.all.length, nm + " — night tickets", x.all) + "</td>" +
+      '<td class="num">' + nsN(x.hand.length, nm + " — handed to client", x.hand, "#0F766E") + "</td>" +
+      '<td class="num">' + nsN(x.solved.length, nm + " — solved by night HD", x.solved, "#047857", "color:#047857;font-weight:700") + "</td>" +
+      '<td class="num">' + (x.sp < 0 ? "—" : Math.round(x.sp * 100) + "%") + "</td>" +
+      '<td class="num">' + nsN(x.waiting.length, nm + " — still with the client", x.waiting, "#D97706") + "</td>" +
+      '<td class="num">' + nsN(x.closed.length, nm + " — closed after hand-over", x.closed, "#047857") + "</td>" +
+      '<td class="num">' + nsN(x.back.length, nm + " — came back", x.back, "#BE1D42", x.back.length ? "color:var(--rose);font-weight:700" : "") + "</td>" +
+      '<td class="num" style="font-weight:700;color:' + (x.rr < 0 ? "var(--faint)" : x.rr >= .25 ? "var(--rose)" : x.rr >= .1 ? "var(--amber)" : "var(--hd)") + '">' + (x.rr < 0 ? "—" : Math.round(x.rr * 100) + "%") + "</td>" +
+      '<td class="num">' + nsN(x.engg.length, nm + " — sent to Engineering in the shift", x.engg, "#5B57D8") + "</td>" +
+      '<td class="num">' + nsN(x.later.length, nm + " — escalated to Engineering later", x.later, "#5B57D8") + "</td>" +
+      '<td class="num">' + nsN(x.none.length, nm + " — not touched in the shift", x.none, "#64748B") + "</td>" +
+      '<td class="num">' + nsN(x.nohist.length, nm + " — history not fetched", x.nohist, "#94A3B8", "color:var(--faint)") + "</td></tr>";
+  }).join("");
+  out += '<div class="card up d4" style="margin-bottom:9px"><div class="pad" style="padding-bottom:6px"><div class="sec-title">By client</div><div class="sub">Which clients accepted the night team’s answer and which came back. Return rate = came back ÷ handed to client. Click a column to sort, a number for its tickets.</div></div>' +
+    '<div style="overflow-x:auto;max-height:460px;overflow-y:auto"><table><thead><tr>' + sth("name", "Client") + sth("all", "Night", 1) + sth("hand", "To client", 1) + sth("solved", "Solved by HD", 1) + sth("sp", "Solved %", 1) + sth("waiting", "With client", 1) + sth("closed", "Closed", 1) + sth("back", "Came back", 1) + sth("rr", "Return rate", 1) + sth("engg", "To Engg", 1) + sth("later", "Engg later", 1) + sth("none", "Not touched", 1) + sth("nohist", "No history", 1) + "</tr></thead><tbody>" + cbody + "</tbody></table></div></div>";
+
+  /* came back */
+  var bl2 = back.slice().sort(function (a, b) { return b.back.t - a.back.t; });
+  var brows = bl2.slice(0, 40).map(function (o) {
+    var t = o.t;
+    return '<tr><td style="white-space:nowrap"><a class="jkey" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + "</a></td>" +
+      '<td class="trunc" style="max-width:260px;color:var(--ink2)" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td>" +
+      '<td style="font-size:11px;white-space:nowrap">' + esc(t.project || "—") + "</td>" +
+      '<td style="font-size:11px;white-space:nowrap">' + esc(o.hand.to) + ' <span class="mono" style="color:var(--muted)">' + nsFdt(o.hand.t) + "</span></td>" +
+      '<td style="font-size:11px;white-space:nowrap"><b style="color:var(--rose)">' + esc(o.back.to) + '</b> <span class="mono" style="color:var(--muted)">' + nsFdt(o.back.t) + "</span></td>" +
+      '<td class="num mono" style="font-size:11px">' + nsDur((o.back.t - o.hand.t) / 60000) + "</td>" +
+      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">' + esc(t.status) + "</td></tr>";
+  }).join("");
+  out += '<div class="card up d4" style="margin-bottom:9px"><div class="pad" style="padding-bottom:6px;display:flex;align-items:flex-end;gap:10px"><div><div class="sec-title">Came back after the hand-over</div><div class="sub">Handed to the client in the night shift, then returned to Help Desk or Engineering. Newest first.</div></div>' +
+    (back.length > 40 ? '<button class="ghost" style="margin-left:auto" data-nsd="' + nsD("Came back after the hand-over", back, "#BE1D42") + '">View all ' + back.length + "</button>" : "") + "</div>" +
+    (back.length ? '<div style="overflow:auto;max-height:380px"><table><thead><tr><th class="static">Key</th><th class="static">Summary</th><th class="static">Client</th><th class="static">Handed over as</th><th class="static">Came back to</th><th class="static num">After</th><th class="static">Status now</th></tr></thead><tbody>' + brows + "</tbody></table></div>" : '<div class="pad"><div class="empty">No night hand-over has come back. 🎉</div></div>') + "</div>";
+
+  /* observations */
+  var obs = [];
+  obs.push("Of <b>" + K.toLocaleString() + "</b> night tickets with history, <b class=\"hd\">" + solved.length + " (" + pct(solved.length, K) + "%)</b> were solved by the night team without Engineering and without the client coming back; <b class=\"eg\">" + by.engg.length + " (" + pct(by.engg.length, K) + "%)</b> went to Engineering during the shift.");
+  if (hand.length) obs.push("The client came back on <b class=\"dn\">" + back.length + " of " + hand.length + " (" + pct(back.length, hand.length) + "%)</b> hand-overs" + (solvedWait.length ? "; " + solvedWait.length + " solved ticket" + (solvedWait.length > 1 ? "s are" : " is") + " still waiting for the client to confirm closure" : "") + ".");
+  var worst = crows.filter(function (x) { return x.hand.length >= 5 && x.rr >= 0; }).sort(function (a, b) { return b.rr - a.rr; })[0];
+  if (worst && worst.back.length) obs.push("Highest return rate: <b>" + esc(worst.name) + "</b> — " + worst.back.length + " of " + worst.hand.length + " hand-overs came back (" + Math.round(worst.rr * 100) + "%).");
+  var peak = hrs.slice().sort(function (a, b) { return hb[b].all.length - hb[a].all.length; })[0];
+  if (peak != null && hb[peak].all.length) obs.push("Busiest arrival hour: <b>" + nsHH(peak) + "–" + nsHH((peak + 1) % 24) + "</b> with " + hb[peak].all.length + " tickets.");
+  if (by.none.length) obs.push("<b>" + by.none.length + "</b> night ticket" + (by.none.length > 1 ? "s had" : " had") + " no status change before " + nsHH(c.end) + " and were left for the day team.");
+  if (by.nohist.length) obs.push("<b>" + by.nohist.length + "</b> night ticket" + (by.nohist.length > 1 ? "s are" : " is") + " not counted yet because " + (by.nohist.length > 1 ? "their" : "its") + " status history hasn’t been fetched.");
+  out += note(obs);
+
+  /* all night tickets */
+  out += '<div class="card up d5" id="ns-list">' + nsListHTML(all) + "</div>";
+  return out;
+}
+
+var NS_FILTERS = [["", "All"], ["client", "Handed to client"], ["solved", "Solved by night HD"], ["returned", "Came back"], ["waiting", "Still with client"], ["engg", "To Engineering"], ["later", "Engg later"], ["hd", "Still with HD"], ["none", "Not touched"], ["nohist", "No history"]];
+function nsMatch(o, f) {
+  if (!f) return true;
+  if (f === "solved") return !!o.hdSolved;
+  if (f === "returned" || f === "waiting") return o.follow === f;
+  if (f === "later") return !!o.enggLater;
+  return o.out === f;
+}
+function nsListHTML(all) {
+  var c = S.ns, q = c.q.trim().toLowerCase();
+  var list = all.filter(function (o) { return nsMatch(o, c.out) && (!q || (o.t.key + " " + o.t.summary + " " + o.t.project + " " + o.t.status).toLowerCase().indexOf(q) > -1); }).sort(function (a, b) { return b.c - a.c; });
+  var PG = 50, pages = Math.max(1, Math.ceil(list.length / PG)); if (c.page >= pages) c.page = pages - 1;
+  var rows = list.slice(c.page * PG, c.page * PG + PG).map(function (o) { return "<tr>" + nsRowCells(o) + "</tr>"; }).join("");
+  var cnt = {}; NS_FILTERS.forEach(function (f) { cnt[f[0]] = all.filter(function (o) { return nsMatch(o, f[0]); }).length; });
+  return '<div class="pad" style="padding-bottom:8px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="sec-title">Every night ticket</div>' +
+    '<input type="search" id="ns-q" class="dinput" placeholder="Search key, summary, client, status…" value="' + esc(c.q) + '" style="margin-left:auto;width:250px">' +
+    '<button class="ghost" id="ns-csv">⬇ Export CSV (' + list.length + ")</button></div>" +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">' + NS_FILTERS.map(function (f) { return '<button class="chip' + (c.out === f[0] ? " on" : "") + '" data-nsout="' + f[0] + '">' + f[1] + " · " + cnt[f[0]] + "</button>"; }).join("") + "</div></div>" +
+    (list.length ? '<div style="overflow-x:auto"><table><thead>' + NS_HEAD + "</thead><tbody>" + rows + "</tbody></table></div>" : '<div class="pad"><div class="empty">No night tickets match.</div></div>') +
+    (pages > 1 ? '<div class="pad" style="display:flex;align-items:center;gap:8px;justify-content:flex-end;padding-top:8px"><span class="sub">' + (c.page * PG + 1) + "–" + Math.min(list.length, c.page * PG + PG) + " of " + list.length + '</span><button class="ghost" data-nspage="-1"' + (c.page ? "" : " disabled") + '>‹ Prev</button><button class="ghost" data-nspage="1"' + (c.page < pages - 1 ? "" : " disabled") + ">Next ›</button></div>" : "");
+}
+function nsBindIn(root) {
+  (root || document).querySelectorAll("[data-nsd]").forEach(function (x) { x.addEventListener("click", function (e) { e.stopPropagation(); nsModal(x.getAttribute("data-nsd")); }); });
+}
+function nsBindList() {
+  var L = el("ns-list"); if (!L) return;
+  nsBindIn(L);
+  L.querySelectorAll("[data-nsout]").forEach(function (b) { b.onclick = function () { S.ns.out = b.getAttribute("data-nsout"); S.ns.page = 0; nsRedrawList(); }; });
+  L.querySelectorAll("[data-nspage]").forEach(function (b) { b.onclick = function () { S.ns.page += +b.getAttribute("data-nspage"); nsRedrawList(); }; });
+  var q = el("ns-q"); if (q) q.oninput = function () { clearTimeout(NS._qt); NS._qt = setTimeout(function () { S.ns.q = q.value; S.ns.page = 0; var pos = q.selectionStart; nsRedrawList(); var q2 = el("ns-q"); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) {} } }, 200); };
+  var cv = el("ns-csv"); if (cv) cv.onclick = function () { var qq = S.ns.q.trim().toLowerCase(); nsCSV(NS.all.filter(function (o) { return nsMatch(o, S.ns.out) && (!qq || (o.t.key + " " + o.t.summary + " " + o.t.project + " " + o.t.status).toLowerCase().indexOf(qq) > -1); }), "night-shift-tickets"); };
+}
+function nsRedrawList() { var L = el("ns-list"); if (!L) return; L.innerHTML = nsListHTML(NS.all); nsBindList(); }
+function bindNight() {
+  var m = el("main"); if (!m) return;
+  nsBindIn(m.querySelector(".nskpis")); 
+  m.querySelectorAll("[data-nsd]").forEach(function (x) { if (x.closest("#ns-list") || x.closest(".nskpis")) return; x.addEventListener("click", function (e) { e.stopPropagation(); nsModal(x.getAttribute("data-nsd")); }); });
+  nsBindBar(); nsBindList();
+  var s = el("ns-start"), e2 = el("ns-end");
+  if (s) s.onchange = function () { S.ns.start = +s.value; nsSaveCfg(); renderMain(); };
+  if (e2) e2.onchange = function () { S.ns.end = +e2.value; nsSaveCfg(); renderMain(); };
+  m.querySelectorAll("[data-nstype]").forEach(function (b) { b.onclick = function () { S.ns.type = b.getAttribute("data-nstype"); S.ns.page = 0; renderMain(); }; });
+  m.querySelectorAll("[data-nstrend]").forEach(function (b) { b.onclick = function () { S.ns.trend = b.getAttribute("data-nstrend"); renderMain(); }; });
+  m.querySelectorAll("[data-nssort]").forEach(function (h) { h.onclick = function () { var col = h.getAttribute("data-nssort"); if (S.ns.csort === col) S.ns.cdir = S.ns.cdir === "asc" ? "desc" : "asc"; else { S.ns.csort = col; S.ns.cdir = col === "name" ? "asc" : "desc"; } renderMain(); }; });
+  if (NS.loaded && !NS.fetching && nsAutoOn() && nsNeed(NS.all).length) nsSchedule();
+}
+
+nsLoad();
 
 /* ═══════════════════════════════ VIEW: PENDING TICKETS ═══════════════════════════════
    Same shape as Trend Analysis, but for everything that isn't Closed. Grouped by
