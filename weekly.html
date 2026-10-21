@@ -291,6 +291,13 @@ select{appearance:none;background:var(--paper);border:1px solid var(--line);bord
 .psplit{display:flex;height:24px;border-radius:7px;overflow:hidden;background:var(--paper)}
 .psplit i{display:flex;align-items:center;justify-content:center;color:#fff;font-style:normal;font-size:11px;font-weight:700;cursor:pointer;min-width:0;overflow:hidden;white-space:nowrap}
 .pbar{cursor:pointer}.pbar:hover{opacity:.8}
+.ptab.mon td{vertical-align:top}.ptab.mon .mmed{font-size:10px;color:var(--faint);font-weight:500;margin-top:1px}
+.marr{font-size:9px}.marr.g{color:#16A34A}.marr.r{color:#DC2626}
+.plegend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--ink2);margin:0 0 9px}
+.plegend span{display:inline-flex;align-items:center;gap:6px}.plegend i{width:14px;height:14px;border-radius:4px;border:1px solid var(--line2)}
+.plegend i.g{background:#DCFCE7;border-color:#86EFAC}.plegend i.w{background:#fff}.plegend i.r{background:#FEE2E2;border-color:#FCA5A5}.plegend i.x{background:var(--paper)}
+.ptab th.ctx{color:var(--faint)}
+.pnote ul{margin:6px 0 0 18px}.pnote li{margin-bottom:3px}
 .pnote{margin-top:16px;font-size:11px;color:var(--muted);line-height:1.6;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 13px}
 @media print{ .ptab tr.prow{cursor:default} .spread{print-color-adjust:exact;-webkit-print-color-adjust:exact} .pk,.ptab td.good,.ptab td.bad{print-color-adjust:exact;-webkit-print-color-adjust:exact} }
 </style>
@@ -444,7 +451,7 @@ var PRIO_COLOR = {"Critical":"var(--p-crit)","High":"var(--p-high)","Medium":"va
 var WEEKS_BACK = 6;
 /* Pending-list columns: default 7 (fit an A4 landscape page); user can add/remove. */
 var DEFAULT_COLS = ["key","summary","status","stage","priority","component","age"];
-var MODAL_COLS   = ["key","summary","status","priority","component","worker","svm","next","created","resolved","took","hd","age"];
+var MODAL_COLS   = ["key","summary","status","priority","component","worker","svm","next","created","fr","resolved","took","hd","age"];
 
 /* ═══════════════════════ HELPERS ═══════════════════════ */
 function el(id){ return document.getElementById(id); }
@@ -804,6 +811,7 @@ var COLS=[
   {k:"created",  label:"Created",        th:'<th>Created</th>',       cell:function(t){return '<td style="white-space:nowrap">'+fdate(t.created)+'</td>';}},
   {k:"resolved", label:"Resolved",       th:'<th>Resolved</th>',      cell:function(t){return '<td style="white-space:nowrap">'+(t.resolved?fdate(t.resolved):"—")+'</td>';}},
   {k:"took",     label:"Took (days)",    th:'<th>Took</th>',          cell:function(t){return '<td class="num">'+(t.created&&t.resolved?fmtD((t.resolved-t.created)/86400000):"—")+'</td>';}},
+  {k:"fr",       label:"First response", th:'<th>1st response</th>',  cell:function(t){ var f=t._frV!=null?t._fr:null; return '<td class="num" style="white-space:nowrap">'+(!f?'<span style="color:var(--faint)">—</span>':f.none?'<span style="color:var(--faint)">not yet</span>':fmtH(f.ms)+(f.via==="other"?' <span title="First move was to “'+esc(f.to)+'”, not Analysis & Study" style="color:var(--faint)">*</span>':''))+'</td>'; }},
   {k:"hd",       label:"Solved by",      th:'<th>Solved by</th>',     cell:function(t){return '<td>'+(isOpen(t)?'<span style="color:var(--faint)">open</span>':isHDT(t)?'<span class="badge-na svm">HD</span>':'<span class="badge-na" style="background:#EEF0FF;color:#5B57D8">Engg</span>')+'</td>';}},
   {k:"age",      label:"Age (days)",     th:'<th>Age (d)</th>',       cell:function(t){return '<td class="num">'+ageDays(t)+'</td>';}}
 ];
@@ -1252,6 +1260,24 @@ function phLoad(){ if(!window.HDStore||!HDStore.loadSlaHistory){ PH.loaded=true;
   return HDStore.loadSlaHistory().then(function(h){ PH.hist=h&&h.v===2&&h.tickets?h.tickets:{}; PH.loaded=true; PH.ver++; }); }
 function phEntry(t){ var e=PH.hist[t.key]; if(!e) return null; var tr=e.transitions||[], last=tr.length?tr[tr.length-1].to:e.status; return (e.status===t.status||last===t.status)?e:null; }
 function kindOf(st){ var C=window.HDClass; if(C.isTerminal(st)) return "closed"; var o=C.owner(st); if(o==="client") return "client"; return C.classify3(st)==="engg"?"engg":"hd"; }
+/* FIRST RESPONSE = from creation until the first status change past Open / Acknowledged — normally the move into
+   "Analysis & Study". The automated Open → Acknowledged message is not a response. When a person's first move is
+   somewhere else (e.g. straight to Waiting for customer to ask a question) that move is the response, flagged "*".
+   null = unknown (no status history) · {ms, via:"as"|"other"} · {none:true} = never responded yet. */
+var FR_STATUS="analysis & study", FR_SKIP={"open":1,"acknowledged":1};
+function firstResp(t){
+  if(t._frV===PH.ver) return t._fr;
+  var e=phEntry(t), r=null;
+  if(e&&t.created){
+    /* the FIRST move past Open / Acknowledged — normally into Analysis & Study. A later return to Analysis & Study
+       (e.g. after the client replied) must not replace an earlier real response such as asking the client a question. */
+    var tr=(e.transitions||[]).slice().sort(function(a,b){return a.t-b.t;}), x=null;
+    for(var i=0;i<tr.length;i++){ if(!FR_SKIP[String(tr[i].to||"").toLowerCase()]){ x=tr[i]; break; } }
+    r=x? {ms:Math.max(0,x.t-t.created.getTime()), via:String(x.to||"").toLowerCase()===FR_STATUS?"as":"other", at:x.t, to:x.to} : {none:true};
+  }
+  t._frV=PH.ver; t._fr=r; return r;
+}
+function fmtH(ms){ if(ms==null||isNaN(ms)) return "—"; var m=ms/60000; if(m<60) return Math.round(m)+"m"; var h=m/60; if(h<24) return (h<10?Math.round(h*10)/10:Math.round(h))+"h"; return fmtD(h/24); }
 function cameBack(t){ /* null = unknown (no history) */
   if(t._cbV===PH.ver) return t._cb;
   var e=phEntry(t), r=null;
@@ -1313,42 +1339,57 @@ function metrics(list,r,view){
   m.cbYes=[]; m.cbKnown=0;
   m.closedL.forEach(function(t){ var c=cameBack(t); if(c===null) return; m.cbKnown++; if(c) m.cbYes.push(t); });
   m.cbPct=m.cbKnown?m.cbYes.length/m.cbKnown*100:null;
+  /* first response, for tickets created in the period */
+  m.frL=[]; m.frNone=[]; m.frOther=0; var frs=[];
+  m.intake.forEach(function(t){ var f=firstResp(t); if(f===null) return; if(f.none){ if(isOpen(t)) m.frNone.push(t); return; } m.frL.push(t); frs.push(f.ms); if(f.via==="other") m.frOther++; });
+  m.frMed=median(frs); m.frP90=pctl(frs,0.9);
+  m.fr1h=m.frL.filter(function(t){ return t._fr.ms<=3600000; });
+  m.fr1hPct=m.frL.length?m.fr1h.length/m.frL.length*100:null;
+  m.frSlow=m.frL.filter(function(t){ return t._fr.ms>4*3600000; });
   m.handled=m.closedL.length+m.openSvm.length;
+  m.keptPct=m.intake.length?m.closedL.length/m.intake.length*100:null;                 // closed ÷ new
+  m.enggBacklogPct=m.intake.length?m.openEngg.length/m.intake.length*100:null;         // open with Engineering ÷ new
+  m.aged30Pct=m.openSvm.length?m.aged30.length/m.openSvm.length*100:null;              // share of our open work older than 30 days
+  m.stalePct=m.openSvm.length?m.stale.length/m.openSvm.length*100:null;                // share of our open work not updated for 14 days
   return m;
 }
 
 /* ── the measures each report compares on ── better: 1 = higher is better, -1 = lower is better, 0 = context only ── */
 var KPI={
   hd:[
-    {id:"closed",  l:"Closed",                   g:function(m){return m.closedL.length;}, f:fmtN, b:1,  L:function(m){return m.closedL;}, tip:"Tickets closed in the period"},
-    {id:"intake",  l:"New tickets",              g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Created in the period and now with this person"},
-    {id:"hdPct",   l:"Solved by HD",             g:function(m){return m.hdPct;},          f:fmtP, b:1,  L:function(m){return m.hdL;}, tip:"Share of closed tickets resolved without Engineering"},
-    {id:"hdResMed",l:"HD resolution (median)",   g:function(m){return m.hdResMed;},       f:fmtD, b:-1, L:function(m){return m.hdL;}, tip:"Created → resolved for the tickets HD solved"},
-    {id:"fastPct", l:"HD solved within 1 day",   g:function(m){return m.fastPct;},        f:fmtP, b:1,  L:function(m){return m.fast;}, tip:"Of the HD-solved tickets"},
-    {id:"slaPct",  l:"SLA met",                  g:function(m){return m.slaPct;},         f:fmtP, b:1,  L:function(m){return m.slaMiss;}, tip:"Closed tickets resolved within the SLA target (SLA Tracker engine). Click: the missed ones"},
-    {id:"cbPct",   l:"Came back after closing",  g:function(m){return m.cbPct;},          f:fmtP, b:-1, L:function(m){return m.cbYes;}, tip:"Client replied / reopened after it was handed back or closed (from status history)"},
-    {id:"openSvm", l:"Open with us",             g:function(m){return m.openSvm.length;}, f:fmtN, b:0,  L:function(m){return m.openSvm;}, tip:"Open now and waiting on our side"},
-    {id:"aged30",  l:"Open with us > 30 days",   g:function(m){return m.aged30.length;},  f:fmtN, b:-1, L:function(m){return m.aged30;}, tip:"Open on our side for more than 30 days"},
-    {id:"stale",   l:"Stale (no update 14d+)",   g:function(m){return m.stale.length;},   f:fmtN, b:-1, L:function(m){return m.stale;}, tip:"Open on our side and not updated for 14+ days"},
-    {id:"docPct",  l:"Documented",               g:function(m){return m.docPct;},         f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.doc.indexOf(t)<0;});}, tip:"Closed with an Analysis or Solution written. Click: the undocumented ones"},
-    {id:"rcPct",   l:"Root cause recorded",      g:function(m){return m.rcPct;},          f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.rcSet.indexOf(t)<0;});}, tip:"Closed with Root Cause filled. Click: the ones without"}
+    {id:"closed",  l:"Closed",                 g:function(m){return m.closedL.length;}, f:fmtN, b:0,  L:function(m){return m.closedL;}, tip:"Tickets closed in the period (workload — not scored)"},
+    {id:"intake",  l:"New tickets",            g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Tickets created in the period (workload — not scored)"},
+    {id:"frMed",   l:"First response",         g:function(m){return m.frMed;},          f:fmtH, b:-1, L:function(m){return m.frL;}, tip:"Typical time from a new ticket to the first real action (Open → Analysis & Study). The automatic Acknowledged step is ignored. Lower is better."},
+    {id:"fr1hPct", l:"Responded within 1 hour",g:function(m){return m.fr1hPct;},        f:fmtP, b:1,  L:function(m){return m.frL.filter(function(t){return t._fr.ms>3600000;});}, tip:"Share of new tickets answered within an hour. Click: the slower ones."},
+    {id:"hdPct",   l:"Solved by Help Desk",    g:function(m){return m.hdPct;},          f:fmtP, b:1,  L:function(m){return m.hdL;}, tip:"Share of closed tickets fixed without Engineering. Higher is better."},
+    {id:"hdResMed",l:"Fix time",               g:function(m){return m.hdResMed;},       f:fmtD, b:-1, L:function(m){return m.hdL;}, tip:"Typical time to close the tickets Help Desk fixed. Lower is better."},
+    {id:"fastPct", l:"Fixed within 1 day",     g:function(m){return m.fastPct;},        f:fmtP, b:1,  L:function(m){return m.fast;}, tip:"Share of Help Desk fixes closed within a day."},
+    {id:"slaPct",  l:"Within SLA",             g:function(m){return m.slaPct;},         f:fmtP, b:1,  L:function(m){return m.slaMiss;}, tip:"Share of closed tickets that met the SLA target. Click: the ones that missed."},
+    {id:"cbPct",   l:"Came back",              g:function(m){return m.cbPct;},          f:fmtP, b:-1, L:function(m){return m.cbYes;}, tip:"Share of closed tickets the client sent back or that were reopened. Lower is better."},
+    {id:"openSvm", l:"Open now",               g:function(m){return m.openSvm.length;}, f:fmtN, b:0,  L:function(m){return m.openSvm;}, tip:"Open tickets waiting on us today (workload — not scored)"},
+    {id:"aged30Pct",l:"Open over 30 days",     g:function(m){return m.aged30Pct;},      f:fmtP, b:-1, L:function(m){return m.aged30;}, tip:"Share of today’s open tickets that are older than 30 days. Lower is better."},
+    {id:"stalePct",l:"Not updated in 14 days", g:function(m){return m.stalePct;},       f:fmtP, b:-1, L:function(m){return m.stale;}, tip:"Share of today’s open tickets with no update for 14 days. Lower is better."},
+    {id:"docPct",  l:"Analysis written",       g:function(m){return m.docPct;},         f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.doc.indexOf(t)<0;});}, tip:"Share of closed tickets with an Analysis or Solution written. Click: the ones without."},
+    {id:"rcPct",   l:"Root cause filled",      g:function(m){return m.rcPct;},          f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.rcSet.indexOf(t)<0;});}, tip:"Share of closed tickets with Root Cause filled. Click: the ones without."}
   ],
   svm:[
-    {id:"intake",  l:"New tickets",              g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Created in the period in this person’s module"},
-    {id:"closed",  l:"Closed",                   g:function(m){return m.closedL.length;}, f:fmtN, b:1,  L:function(m){return m.closedL;}, tip:"Closed in the period"},
-    {id:"engg",    l:"Fixed by Engineering",     g:function(m){return m.enggL.length;},   f:fmtN, b:0,  L:function(m){return m.enggL;}, tip:"Closed tickets that needed Engineering (linked / Solved By ENGG)"},
-    {id:"enggResMed",l:"Engineering resolution (median)", g:function(m){return m.enggResMed;}, f:fmtD, b:-1, L:function(m){return m.enggL;}, tip:"Created → resolved for tickets Engineering fixed"},
-    {id:"openEngg",l:"Open with Engineering",    g:function(m){return m.openEngg.length;},f:fmtN, b:-1, L:function(m){return m.openEngg;}, tip:"Open now in an Engineering status"},
-    {id:"enggAgeMed",l:"Age of Engg backlog (median)", g:function(m){return m.enggAgeMed;}, f:fmtD, b:-1, L:function(m){return m.openEngg;}, tip:"How long the open Engineering tickets have been open"},
-    {id:"released",l:"Delivered in period",      g:function(m){return m.released.length;},f:fmtN, b:1,  L:function(m){return m.released;}, tip:"Delivered Date in the period"},
-    {id:"slaPct",  l:"SLA met",                  g:function(m){return m.slaPct;},         f:fmtP, b:1,  L:function(m){return m.slaMiss;}, tip:"Closed tickets within SLA target. Click: the missed ones"},
-    {id:"cbPct",   l:"Came back after fix",      g:function(m){return m.cbPct;},          f:fmtP, b:-1, L:function(m){return m.cbYes;}, tip:"Returned to HD / Engineering after being handed back or closed"},
-    {id:"aged30",  l:"Open with us > 30 days",   g:function(m){return m.aged30.length;},  f:fmtN, b:-1, L:function(m){return m.aged30;}, tip:"Open on our side for more than 30 days"},
-    {id:"hdPct",   l:"Solved by HD in module",   g:function(m){return m.hdPct;},          f:fmtP, b:0,  L:function(m){return m.hdL;}, tip:"How much of this module Help Desk resolved without Engineering"},
-    {id:"rcPct",   l:"Root cause recorded",      g:function(m){return m.rcPct;},          f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.rcSet.indexOf(t)<0;});}, tip:"Closed with Root Cause filled. Click: the ones without"}
+    {id:"intake",  l:"New tickets",            g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Tickets created in the period in this module (workload — not scored)"},
+    {id:"closed",  l:"Closed",                 g:function(m){return m.closedL.length;}, f:fmtN, b:0,  L:function(m){return m.closedL;}, tip:"Tickets closed in the period (workload — not scored)"},
+    {id:"keptPct", l:"Kept up with new work",  g:function(m){return m.keptPct;},        f:fmtP, b:1,  L:function(m){return m.closedL;}, tip:"Closed ÷ new tickets. 100% = closed as many as came in; below 100% = the backlog grew. Higher is better."},
+    {id:"engg",    l:"Fixed by Engineering",   g:function(m){return m.enggL.length;},   f:fmtN, b:0,  L:function(m){return m.enggL;}, tip:"Closed tickets that needed Engineering (workload — not scored)"},
+    {id:"enggResMed",l:"Engineering fix time", g:function(m){return m.enggResMed;},     f:fmtD, b:-1, L:function(m){return m.enggL;}, tip:"Typical time to close the tickets Engineering fixed. Lower is better."},
+    {id:"openEngg",l:"Open with Engineering",  g:function(m){return m.openEngg.length;},f:fmtN, b:0,  L:function(m){return m.openEngg;}, tip:"Open now in an Engineering status (workload — not scored)"},
+    {id:"enggBacklogPct",l:"Engineering backlog vs new", g:function(m){return m.enggBacklogPct;}, f:fmtP, b:-1, L:function(m){return m.openEngg;}, tip:"Open with Engineering as a share of new tickets — fair across big and small modules. Lower is better."},
+    {id:"enggAgeMed",l:"Engineering backlog age", g:function(m){return m.enggAgeMed;},  f:fmtD, b:-1, L:function(m){return m.openEngg;}, tip:"Typical age of the tickets open with Engineering. Lower is better."},
+    {id:"released",l:"Delivered",              g:function(m){return m.released.length;},f:fmtN, b:0,  L:function(m){return m.released;}, tip:"Tickets with a Delivered Date in the period (workload — not scored)"},
+    {id:"slaPct",  l:"Within SLA",             g:function(m){return m.slaPct;},         f:fmtP, b:1,  L:function(m){return m.slaMiss;}, tip:"Share of closed tickets that met the SLA target. Click: the ones that missed."},
+    {id:"cbPct",   l:"Came back after fix",    g:function(m){return m.cbPct;},          f:fmtP, b:-1, L:function(m){return m.cbYes;}, tip:"Share of closed tickets that were sent back or reopened. Lower is better."},
+    {id:"aged30Pct",l:"Open over 30 days",     g:function(m){return m.aged30Pct;},      f:fmtP, b:-1, L:function(m){return m.aged30;}, tip:"Share of today’s open tickets older than 30 days. Lower is better."},
+    {id:"hdPct",   l:"Solved by Help Desk",    g:function(m){return m.hdPct;},          f:fmtP, b:0,  L:function(m){return m.hdL;}, tip:"How much of this module Help Desk fixed without Engineering (information — not scored)"},
+    {id:"rcPct",   l:"Root cause filled",      g:function(m){return m.rcPct;},          f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.rcSet.indexOf(t)<0;});}, tip:"Share of closed tickets with Root Cause filled. Click: the ones without."}
   ]
 };
-var TABLE_COLS={hd:["closed","hdPct","hdResMed","slaPct","cbPct","openSvm","aged30","stale","docPct"], svm:["intake","closed","engg","enggResMed","openEngg","enggAgeMed","released","slaPct","cbPct","aged30"]};
+var TABLE_COLS={hd:["closed","openSvm","frMed","hdPct","hdResMed","slaPct","cbPct","aged30Pct","docPct"], svm:["intake","closed","keptPct","enggResMed","enggBacklogPct","enggAgeMed","slaPct","cbPct","aged30Pct"]};
 
 /* everybody in the current scope, with metrics; cached per render */
 var PC=null;
@@ -1381,13 +1422,22 @@ function reportTabs(){
 }
 function deltaChip(v,med,k){
   if(v==null||med==null||isNaN(v)||isNaN(med)||!k.b) return '';
-  var d=v-med, isPct=k.f===fmtP, isDay=k.f===fmtD;
-  if(Math.abs(d)<(isPct?1:isDay?0.05:0.5)) return '<span class="dchip eq">≈ team median</span>';
+  var d=v-med, isPct=k.f===fmtP, isDay=k.f===fmtD, isHr=k.f===fmtH;
+  if(Math.abs(d)<(isPct?1:isDay?0.05:isHr?60000:0.5)) return '<span class="dchip eq">same as team</span>';
   var good=k.b>0? d>0 : d<0;
-  var txt=isPct? (d>0?"+":"")+Math.round(d)+" pts" : isDay? (d>0?"+":"−")+fmtD(Math.abs(d)) : (d>0?"+":"")+Math.round(d);
-  return '<span class="dchip '+(good?"up":"down")+'">'+(good?"▲ ":"▼ ")+txt+' vs median</span>';
+  var txt=isPct? (d>0?"+":"")+Math.round(d)+" pts" : isDay? (d>0?"+":"−")+fmtD(Math.abs(d)) : isHr? (d>0?"+":"−")+fmtH(Math.abs(d)) : (d>0?"+":"")+Math.round(d);
+  return '<span class="dchip '+(good?"up":"down")+'">'+(good?"▲ ":"▼ ")+txt+' vs team</span>';
 }
-function qBadge(q){ if(q==null) return ""; return q>=0.75?'<span class="qb top">Top 25%</span>':q<=0.25?'<span class="qb low">Bottom 25%</span>':""; }
+/* Colour only when it really matters: in the best / weakest quarter of the team AND clearly different from the
+   team typical (≥ 5 points for a %, ≥ 20% for a time). Small gaps stay white. */
+function clearGap(k,v,med){
+  if(v==null||med==null||isNaN(v)||isNaN(med)) return false;
+  if(k.f===fmtP) return Math.abs(v-med)>=5;
+  if(k.f===fmtD||k.f===fmtH){ var base=Math.max(Math.abs(med), k.f===fmtH?600000:0.1); return Math.abs(v-med)/base>=0.2; }
+  return Math.abs(v-med)>=1;
+}
+function toneOf(k,s,v){ if(!k.b||!s) return ""; var q=s.q(v); if(q==null||s.n<3||!clearGap(k,v,s.med)) return ""; return q>=0.75?"good":q<=0.25?"bad":""; }
+function qBadge(q){ if(q==null) return ""; return q>=0.75?'<span class="qb top">Among the best</span>':q<=0.25?'<span class="qb low">Needs attention</span>':""; }
 
 /* weekly closed vs new for one person (12 ISO weeks ending at the period end) */
 function weekSeries(m,r){
@@ -1418,7 +1468,7 @@ function spread(k,st,m){
   if(hi===lo) hi=lo+1;
   function X(x){ var p=(x-lo)/(hi-lo); if(k.b<0) p=1-p; return Math.max(0,Math.min(100,p*100)); }
   var dots=s.vals.map(function(x){ return '<i style="left:'+X(x.v)+'%" title="'+esc(x.m.name)+': '+esc(k.f(x.v))+'"></i>'; }).join("");
-  return '<div class="spread" title="Left = weaker, right = stronger. Grey line = team median.">'+dots+(s.med!=null?'<b class="med" style="left:'+X(s.med)+'%"></b>':'')+(v!=null&&!isNaN(v)?'<em style="left:'+X(v)+'%"></em>':'')+'</div>';
+  return '<div class="spread" title="Left = weaker, right = stronger. Grey line = team typical.">'+dots+(s.med!=null?'<b class="med" style="left:'+X(s.med)+'%"></b>':'')+(v!=null&&!isNaN(v)?'<em style="left:'+X(v)+'%"></em>':'')+'</div>';
 }
 function mixTable(title,list,keyFn,who,hdCol){
   var by={}; list.forEach(function(t){ var k=keyFn(t)||"(blank)"; (by[k]=by[k]||[]).push(t); });
@@ -1454,7 +1504,7 @@ function renderPerf(){
       (P.per==="custom"?'<input type="date" id="pfrom" class="pdate" value="'+esc(P.from)+'" aria-label="From"><span class="pfaint">→</span><input type="date" id="pto" class="pdate" value="'+esc(P.to)+'" aria-label="To">':'')+
       '<span class="flabel">Client</span><select id="pclient"><option value="">All clients</option>'+clients.map(function(c){return '<option value="'+esc(c.name)+'"'+(c.name===P.client?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>'+
       '<span class="flabel">Request type</span>'+mselHTML(mid)+
-      '<span class="flabel" title="People with fewer tickets are listed but not ranked or used for the team median">Rank from</span><select id="pmin">'+[1,3,5,10,20].map(function(n){return '<option value="'+n+'"'+(P.minN===n?" selected":"")+'>'+n+'+ tickets</option>';}).join("")+'</select>'+
+      '<span class="flabel" title="People with fewer tickets are still listed, but not coloured or compared">Compare people with</span><select id="pmin">'+[1,3,5,10,20].map(function(n){return '<option value="'+n+'"'+(P.minN===n?" selected":"")+'>'+n+'+ tickets</option>';}).join("")+'</select>'+
       '<span class="spacer"></span>'+slaBar(pc)+
       '<button class="btn primary" id="printbtn2">\uD83D\uDDA8\uFE0F Print / Save PDF</button>'+
     '</div>'+
@@ -1486,34 +1536,37 @@ function teamHTML(view,pc,title){
     '<div class="who"><div class="kicker">Reports · '+esc(title)+'</div><h1>'+(view==="hd"?"Help Desk team":"SVM in-charges")+(P.client?" · "+esc(P.client):"")+'</h1><div class="gen">'+esc(perLabel(pc.r))+' · '+esc(S.issueType.join(", ")||"all types")+' · from '+esc(FILENAME)+'</div></div>'+
     '<div class="window">'+pc.team.length+' ranked · '+pc.rows.length+' people</div></div>';
   var kp=view==="hd"? [
-      ["Closed",all.closedL.length,all.closedL,""],["Solved by HD",fmtP(all.hdPct),all.hdL,"hl2"],["HD resolution (median)",fmtD(all.hdResMed),all.hdL,""],
-      ["SLA met",fmtP(all.slaPct),all.slaMiss,""],["Came back",fmtP(all.cbPct),all.cbYes,""],["Open with us",all.openSvm.length,all.openSvm,"hl"],["Stale 14d+",all.stale.length,all.stale,""]]
-    : [["New",all.intake.length,all.intake,""],["Closed",all.closedL.length,all.closedL,""],["Fixed by Engineering",all.enggL.length,all.enggL,"hl2"],["Engg resolution (median)",fmtD(all.enggResMed),all.enggL,""],
-      ["Open with Engineering",all.openEngg.length,all.openEngg,"hl"],["Delivered",all.released.length,all.released,""],["SLA met",fmtP(all.slaPct),all.slaMiss,""]];
+      ["Closed",all.closedL.length,all.closedL,""],["Solved by HD",fmtP(all.hdPct),all.hdL,"hl2"],["Fix time (typical)",fmtD(all.hdResMed),all.hdL,""],
+      ["Within SLA",fmtP(all.slaPct),all.slaMiss,""],["Came back",fmtP(all.cbPct),all.cbYes,""],["Open now",all.openSvm.length,all.openSvm,"hl"],["First response (typical)",fmtH(all.frMed),all.frL,""]]
+    : [["New",all.intake.length,all.intake,""],["Closed",all.closedL.length,all.closedL,""],["Fixed by Engineering",all.enggL.length,all.enggL,"hl2"],["Engineering fix time (typical)",fmtD(all.enggResMed),all.enggL,""],
+      ["Open with Engineering",all.openEngg.length,all.openEngg,"hl"],["Kept up with new work",fmtP(all.keptPct),all.closedL,""],["Within SLA",fmtP(all.slaPct),all.slaMiss,""]];
   var kpis='<div class="kpis">'+kp.map(function(x){ return '<div class="kpi '+x[3]+'" data-dr="'+dr("Team — "+x[0],x[2])+'"><div class="lab">'+x[0]+'</div><div class="val">'+(typeof x[1]==="number"?fmtN(x[1]):x[1])+'</div></div>'; }).join("")+'</div>';
-  function th(id,l,tip){ var on=srt.c===id; return '<th class="'+(id==="name"?"":"num ")+'sortable'+(on?" on":"")+'" data-psort="'+id+'" title="'+esc(tip||"")+'">'+l+(on?(srt.d<0?" ↓":" ↑"):"")+'</th>'; }
+  function th(id,l,tip,ctx){ var on=srt.c===id; return '<th class="'+(id==="name"?"":"num ")+'sortable'+(on?" on":"")+(ctx?" ctx":"")+'" data-psort="'+id+'" title="'+esc(tip||"")+'">'+l+(on?(srt.d<0?" ↓":" ↑"):"")+'</th>'; }
   var body=rows.map(function(m){
     var ranked=pc.team.indexOf(m)>-1;
     return '<tr class="prow'+(ranked?"":" unr")+'" data-person="'+esc(m.name)+'"><td class="pname"><a href="#" data-person="'+esc(m.name)+'">'+esc(m.name)+'</a>'+(m.group&&m.group!=="Others"?' <span class="grp">'+esc(m.group)+'</span>':'')+(ranked?'':' <span class="pfaint" title="Fewer than '+P.minN+' tickets — not ranked">·</span>')+'</td>'+
       cols.map(function(k){
-        var v=k.g(m), s=pc.st[k.id], qv=ranked&&s?s.q(v):null, tone=qv==null?"":qv>=0.75?"good":qv<=0.25?"bad":"";
+        var v=k.g(m), s=pc.st[k.id], tone=ranked?toneOf(k,s,v):"";
         var shown=k.f===fmtN? num(v,m.name+" — "+k.l,k.L(m)) : (v==null||isNaN(v)?'<span class="pfaint">—</span>':'<span class="pnum" data-dr="'+dr(m.name+" — "+k.l,k.L(m))+'">'+k.f(v)+'</span>');
         return '<td class="num '+tone+'">'+shown+'</td>';
       }).join("")+'</tr>';
   }).join("");
-  var medRow='<tr class="medrow"><td class="pname">Team median</td>'+cols.map(function(k){ var s=pc.st[k.id]; return '<td class="num">'+(s&&s.med!=null?k.f(s.med):"—")+'</td>'; }).join("")+'</tr>';
+  var medRow='<tr class="medrow"><td class="pname" title="The middle value of the team: half the people are above it, half below">Team typical</td>'+cols.map(function(k){ var s=pc.st[k.id]; return '<td class="num">'+(s&&s.med!=null?k.f(s.med):"—")+'</td>'; }).join("")+'</tr>';
   return head+'<div class="rbody">'+kpis+
-    '<div class="sectitle">'+(view==="hd"?"Every HD worker":"Every SVM in-charge")+' <span class="sub">click a name for the full report · click a number for its tickets · green = top 25%, red = bottom 25% of the team</span></div>'+
+    '<div class="sectitle">'+(view==="hd"?"Every HD worker":"Every SVM in-charge")+' <span class="sub">click a name for the full report · click a number for its tickets</span></div>'+
+    '<div class="plegend"><span><i class="g"></i>Green = clearly better than the team</span><span><i class="w"></i>White = normal</span><span><i class="r"></i>Red = clearly behind — needs attention</span><span><i class="x"></i>Grey heading = workload, not scored</span></div>'+
     '<div class="noprint" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="search" id="pq" class="pdate" style="width:240px" placeholder="Find a person…" value="'+esc(P.q)+'"><button class="btn" id="pcsv">\u2B07 Export table (CSV)</button></div>'+
-    '<div class="ttable-wrap"><table class="ptab team"><thead><tr>'+th("name","Person")+cols.map(function(k){return th(k.id,k.l,k.tip);}).join("")+'</tr></thead><tbody>'+medRow+body+'</tbody></table></div>'+
+    '<div class="ttable-wrap"><table class="ptab team"><thead><tr>'+th("name","Person")+cols.map(function(k){return th(k.id,k.l,k.tip,!k.b);}).join("")+'</tr></thead><tbody>'+medRow+body+'</tbody></table></div>'+
     notes(view)+'</div>';
 }
 function notes(view){
-  return '<div class="pnote"><b>How these numbers are worked out.</b> '+
-    (view==="hd"?'A ticket belongs to its <b>Current Worker</b> (for a closed ticket, the person who held it when it closed). ':'A ticket belongs to its <b>SVM In Charge</b> (the module owner). ')+
-    '<b>Closed</b> = closed with a resolved date in the period; <b>Open</b> = today. <b>Solved by HD</b> = “Solved By” HD, otherwise no linked ticket. Resolution times are <b>medians</b> of created → resolved. '+
-    '<b>SLA</b> uses the SLA Tracker’s engine and targets; <b>Came back</b> uses status history — both count only tickets whose history has been fetched (use ⟳ Fetch history). '+
-    'Ranks and the team median use people with at least '+P.minN+' ticket'+(P.minN>1?"s":"")+'.</div>';
+  return '<div class="pnote"><b>How to read this</b><ul>'+
+    '<li>'+(view==="hd"?'A ticket counts for its <b>Current Worker</b>.':'A ticket counts for its <b>SVM In Charge</b> (the module owner).')+' “Closed” and “New” are for the chosen period; “Open” is today.</li>'+
+    '<li><b>Typical</b> = the middle value: half are above, half below. One very slow ticket can’t distort it.</li>'+
+    '<li><b>Colours</b> compare each person with the rest of the team on that column. Green / red only when someone is in the best / weakest quarter <b>and</b> clearly different from the team typical (5 points or more for a %, 20% or more for a time). Small differences stay white. Counts (grey headings) show workload and are never coloured.</li>'+
+    (view==="hd"?'<li><b>First response</b> = time until the first real action (normally Open → Analysis &amp; Study). The automatic Acknowledged step is ignored.</li>':'<li>Percentages like <b>Kept up with new work</b> and <b>Engineering backlog vs new</b> are used instead of raw counts, so big and small modules are compared fairly.</li>')+
+    '<li><b>Within SLA</b>, <b>Came back</b>'+(view==="hd"?' and <b>First response</b>':'')+' need each ticket’s status history — use ⟳ Fetch history if some is missing.</li>'+
+    '<li>People with fewer than '+P.minN+' ticket'+(P.minN>1?"s":"")+' are listed but not coloured or compared.</li></ul></div>';
 }
 
 function personHTML(view,m,pc){
@@ -1524,9 +1577,9 @@ function personHTML(view,m,pc){
     '<div class="window noprint"><button class="btn" id="pback">\u2190 All '+(view==="hd"?"HD workers":"SVM in-charges")+'</button></div></div>';
   /* KPI cards with team comparison */
   var cards='<div class="pkpis">'+ks.map(function(k){
-    var v=k.g(m), s=st[k.id], rk=ranked&&s?s.rank(m):null, q=ranked&&s?s.q(v):null;
+    var v=k.g(m), s=st[k.id], rk=ranked&&s?s.rank(m):null, tn=ranked?toneOf(k,s,v):"", q=tn==="good"?1:tn==="bad"?0:null;
     var list=k.L(m), shown=v==null||isNaN(v)?"—":k.f(v);
-    var cov=k.id==="slaPct"? (m.slaKnown+" of "+m.closedL.length+" with SLA data") : k.id==="cbPct"? (m.cbKnown+" of "+m.closedL.length+" with history") : "";
+    var cov=k.id==="slaPct"? (m.slaKnown+" of "+m.closedL.length+" with SLA data") : k.id==="cbPct"? (m.cbKnown+" of "+m.closedL.length+" with history") : (k.id==="frMed"||k.id==="fr1hPct")? (m.frL.length+" of "+m.intake.length+" new with history") : "";
     return '<div class="pk'+(q!=null&&q>=0.75?" top":q!=null&&q<=0.25?" low":"")+'" data-dr="'+dr(who+" — "+k.l,list)+'" title="'+esc(k.tip)+'">'+
       '<div class="lab">'+esc(k.l)+'</div><div class="val">'+shown+'</div>'+
       '<div class="pk-c">'+(ranked&&s?deltaChip(v,s.med,k):"")+'</div>'+
@@ -1535,12 +1588,12 @@ function personHTML(view,m,pc){
   /* comparator */
   var peers=P.cmp[view].map(function(n){ return pc.rows.filter(function(x){return x.name===n;})[0]; }).filter(Boolean).filter(function(x){return x!==m;});
   var others=pc.team.filter(function(x){return x!==m&&peers.indexOf(x)<0;}).sort(function(a,b){return a.name.localeCompare(b.name);});
-  var cmp='<div class="sectitle">Compared with the team <span class="sub">every member is a dot · '+esc(who)+' is the large dot · the grey line is the team median · right = stronger</span></div>'+
+  var cmp='<div class="sectitle">Compared with the team <span class="sub">each dot is a team member · the big dot is '+esc(who)+' · further right = better</span></div>'+
     '<div class="noprint" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span class="flabel">Compare with</span>'+
     peers.map(function(x){ return '<span class="peer">'+esc(x.name)+'<button data-unpeer="'+esc(x.name)+'" aria-label="Remove '+esc(x.name)+'">✕</button></span>'; }).join("")+
     (peers.length<4?'<select id="paddpeer"><option value="">+ add a person…</option>'+others.map(function(x){return '<option value="'+esc(x.name)+'">'+esc(x.name)+'</option>';}).join("")+'</select>':'')+
     (others.length&&!peers.length?'<button class="btn" id="pbestpeer">Add the best on “'+esc(ks.filter(function(k){return k.b>0;})[0].l)+'”</button>':'')+'</div>'+
-    '<div class="ttable-wrap"><table class="ptab cmp"><thead><tr><th>Measure</th><th class="num me">'+esc(who)+'</th><th class="num">Team median</th><th class="num">Best in team</th>'+peers.map(function(x){return '<th class="num">'+esc(x.name)+'</th>';}).join("")+'<th style="min-width:180px">Where '+esc(who.split(" ")[0])+' stands</th></tr></thead><tbody>'+
+    '<div class="ttable-wrap"><table class="ptab cmp"><thead><tr><th>Measure</th><th class="num me">'+esc(who)+'</th><th class="num" title="The middle value of the team">Team typical</th><th class="num">Best in team</th>'+peers.map(function(x){return '<th class="num">'+esc(x.name)+'</th>';}).join("")+'<th style="min-width:180px">Where '+esc(who.split(" ")[0])+' stands <span style="font-weight:500;text-transform:none">(right = better)</span></th></tr></thead><tbody>'+
     ks.map(function(k){
       var s=st[k.id], v=k.g(m);
       function cell(x){ var vv=k.g(x); return vv==null||isNaN(vv)?'<span class="pfaint">—</span>':'<span class="pnum" data-dr="'+dr(x.name+" — "+k.l,k.L(x))+'">'+k.f(vv)+'</span>'; }
@@ -1550,15 +1603,19 @@ function personHTML(view,m,pc){
     }).join("")+'</tbody></table></div>';
   /* strengths & focus areas */
   var good=[], focus=[];
-  if(ranked) ks.forEach(function(k){ if(!k.b) return; var s=st[k.id], v=k.g(m), q=s?s.q(v):null; if(q==null||s.n<4) return; if(q>=0.75) good.push(k.l+' <b>'+k.f(v)+'</b> (team median '+k.f(s.med)+')'); else if(q<=0.25) focus.push(k.l+' <b>'+k.f(v)+'</b> (team median '+k.f(s.med)+')'); });
+  if(ranked) ks.forEach(function(k){ if(!k.b) return; var s=st[k.id], v=k.g(m), tn=toneOf(k,s,v), q=tn==="good"?1:tn==="bad"?0:null; if(q==null) return; if(q>=0.75) good.push(k.l+' <b>'+k.f(v)+'</b> (team typical '+k.f(s.med)+')'); else if(q<=0.25) focus.push(k.l+' <b>'+k.f(v)+'</b> (team typical '+k.f(s.med)+')'); });
   var obs='<div class="grid2">'+
-    '<div class="chartcard"><div class="ct">✅ Strengths <span class="pfaint">· top 25% of the team</span></div>'+(good.length?'<ul class="plist">'+good.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>':'<div class="empty">'+(ranked?"No measure in the top 25% this period.":"Not enough tickets to rank.")+'</div>')+'</div>'+
-    '<div class="chartcard"><div class="ct">🎯 Focus areas <span class="pfaint">· bottom 25% of the team</span></div>'+(focus.length?'<ul class="plist">'+focus.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>':'<div class="empty">'+(ranked?"No measure in the bottom 25% this period.":"Not enough tickets to rank.")+'</div>')+'</div></div>';
+    '<div class="chartcard"><div class="ct">✅ Strengths <span class="pfaint">· clearly better than the team</span></div>'+(good.length?'<ul class="plist">'+good.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>':'<div class="empty">'+(ranked?"Nothing clearly ahead of the team this period.":"Not enough tickets to rank.")+'</div>')+'</div>'+
+    '<div class="chartcard"><div class="ct">🎯 Focus areas <span class="pfaint">· clearly behind the team</span></div>'+(focus.length?'<ul class="plist">'+focus.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>':'<div class="empty">'+(ranked?"Nothing clearly behind the team this period. 👍":"Not enough tickets to rank.")+'</div>')+'</div></div>';
+  /* month by month (12 months to the period end), with the team median for each month */
+  var mon=monthly(view,m,pc);
+
   /* activity & speed */
   var act='<div class="sectitle">Activity &amp; speed <span class="sub">click a bar or number for its tickets</span></div><div class="grid2">'+
     '<div class="chartcard"><div class="ct">New vs closed per week <span class="pfaint">· last 12 weeks to '+fdate(pc.r.to)+'</span></div>'+weekChart(ws,who)+'</div>'+
     '<div class="chartcard"><div class="ct">How long tickets took <span class="pfaint">· closed in the period, created → resolved</span></div>'+resBuckets(m.closedL,who)+
-      '<div class="pfaint" style="margin-top:6px">Median '+fmtD(m.resMed)+' · 90% within '+fmtD(m.resP90)+' · HD-solved median '+fmtD(m.hdResMed)+(view==="svm"?' · Engineering median '+fmtD(m.enggResMed):'')+'</div></div></div>';
+      '<div class="pfaint" style="margin-top:6px">Typical '+fmtD(m.resMed)+' · 9 in 10 within '+fmtD(m.resP90)+' · Help Desk fixes typically '+fmtD(m.hdResMed)+(view==="svm"?' · Engineering fixes typically '+fmtD(m.enggResMed):'')+'</div>'+
+      (view==="hd"?'<div class="pfaint" style="margin-top:4px">First response: typically <b>'+fmtH(m.frMed)+'</b> · 9 in 10 within '+fmtH(m.frP90)+' · '+num(m.frSlow.length,who+" — first response over 4 hours",m.frSlow,"bad")+' over 4 hours · '+num(m.frNone.length,who+" — new, still Open / Acknowledged",m.frNone)+' not responded yet'+(m.frOther?' · '+m.frOther+' first went elsewhere than Analysis &amp; Study (marked *)':'')+'</div>':'')+'</div></div>';
   /* outcome split */
   var hdN=m.hdL.length, egN=m.enggL.length, tot=Math.max(1,hdN+egN);
   var split='<div class="chartcard" style="margin-top:11px"><div class="ct">Closed in the period: who resolved it</div>'+
@@ -1576,9 +1633,51 @@ function personHTML(view,m,pc){
   var open='<div class="sectitle">Open work now <span class="sub">'+num(m.openSvm.length,who+" — open with us",m.openSvm)+' with us · '+num(m.openClient.length,who+" — waiting on the client",m.openClient)+' with the client'+(view==="svm"?' · '+num(m.openEngg.length,who+" — with Engineering",m.openEngg)+' with Engineering':'')+' · '+num(m.stale.length,who+" — stale",m.stale,"bad")+' stale · oldest first</span></div>'+
     (openList.length?ticketTable(openList.slice(0,40),["key","summary","status","stage","priority","component",view==="hd"?"svm":"worker","age"]):'<div class="empty">Nothing open on our side. 🎉</div>')+
     (openList.length>40?'<div class="pfaint" style="margin-top:6px">Showing the 40 oldest of '+num(openList.length,who+" — open",openList)+'.</div>':'');
-  return head+'<div class="rbody">'+cards+cmp+obs+act+split+mix+open+notes(view)+'</div>';
+  return head+'<div class="rbody">'+cards+cmp+obs+mon+act+split+mix+open+notes(view)+'</div>';
 }
 
+var MON_KPI={ hd:["intake","closed","frMed","hdPct","hdResMed","slaPct","cbPct","docPct"], svm:["intake","closed","keptPct","enggResMed","released","slaPct","cbPct","rcPct"] };
+function monthly(view,m,pc){
+  var end=pc.r.to, months=[];
+  for(var i=11;i>=0;i--){ var a=new Date(end.getFullYear(),end.getMonth()-i,1), b=new Date(end.getFullYear(),end.getMonth()-i+1,0,23,59,59,999); months.push({from:a,to:b,label:a.toLocaleDateString("en-GB",{month:"short",year:"2-digit"})}); }
+  var ks=MON_KPI[view].map(function(id){ return KPI[view].filter(function(k){return k.id===id;})[0]; });
+  var team=pc.team.filter(function(x){return x.name!==m.name;}).concat(pc.team.indexOf(m)>-1?[m]:[]);
+  var rows=months.map(function(mo){
+    var mine=metrics(m.all,mo,view), meds={};
+    var tm=team.map(function(x){ return metrics(x.all,mo,view); });
+    ks.forEach(function(k){ meds[k.id]=median(tm.map(function(z){return k.g(z);}).filter(function(v){return v!=null&&!isNaN(v);})); });
+    return {mo:mo, m:mine, med:meds};
+  });
+  /* drop leading months with nothing at all */
+  while(rows.length>1 && !rows[0].m.intake.length && !rows[0].m.closedL.length) rows.shift();
+  function cell(k,row,prev){
+    var v=k.g(row.m), med=row.med[k.id];
+    if(v==null||isNaN(v)) return '<td class="num"><span class="pfaint">—</span></td>';
+    var tone="", arrow="";
+    if(k.b&&med!=null&&clearGap(k,v,med)){ var better=k.b>0? v>med : v<med; tone=better?"good":"bad"; }
+    if(prev){ var pv=k.g(prev.m); if(pv!=null&&!isNaN(pv)&&Math.abs(v-pv)>=(k.f===fmtP?1:k.f===fmtH?60000:k.f===fmtD?0.05:0.5)){ var up=v>pv, good=k.b>0?up:k.b<0?!up:null; arrow=' <span class="marr '+(good==null?"":good?"g":"r")+'" title="vs previous month '+esc(k.f(pv))+'">'+(up?"▲":"▼")+'</span>'; } }
+    var shown='<span class="pnum" data-dr="'+dr(m.name+" — "+k.l+" — "+row.mo.label,k.L(row.m))+'">'+k.f(v)+'</span>';
+    return '<td class="num '+tone+'" title="Team typical that month: '+esc(med==null?"—":k.f(med))+'">'+shown+arrow+'<div class="mmed">'+(med==null?"":k.f(med))+'</div></td>';
+  }
+  /* chart: closed per month (bars) vs team median closed (line) */
+  var W=640,H=150,L=28,B=22,T=10,n=rows.length,slot=(W-L-8)/Math.max(1,n),bw=Math.min(26,slot*0.55),mx=1,sv="";
+  var ck=KPI[view].filter(function(k){return k.id==="closed";})[0];
+  rows.forEach(function(r){ mx=Math.max(mx,r.m.closedL.length,r.med.closed||0); });
+  var step=mx<=5?1:mx<=10?2:mx<=25?5:mx<=60?10:mx<=150?25:50, top=Math.ceil(mx/step)*step, pts=[];
+  for(var g=0;g<=top;g+=step){ var y=T+(H-T-B)*(1-g/top); sv+='<line x1="'+L+'" x2="'+W+'" y1="'+y+'" y2="'+y+'" stroke="#E3E8EE"/><text x="'+(L-5)+'" y="'+(y+3)+'" text-anchor="end" font-size="9" fill="#9AA7B8">'+g+'</text>'; }
+  rows.forEach(function(r,i){ var x=L+i*slot+(slot-bw)/2, h=(H-T-B)*r.m.closedL.length/top;
+    if(r.m.closedL.length) sv+='<rect class="pbar" x="'+x+'" y="'+(H-B-h)+'" width="'+bw+'" height="'+h+'" rx="3" fill="#0F766E" data-dr="'+dr(m.name+" — closed in "+r.mo.label,r.m.closedL)+'"><title>'+r.mo.label+': '+r.m.closedL.length+' closed (team typical '+(r.med.closed==null?"—":r.med.closed)+')</title></rect>';
+    if(r.med.closed!=null) pts.push((x+bw/2).toFixed(1)+","+(T+(H-T-B)*(1-r.med.closed/top)).toFixed(1));
+    sv+='<text x="'+(L+i*slot+slot/2)+'" y="'+(H-7)+'" text-anchor="middle" font-size="9" fill="#6B7A90">'+r.mo.label+'</text>'; });
+  if(pts.length>1) sv+='<polyline points="'+pts.join(" ")+'" fill="none" stroke="#B45309" stroke-width="1.6" stroke-dasharray="4 3"/>';
+  pts.forEach(function(p){ var xy=p.split(","); sv+='<circle cx="'+xy[0]+'" cy="'+xy[1]+'" r="2.6" fill="#fff" stroke="#B45309" stroke-width="1.5"/>'; });
+  /* best and weakest month on the first "better" measure after volume */
+  return '<div class="sectitle">Month by month <span class="sub">last '+rows.length+' month'+(rows.length>1?"s":"")+' to '+fdate(end)+' · grey figure = team typical that month · green / red = clearly better / worse than the team · ▲▼ = up / down from last month</span></div>'+
+    '<div class="chartcard"><div class="ct">Closed per month <span class="pfaint">· bars = '+esc(m.name)+' · dashed line = team typical</span></div><svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="Closed per month">'+sv+'</svg></div>'+
+    '<div class="ttable-wrap" style="margin-top:10px"><table class="ptab mon"><thead><tr><th>Month</th>'+ks.map(function(k){return '<th class="num" title="'+esc(k.tip)+'">'+esc(k.l)+'</th>';}).join("")+'</tr></thead><tbody>'+
+    rows.slice().reverse().map(function(r,i,arr){ var prev=arr[i+1]; return '<tr><td class="pname">'+r.mo.label+(r.mo.to>new Date()?' <span class="pfaint">so far</span>':'')+'</td>'+ks.map(function(k){return cell(k,r,prev);}).join("")+'</tr>'; }).join("")+
+    '</tbody></table></div>';
+}
 function bindPerf(view,pc){
   document.querySelectorAll(".rtab").forEach(function(b){ b.onclick=function(){ P.view=b.getAttribute("data-view"); setHash(); render(); window.scrollTo(0,0); }; });
   var bb=el("backbtn2"); if(bb) bb.onclick=function(){ window.location.href="index.html"; };
