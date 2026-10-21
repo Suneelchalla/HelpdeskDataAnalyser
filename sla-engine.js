@@ -46,11 +46,9 @@
     warnPct: 75,
     dangerPct: 90,
     goalPct: 90,                        // SLA % the team aims for (colours only)
-    /* FIRST RESPONSE = creation → the first status change that is a real action. The statuses below are NOT a
-       response (Acknowledged is set by an automatic message). Normally the response is the move into Analysis &
-       Study; if someone's first move is elsewhere (e.g. Waiting for customer to ask a question) that counts. */
+    /* FIRST RESPONSE = creation → the first message to the client, i.e. the first time the ticket moves to a
+       CLIENT-side status (Master Data). The automatic acknowledgement (Acknowledged, a Help Desk status) never counts. */
     frTargetMin: 60,                    // first-response target, calendar minutes
-    frIgnore: ["Open", "Acknowledged"],
     issueTypes: ["Incident", "Service Request"],
     /* Wording of the reminder posted to Jira. Two templates, chosen automatically per ticket:
          soon     → open and not yet breached (running, or paused with the client)
@@ -76,7 +74,6 @@
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
     if (typeof saved.frTargetMin === "number" && saved.frTargetMin > 0) c.frTargetMin = saved.frTargetMin;
-    if (Array.isArray(saved.frIgnore)) c.frIgnore = saved.frIgnore.map(function (x) { return String(x).trim(); }).filter(Boolean);
     if (saved.calendars && typeof saved.calendars === "object") Object.keys(saved.calendars).forEach(function (k) {
       var x = saved.calendars[k], ok = /^\d{1,2}:\d{2}$/;
       if (x && ok.test(x.businessStart) && ok.test(x.businessEnd) && Array.isArray(x.workDays) && x.workDays.length)
@@ -91,16 +88,25 @@
   }
 
   /* ─────────── first response ───────────
-     created (ms) + status transitions [{t, from, to, by}] → { min, at, to, by, viaAS } once someone acted,
-     { min:null, pending:true } while it is still Open / Acknowledged, null without a creation time.
-     Calendar minutes (a response is a response at 02:00 too). */
-  function firstResponse(created, transitions, cfg) {
+     FIRST RESPONSE = from creation to the first message to the client: the first status change INTO a client-side
+     status (Waiting for customer, Resolved With Clarification, Resolved … — whatever Master Data marks "Client").
+     • The automatic acknowledgement (Open → Acknowledged) is a Help Desk status, so it never counts.
+     • Changes made by an automation account (name contains "automation" / "bot") are skipped.
+     • A ticket closed without ever going to a client status: the closure counts (closedDirect = true).
+     opts: { isClient(status) → bool, isClosed(status) → bool }  (the page passes its Master Data classifier)
+     → { min, at, to, from, by, closedDirect } once answered · { min:null, pending:true } while not yet answered ·
+       null without a creation time. Calendar minutes — a reply at 02:00 is still a reply. */
+  var FR_BOT = /automation|\bbot\b|system|integration/i;
+  function firstResponse(created, transitions, opts) {
     if (created == null) return null;
-    var ign = {}; ((cfg && cfg.frIgnore) || DEFAULT_CONFIG.frIgnore).forEach(function (x) { ign[String(x).trim().toLowerCase()] = 1; });
+    opts = opts || {};
+    var isClient = opts.isClient || function () { return false; }, isClosed = opts.isClosed || function (s) { return /^closed$/i.test(String(s || "")); };
     var tr = (transitions || []).slice().sort(function (a, b) { return a.t - b.t; });
     for (var i = 0; i < tr.length; i++) {
-      var to = String(tr[i].to || "").trim();
-      if (!ign[to.toLowerCase()]) return { min: Math.max(0, (tr[i].t - created) / 60000), at: tr[i].t, to: to, from: tr[i].from || "", by: tr[i].by || "", viaAS: to.toLowerCase() === "analysis & study" };
+      var x = tr[i], to = String(x.to || "").trim();
+      if (x.by && FR_BOT.test(x.by)) continue;
+      var cl = isClient(to), done = !cl && isClosed(to);
+      if (cl || done) return { min: Math.max(0, (x.t - created) / 60000), at: x.t, to: to, from: x.from || "", by: x.by || "", closedDirect: done };
     }
     return { min: null, pending: true };
   }
