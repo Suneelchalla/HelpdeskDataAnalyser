@@ -811,7 +811,7 @@ var COLS=[
   {k:"created",  label:"Created",        th:'<th>Created</th>',       cell:function(t){return '<td style="white-space:nowrap">'+fdate(t.created)+'</td>';}},
   {k:"resolved", label:"Resolved",       th:'<th>Resolved</th>',      cell:function(t){return '<td style="white-space:nowrap">'+(t.resolved?fdate(t.resolved):"—")+'</td>';}},
   {k:"took",     label:"Took (days)",    th:'<th>Took</th>',          cell:function(t){return '<td class="num">'+(t.created&&t.resolved?fmtD((t.resolved-t.created)/86400000):"—")+'</td>';}},
-  {k:"fr",       label:"First response", th:'<th>1st response</th>',  cell:function(t){ var f=t._frV!=null?t._fr:null; return '<td class="num" style="white-space:nowrap">'+(!f?'<span style="color:var(--faint)">—</span>':f.none?'<span style="color:var(--faint)">not yet</span>':fmtH(f.ms)+(f.via==="other"?' <span title="First move was to “'+esc(f.to)+'”, not Analysis & Study" style="color:var(--faint)">*</span>':''))+'</td>'; }},
+  {k:"fr",       label:"First response", th:'<th>1st response</th>',  cell:function(t){ var f=t._frV!=null?t._fr:null; return '<td class="num" style="white-space:nowrap">'+(!f?'<span style="color:var(--faint)">—</span>':f.none?'<span style="color:var(--faint)">not yet</span>':fmtH(f.ms)+(f.closedDirect?' <span title="Closed without ever going to a client-side status — the closure is counted" style="color:var(--faint)">*</span>':''))+'</td>'; }},
   {k:"hd",       label:"Solved by",      th:'<th>Solved by</th>',     cell:function(t){return '<td>'+(isOpen(t)?'<span style="color:var(--faint)">open</span>':isHDT(t)?'<span class="badge-na svm">HD</span>':'<span class="badge-na" style="background:#EEF0FF;color:#5B57D8">Engg</span>')+'</td>';}},
   {k:"age",      label:"Age (days)",     th:'<th>Age (d)</th>',       cell:function(t){return '<td class="num">'+ageDays(t)+'</td>';}}
 ];
@@ -1260,22 +1260,17 @@ function phLoad(){ if(!window.HDStore||!HDStore.loadSlaHistory){ PH.loaded=true;
   return HDStore.loadSlaHistory().then(function(h){ PH.hist=h&&h.v===2&&h.tickets?h.tickets:{}; PH.loaded=true; PH.ver++; }); }
 function phEntry(t){ var e=PH.hist[t.key]; if(!e) return null; var tr=e.transitions||[], last=tr.length?tr[tr.length-1].to:e.status; return (e.status===t.status||last===t.status)?e:null; }
 function kindOf(st){ var C=window.HDClass; if(C.isTerminal(st)) return "closed"; var o=C.owner(st); if(o==="client") return "client"; return C.classify3(st)==="engg"?"engg":"hd"; }
-/* FIRST RESPONSE = from creation until the first status change past Open / Acknowledged — normally the move into
-   "Analysis & Study". The automated Open → Acknowledged message is not a response. When a person's first move is
-   somewhere else (e.g. straight to Waiting for customer to ask a question) that move is the response, flagged "*".
-   null = unknown (no status history) · {ms, via:"as"|"other"} · {none:true} = never responded yet. */
-var FR_STATUS="analysis & study", FR_SKIP={"open":1,"acknowledged":1};
+/* FIRST RESPONSE = from creation to the first message to the client: the first status change INTO a client-side
+   status (Master Data "Client": Waiting for customer, Resolved With Clarification, Resolved …). The automatic
+   acknowledgement (Acknowledged, a Help Desk status) never counts; changes by automation accounts are skipped. A ticket
+   closed without ever going to a client status counts its closure (marked *). Same engine function as the SLA Tracker.
+   null = unknown (no status history) · {ms, closedDirect, at, to, by} · {none:true} = nothing sent to the client yet. */
 function firstResp(t){
   if(t._frV===PH.ver) return t._fr;
   var e=phEntry(t), r=null;
-  if(e&&t.created){
-    /* the FIRST move past Open / Acknowledged — normally into Analysis & Study. Same function and the same
-       Settings (target, "not a response" statuses) as the SLA Tracker, so the two pages always agree. */
-    var f=window.HDSla&&HDSla.firstResponse? HDSla.firstResponse(t.created.getTime(), e.transitions, frCfg()) : null;
-    if(f) r=f.min!=null? {ms:f.min*60000, via:f.viaAS?"as":"other", at:f.at, to:f.to, by:f.by} : {none:true};
-    else { var tr=(e.transitions||[]).slice().sort(function(a,b){return a.t-b.t;}), x=null;
-      for(var i=0;i<tr.length;i++){ if(!FR_SKIP[String(tr[i].to||"").toLowerCase()]){ x=tr[i]; break; } }
-      r=x? {ms:Math.max(0,x.t-t.created.getTime()), via:String(x.to||"").toLowerCase()===FR_STATUS?"as":"other", at:x.t, to:x.to} : {none:true}; }
+  if(e&&t.created&&window.HDSla&&HDSla.firstResponse){
+    var f=HDSla.firstResponse(t.created.getTime(), e.transitions, { isClient:function(st){ return kindOf(st)==="client"; }, isClosed:function(st){ return kindOf(st)==="closed"; } });
+    if(f) r=f.min!=null? {ms:f.min*60000, closedDirect:!!f.closedDirect, at:f.at, to:f.to, by:f.by} : {none:true};
   }
   t._frV=PH.ver; t._fr=r; return r;
 }
@@ -1348,7 +1343,7 @@ function metrics(list,r,view){
   m.cbPct=m.cbKnown?m.cbYes.length/m.cbKnown*100:null;
   /* first response, for tickets created in the period */
   m.frL=[]; m.frNone=[]; m.frOther=0; var frs=[];
-  m.intake.forEach(function(t){ var f=firstResp(t); if(f===null) return; if(f.none){ if(isOpen(t)) m.frNone.push(t); return; } m.frL.push(t); frs.push(f.ms); if(f.via==="other") m.frOther++; });
+  m.intake.forEach(function(t){ var f=firstResp(t); if(f===null) return; if(f.none){ if(isOpen(t)) m.frNone.push(t); return; } m.frL.push(t); frs.push(f.ms); if(f.closedDirect) m.frOther++; });
   m.frMed=median(frs); m.frP90=pctl(frs,0.9);
   m.fr1h=m.frL.filter(function(t){ return t._fr.ms<=frTargetMs(); });
   m.fr1hPct=m.frL.length?m.fr1h.length/m.frL.length*100:null;
@@ -1366,7 +1361,7 @@ var KPI={
   hd:[
     {id:"closed",  l:"Closed",                 g:function(m){return m.closedL.length;}, f:fmtN, b:0,  L:function(m){return m.closedL;}, tip:"Tickets closed in the period (workload — not scored)"},
     {id:"intake",  l:"New tickets",            g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Tickets created in the period (workload — not scored)"},
-    {id:"frMed",   l:"First response",         g:function(m){return m.frMed;},          f:fmtH, b:-1, L:function(m){return m.frL;}, tip:"Typical time from a new ticket to the first real action (Open → Analysis & Study). The automatic Acknowledged step is ignored. Lower is better."},
+    {id:"frMed",   l:"First response",         g:function(m){return m.frMed;},          f:fmtH, b:-1, L:function(m){return m.frL;}, tip:"Typical time from a new ticket to the first message to the client — its first move to a client-side status (Waiting for customer, Resolved With Clarification …). The automatic acknowledgement doesn’t count. Lower is better."},
     {id:"fr1hPct", l:"Responded within target",g:function(m){return m.fr1hPct;},       f:fmtP, b:1,  L:function(m){return m.frL.filter(function(t){return t._fr.ms>frTargetMs();});}, tip:"Share of new tickets answered within the first-response target (SLA Tracker → Settings, default 1 hour). Click: the slower ones."},
     {id:"hdPct",   l:"Solved by Help Desk",    g:function(m){return m.hdPct;},          f:fmtP, b:1,  L:function(m){return m.hdL;}, tip:"Share of closed tickets fixed without Engineering. Higher is better."},
     {id:"hdResMed",l:"Fix time",               g:function(m){return m.hdResMed;},       f:fmtD, b:-1, L:function(m){return m.hdL;}, tip:"Typical time to close the tickets Help Desk fixed. Lower is better."},
@@ -1571,7 +1566,7 @@ function notes(view){
     '<li>'+(view==="hd"?'A ticket counts for its <b>Current Worker</b>.':'A ticket counts for its <b>SVM In Charge</b> (the module owner).')+' “Closed” and “New” are for the chosen period; “Open” is today.</li>'+
     '<li><b>Typical</b> = the middle value: half are above, half below. One very slow ticket can’t distort it.</li>'+
     '<li><b>Colours</b> compare each person with the rest of the team on that column. Green / red only when someone is in the best / weakest quarter <b>and</b> clearly different from the team typical (5 points or more for a %, 20% or more for a time). Small differences stay white. Counts (grey headings) show workload and are never coloured.</li>'+
-    (view==="hd"?'<li><b>First response</b> = time until the first real action (normally Open → Analysis &amp; Study). The automatic Acknowledged step is ignored.</li>':'<li>Percentages like <b>Kept up with new work</b> and <b>Engineering backlog vs new</b> are used instead of raw counts, so big and small modules are compared fairly.</li>')+
+    (view==="hd"?'<li><b>First response</b> = time until the first message to the client — the first move to a client-side status (Waiting for customer, Resolved With Clarification …). The automatic acknowledgement doesn’t count.</li>':'<li>Percentages like <b>Kept up with new work</b> and <b>Engineering backlog vs new</b> are used instead of raw counts, so big and small modules are compared fairly.</li>')+
     '<li><b>Came back</b> = resolved (Resolved / Resolved With Clarification / Closed) and later reopened or sent back to us. Asking the client a question and getting a reply is normal and does not count.</li>'+
     '<li><b>Within SLA</b>, <b>Came back</b>'+(view==="hd"?' and <b>First response</b>':'')+' need each ticket’s status history — use ⟳ Fetch history if some is missing.</li>'+
     '<li>People with fewer than '+P.minN+' ticket'+(P.minN>1?"s":"")+' are listed but not coloured or compared.</li></ul></div>';
@@ -1623,7 +1618,7 @@ function personHTML(view,m,pc){
     '<div class="chartcard"><div class="ct">New vs closed per week <span class="pfaint">· last 12 weeks to '+fdate(pc.r.to)+'</span></div>'+weekChart(ws,who)+'</div>'+
     '<div class="chartcard"><div class="ct">How long tickets took <span class="pfaint">· closed in the period, created → resolved</span></div>'+resBuckets(m.closedL,who)+
       '<div class="pfaint" style="margin-top:6px">Typical '+fmtD(m.resMed)+' · 9 in 10 within '+fmtD(m.resP90)+' · Help Desk fixes typically '+fmtD(m.hdResMed)+(view==="svm"?' · Engineering fixes typically '+fmtD(m.enggResMed):'')+'</div>'+
-      (view==="hd"?'<div class="pfaint" style="margin-top:4px">First response: typically <b>'+fmtH(m.frMed)+'</b> · 9 in 10 within '+fmtH(m.frP90)+' · '+num(m.frSlow.length,who+" — first response over 4 hours",m.frSlow,"bad")+' over 4 hours · '+num(m.frNone.length,who+" — new, still Open / Acknowledged",m.frNone)+' not responded yet'+(m.frOther?' · '+m.frOther+' first went elsewhere than Analysis &amp; Study (marked *)':'')+'</div>':'')+'</div></div>';
+      (view==="hd"?'<div class="pfaint" style="margin-top:4px">First response: typically <b>'+fmtH(m.frMed)+'</b> · 9 in 10 within '+fmtH(m.frP90)+' · '+num(m.frSlow.length,who+" — first response over 4 hours",m.frSlow,"bad")+' over 4 hours · '+num(m.frNone.length,who+" — new, nothing sent to the client yet",m.frNone)+' not answered yet'+(m.frOther?' · '+m.frOther+' closed without a client status (marked *)':'')+'</div>':'')+'</div></div>';
   /* outcome split */
   var hdN=m.hdL.length, egN=m.enggL.length, tot=Math.max(1,hdN+egN);
   var split='<div class="chartcard" style="margin-top:11px"><div class="ct">Closed in the period: who resolved it</div>'+
