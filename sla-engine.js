@@ -46,6 +46,11 @@
     warnPct: 75,
     dangerPct: 90,
     goalPct: 90,                        // SLA % the team aims for (colours only)
+    /* FIRST RESPONSE = creation → the first status change that is a real action. The statuses below are NOT a
+       response (Acknowledged is set by an automatic message). Normally the response is the move into Analysis &
+       Study; if someone's first move is elsewhere (e.g. Waiting for customer to ask a question) that counts. */
+    frTargetMin: 60,                    // first-response target, calendar minutes
+    frIgnore: ["Open", "Acknowledged"],
     issueTypes: ["Incident", "Service Request"],
     /* Wording of the reminder posted to Jira. Two templates, chosen automatically per ticket:
          soon     → open and not yet breached (running, or paused with the client)
@@ -70,6 +75,8 @@
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
+    if (typeof saved.frTargetMin === "number" && saved.frTargetMin > 0) c.frTargetMin = saved.frTargetMin;
+    if (Array.isArray(saved.frIgnore)) c.frIgnore = saved.frIgnore.map(function (x) { return String(x).trim(); }).filter(Boolean);
     if (saved.calendars && typeof saved.calendars === "object") Object.keys(saved.calendars).forEach(function (k) {
       var x = saved.calendars[k], ok = /^\d{1,2}:\d{2}$/;
       if (x && ok.test(x.businessStart) && ok.test(x.businessEnd) && Array.isArray(x.workDays) && x.workDays.length)
@@ -81,6 +88,21 @@
       if (saved.targets.clients) c.targets.clients = clone(saved.targets.clients);
     }
     return c;
+  }
+
+  /* ─────────── first response ───────────
+     created (ms) + status transitions [{t, from, to, by}] → { min, at, to, by, viaAS } once someone acted,
+     { min:null, pending:true } while it is still Open / Acknowledged, null without a creation time.
+     Calendar minutes (a response is a response at 02:00 too). */
+  function firstResponse(created, transitions, cfg) {
+    if (created == null) return null;
+    var ign = {}; ((cfg && cfg.frIgnore) || DEFAULT_CONFIG.frIgnore).forEach(function (x) { ign[String(x).trim().toLowerCase()] = 1; });
+    var tr = (transitions || []).slice().sort(function (a, b) { return a.t - b.t; });
+    for (var i = 0; i < tr.length; i++) {
+      var to = String(tr[i].to || "").trim();
+      if (!ign[to.toLowerCase()]) return { min: Math.max(0, (tr[i].t - created) / 60000), at: tr[i].t, to: to, from: tr[i].from || "", by: tr[i].by || "", viaAS: to.toLowerCase() === "analysis & study" };
+    }
+    return { min: null, pending: true };
   }
 
   /* ─────────── timestamps ─────────── */
@@ -374,7 +396,7 @@
   }
 
   return {
-    DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig,
+    DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig, firstResponse: firstResponse,
     parseTs: parseTs, makeCalendar: makeCalendar, makeCalendarSet: makeCalendarSet, bizMinutes: bizMinutes,
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
