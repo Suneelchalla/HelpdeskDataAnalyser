@@ -1274,34 +1274,37 @@ function buildSlaMessageInner(t, L, extra) {
   var held = { hd: "Help Desk", engg: "Engineering", client: "Client" }[r.currentKind] || "—";
   var used = Math.round(r.pct) + "% of the " + fdur(r.targetMin) + " target used";
   var situation, ask, remaining, strip, breachTime = "", timeLeft = "", breachedAt = "", overBy = "";
+  /* {situation} = where the SLA stands, in one sentence · {ask} = the one thing we need · {remaining} = time left (optional) */
+  var fdurM = function (m) { return String(fdur(m)).replace(/( 0m)+$/, "").replace(/( 0h)+$/, "").replace(/ 0h( \d+m)$/, "$1"); };
   if (bi.state === "breached") {
-    breachedAt = fdtw(bi.breachedAt) + " IST"; breachTime = breachedAt; overBy = fdur(bi.overByMin);
-    situation = "**SLA breached on " + breachedAt + "** — the " + fdur(r.targetMin) + " target is used up and the ticket is still open.";
-    ask = "Kindly post an update on this ticket immediately.";
-    remaining = "Over target by " + overBy + " — please prioritise.";
-    strip = "SLA breached on " + breachedAt + " — now " + overBy + " over the " + fdur(r.targetMin) + " target and still open.";
+    breachedAt = fdtw(bi.breachedAt) + " IST"; breachTime = breachedAt; overBy = fdurM(bi.overByMin);
+    situation = "The resolution SLA was breached on **" + breachedAt + "**. The ticket is still open and is now " + overBy + " over its " + fdurM(r.targetMin) + " target.";
+    ask = "Please update the ticket with the reason for the delay and the expected resolution date.";
+    remaining = "Over target by " + overBy + ".";
+    strip = "SLA breached on " + breachedAt + " — now " + overBy + " over the " + fdurM(r.targetMin) + " target and still open.";
   } else if (bi.state === "paused") {
-    breachTime = fdtw(bi.ifResumedAt) + " IST"; timeLeft = fdur(bi.remainingMin);
-    situation = "The SLA clock is currently **paused** because the ticket is with the client (" + safeTxt(r.currentStatus) + "). If it came back to us now it would breach on **" + breachTime + "** (" + used + ").";
-    ask = "Kindly follow up with the client for the required response so the ticket can move forward.";
-    remaining = "Time remaining once it returns: " + timeLeft + " — please prioritise.";
+    breachTime = fdtw(bi.ifResumedAt) + " IST"; timeLeft = fdurM(bi.remainingMin);
+    situation = "The SLA clock is paused while the ticket is with the client (" + safeTxt(r.currentStatus) + "). " + timeLeft + " of working time remains once it returns to us.";
+    ask = "Please follow up with the client so the ticket can move forward.";
+    remaining = timeLeft + " of working time remains.";
     strip = "The SLA clock is currently paused because the ticket is with the client (" + r.currentStatus + "). " + timeLeft + " of working time is left (" + used + "). If it came back to us now it would breach on " + breachTime + ".";
   } else {
-    breachTime = fdtw(bi.breachAt) + " IST"; timeLeft = fdur(bi.remainingMin);
-    situation = "Breach time: **" + breachTime + "** (" + used + ").";
-    ask = "Kindly action this ticket before the breach time.";
-    remaining = "Time remaining: " + timeLeft + " — please prioritise.";
+    breachTime = fdtw(bi.breachAt) + " IST"; timeLeft = fdurM(bi.remainingMin);
+    situation = "The resolution SLA will be breached on **" + breachTime + "** — " + timeLeft + " of working time remains.";
+    ask = "Please action the ticket before the breach time.";
+    remaining = timeLeft + " of working time remains.";
     strip = "Breach time: " + breachTime + " — " + timeLeft + " of working time left (" + used + ").";
   }
   var vals = { name: safeTxt(who), svm: safeTxt(t.svm || ""), worker: safeTxt(t.worker || ""), key: t.key, summary: safeTxt(String(t.summary || "").replace(/\s+/g, " ").trim()), severity: t.sev ? Sla.sevName(t.sev) : safeTxt(t.priority || "Unrated"), heldBy: held, status: safeTxt(r.currentStatus),
-    created: fdt(t.created), age: fcal(r.ageCalMin), used: fdur(r.elapsedMin), target: fdur(r.targetMin), pct: Math.round(r.pct) + "%", timeLeft: timeLeft, breachTime: breachTime, breachedAt: breachedAt, overBy: overBy, situation: situation, ask: ask, remaining: remaining, extra: safeTxt(extra || "").trim() };
+    created: fdt(t.created), age: fcal(r.ageCalMin), used: fdurM(r.elapsedMin), target: fdurM(r.targetMin), pct: Math.round(r.pct) + "%", timeLeft: timeLeft, breachTime: breachTime, breachedAt: breachedAt, overBy: overBy, situation: situation, ask: ask, remaining: remaining, extra: safeTxt(extra || "").trim() };
   var tpl = (ST.cfg.templates && ST.cfg.templates[kind]) || Sla.DEFAULT_CONFIG.templates[kind];
   var filled = tpl.replace(/\{(\w+)\}/g, function (m, k) { return Object.prototype.hasOwnProperty.call(vals, k) ? vals[k] : m; });
   var b = function (x) { return { t: x, b: 1 }; }, n = function (x) { return { t: x }; }, BR = { br: 1 };
   function runsOf(par) {                                        // "a **b** c\nnext" → runs with bold and line breaks
     var out = []; par.split("\n").forEach(function (line, i) { if (i) out.push(BR); line.split("**").forEach(function (seg, j) { if (seg !== "") out.push(j % 2 ? b(seg) : n(seg)); }); }); return out;
   }
-  var paras = [[b(SLA_MARK + " — " + label)]].concat(filled.split(/\n{2,}/).map(function (x) { return x.replace(/^\n+|\n+$/g, ""); }).filter(function (x) { return x.trim() !== ""; }).map(runsOf));
+  var heading = bi.state === "paused" ? "Clock paused (with client)" : label;   // the note's heading names the real state; the template is still "About to breach"
+  var paras = [[b(SLA_MARK + " — " + heading)]].concat(filled.split(/\n{2,}/).map(function (x) { return x.replace(/^\n+|\n+$/g, ""); }).filter(function (x) { return x.trim() !== ""; }).map(runsOf));
   var text = paras.map(function (p) { return p.map(function (x) { return x.br ? "\n" : x.t; }).join(""); }).join("\n\n");
   var adf = { type: "doc", version: 1, content: paras.map(function (p) { return { type: "paragraph", content: p.map(function (x) { return x.br ? { type: "hardBreak" } : (x.b ? { type: "text", text: x.t, marks: [{ type: "strong" }] } : { type: "text", text: x.t }); }) }; }) };
   return { text: text, adf: adf, headline: strip, kind: kind, label: label };
