@@ -541,10 +541,10 @@ body.canrefresh #tabRefresh{display:flex}
         </a>
         <a class="card wr" id="cardWR" href="weekly.html" style="--i:2" data-g="🗓️">
           <i class="spot"></i>
-          <div class="top"><div class="badge">🗓️<span class="kb" aria-hidden="true">3</span></div><h2>Weekly Report</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
-          <p>Client-ready weekly report — per-client KPIs, inflow, resolved and activity stages. Print or save as PDF.</p>
+          <div class="top"><div class="badge">🗓️<span class="kb" aria-hidden="true">3</span></div><h2>Reports</h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Client-ready weekly report, plus HD worker and SVM in-charge performance — individual reports, team rankings and side-by-side comparison. Print or save as PDF.</p>
           <div class="viz" aria-hidden="true"><svg viewBox="0 0 260 44" preserveAspectRatio="xMidYMid meet" fill="currentColor"><rect x="0.0" y="26" width="14" height="18" rx="3" opacity="0.25"/><rect x="21.5" y="18" width="14" height="26" rx="3" opacity="0.31"/><rect x="43.0" y="30" width="14" height="14" rx="3" opacity="0.37"/><rect x="64.5" y="14" width="14" height="30" rx="3" opacity="0.43"/><rect x="86.0" y="22" width="14" height="22" rx="3" opacity="0.49"/><rect x="107.5" y="10" width="14" height="34" rx="3" opacity="0.55"/><rect x="129.0" y="24" width="14" height="20" rx="3" opacity="0.61"/><rect x="150.5" y="16" width="14" height="28" rx="3" opacity="0.67"/><rect x="172.0" y="8" width="14" height="36" rx="3" opacity="0.73"/><rect x="193.5" y="20" width="14" height="24" rx="3" opacity="0.79"/><rect x="215.0" y="12" width="14" height="32" rx="3" opacity="0.85"/><rect x="236.5" y="4" width="14" height="40" rx="3" opacity="0.91"/></svg></div>
-          <div class="feat"><span>Per client</span><span>SVM vs Client</span><span>Stages</span><span>Print / PDF</span><span>Weekly</span></div>
+          <div class="feat"><span>Weekly</span><span>HD workers</span><span>SVM in-charges</span><span>Compare</span><span>Print / PDF</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
         <a class="card ch" id="cardCH" href="change.html" style="--i:3" data-g="🔀">
@@ -1339,7 +1339,7 @@ if(HS){
 <script>
 /* ═════ Tabbed workspace — open each dashboard as a tab inside this page ═════ */
 (function(){
-  var MODS={"followup.html":"Follow-up Tracker","trend.html":"HD Trend Tracker","weekly.html":"Weekly Report","change.html":"Change Tracker","releases.html":"Release Tracker","clarify.html":"Similar Ticket Finder","ops.html":"Operations Intelligence","sla.html":"SLA Tracker"};
+  var MODS={"followup.html":"Follow-up Tracker","trend.html":"HD Trend Tracker","weekly.html":"Reports","change.html":"Change Tracker","releases.html":"Release Tracker","clarify.html":"Similar Ticket Finder","ops.html":"Operations Intelligence","sla.html":"SLA Tracker"};
   var SKEY="hd-tabs", BASE_TITLE=document.title;
   var cards=document.getElementById("cards"), list=document.getElementById("tabList"), framesBox=document.getElementById("tabFrames"), homeTab=document.getElementById("tabHome");
   var tabs=[], active="home";
@@ -1477,26 +1477,27 @@ if(HS){
   /* ── Jira bridge relay for dashboard tabs ──
      The HD Jira Bridge extension only runs on the pages its manifest lists. A dashboard tab whose page it does
      not run on (e.g. the Trend Tracker) asks THIS page instead: it posts HD_RELAY_PING / HD_RELAY_CALL to its
-     parent, we re-issue them to the extension here and pass the answers back. Own message types, so the extension
-     never sees (and never runs) a tab's request twice. Only our own tab frames, same origin, are served. */
+     parent, we re-issue them to the extension here and pass the answers back (HD_RELAY_READY / HD_RELAY_RESULT). Own
+     message types both ways, so the extension never runs a tab's request twice and a tab's own bridge code never
+     mistakes the relay for a bridge on its own page. Only our own tab frames, same origin, are served. */
   var RL={ready:false,seq:900000000,map:{},waiting:[]};
   function isTabFrame(src){ for(var i=0;i<tabs.length;i++) if(tabs[i].frame&&tabs[i].frame.contentWindow===src) return true; return false; }
   window.addEventListener("message",function(e){
     var d=e.data; if(!d||typeof d!=="object") return;
     if(e.source===window){
-      if(d.type==="HD_BRIDGE_READY"){ if(!RL.ready){ RL.ready=true; RL.waiting.splice(0).forEach(function(w){ try{ w.postMessage({type:"HD_BRIDGE_READY",relay:true},location.origin); }catch(x){} }); } return; }
+      if(d.type==="HD_BRIDGE_READY"){ if(!RL.ready){ RL.ready=true; RL.waiting.splice(0).forEach(function(w){ try{ w.postMessage({type:"HD_RELAY_READY"},location.origin); }catch(x){} }); } return; }
       if(d.type==="HD_BRIDGE_RESULT"&&RL.map[d.id]){ var m=RL.map[d.id]; delete RL.map[d.id];
-        try{ m.src.postMessage({type:"HD_BRIDGE_RESULT",id:m.id,ok:d.ok,data:d.data,error:d.error,relay:true},location.origin); }catch(x){} }
+        try{ m.src.postMessage({type:"HD_RELAY_RESULT",id:m.id,ok:d.ok,data:d.data,error:d.error,relay:true},location.origin); }catch(x){} }
       return;
     }
     if(e.origin!==location.origin||!isTabFrame(e.source)) return;
     if(d.type==="HD_RELAY_PING"){
-      if(RL.ready){ e.source.postMessage({type:"HD_BRIDGE_READY",relay:true},location.origin); }
+      if(RL.ready){ e.source.postMessage({type:"HD_RELAY_READY"},location.origin); }
       else { if(RL.waiting.indexOf(e.source)<0) RL.waiting.push(e.source); window.postMessage({type:"HD_BRIDGE_PING"},"*"); }
       return;
     }
     if(d.type==="HD_RELAY_CALL"){
-      if(!RL.ready){ e.source.postMessage({type:"HD_BRIDGE_RESULT",id:d.id,ok:false,error:"EXTENSION_NOT_FOUND",relay:true},location.origin); return; }
+      if(!RL.ready){ e.source.postMessage({type:"HD_RELAY_RESULT",id:d.id,ok:false,error:"EXTENSION_NOT_FOUND"},location.origin); return; }
       var id=++RL.seq; RL.map[id]={src:e.source,id:d.id};
       setTimeout(function(){ delete RL.map[id]; },120000);
       window.postMessage({type:"HD_BRIDGE_CALL",id:id,host:d.host,path:d.path,method:d.method||"GET",body:d.body||null},"*");
