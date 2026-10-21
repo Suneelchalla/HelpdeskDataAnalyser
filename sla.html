@@ -380,7 +380,7 @@ function setCalendars() {
    empty histories), so entries from older versions are discarded instead of being trusted. */
 var HIST_VER = 2;
 var ST = {
-  tab: "overview", rows: [], tickets: [], byKey: {}, cfg: null, cal: null, hist: { tickets: {} }, results: {}, fr: {}, now: Date.now(),
+  tab: "overview", rows: [], tickets: [], byKey: {}, cfg: null, cal: null, hist: { tickets: {} }, results: {}, fr: {}, frm: {}, frDim: "worker", now: Date.now(),
   ui: { preset: "1m", from: "", to: "" },
   f: { client: [], sev: [], type: [], svm: [], worker: [], result: "" }, opts: {},
   sort: { key: "pct", dir: "desc" }, page: 1, PAGE: 25,
@@ -527,32 +527,50 @@ function frOf(t) {
   var e = histFor(t), r = e ? Sla.firstResponse(t.created, e.transitions, { isClient: function (st) { return classify(st).kind === "client"; }, isClosed: function (st) { return classify(st).kind === "closed"; } }) : null;
   ST.fr[t.key] = r; return r;
 }
-function frTarget() { return ST.cfg.frTargetMin || 60; }
+function frTarget() { return ST.cfg.frTargetMin || 30; }
 function isOpenT(t) { return classify(t.status).kind !== "closed"; }
+/* first-response SLA state (shared engine): met · missed (replied late) · breached (no reply, over target) · risk · waiting */
+function frM(t) {
+  if (Object.prototype.hasOwnProperty.call(ST.frm, t.key)) return ST.frm[t.key];
+  var f = frOf(t), m = f ? Sla.frMeasure(t.created, f, ST.now, ST.cfg, calFor(t)) : null;
+  if (m && !m.answered && !isOpenT(t)) m = null;                    // closed without any trace of a reply: not measurable
+  ST.frm[t.key] = m; return m;
+}
+function frBasisTxt() { return ST.cfg.frBasis === "working" ? "working time" : "calendar time"; }
 function frCat(x, c) {
-  var f = frOf(x.t); if (!f) return false;
-  if (c === "fr") return f.min != null;
-  if (c === "frin") return f.min != null && f.min <= frTarget();
-  if (c === "frslow") return f.min != null && f.min > frTarget();
-  if (c === "frwait") return !!f.pending && isOpenT(x.t);
+  var m = frM(x.t); if (!m) return false;
+  switch (c) {
+    case "fr": return m.answered;                                   // replied
+    case "frin": case "frmet": return m.state === "met";
+    case "frslow": case "frmiss": return m.state === "missed";
+    case "frbr": return m.state === "breached";
+    case "frrisk": return m.state === "risk";
+    case "frok": return m.state === "waiting" || m.state === "risk";
+    case "frwait": return !m.answered;                              // not replied yet (any)
+    case "frinside": return m.state === "waiting";                  // no reply yet, well inside the SLA
+    case "frdec": return m.state === "met" || m.state === "missed" || m.state === "breached";
+    case "frbad": return m.state === "missed" || m.state === "breached";
+    case "frall": return true;
+  }
   return false;
 }
 function frStats(v) {
-  var mins = [], within = 0, wait = 0, oldest = 0;
-  v.forEach(function (x) { var f = frOf(x.t); if (!f) return;
-    if (f.min != null) { mins.push(f.min); if (f.min <= frTarget()) within++; }
-    else if (f.pending && isOpenT(x.t)) { wait++; oldest = Math.max(oldest, (ST.now - x.t.created) / 60000); } });
+  var mins = [], o = { met: 0, missed: 0, breached: 0, risk: 0, waiting: 0, oldest: 0 };
+  v.forEach(function (x) { var m = frM(x.t); if (!m) return; o[m.state]++;
+    if (m.answered) mins.push(m.mins); else o.oldest = Math.max(o.oldest, m.mins); });
   mins.sort(function (a, b) { return a - b; });
-  var n = mins.length, med = n ? (n % 2 ? mins[(n - 1) / 2] : (mins[n / 2 - 1] + mins[n / 2]) / 2) : null;
-  return { n: n, med: med, within: within, inPct: n ? Math.round(within / n * 100) : null, wait: wait, oldest: oldest };
+  var n = mins.length; o.n = n; o.med = n ? (n % 2 ? mins[(n - 1) / 2] : (mins[n / 2 - 1] + mins[n / 2]) / 2) : null;
+  o.p90 = n ? mins[Math.min(n - 1, Math.ceil(n * 0.9) - 1)] : null;
+  o.dec = o.met + o.missed + o.breached; o.slaPct = o.dec ? Math.round(o.met / o.dec * 100) : null;
+  o.within = o.met; o.inPct = n ? Math.round(o.met / n * 100) : null; o.wait = o.risk + o.waiting + o.breached;
+  return o;
 }
 function frTxt(m) { return m == null ? "—" : m < 1 ? "<1m" : fcal(m).replace(/ 0m$/, ""); }
 function frCell(t) {
-  var f = frOf(t);
-  if (!f) return '<span class="mut">—</span>';
-  if (f.pending) return isOpenT(t) ? '<span class="chip2 a" title="Nothing has been sent to the client yet (never in a client-side status)">waiting ' + frTxt((ST.now - t.created) / 60000) + "</span>" : '<span class="mut">—</span>';
-  var slow = f.min > frTarget();
-  return '<span style="font-weight:600;' + (slow ? "color:var(--rose)" : "") + '" title="' + esc("First action " + fdt(f.at) + " IST → " + f.to + (f.by ? " by " + f.by : "") + (slow ? " · over the " + frTxt(frTarget()) + " target" : "")) + '">' + frTxt(f.min) + "</span>" + (f.closedDirect ? ' <span class="mut" title="Closed without ever going to a client-side status — the closure is counted as the first response">*</span>' : "");
+  var f = frOf(t), m = frM(t);
+  if (!f || !m) return '<span class="mut">—</span>';
+  if (!m.answered) return '<span class="chip2 ' + (m.state === "breached" ? "r" : "a") + '" title="Nothing sent to the client yet · ' + frTxt(m.mins) + " " + frBasisTxt() + (m.state === "breached" ? " — over the " + frTxt(frTarget()) + " first-response SLA" : "") + '">' + (m.state === "breached" ? "no reply · " : "waiting ") + frTxt(m.mins) + "</span>";
+  return '<span style="font-weight:600;' + (m.state === "missed" ? "color:var(--rose)" : "") + '" title="' + esc("First reply " + fdt(f.at) + " IST → " + f.to + (f.by ? " by " + f.by : "") + " · " + frTxt(m.mins) + " " + frBasisTxt() + (m.state === "missed" ? " — over the " + frTxt(frTarget()) + " SLA" : "")) + '">' + frTxt(m.mins) + "</span>" + (f.closedDirect ? ' <span class="mut" title="Closed without ever going to a client-side status — the closure is counted as the first response">*</span>' : "");
 }
 function applyFilters(list, skipResult) {
   var f = ST.f;
@@ -581,7 +599,7 @@ function applyFilters(list, skipResult) {
    "Open" or "Breached / missed" would remove the met tickets and force the SLA % to 0. The chip only narrows the Tickets list. */
 function view(skipResult) { return applyFilters(ST.scope, !!skipResult).map(function (t) { var r = getResult(t); return { t: t, r: r, b: bucketOf(r) }; }); }
 function recompute() {
-  ST.results = {}; ST.fr = {}; ST.now = Date.now(); ST.scope = scope();
+  ST.results = {}; ST.fr = {}; ST.frm = {}; ST.now = Date.now(); ST.scope = scope();
   /* The SVM pending table is an "as of now" view, so it is NOT limited by the Created range: every open ticket of the included
      types counts, however old. pendAll = all of them; pendFetch = the ones held by Help Desk/Engineering (by current status) that
      need status history to be placed; scopeKeys lets us tell which of those fall outside the selected range. */
@@ -644,7 +662,7 @@ function buildFilters() {
   ["client", "sev", "type", "svm", "worker"].forEach(msList);
 }
 function renderTabs() {
-  var tabs = [["overview", "Overview"], ["tickets", "Tickets"], ["insights", "Insights"], ["settings", "Settings"]];
+  var tabs = [["overview", "Overview"], ["tickets", "Tickets"], ["insights", "Insights"], ["fr", "First response"], ["settings", "Settings"]];
   $("tabs").innerHTML = tabs.map(function (t) { return '<button data-tab="' + t[0] + '" class="' + (ST.tab === t[0] ? "on" : "") + '">' + t[1] + (t[0] === "tickets" ? '<span class="cnt">' + view().length + "</span>" : "") + "</button>"; }).join("");
 }
 
@@ -761,7 +779,7 @@ function runFetch(keys, auto) {
     onBatch: function (res) {
       Object.keys(res).forEach(function (k) { var t = ST.byKey[k]; ST.hist.tickets[k] = { updated: t && t.status === res[k].status ? t.updated : null, fetchedAt: Date.now(), src: res[k].src, status: res[k].status, suspect: !!res[k].suspect, transitions: res[k].transitions }; });
       /* save + show results every 5 batches, so a long run fills in as it goes */
-      if (++ST.saves % 5 === 0) return saveHist().then(function () { ST.results = {}; ST.fr = {}; ST.now = Date.now(); renderAll(); });
+      if (++ST.saves % 5 === 0) return saveHist().then(function () { ST.results = {}; ST.fr = {}; ST.frm = {}; ST.now = Date.now(); renderAll(); });
     }
   }).then(function (r) {
     if (r.mode === "per-issue") ST.mode = "per-issue";
@@ -813,7 +831,7 @@ function holdCat(x, kind, cat) {
 function kpiCat(x, c) {
   switch (c) { case "sla": return isDecided(x); case "ob": return x.b === "breached"; case "risk": return x.b === "warning" || x.b === "danger"; case "open": return isOpenX(x); case "closed": return !!(x.r && x.r.isClosed);
     case "within": return !!(x.r && !isDecided(x) && !x.r.isClosed && x.b !== "none"); case "nt": return !!x.r && x.b === "none";
-    case "fr": case "frin": case "frslow": case "frwait": return frCat(x, c); }
+    case "fr": case "frin": case "frslow": case "frwait": case "frmet": case "frmiss": case "frbr": case "frrisk": case "frok": case "frinside": case "frdec": case "frbad": return frCat(x, c); }
   return false;
 }
 function dimFn(by) { return by === "client" ? function (t) { return t.prefix; } : by === "severity" ? function (t) { return t.sev || "none"; } : function (t) { return t.worker || "Unassigned"; }; }
@@ -833,11 +851,25 @@ function drillList(spec) {
       var T = { sla: ["SLA met — the tickets behind the percentage", "Met + missed + open tickets already over target. Open tickets still inside their target are not counted yet."], ob: ["Breached, still open", "Open tickets that have already used up their target."], risk: ["At risk", ST.cfg.warnPct + "% or more of the target used, not yet breached."], open: ["Open tickets", "Everything with history that is not closed."], closed: ["Closed tickets", "Used for the average time to resolve (working time)."],
         within: ["Open, within target", "Open tickets still inside their target (the clock may be running, or paused while the ticket is with the client). Their outcome is not known yet, so they are not in the SLA %."],
         fr: ["First response", "Time from creation to the first message to the client — the first move to a client-side status (Waiting for customer, Resolved With Clarification …). The automatic acknowledgement is not counted. Slowest first."],
-        frin: ["First response within target", "Responded within " + frTxt(frTarget()) + " of creation."],
-        frslow: ["First response over target", "Took longer than " + frTxt(frTarget()) + " to send the first message to the client."],
-        frwait: ["Waiting for first response", "Open tickets that have never been in a client-side status — the client has not had a reply yet. Oldest first."],
+        frin: ["First response within SLA", "Replied within " + frTxt(frTarget()) + " (" + frBasisTxt() + ")."], frmet: ["First response within SLA", "Replied within " + frTxt(frTarget()) + " (" + frBasisTxt() + ")."],
+        frslow: ["First response SLA missed", "Replied, but later than " + frTxt(frTarget()) + "."], frmiss: ["First response SLA missed", "Replied, but later than " + frTxt(frTarget()) + "."],
+        frbr: ["No reply yet — first-response SLA breached", "Open tickets that have never been sent to the client and are already past " + frTxt(frTarget()) + ". Longest first."],
+        frrisk: ["No reply yet — close to the first-response SLA", ST.cfg.warnPct + "% or more of the " + frTxt(frTarget()) + " used, nothing sent to the client yet."],
+        frok: ["No reply yet — still inside the first-response SLA", "Nothing sent to the client yet and not past " + frTxt(frTarget()) + " (includes the ones close to it)."],
+        frinside: ["No reply yet — well inside the first-response SLA", "Nothing sent to the client yet, under " + ST.cfg.warnPct + "% of " + frTxt(frTarget()) + " used."],
+        frwait: ["Waiting for a first reply", "Open tickets that have never been in a client-side status — the client has not had a reply yet. Longest first."],
+        frdec: ["First response SLA — the tickets behind the %", "Replied within " + frTxt(frTarget()) + " (met), replied late (missed), or no reply and already past " + frTxt(frTarget()) + " (breached)."],
+        frbad: ["First response SLA missed or breached", "Replied late, or no reply and already past " + frTxt(frTarget()) + "."],
         nt: ["No SLA target", "Tickets whose Priority is blank or not Show Stopper / Critical / High / Medium / Low, so no target applies and they cannot be measured."] }[p[1]] || ["Tickets", ""];
       r.title = T[0]; r.sub = T[1]; r.tab = { ob: "openbreached", risk: "risk", open: "open", closed: "closed" }[p[1]] || null; break;
+    }
+    case "frs": {   /* First Response tab: category × dimension × period */
+      var dimK = function (t) { var d = p[2]; return d === "worker" ? (t.worker || "Unassigned") : d === "client" ? t.prefix : d === "severity" ? (t.sev || "none") : d === "hour" ? String(new Date(t.created + 330 * 60000).getUTCHours()) : d === "bucket" ? frBucket(frM(t)) : ""; };
+      r.list = v.filter(function (x) { return frCat(x, p[1]) && (p[2] === "*" || dimK(x.t) === p[3]) && (!p[4] || p[4] === "*" || perKey(x.t.created) === p[4]); });
+      var CT = { frall: "all measured", frdec: "decided", frmet: "replied within SLA", frmiss: "replied late (missed)", frbr: "no reply, SLA breached", frrisk: "no reply, close to SLA", frok: "no reply, inside SLA", frwait: "waiting for a first reply", frbad: "missed or breached", fr: "replied" };
+      var DL = p[2] === "*" ? "" : p[2] === "client" ? clientName(p[3]) + " (" + p[3] + ")" : p[2] === "severity" ? (p[3] === "none" ? "Unrated" : Sla.sevName(p[3])) : p[2] === "hour" ? pad(+p[3]) + ":00–" + pad((+p[3] + 1) % 24) + ":00 IST" : p[3];
+      r.title = "First response · " + [DL, p[4] && p[4] !== "*" ? perLabel(p[4]) : "", CT[p[1]] || p[1]].filter(Boolean).join(" · ");
+      r.sub = "First response = creation → first message to the client (first move to a client-side status). SLA " + frTxt(frTarget()) + ", " + frBasisTxt() + "."; break;
     }
     case "frw": {   /* insights: first response by worker */
       r.list = v.filter(function (x) { return (p[1] === "*" || (x.t.worker || "Unassigned") === p[1]) && frCat(x, p[2]); });
@@ -873,7 +905,7 @@ function drillList(spec) {
   }
   return r;
 }
-function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: /^(kpi\|fr|frw\|)/.test(spec) ? { key: "fr", dir: "desc" } : /^in\|(st|stbr)\|/.test(spec) ? { key: "dwell", dir: "desc" } : /^in\|(now|stnow)\|/.test(spec) ? { key: "cur", dir: "desc" } : /^pn\|(client|nohist)/.test(spec) ? { key: "key", dir: "asc" } : spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
+function openDrill(spec) { ST.dr = { spec: spec, page: 1, sort: /^(kpi\|fr|frw\||frs\|)/.test(spec) ? { key: "fr", dir: "desc" } : /^in\|(st|stbr)\|/.test(spec) ? { key: "dwell", dir: "desc" } : /^in\|(now|stnow)\|/.test(spec) ? { key: "cur", dir: "desc" } : /^pn\|(client|nohist)/.test(spec) ? { key: "key", dir: "asc" } : spec.indexOf("pn|") === 0 ? { key: "pn", dir: "asc" } : { key: "pct", dir: "desc" }, sel: {} }; renderDrill(); var x = document.querySelector("[data-closedrill]"); if (x) x.focus(); }
 function grpOf(x) { return x.b === "breached" ? "breached" : (x.b === "warning" || x.b === "danger") ? "soon" : "ok"; }
 function drToolbar(list) {
   var el = list.filter(canRemind); if (!el.length) return "";
@@ -1028,9 +1060,9 @@ function renderOverview(v) {
     kpi("At risk", s.risk, ST.cfg.warnPct + "%+ of target used", "#F59E0B", "risk", s.risk) +
     kpi("Open now", s.open, "Help Desk " + s.by.hd.n + " · Eng " + s.by.engg.n + " · Client " + s.by.client.n, "var(--engg)", "open", s.open) +
     kpi("Avg time to resolve", s.nEl ? fdur(s.sumEl / s.nEl) : "—", s.nEl + " closed · working time", "var(--hd)", "closed", s.nEl) +
-    (function () { var f = frStats(v), acc = f.inPct == null ? "var(--faint)" : f.inPct >= goal ? "var(--green)" : f.inPct >= goal - 15 ? "#F59E0B" : "var(--rose)";
-      return kpi("First response", f.n ? frTxt(f.med) : "—", f.n ? f.inPct + "% within " + frTxt(frTarget()) + " · typical of " + f.n : "no history yet", acc, "fr", f.n) +
-        kpi("Waiting for first response", f.wait, f.wait ? "not sent to the client yet · oldest " + frTxt(f.oldest) : "every ticket answered", f.wait ? "#F59E0B" : "var(--faint)", "frwait", f.wait); })() + "</div>";
+    (function () { var f = frStats(v), acc = f.slaPct == null ? "var(--faint)" : f.slaPct >= goal ? "var(--green)" : f.slaPct >= goal - 15 ? "#F59E0B" : "var(--rose)";
+      return kpi("First response SLA", f.slaPct == null ? "—" : f.slaPct + "%", f.dec ? "replied within " + frTxt(frTarget()) + " · typical " + frTxt(f.med) : "no history yet", acc, "frdec", f.dec) +
+        kpi("No reply, past " + frTxt(frTarget()), f.breached, f.wait ? f.wait + " waiting for a first reply · oldest " + frTxt(f.oldest) : "every ticket answered", f.breached ? "var(--rose)" : "var(--faint)", "frbr", f.breached); })() + "</div>";
   h += pendingPanel(pendingView()) + trendPanel(v) + matrixPanel(v);
   /* who holds the open tickets */
   var hold = ["hd", "engg", "client"].map(function (k) {
@@ -1075,7 +1107,7 @@ function sortVal(x, k) {
     case "created": return x.t.created; case "target": return r && r.targetMin != null ? r.targetMin : -1;
     case "elapsed": return r ? r.elapsedMin : -1; case "paused": return r ? r.pausedMin : -1; case "pct": return r && r.pct != null ? r.pct : -1;
     case "worker": return x.t.worker || ""; case "client": return x.t.prefix;
-    case "fr": { var f = frOf(x.t); return !f ? -1 : f.min != null ? f.min : f.pending && isOpenT(x.t) ? 1e9 + (ST.now - x.t.created) / 60000 : -1; }
+    case "fr": { var m = frM(x.t); return !m ? -1 : m.answered ? m.mins : 1e9 + m.mins; }
     case "pn": { var rk = { ready: 0, breached: 1, notyet: 2, notarget: 3 }[pnState(x)]; return rk * 1e14 + Math.min(sortVal(x, "breach"), 9e13); }
     case "breach": { var bi = binfoOf(x); if (!bi) return 9e15; if (bi.state === "breached" || bi.state === "missed") return bi.breachedAt == null ? 0 : bi.breachedAt; if (bi.state === "running") return bi.breachAt == null ? 9e15 : bi.breachAt; if (bi.state === "paused") return 8e15; return 9e15; }
   } return 0;
@@ -1183,8 +1215,9 @@ function renderDetailInner() {
       kpi(r.remainingMin != null && r.remainingMin < 0 ? "Over target by" : "Remaining", r.remainingMin == null ? "—" : r.remainingMin === 0 ? "At limit" : fdur(Math.abs(r.remainingMin)), r.pct != null ? Math.round(r.pct) + "% used" : "", r.remainingMin != null && r.remainingMin <= 0 ? "var(--rose)" : "var(--green)") +
       kpi("Not counted (with client)", fdur(r.pausedMin), r.clientRounds + " time" + (r.clientRounds === 1 ? "" : "s") + " with client", "#F0A838") +
       kpi("Age since created", fcal(r.ageCalMin), "calendar time, incl. weekends", "var(--ink2)") +
-      (function () { var f = frOf(t); if (!f) return ""; if (f.pending) return kpi("First response", "Not yet", isOpenT(t) ? "waiting " + frTxt((ST.now - t.created) / 60000) + " · nothing sent to the client yet" : "no client reply in its history", "#F59E0B");
-        return kpi("First response", frTxt(f.min), fdt(f.at) + " IST → " + f.to + (f.by ? " · " + f.by : "") + (f.closedDirect ? " (closed without a client status)" : ""), f.min > frTarget() ? "var(--rose)" : "var(--green)"); })() + "</div>";
+      (function () { var f = frOf(t), m = frM(t); if (!f || !m) return "";
+        if (!m.answered) return kpi("First response", "Not yet", "waiting " + frTxt(m.mins) + (m.state === "breached" ? " · SLA " + frTxt(frTarget()) + " breached" : " · SLA " + frTxt(frTarget())), m.state === "breached" ? "var(--rose)" : "#F59E0B");
+        return kpi("First response", frTxt(m.mins), (m.state === "met" ? "within" : "missed") + " the " + frTxt(frTarget()) + " SLA · " + fdt(f.at) + " IST → " + f.to + (f.by ? " · " + f.by : ""), m.state === "missed" ? "var(--rose)" : "var(--green)"); })() + "</div>";
     var bi = Sla.breachInfo(r, calFor(t), ST.now);
     var notYet = !r.isClosed && !r.isPaused && r.elapsedMin < 0.5, nws = notYet ? Sla.nextWorkStart(ST.now, calFor(t)) : null;
     h += '<div class="sr">' + (notYet && nws ? "<b>No working time has passed yet</b> — the ticket was raised outside working hours, so the clock starts <b>" + fdtw(nws) + " IST</b>. " : "") + breachSentence(bi) + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "Created <b>" + fcal(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(calText(calFor(t))) + "), which came to <b>" + fdur(r.elapsedMin) + "</b>" + dayNote + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
@@ -1499,7 +1532,7 @@ function reportHtml(v, o) {
     var tsg = Object.keys(stc).sort(function (a, b) { return stc[b] - stc[a]; })[0]; if (tsg && brs.length >= 5) pts.push("Most breaches occurred while tickets were in <b>" + esc(tsg) + "</b> (" + Math.round(stc[tsg] / brs.length * 100) + "% of " + brs.length + ").");
     if (mgmt) { var tb = { hd: 0, engg: 0 }; H.filter(isBr).forEach(function (x) { var w = insOf(x); if (w && tb[w.at] != null) tb[w.at]++; }); var tt = tb.hd + tb.engg;
       if (tt) pts.push("Breaches by team holding the ticket when the target was exceeded: Engineering <b>" + tb.engg + "</b> (" + Math.round(tb.engg / tt * 100) + "%), Help Desk <b>" + tb.hd + "</b> (" + Math.round(tb.hd / tt * 100) + "%)."); }
-    var FR = frStats(v); if (FR.n) pts.push("First response (creation → first reply to the client): typically <b>" + frTxt(FR.med) + "</b>, with <b>" + FR.inPct + "%</b> of " + FR.n.toLocaleString() + " tickets answered within " + frTxt(frTarget()) + "." + (FR.wait ? " " + FR.wait + " open ticket" + (FR.wait === 1 ? " was" : "s were") + " still awaiting a first response at the report date." : ""));
+    var FR = frStats(v); if (FR.dec) pts.push("First-response SLA (" + frTxt(frTarget()) + ", " + frBasisTxt() + "): <b>" + FR.slaPct + "%</b> met — " + FR.met.toLocaleString() + " replied in time, " + FR.missed.toLocaleString() + " replied late" + (FR.breached ? ", " + FR.breached.toLocaleString() + " still without a reply past the target" : "") + ". Typical first reply <b>" + frTxt(FR.med) + "</b>.");
     if (pts.length) h += '<div class="rp-points"><div class="hd">Key points</div><ul>' + pts.map(function (p) { return "<li>" + p + "</li>"; }).join("") + "</ul></div>";
   }
 
@@ -1705,7 +1738,8 @@ function renderSettings() {
     '<div class="frow" style="margin-top:6px"><select id="addCalSel" aria-label="Client to give a calendar"><option value="">Add a client calendar…</option>' + freeCal.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCal">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Due soon from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div><div class="fld"><label>SLA goal</label><input type="number" min="1" max="100" data-d="goal" value="' + esc(d.goalPct) + '"> %</div></div><p class="h" style="margin:10px 0 0">The goal only sets the colours on the SLA % views (green at or above it, amber within 15 points, red below).</p></div>';
   h += '<div class="card set-sec"><h3>First response</h3><p class="h">Time from a ticket being created to the <b>first message to the client</b> — the first time it moves to a <b>client-side status</b> (Waiting for customer, Resolved With Clarification, Resolved …, exactly the statuses Master Data marks “Client”). The automatic acknowledgement (Acknowledged) is a Help Desk status, so it never counts; changes made by automation accounts are skipped. A ticket closed without ever going to a client status counts its closure (marked *). Calendar time, shared with Reports.</p>' +
-    '<div class="frow"><div class="fld"><label>Target</label><input type="number" min="1" step="1" data-d="frt" value="' + esc(d.frTargetMin || 60) + '" style="width:90px"> minutes</div></div></div>';
+    '<div class="frow"><div class="fld"><label>First-response SLA</label><input type="number" min="1" step="1" data-d="frt" value="' + esc(d.frTargetMin || 30) + '" style="width:90px"> minutes</div>' +
+    '<div class="fld"><label>Measured in</label><select data-d="frb"><option value="calendar"' + (d.frBasis !== "working" ? " selected" : "") + '>Calendar time (24×7)</option><option value="working"' + (d.frBasis === "working" ? " selected" : "") + ">Working hours (each client’s calendar above)</option></select></div></div></div>";
   var phs = ["name", "svm", "worker", "key", "summary", "severity", "heldBy", "status", "created", "age", "used", "target", "pct", "timeLeft", "breachTime", "breachedAt", "overBy", "situation", "ask", "remaining", "extra"];
   h += '<div class="card set-sec"><h3>Reminder templates</h3><p class="h">The wording posted to Jira as an internal note. Each ticket gets one of two templates automatically: <b>About to breach</b> for open tickets that have not breached yet (including tickets waiting with the client), and <b>Breached</b> for open tickets already over target. A blank line starts a new paragraph and <b>**text**</b> makes it bold. Only the heading is added for you; <b>{remaining}</b> is the closing “time remaining — please prioritise” line.</p><div style="margin-bottom:10px;line-height:2"><b>{name}</b> is always the ticket’s SVM In Charge (the reminder is addressed to them, not to the current worker). Placeholders: ' + phs.map(function (x) { return '<span class="phl">{' + x + "}</span>"; }).join("") + '</div>' +
     [["soon", "About to breach"], ["breached", "Breached"]].map(function (k) { var v = d.templates[k[0]] || "";
@@ -1726,7 +1760,8 @@ function readDraftInput(el) {
   else if (p.indexOf("cli:") === 0) { var parts = p.split(":"), c = d.targets.clients[parts[1]] || (d.targets.clients[parts[1]] = {}); if (n == null || isNaN(n) || n <= 0) delete c[parts[2]]; else c[parts[2]] = n; }
   else if (p === "bs") d.businessStart = v; else if (p === "be") d.businessEnd = v;
   else if (p === "warn") d.warnPct = n; else if (p === "danger") d.dangerPct = n; else if (p === "goal") d.goalPct = n;
-  else if (p === "frt") d.frTargetMin = n;
+  else if (p === "frt") { d.frTargetMin = n; d.frTargetSet = true; }
+  else if (p === "frb") d.frBasis = v === "working" ? "working" : "calendar";
 }
 function saveSettings() {
   var d = ST.draft, err = null;
@@ -1763,7 +1798,76 @@ function renderAll() {
   renderTabs(); renderBar(); if (!ST.fetching) scheduleAuto();
   if (ST.tab === "settings") { renderSettings(); return; }
   var v = view(ST.tab !== "tickets");
-  if (ST.tab === "tickets") renderTickets(v); else if (ST.tab === "insights") renderInsights(v); else renderOverview(v);
+  if (ST.tab === "tickets") renderTickets(v); else if (ST.tab === "insights") renderInsights(v); else if (ST.tab === "fr") renderFR(v); else renderOverview(v);
+}
+
+/* ═════════ First response tab ═════════
+   One dashboard for the first-response SLA (default 30 minutes): creation → first message to the client.
+   met = replied within the SLA · missed = replied late · breached = no reply yet and already past the SLA ·
+   SLA % = met ÷ (met + missed + breached) — tickets still waiting inside the SLA are not decided yet.
+   Every number opens its tickets (drill spec frs|category|dimension|key|period). */
+var FR_BK = ["≤ 15m", "15–30m", "30m–1h", "1–2h", "2–4h", "4–8h", "> 8h"];
+function frBucket(m) { if (!m || !m.answered) return ""; var x = m.mins; return x <= 15 ? FR_BK[0] : x <= 30 ? FR_BK[1] : x <= 60 ? FR_BK[2] : x <= 120 ? FR_BK[3] : x <= 240 ? FR_BK[4] : x <= 480 ? FR_BK[5] : FR_BK[6]; }
+function frTone(p) { var g = ST.cfg.goalPct; return p == null ? "var(--faint)" : p >= g ? "var(--green)" : p >= g - 15 ? "#F59E0B" : "var(--rose)"; }
+function frPctCell(p, n, parts) { return p == null ? '<span class="mut">—</span>' : drNum(n, parts, "font-weight:700;color:" + frTone(p), p + "%"); }
+function frStateChip(m) { return m.state === "breached" ? '<span class="chip2 r">past ' + frTxt(frTarget()) + "</span>" : m.state === "risk" ? '<span class="chip2 a">close to SLA</span>' : '<span class="chip2 x">inside SLA</span>'; }
+function renderFR(v) {
+  var M = $("main"), T = frTarget(), goal = ST.cfg.goalPct, S0 = frStats(v);
+  if (!ST.scope.length) { M.innerHTML = '<div class="card empty"><b>No tickets created in this date range.</b><br>Pick a wider range above.</div>'; return; }
+  var meas = v.filter(function (x) { return frM(x.t); });
+  if (!meas.length) { M.innerHTML = '<div class="card empty"><b>No status history for these tickets yet.</b><br>First response is read from each ticket’s status timeline — use <b>Fetch &amp; calculate</b> above.</div>'; return; }
+  var h = '<div class="callout">First-response SLA <b>' + frTxt(T) + "</b> (" + frBasisTxt() + ") — from creation to the <b>first message to the client</b>, i.e. the first move to a client-side status (Waiting for customer, Resolved With Clarification …). The automatic acknowledgement doesn’t count. Change it in <b>Settings → First response</b>. <b>Click any number</b> for its tickets.</div>";
+  h += '<div class="kpis k7">' +
+    kpi("First response SLA", S0.slaPct == null ? "—" : S0.slaPct + "%", S0.dec ? S0.met + " of " + S0.dec + " decided · goal " + goal + "%" : "nothing decided yet", frTone(S0.slaPct), "frdec", S0.dec) +
+    kpi("Replied within " + frTxt(T), S0.met, "SLA met", "var(--green)", "frmet", S0.met) +
+    kpi("Replied late", S0.missed, "SLA missed", "var(--rose)", "frmiss", S0.missed) +
+    kpi("No reply, past " + frTxt(T), S0.breached, "SLA breached · still waiting", "var(--rose)", "frbr", S0.breached) +
+    kpi("No reply, close to SLA", S0.risk, ST.cfg.warnPct + "%+ of " + frTxt(T) + " used", "#F59E0B", "frrisk", S0.risk) +
+    kpi("Typical first reply", frTxt(S0.med), S0.n ? "9 in 10 within " + frTxt(S0.p90) + " · " + S0.n + " replied" : "no replies yet", "var(--ink2)", "fr", S0.n) +
+    kpi("No reply, inside SLA", S0.waiting, "not decided yet", "var(--faint)", "frinside", S0.waiting) + "</div>";
+
+  /* who needs a reply right now */
+  var wait = meas.filter(function (x) { return !frM(x.t).answered; }).sort(function (a, b) { return frM(b.t).mins - frM(a.t).mins; });
+  var wrows = wait.slice(0, 12).map(function (x) { var m = frM(x.t);
+    return '<tr class="row-click" tabindex="0" data-open="' + esc(x.t.key) + '"><td>' + keyLink(x.t.key) + '</td><td class="ell" title="' + esc(x.t.summary) + '">' + esc(x.t.summary) + "</td><td>" + esc(clientName(x.t.prefix)) + "</td><td>" + esc(x.t.worker || "—") + '</td><td style="white-space:nowrap">' + fdt(x.t.created) + '</td><td class="num"><b' + (m.state === "breached" ? ' style="color:var(--rose)"' : "") + ">" + frTxt(m.mins) + "</b></td><td>" + frStateChip(m) + "</td></tr>"; }).join("");
+  h += '<div class="card panel"><div class="panel-h"><h3>Waiting for a first reply now</h3>' + (wait.length > 12 ? '<span class="dr"' + drAttr(["frs", "frwait", "*", ""], wait.length) + ">View all " + wait.length + "</span>" : "") + '</div><div class="sub">Open tickets the client hasn’t heard back on yet, longest wait first.</div>' +
+    (wait.length ? '<div class="tw"><table><thead><tr><th>Ticket</th><th>Summary</th><th>Client</th><th>Worker</th><th>Created (IST)</th><th class="num">Waiting</th><th>State</th></tr></thead><tbody>' + wrows + "</tbody></table></div>" : '<div class="empty" style="padding:18px">Every ticket has had a first reply. 🎉</div>') + "</div>";
+
+  /* by month / week */
+  var gp = {}; meas.forEach(function (x) { (gp[perKey(x.t.created)] || (gp[perKey(x.t.created)] = [])).push(x); });
+  var trows = Object.keys(gp).sort().map(function (k) { var o = frStats(gp[k]), P = function (c) { return ["frs", c, "*", "", k]; };
+    return '<tr><td style="white-space:nowrap"><b>' + perLabel(k) + '</b></td><td class="num">' + drNum(gp[k].length, P("frall")) + '</td><td class="num">' + drNum(o.met, P("frmet")) + '</td><td class="num">' + drNum(o.missed, P("frmiss"), o.missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.breached, P("frbr"), o.breached ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.risk + o.waiting, P("frok")) + '</td><td class="num">' + frPctCell(o.slaPct, o.dec, P("frdec")) + '</td><td style="width:20%">' + (o.slaPct == null ? "" : hbar(o.slaPct, frTone(o.slaPct))) + '</td><td class="num">' + frTxt(o.med) + "</td></tr>"; }).join("");
+  h += '<div class="card panel"><div class="panel-h"><h3>First response SLA by ' + (ST.trendBy === "week" ? "week" : "month") + "</h3>" + togg("trend", ST.trendBy, [["month", "Month"], ["week", "Week"]]) + '</div><div class="sub">Grouped by when the ticket was created. SLA % = replied within ' + frTxt(T) + " ÷ (within + late + no reply past " + frTxt(T) + ").</div>" +
+    '<div class="tw"><table><thead><tr><th>Period</th><th class="num">Tickets</th><th class="num">Within SLA</th><th class="num">Replied late</th><th class="num">No reply, past SLA</th><th class="num">Not decided</th><th class="num">SLA %</th><th></th><th class="num">Typical reply</th></tr></thead><tbody>' + trows + "</tbody></table></div></div>";
+
+  /* by hour of creation + how long replies took */
+  var hr = []; for (var i = 0; i < 24; i++) hr.push([]);
+  meas.forEach(function (x) { hr[new Date(x.t.created + 330 * 60000).getUTCHours()].push(x); });
+  var hrows = hr.map(function (g, i) { var o = frStats(g), H = function (c) { return ["frs", c, "hour", String(i)]; };
+    return '<tr><td class="mono" style="white-space:nowrap">' + pad(i) + ":00–" + pad((i + 1) % 24) + ':00</td><td class="num">' + drNum(g.length, H("frall")) + '</td><td class="num">' + drNum(o.missed + o.breached, H("frbad"), o.missed + o.breached ? "color:var(--rose)" : "") + '</td><td class="num">' + frPctCell(o.slaPct, o.dec, H("frdec")) + '</td><td style="width:38%">' + (o.slaPct == null ? "" : hbar(o.slaPct, frTone(o.slaPct))) + "</td></tr>"; }).join("");
+  var bk = {}; FR_BK.forEach(function (b) { bk[b] = 0; }); meas.forEach(function (x) { var b = frBucket(frM(x.t)); if (b) bk[b]++; });
+  var bmax = Math.max.apply(null, FR_BK.map(function (b) { return bk[b]; }).concat([1]));
+  var brows = FR_BK.map(function (b, i) { var inside = i <= 1 || (i === 2 && T > 30) || (i === 3 && T > 60);
+    return '<tr><td style="white-space:nowrap"><b>' + b + '</b></td><td style="width:55%">' + hbar(bk[b] / bmax * 100, inside ? "var(--green)" : "var(--rose)") + '</td><td class="num">' + drNum(bk[b], ["frs", "fr", "bucket", b]) + '</td><td class="num mut">' + (S0.n ? Math.round(bk[b] / S0.n * 100) + "%" : "") + "</td></tr>"; }).join("");
+  h += '<div class="grid2"><div class="card panel"><h3>By hour the ticket arrived (IST)</h3><div class="sub">Where first replies are missed — e.g. nights, lunch, shift changes. Missed = replied late + no reply past ' + frTxt(T) + '.</div><div class="tw"><table><thead><tr><th>Arrived</th><th class="num">Tickets</th><th class="num">Missed</th><th class="num">SLA %</th><th></th></tr></thead><tbody>' + hrows + "</tbody></table></div></div>" +
+    '<div class="card panel"><h3>How long the first reply took</h3><div class="sub">Replied tickets only (' + S0.n + "). Green = inside the " + frTxt(T) + " SLA.</div>" + '<div class="tw"><table><tbody>' + brows + "</tbody></table></div>" +
+    '<div class="sub" style="margin-top:10px">Typical first reply <b>' + frTxt(S0.med) + "</b> · 9 in 10 within <b>" + frTxt(S0.p90) + "</b>.</div></div></div>";
+
+  /* by worker / client / severity */
+  var by = ST.frDim, kf = by === "worker" ? function (t) { return t.worker || "Unassigned"; } : by === "client" ? function (t) { return t.prefix; } : function (t) { return t.sev || "none"; };
+  var dm = {}; meas.forEach(function (x) { var k = kf(x.t); (dm[k] || (dm[k] = [])).push(x); });
+  var dl = Object.keys(dm).map(function (k) { return { k: k, l: dm[k], o: frStats(dm[k]) }; }).sort(function (a, b) { return by === "severity" ? Sla.SEVERITIES.map(function (z) { return z.id; }).indexOf(a.k) - Sla.SEVERITIES.map(function (z) { return z.id; }).indexOf(b.k) : b.o.dec - a.o.dec || a.k.localeCompare(b.k); });
+  var more = dl.length > 25 ? dl.length - 25 : 0; dl = dl.slice(0, 25);
+  var lab = function (k) { return by === "client" ? clientName(k) + " (" + k + ")" : by === "severity" ? (k === "none" ? "Unrated" : Sla.sevName(k)) : k; };
+  h += '<div class="card panel"><div class="panel-h"><h3>First response by ' + by + "</h3>" + togg("frdim", by, [["worker", "Worker"], ["client", "Client"], ["severity", "Severity"]]) + '</div><div class="sub">' + (by === "worker" ? "By Current Worker." : "") + " Sorted by tickets decided.</div>" +
+    '<div class="tw"><table><thead><tr><th>' + (by === "worker" ? "Worker" : by === "client" ? "Client" : "Severity") + '</th><th class="num">Decided</th><th class="num">Within SLA</th><th class="num">Replied late</th><th class="num">No reply, past SLA</th><th class="num">SLA %</th><th style="width:16%"></th><th class="num">Typical reply</th><th class="num">Waiting now</th></tr></thead><tbody>' +
+    dl.map(function (d) { var D = function (c) { return ["frs", c, by, d.k]; }, o = d.o;
+      return "<tr><td><b>" + esc(lab(d.k)) + '</b></td><td class="num">' + drNum(o.dec, D("frdec")) + '</td><td class="num">' + drNum(o.met, D("frmet")) + '</td><td class="num">' + drNum(o.missed, D("frmiss"), o.missed ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.breached, D("frbr"), o.breached ? "color:var(--rose);font-weight:700" : "") + '</td><td class="num">' + frPctCell(o.slaPct, o.dec, D("frdec")) + "</td><td>" + (o.slaPct == null ? "" : hbar(o.slaPct, frTone(o.slaPct))) + '</td><td class="num">' + frTxt(o.med) + '</td><td class="num">' + drNum(o.risk + o.waiting + o.breached, D("frwait"), o.breached ? "color:#B45309;font-weight:700" : "") + "</td></tr>"; }).join("") +
+    "</tbody></table></div>" + (more ? '<div class="sub" style="margin-top:6px">…and ' + more + " more. Use the filters above to narrow down.</div>" : "") + "</div>";
+
+  var nm = v.length - meas.length;
+  h += '<div class="recon">Of <b>' + v.length.toLocaleString() + "</b> tickets in range: " + drNum(S0.dec, ["frs", "frdec", "*", ""], "", S0.dec.toLocaleString()) + " <b>decided</b> · " + drNum(S0.risk + S0.waiting, ["frs", "frok", "*", ""], "", (S0.risk + S0.waiting).toLocaleString()) + " <b>still inside the SLA</b> (no reply yet)" + (nm ? " · " + nm.toLocaleString() + " <b>not measurable</b> (status history not fetched yet)" : "") + ".</div>";
+  M.innerHTML = h;
 }
 
 /* ═════════ Insights tab ═════════
@@ -1950,8 +2054,8 @@ function renderInsights(v) {
     "</tbody></table></div>" + (dmore ? '<div class="sub" style="margin-top:6px">…and ' + dmore + " more. Use the filters above to narrow down.</div>" : "") + "</div>";
 
   /* ── I. first response by worker ── */
-  var fw = {}; v.forEach(function (x) { var f = frOf(x.t); if (!f) return; var k = x.t.worker || "Unassigned", o = fw[k] || (fw[k] = { k: k, mins: [], within: 0, slow: 0, wait: 0 });
-    if (f.min != null) { o.mins.push(f.min); if (f.min <= frTarget()) o.within++; else o.slow++; } else if (f.pending && isOpenT(x.t)) o.wait++; });
+  var fw = {}; v.forEach(function (x) { var m = frM(x.t); if (!m) return; var k = x.t.worker || "Unassigned", o = fw[k] || (fw[k] = { k: k, mins: [], within: 0, slow: 0, wait: 0 });
+    if (m.answered) { o.mins.push(m.mins); if (m.state === "met") o.within++; else o.slow++; } else o.wait++; });
   var fl = Object.keys(fw).map(function (k) { var o = fw[k]; o.mins.sort(function (a, b) { return a - b; }); var n = o.mins.length; o.n = n; o.med = n ? (n % 2 ? o.mins[(n - 1) / 2] : (o.mins[n / 2 - 1] + o.mins[n / 2]) / 2) : null; o.pct = n ? Math.round(o.within / n * 100) : null; return o; })
     .filter(function (o) { return o.n || o.wait; }).sort(function (a, b) { return b.n - a.n; });
   var FS = frStats(v);
@@ -1983,6 +2087,7 @@ document.addEventListener("click", function (e) {
   if ((x = q("[data-res]"))) { ST.f.result = x.dataset.res; ST.page = 1; buildFilters(); renderAll(); return; }
   if ((x = q("[data-tab]"))) { if (x.closest("#detail")) closeOv("detail"); if (x.closest("#drill")) closeOv("drill"); ST.tab = x.dataset.tab; if (ST.tab === "settings") ST.draft = null; renderAll(); return; }
   if ((x = q("[data-trend]"))) { ST.trendBy = x.dataset.trend; renderAll(); return; }
+  if ((x = q("[data-frdim]"))) { ST.frDim = x.dataset.frdim; renderAll(); return; }
   if ((x = q("[data-matrix]"))) { ST.matrixBy = x.dataset.matrix; renderAll(); return; }
   if ((x = q("[data-ins]"))) { var iv = x.dataset.ins.split(":"), ik = iv[0], ivv = iv.slice(1).join(":"); ST.ins[ik] = ik === "stAll" ? ivv === "1" : ivv; renderAll(); return; }
   if (q("#btnFetchAll")) { runFetch(missingKeys(false, true)); return; }
