@@ -3,10 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HD Weekly Report</title>
+<title>HD Reports</title>
+<meta name="hd-dashboard" content="reports">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23B45309'/%3E%3Crect x='7' y='13' width='4' height='10' rx='1.5' fill='white'/%3E%3Crect x='14' y='9' width='4' height='14' rx='1.5' fill='white'/%3E%3Crect x='21' y='16' width='4' height='7' rx='1.5' fill='white'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
+<script src="sla-engine.js"></script>
+<script src="sla-history.js"></script>
+<script src="sla-link.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -238,10 +242,61 @@ select{appearance:none;background:var(--paper);border:1px solid var(--line);bord
 @media (min-width: 2560px) { body { zoom: 1.42; } }
 @media (min-width: 3200px) { body { zoom: 1.65; } }
 @media (min-width: 3840px) { body { zoom: 1.9; } }
+
+/* ── report tabs ── */
+.rtabs{display:flex;gap:6px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.rtab{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;background:var(--card);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink2);box-shadow:var(--sh)}
+.rtab:hover{border-color:var(--line2);color:var(--ink)}
+.rtab.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.rtab:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rtabs .spacer{flex:1}
+.pdate{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:12px;font-family:var(--sans);color:var(--ink)}
+/* ── performance tables ── */
+.ptab{width:100%;border-collapse:collapse;font-size:12px}
+.ptab th{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:8px 10px;border-bottom:2px solid var(--line);background:var(--paper);white-space:nowrap;position:sticky;top:0}
+.ptab th.num,.ptab td.num{text-align:right;font-variant-numeric:tabular-nums}
+.ptab th.sortable{cursor:pointer}.ptab th.sortable:hover,.ptab th.on{color:var(--ink)}
+.ptab td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.ptab tr.prow{cursor:pointer}.ptab tr.prow:hover td{background:#FAFBFC}
+.ptab tr.unr td{opacity:.62}
+.ptab tr.medrow td{background:#F1F5F9;font-weight:700;color:var(--ink2);font-size:11.5px}
+.ptab td.good{background:#ECFDF5}.ptab td.bad{background:#FEF2F2}
+.ptab .pname{font-weight:600;color:var(--ink);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.ptab .pname a{color:var(--ink);text-decoration:none;border-bottom:1px dashed var(--line2)}.ptab .pname a:hover{color:var(--hd);border-color:var(--hd)}
+.ptab.cmp td.me,.ptab.cmp th.me{background:#FFF7ED;font-weight:700}
+.ptab.mix td{padding:5px 8px}.ptab.mix td.bar{width:45%}.ptab.mix td.bar i{display:block;height:9px;border-radius:5px;background:var(--hd2);min-width:2px}
+.pnum{cursor:pointer;font-weight:700;border-bottom:1px dotted var(--line2)}.pnum:hover{color:var(--hd);border-color:var(--hd)}
+.pnum.zero{cursor:default;border:none;color:var(--faint);font-weight:500}.pnum.bad{color:#BE1D42}
+.pfaint{color:var(--faint);font-size:11px;font-weight:500}
+.grp{display:inline-block;font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px;background:#EEF0FF;color:#5B57D8;vertical-align:1px}.grp.lg{font-size:11px;vertical-align:4px}
+.pkpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:10px}
+.pk{border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;background:var(--paper);cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.pk:hover{box-shadow:var(--sh2);border-color:var(--line2)}
+.pk.top{background:#F0FDF4;border-color:#BBF7D0}.pk.low{background:#FFF5F5;border-color:#FECACA}
+.pk .lab{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.pk .val{font-family:var(--disp);font-size:24px;font-weight:700;margin-top:4px;line-height:1.1}
+.pk-c{margin-top:5px;min-height:18px}.pk-r{margin-top:3px;font-size:11px;color:var(--ink2);font-weight:600}
+.dchip{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px}
+.dchip.up{background:#DCFCE7;color:#166534}.dchip.down{background:#FEE2E2;color:#991B1B}.dchip.eq{background:#F1F5F9;color:#475569}
+.qb{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;padding:1px 6px;border-radius:8px}.qb.top{background:#166534;color:#fff}.qb.low{background:#991B1B;color:#fff}
+.spread{position:relative;height:18px;background:linear-gradient(90deg,#FEE2E2,#F1F5F9 50%,#DCFCE7);border-radius:9px}
+.spread i{position:absolute;top:6px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#94A3B8;opacity:.7}
+.spread b.med{position:absolute;top:2px;bottom:2px;width:2px;margin-left:-1px;background:#475569}
+.spread em{position:absolute;top:2px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 1px var(--accent)}
+.peer{display:inline-flex;align-items:center;gap:5px;padding:4px 6px 4px 10px;border-radius:14px;background:#EEF0FF;color:#3730A3;font-size:11.5px;font-weight:700}
+.peer button{background:none;color:#3730A3;font-size:11px;padding:0 3px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+@media(max-width:1000px){.grid3{grid-template-columns:1fr}}
+.plist{margin:6px 0 0 18px;font-size:12px;line-height:1.7;color:var(--ink2)}
+.psplit{display:flex;height:24px;border-radius:7px;overflow:hidden;background:var(--paper)}
+.psplit i{display:flex;align-items:center;justify-content:center;color:#fff;font-style:normal;font-size:11px;font-weight:700;cursor:pointer;min-width:0;overflow:hidden;white-space:nowrap}
+.pbar{cursor:pointer}.pbar:hover{opacity:.8}
+.pnote{margin-top:16px;font-size:11px;color:var(--muted);line-height:1.6;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 13px}
+@media print{ .ptab tr.prow{cursor:default} .spread{print-color-adjust:exact;-webkit-print-color-adjust:exact} .pk,.ptab td.good,.ptab td.bad{print-color-adjust:exact;-webkit-print-color-adjust:exact} }
 </style>
 </head>
 <body>
-<div id="app"><div class="loading"><div style="font-size:15px;font-weight:700">Loading Weekly Report…</div><div style="font-size:12px;color:var(--muted)">Nothing loading? <a href="index.html" style="color:var(--client);font-weight:600">Go to upload</a>.</div></div></div>
+<div id="app"><div class="loading"><div style="font-size:15px;font-weight:700">Loading Reports…</div><div style="font-size:12px;color:var(--muted)">Nothing loading? <a href="index.html" style="color:var(--client);font-weight:600">Go to upload</a>.</div></div></div>
 
 <script>
 /* ═══ MULTI-SELECT DROPDOWN — stays open during selection, renders on close ═══ */
@@ -389,7 +444,7 @@ var PRIO_COLOR = {"Critical":"var(--p-crit)","High":"var(--p-high)","Medium":"va
 var WEEKS_BACK = 6;
 /* Pending-list columns: default 7 (fit an A4 landscape page); user can add/remove. */
 var DEFAULT_COLS = ["key","summary","status","stage","priority","component","age"];
-var MODAL_COLS   = ["key","summary","status","stage","priority","component","worker","next","age"];
+var MODAL_COLS   = ["key","summary","status","priority","component","worker","svm","next","created","resolved","took","hd","age"];
 
 /* ═══════════════════════ HELPERS ═══════════════════════ */
 function el(id){ return document.getElementById(id); }
@@ -484,6 +539,14 @@ function normalize(rows){
       currentWorker:String(pick(row,"current worker")||"").trim(),
       svmInCharge:String(pick(row,"svm in charge")||"").trim(),
       issueType:String(pick(row,"issue type")||"").trim(),
+      updated:toDate(pick(row,"updated")),
+      linked:String(pick(row,"linked issues")||"").trim(),
+      solvedBy:String(pick(row,"solved by")||"").trim().toUpperCase(),
+      rootCause:String(pick(row,"root cause")||"").trim(),
+      typeOfFix:String(pick(row,"type of fix")||"").trim(),
+      analysis:String(pick(row,"analysis")||""),
+      solution:String(pick(row,"solution summary","solution")||""),
+      delivered:toDate(pick(row,"delivered date")),
       _raw:row
     };
   }).filter(function(t){return t.key;});
@@ -739,6 +802,9 @@ var COLS=[
   {k:"svm",      label:"SVM In Charge",  th:'<th>SVM In Charge</th>', cell:function(t){return '<td>'+esc(t.svmInCharge||t.currentWorker||"—")+'</td>';}},
   {k:"next",     label:"Next Action",    th:'<th>Next</th>',          cell:function(t){var na=naKey(t);return '<td>'+(na==="svm"?'<span class="badge-na svm">SVM</span>':na==="client"?'<span class="badge-na client">Client</span>':'<span class="pill">—</span>')+'</td>';}},
   {k:"created",  label:"Created",        th:'<th>Created</th>',       cell:function(t){return '<td style="white-space:nowrap">'+fdate(t.created)+'</td>';}},
+  {k:"resolved", label:"Resolved",       th:'<th>Resolved</th>',      cell:function(t){return '<td style="white-space:nowrap">'+(t.resolved?fdate(t.resolved):"—")+'</td>';}},
+  {k:"took",     label:"Took (days)",    th:'<th>Took</th>',          cell:function(t){return '<td class="num">'+(t.created&&t.resolved?fmtD((t.resolved-t.created)/86400000):"—")+'</td>';}},
+  {k:"hd",       label:"Solved by",      th:'<th>Solved by</th>',     cell:function(t){return '<td>'+(isOpen(t)?'<span style="color:var(--faint)">open</span>':isHDT(t)?'<span class="badge-na svm">HD</span>':'<span class="badge-na" style="background:#EEF0FF;color:#5B57D8">Engg</span>')+'</td>';}},
   {k:"age",      label:"Age (days)",     th:'<th>Age (d)</th>',       cell:function(t){return '<td class="num">'+ageDays(t)+'</td>';}}
 ];
 /* Shared ticket table. colKeys = array of column keys to show (in COLS order).
@@ -796,6 +862,7 @@ function clientList(){
   return Object.keys(m).map(function(k){return {name:k,n:m[k]};}).sort(function(a,b){return b.n-a.n;});
 }
 function render(){
+  if(P.view!=="weekly"){ renderPerf(); return; }
   var clients=clientList();
   if(!S.client && clients.length) S.client=clients[0].name;
   // option lists for the Next-action / Status filters (scoped to the selected client)
@@ -865,7 +932,7 @@ function render(){
   var app=el("app");
   app.innerHTML=''+
   /* controls */
-  '<div class="wrap">'+
+  '<div class="wrap">'+reportTabs()+
     '<div class="controls noprint">'+
       '<span class="flabel">Client</span>'+
       '<select id="csel">'+clients.map(function(c){return '<option value="'+esc(c.name)+'" '+(c.name===S.client?"selected":"")+'>'+esc(c.name)+' ('+c.n+')</option>';}).join("")+'</select>'+
@@ -1050,6 +1117,8 @@ function bind(){
     setTimeout(function(){ document.title=orig; }, 1000);
   };
   el("backbtn").onclick=function(){ window.location.href="index.html"; };
+  document.querySelectorAll(".rtab").forEach(function(b){ b.onclick=function(){ P.view=b.getAttribute("data-view"); setHash(); render(); window.scrollTo(0,0); }; });
+  var bb2=el("backbtn2"); if(bb2) bb2.onclick=function(){ window.location.href="index.html"; };
   bindDrill();
 }
 /* Click-to-see-tickets on every chart element (screen only; opens a modal). */
@@ -1134,6 +1203,412 @@ function bindDrill(){
   }; });
 }
 
+/* ═══════════════════════ PERFORMANCE REPORTS (HD worker · SVM in-charge) ═══════════════════════
+   WHO A TICKET BELONGS TO
+     HD worker report     → "Current Worker" (same as the Trend Tracker's HD Worker pivot). For a closed ticket
+                            that is the person who held it when it closed.
+     SVM in-charge report → "SVM In Charge" (the module owner on the engineering side).
+   DEFINITIONS (identical everywhere in these reports)
+     Intake          created in the period.            Closed   status Closed with a Resolved date in the period.
+     Open now        not Closed (today's snapshot — not limited by the period).
+     Solved by HD    "Solved By" = HD, else no linked ticket (same rule as the Trend Tracker). Otherwise Engineering.
+     Resolution time created → resolved, calendar days (median, so one very old ticket can't distort it).
+     With SVM / with client   who must act next, from the Master Data status map (same as the Weekly Report).
+     With Engineering         status classified "engg" in Master Data.
+     Stale           open, waiting on our side, no update for 14+ days.
+     SLA met / missed / breached   the SLA Tracker's own engine and status-history cache (coverage shown).
+     Came back       after reaching a client-side status or Closed, the ticket returned to Help Desk / Engineering
+                     (from status history, coverage shown).
+     Documented      closed with an Analysis or Solution Summary written.   Root cause set: Root Cause filled. */
+var DAY=86400000;
+var P={ view:"weekly", per:"3m", from:"", to:"", client:"", person:{hd:"",svm:""}, sort:{hd:{c:"closed",d:-1},svm:{c:"closed",d:-1}}, cmp:{hd:[],svm:[]}, minN:3, q:"" };
+function readHash(){ var h=(location.hash||"").replace("#",""), m=h.match(/^(hd|svm)(?:-(.+))?$/); if(m){ P.view=m[1]; P.person[m[1]]=m[2]?decodeURIComponent(m[2]):""; } else P.view="weekly"; }
+readHash();
+/* links like weekly.html#hd-Priya%20S open that report directly — also when only the # part changes */
+window.addEventListener("hashchange",function(){ readHash(); if(RAW.length) render(); });
+function setHash(){ try{ var h=P.view==="weekly"?"":P.view+(P.person[P.view]?"-"+encodeURIComponent(P.person[P.view]):""); history.replaceState(null,"",h?"#"+h:location.pathname+location.search); }catch(e){} }
+
+/* ── period ── */
+var PERIODS=[["4w","Last 4 weeks"],["3m","Last 3 months"],["6m","Last 6 months"],["12m","Last 12 months"],["tm","This month"],["lm","Last month"],["ty","This year"],["custom","Custom"]];
+function perRange(){
+  var now=new Date(), end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59,999), start;
+  function back(m){ var d=new Date(now.getFullYear(),now.getMonth()-m,now.getDate()); d.setHours(0,0,0,0); return d; }
+  switch(P.per){
+    case "4w": start=new Date(end.getTime()-28*DAY+1); start.setHours(0,0,0,0); break;
+    case "6m": start=back(6); break; case "12m": start=back(12); break;
+    case "tm": start=new Date(now.getFullYear(),now.getMonth(),1); break;
+    case "lm": start=new Date(now.getFullYear(),now.getMonth()-1,1); end=new Date(now.getFullYear(),now.getMonth(),0,23,59,59,999); break;
+    case "ty": start=new Date(now.getFullYear(),0,1); break;
+    case "custom": start=P.from?new Date(P.from+"T00:00:00"):back(3); end=P.to?new Date(P.to+"T23:59:59"):end; break;
+    default: start=back(3);
+  }
+  return {from:start,to:end};
+}
+function perLabel(r){ return fdate(r.from)+" → "+fdate(r.to); }
+
+/* ── status history (shared SLA cache) for "came back" ── */
+var PH={hist:{},loaded:false,ver:0};
+function phLoad(){ if(!window.HDStore||!HDStore.loadSlaHistory){ PH.loaded=true; return Promise.resolve(); }
+  return HDStore.loadSlaHistory().then(function(h){ PH.hist=h&&h.v===2&&h.tickets?h.tickets:{}; PH.loaded=true; PH.ver++; }); }
+function phEntry(t){ var e=PH.hist[t.key]; if(!e) return null; var tr=e.transitions||[], last=tr.length?tr[tr.length-1].to:e.status; return (e.status===t.status||last===t.status)?e:null; }
+function kindOf(st){ var C=window.HDClass; if(C.isTerminal(st)) return "closed"; var o=C.owner(st); if(o==="client") return "client"; return C.classify3(st)==="engg"?"engg":"hd"; }
+function cameBack(t){ /* null = unknown (no history) */
+  if(t._cbV===PH.ver) return t._cb;
+  var e=phEntry(t), r=null;
+  if(e){ var seenOut=false; r=false; (e.transitions||[]).slice().sort(function(a,b){return a.t-b.t;}).forEach(function(x){ var k=kindOf(x.to); if(k==="client"||k==="closed") seenOut=true; else if(seenOut) r=true; }); }
+  t._cbV=PH.ver; t._cb=r; return r;
+}
+/* ── SLA (SLA Tracker engine) ── */
+function slaOf(t){ var L=window.HDSlaLink; if(!L||!L.ready||!L.ready()) return null; var r=L.get(t._raw); return r&&r.state&&["na","none","nohist","loading"].indexOf(r.state)<0?r:null; }
+
+/* ── helpers ── */
+function median(a){ if(!a.length) return null; var s=a.slice().sort(function(x,y){return x-y;}), m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+function pctl(a,p){ if(!a.length) return null; var s=a.slice().sort(function(x,y){return x-y;}); return s[Math.min(s.length-1,Math.floor(p*s.length))]; }
+function days(a,b){ return (b-a)/DAY; }
+function isHDT(t){ if(t.solvedBy==="HD") return true; if(t.solvedBy==="ENGG"||t.solvedBy==="ENG"||t.solvedBy==="ENGINEERING") return false; return blank(t.linked); }
+function fmtD(v){ if(v==null||isNaN(v)) return "—"; return v<1? (Math.round(v*24)+"h") : v<10? (Math.round(v*10)/10+"d") : Math.round(v)+"d"; }
+function fmtP(v){ return v==null||isNaN(v)?"—":Math.round(v)+"%"; }
+function fmtN(v){ return v==null?"—":Number(v).toLocaleString(); }
+function nm(view,t){ var v=view==="hd"?t.currentWorker:t.svmInCharge; return v||"(unassigned)"; }
+function scope(){ var types=S.issueType; return RAW.filter(function(t){ if(types.length&&types.indexOf(t.issueType)<0) return false; if(P.client&&(t.client||"(no project)")!==P.client) return false; return true; }); }
+
+/* ── metrics for one person's tickets ── */
+function metrics(list,r,view){
+  var inP=function(d){ return d&&d>=r.from&&d<=r.to; }, now=Date.now();
+  var m={all:list};
+  m.intake=list.filter(function(t){return inP(t.created);});
+  m.closedL=list.filter(function(t){return !isOpen(t)&&inP(t.resolved);});
+  m.openL=list.filter(isOpen);
+  m.openSvm=m.openL.filter(function(t){return naKey(t)==="svm";});
+  m.openClient=m.openL.filter(function(t){return naKey(t)==="client";});
+  m.openEngg=m.openL.filter(function(t){return window.HDClass.classify3(t.status)==="engg"&&!window.HDClass.isTerminal(t.status);});
+  m.aged30=m.openSvm.filter(function(t){return t.created&&now-t.created>30*DAY;});
+  m.aged90=m.openSvm.filter(function(t){return t.created&&now-t.created>90*DAY;});
+  m.stale=m.openSvm.filter(function(t){var u=t.updated||t.created; return u&&now-u>14*DAY;});
+  m.hdL=m.closedL.filter(isHDT); m.enggL=m.closedL.filter(function(t){return !isHDT(t);});
+  m.hdPct=m.closedL.length?m.hdL.length/m.closedL.length*100:null;
+  var rd=m.closedL.filter(function(t){return t.created&&t.resolved>=t.created;});
+  m.resMed=median(rd.map(function(t){return days(t.created,t.resolved);}));
+  m.resP90=pctl(rd.map(function(t){return days(t.created,t.resolved);}),0.9);
+  var hdr=m.hdL.filter(function(t){return t.created&&t.resolved>=t.created;});
+  m.hdResMed=median(hdr.map(function(t){return days(t.created,t.resolved);}));
+  m.fast=hdr.filter(function(t){return days(t.created,t.resolved)<=1;});
+  m.fastPct=hdr.length?m.fast.length/hdr.length*100:null;
+  var er=m.enggL.filter(function(t){return t.created&&t.resolved>=t.created;});
+  m.enggResMed=median(er.map(function(t){return days(t.created,t.resolved);}));
+  m.enggAgeMed=median(m.openEngg.filter(function(t){return t.created;}).map(function(t){return days(t.created,now);}));
+  m.doc=m.closedL.filter(function(t){return !blank(t.analysis)||!blank(t.solution);});
+  m.docPct=m.closedL.length?m.doc.length/m.closedL.length*100:null;
+  m.rcSet=m.closedL.filter(function(t){return !blank(t.rootCause);});
+  m.rcPct=m.closedL.length?m.rcSet.length/m.closedL.length*100:null;
+  m.crit=m.closedL.filter(function(t){return /critical|show stopper|high/i.test(t.priority);});
+  m.released=list.filter(function(t){return inP(t.delivered);});
+  /* SLA (closed in period: met vs missed; open: breached now) */
+  m.slaMet=[]; m.slaMiss=[]; m.slaBreach=[]; m.slaRisk=[];
+  m.closedL.forEach(function(t){ var s=slaOf(t); if(!s) return; if(s.state==="missed"||s.breached) m.slaMiss.push(t); else m.slaMet.push(t); });
+  m.openL.forEach(function(t){ var s=slaOf(t); if(!s) return; if(s.breached) m.slaBreach.push(t); else if(s.atRisk) m.slaRisk.push(t); });
+  m.slaKnown=m.slaMet.length+m.slaMiss.length;
+  m.slaPct=m.slaKnown?m.slaMet.length/m.slaKnown*100:null;
+  /* came back (history) */
+  m.cbYes=[]; m.cbKnown=0;
+  m.closedL.forEach(function(t){ var c=cameBack(t); if(c===null) return; m.cbKnown++; if(c) m.cbYes.push(t); });
+  m.cbPct=m.cbKnown?m.cbYes.length/m.cbKnown*100:null;
+  m.handled=m.closedL.length+m.openSvm.length;
+  return m;
+}
+
+/* ── the measures each report compares on ── better: 1 = higher is better, -1 = lower is better, 0 = context only ── */
+var KPI={
+  hd:[
+    {id:"closed",  l:"Closed",                   g:function(m){return m.closedL.length;}, f:fmtN, b:1,  L:function(m){return m.closedL;}, tip:"Tickets closed in the period"},
+    {id:"intake",  l:"New tickets",              g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Created in the period and now with this person"},
+    {id:"hdPct",   l:"Solved by HD",             g:function(m){return m.hdPct;},          f:fmtP, b:1,  L:function(m){return m.hdL;}, tip:"Share of closed tickets resolved without Engineering"},
+    {id:"hdResMed",l:"HD resolution (median)",   g:function(m){return m.hdResMed;},       f:fmtD, b:-1, L:function(m){return m.hdL;}, tip:"Created → resolved for the tickets HD solved"},
+    {id:"fastPct", l:"HD solved within 1 day",   g:function(m){return m.fastPct;},        f:fmtP, b:1,  L:function(m){return m.fast;}, tip:"Of the HD-solved tickets"},
+    {id:"slaPct",  l:"SLA met",                  g:function(m){return m.slaPct;},         f:fmtP, b:1,  L:function(m){return m.slaMiss;}, tip:"Closed tickets resolved within the SLA target (SLA Tracker engine). Click: the missed ones"},
+    {id:"cbPct",   l:"Came back after closing",  g:function(m){return m.cbPct;},          f:fmtP, b:-1, L:function(m){return m.cbYes;}, tip:"Client replied / reopened after it was handed back or closed (from status history)"},
+    {id:"openSvm", l:"Open with us",             g:function(m){return m.openSvm.length;}, f:fmtN, b:0,  L:function(m){return m.openSvm;}, tip:"Open now and waiting on our side"},
+    {id:"aged30",  l:"Open with us > 30 days",   g:function(m){return m.aged30.length;},  f:fmtN, b:-1, L:function(m){return m.aged30;}, tip:"Open on our side for more than 30 days"},
+    {id:"stale",   l:"Stale (no update 14d+)",   g:function(m){return m.stale.length;},   f:fmtN, b:-1, L:function(m){return m.stale;}, tip:"Open on our side and not updated for 14+ days"},
+    {id:"docPct",  l:"Documented",               g:function(m){return m.docPct;},         f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.doc.indexOf(t)<0;});}, tip:"Closed with an Analysis or Solution written. Click: the undocumented ones"},
+    {id:"rcPct",   l:"Root cause recorded",      g:function(m){return m.rcPct;},          f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.rcSet.indexOf(t)<0;});}, tip:"Closed with Root Cause filled. Click: the ones without"}
+  ],
+  svm:[
+    {id:"intake",  l:"New tickets",              g:function(m){return m.intake.length;},  f:fmtN, b:0,  L:function(m){return m.intake;}, tip:"Created in the period in this person’s module"},
+    {id:"closed",  l:"Closed",                   g:function(m){return m.closedL.length;}, f:fmtN, b:1,  L:function(m){return m.closedL;}, tip:"Closed in the period"},
+    {id:"engg",    l:"Fixed by Engineering",     g:function(m){return m.enggL.length;},   f:fmtN, b:0,  L:function(m){return m.enggL;}, tip:"Closed tickets that needed Engineering (linked / Solved By ENGG)"},
+    {id:"enggResMed",l:"Engineering resolution (median)", g:function(m){return m.enggResMed;}, f:fmtD, b:-1, L:function(m){return m.enggL;}, tip:"Created → resolved for tickets Engineering fixed"},
+    {id:"openEngg",l:"Open with Engineering",    g:function(m){return m.openEngg.length;},f:fmtN, b:-1, L:function(m){return m.openEngg;}, tip:"Open now in an Engineering status"},
+    {id:"enggAgeMed",l:"Age of Engg backlog (median)", g:function(m){return m.enggAgeMed;}, f:fmtD, b:-1, L:function(m){return m.openEngg;}, tip:"How long the open Engineering tickets have been open"},
+    {id:"released",l:"Delivered in period",      g:function(m){return m.released.length;},f:fmtN, b:1,  L:function(m){return m.released;}, tip:"Delivered Date in the period"},
+    {id:"slaPct",  l:"SLA met",                  g:function(m){return m.slaPct;},         f:fmtP, b:1,  L:function(m){return m.slaMiss;}, tip:"Closed tickets within SLA target. Click: the missed ones"},
+    {id:"cbPct",   l:"Came back after fix",      g:function(m){return m.cbPct;},          f:fmtP, b:-1, L:function(m){return m.cbYes;}, tip:"Returned to HD / Engineering after being handed back or closed"},
+    {id:"aged30",  l:"Open with us > 30 days",   g:function(m){return m.aged30.length;},  f:fmtN, b:-1, L:function(m){return m.aged30;}, tip:"Open on our side for more than 30 days"},
+    {id:"hdPct",   l:"Solved by HD in module",   g:function(m){return m.hdPct;},          f:fmtP, b:0,  L:function(m){return m.hdL;}, tip:"How much of this module Help Desk resolved without Engineering"},
+    {id:"rcPct",   l:"Root cause recorded",      g:function(m){return m.rcPct;},          f:fmtP, b:1,  L:function(m){return m.closedL.filter(function(t){return m.rcSet.indexOf(t)<0;});}, tip:"Closed with Root Cause filled. Click: the ones without"}
+  ]
+};
+var TABLE_COLS={hd:["closed","hdPct","hdResMed","slaPct","cbPct","openSvm","aged30","stale","docPct"], svm:["intake","closed","engg","enggResMed","openEngg","enggAgeMed","released","slaPct","cbPct","aged30"]};
+
+/* everybody in the current scope, with metrics; cached per render */
+var PC=null;
+function people(view){
+  var r=perRange(), sc=scope(), by={};
+  sc.forEach(function(t){ var k=nm(view,t); (by[k]=by[k]||[]).push(t); });
+  var rows=Object.keys(by).map(function(k){ var m=metrics(by[k],r,view); m.name=k; m.group=window.HDGroups?HDGroups.groupOf(k):""; return m; })
+    .filter(function(m){ return m.closedL.length+m.intake.length+m.openL.length>0; });
+  var team=rows.filter(function(m){ return m.name!=="(unassigned)" && (m.closedL.length+m.openL.length)>=P.minN; });
+  /* team median, best and ranks per measure (members with enough tickets only) */
+  var st={};
+  KPI[view].forEach(function(k){
+    var vals=team.map(function(m){return {m:m,v:k.g(m)};}).filter(function(x){return x.v!=null&&!isNaN(x.v);});
+    var sorted=vals.slice().sort(function(a,b){ return k.b<0? a.v-b.v : b.v-a.v; });
+    st[k.id]={ med:median(vals.map(function(x){return x.v;})), best:k.b?sorted[0]:null, n:vals.length, vals:vals,
+      rank:function(m){ if(!k.b) return null; var v=k.g(m); if(v==null||isNaN(v)) return null; var i=0; sorted.forEach(function(x){ if(k.b<0? x.v<v : x.v>v) i++; }); return i+1; },
+      q:function(v){ /* quartile position 0..1 (1 = best) */ if(v==null||!vals.length||!k.b) return null; var better=vals.filter(function(x){ return k.b<0? x.v>v : x.v<v; }).length; return vals.length>1? better/(vals.length-1) : 1; } };
+  });
+  return {rows:rows, team:team, st:st, r:r, sc:sc};
+}
+
+/* ── UI building blocks ── */
+var DR={}, drSeq=0;   /* drill registry: id → {title, tix} */
+function dr(title,tix){ var id="d"+(drSeq++); DR[id]={title:title,tix:tix}; return id; }
+function num(n,title,tix,cls){ if(!n) return '<span class="pnum zero">0</span>'; return '<span class="pnum'+(cls?" "+cls:"")+'" data-dr="'+dr(title,tix)+'">'+fmtN(n)+'</span>'; }
+function reportTabs(){
+  var tabs=[["weekly","📅","Weekly Report"],["hd","🧑‍💻","HD Worker Performance"],["svm","🛠️","SVM In-Charge Performance"]];
+  return '<div class="rtabs noprint" role="tablist">'+tabs.map(function(x){ return '<button role="tab" class="rtab'+(P.view===x[0]?" on":"")+'" data-view="'+x[0]+'" aria-selected="'+(P.view===x[0])+'"><span>'+x[1]+'</span>'+x[2]+'</button>'; }).join("")+
+    '<span class="spacer"></span><button class="btn" id="backbtn2">\u2190 Launcher</button></div>';
+}
+function deltaChip(v,med,k){
+  if(v==null||med==null||isNaN(v)||isNaN(med)||!k.b) return '';
+  var d=v-med, isPct=k.f===fmtP, isDay=k.f===fmtD;
+  if(Math.abs(d)<(isPct?1:isDay?0.05:0.5)) return '<span class="dchip eq">≈ team median</span>';
+  var good=k.b>0? d>0 : d<0;
+  var txt=isPct? (d>0?"+":"")+Math.round(d)+" pts" : isDay? (d>0?"+":"−")+fmtD(Math.abs(d)) : (d>0?"+":"")+Math.round(d);
+  return '<span class="dchip '+(good?"up":"down")+'">'+(good?"▲ ":"▼ ")+txt+' vs median</span>';
+}
+function qBadge(q){ if(q==null) return ""; return q>=0.75?'<span class="qb top">Top 25%</span>':q<=0.25?'<span class="qb low">Bottom 25%</span>':""; }
+
+/* weekly closed vs new for one person (12 ISO weeks ending at the period end) */
+function weekSeries(m,r){
+  var wks=[], end=r.to.getTime(); for(var i=11;i>=0;i--) wks.push(wkKey(new Date(end-i*7*DAY)));
+  var seen={}; wks=wks.filter(function(w){ if(seen[w]) return false; seen[w]=1; return true; });
+  var cl={}, nw={}; wks.forEach(function(w){cl[w]=[];nw[w]=[];});
+  m.all.forEach(function(t){ var a=wkKey(t.created); if(nw[a]) nw[a].push(t); if(!isOpen(t)){ var b=wkKey(t.resolved); if(cl[b]) cl[b].push(t); } });
+  return {wks:wks, cl:cl, nw:nw};
+}
+function weekChart(ws,who){
+  var W=640,H=170,L=28,B=26,T=10,n=ws.wks.length,slot=(W-L-8)/n,bw=Math.min(18,slot*0.36),mx=1,s="";
+  ws.wks.forEach(function(w){ mx=Math.max(mx,ws.cl[w].length,ws.nw[w].length); });
+  var step=mx<=5?1:mx<=10?2:mx<=25?5:mx<=60?10:mx<=150?25:50, top=Math.ceil(mx/step)*step;
+  for(var g=0;g<=top;g+=step){ var y=T+(H-T-B)*(1-g/top); s+='<line x1="'+L+'" x2="'+W+'" y1="'+y+'" y2="'+y+'" stroke="#E3E8EE"/><text x="'+(L-5)+'" y="'+(y+3)+'" text-anchor="end" font-size="9" fill="#9AA7B8">'+g+'</text>'; }
+  ws.wks.forEach(function(w,i){
+    var x=L+i*slot+(slot-2*bw-3)/2, h1=(H-T-B)*ws.nw[w].length/top, h2=(H-T-B)*ws.cl[w].length/top;
+    if(ws.nw[w].length) s+='<rect class="pbar" x="'+x+'" y="'+(H-B-h1)+'" width="'+bw+'" height="'+h1+'" rx="2" fill="#CBD5E1" data-dr="'+dr(who+" — new in "+wkLabel(w),ws.nw[w])+'"><title>'+wkLabel(w)+': '+ws.nw[w].length+' new</title></rect>';
+    if(ws.cl[w].length) s+='<rect class="pbar" x="'+(x+bw+3)+'" y="'+(H-B-h2)+'" width="'+bw+'" height="'+h2+'" rx="2" fill="#0F766E" data-dr="'+dr(who+" — closed in "+wkLabel(w),ws.cl[w])+'"><title>'+wkLabel(w)+': '+ws.cl[w].length+' closed</title></rect>';
+    s+='<text x="'+(L+i*slot+slot/2)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9" fill="#6B7A90">'+wkLabel(w)+'</text>';
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="New and closed per week">'+s+'</svg>'+
+    '<div class="legend"><span class="li"><span class="sw" style="background:#CBD5E1"></span>New</span><span class="li"><span class="sw" style="background:#0F766E"></span>Closed</span></div>';
+}
+/* "where they stand": every member as a dot on the measure, this person highlighted */
+function spread(k,st,m){
+  var s=st[k.id]; if(!s||!s.vals.length) return '<span class="pfaint">—</span>';
+  var vs=s.vals.map(function(x){return x.v;}), lo=Math.min.apply(null,vs), hi=Math.max.apply(null,vs), v=k.g(m);
+  if(hi===lo) hi=lo+1;
+  function X(x){ var p=(x-lo)/(hi-lo); if(k.b<0) p=1-p; return Math.max(0,Math.min(100,p*100)); }
+  var dots=s.vals.map(function(x){ return '<i style="left:'+X(x.v)+'%" title="'+esc(x.m.name)+': '+esc(k.f(x.v))+'"></i>'; }).join("");
+  return '<div class="spread" title="Left = weaker, right = stronger. Grey line = team median.">'+dots+(s.med!=null?'<b class="med" style="left:'+X(s.med)+'%"></b>':'')+(v!=null&&!isNaN(v)?'<em style="left:'+X(v)+'%"></em>':'')+'</div>';
+}
+function mixTable(title,list,keyFn,who,hdCol){
+  var by={}; list.forEach(function(t){ var k=keyFn(t)||"(blank)"; (by[k]=by[k]||[]).push(t); });
+  var rows=Object.keys(by).map(function(k){ return {k:k,l:by[k]}; }).sort(function(a,b){ return b.l.length-a.l.length; }).slice(0,10);
+  if(!rows.length) return '<div class="chartcard"><div class="ct">'+title+'</div><div class="empty">No tickets.</div></div>';
+  var mx=rows[0].l.length;
+  return '<div class="chartcard"><div class="ct">'+title+'</div><table class="ptab mix"><tbody>'+rows.map(function(x){
+    var hd=x.l.filter(isHDT).length;
+    return '<tr><td class="pname" title="'+esc(x.k)+'">'+esc(trunc(x.k,34))+'</td><td class="bar"><i style="width:'+(x.l.length/mx*100)+'%"></i></td><td class="num">'+num(x.l.length,who+" — "+title+": "+x.k,x.l)+'</td>'+
+      (hdCol?'<td class="num pfaint" title="Solved by HD">'+(x.l.length?Math.round(hd/x.l.length*100)+'% HD':'')+'</td>':'')+'</tr>';
+  }).join("")+'</tbody></table></div>';
+}
+function resBuckets(list,who){
+  var B=[["≤ 1 day",0,1],["1–3 days",1,3],["3–7 days",3,7],["1–2 weeks",7,14],["2–4 weeks",14,30],["> 30 days",30,1e9]], bl=B.map(function(){return [];});
+  list.forEach(function(t){ if(!t.created||!t.resolved) return; var d=days(t.created,t.resolved); for(var i=0;i<B.length;i++) if(d<=B[i][2]){ bl[i].push(t); break; } });
+  var mx=Math.max.apply(null,bl.map(function(x){return x.length;}).concat([1]));
+  return '<table class="ptab mix"><tbody>'+B.map(function(b,i){ return '<tr><td class="pname">'+b[0]+'</td><td class="bar"><i style="width:'+(bl[i].length/mx*100)+'%;background:'+(i<2?"#0F766E":i<4?"#D97706":"#BE1D42")+'"></i></td><td class="num">'+num(bl[i].length,who+" — resolved in "+b[0],bl[i])+'</td><td class="num pfaint">'+(list.length?Math.round(bl[i].length/list.length*100)+'%':'')+'</td></tr>'; }).join("")+'</tbody></table>';
+}
+
+/* ── the page ── */
+function renderPerf(){
+  DR={}; drSeq=0;
+  var view=P.view, pc=people(view), r=pc.r, clients=clientList();
+  var types=Object.keys(RAW.reduce(function(a,t){ if(t.issueType)a[t.issueType]=1; return a; },{})).sort();
+  if(!itInit){ itInit=true; S.issueType=defaultIssueTypes(); }
+  var mid=mselCreate("itMsel","All types",types,S.issueType.filter(function(x){return types.indexOf(x)>-1;}),function(sel){S.issueType=sel;},function(){render();});
+  var person=P.person[view], pm=person?pc.rows.filter(function(m){return m.name===person;})[0]:null;
+  if(person&&!pm){ P.person[view]=""; person=""; }
+  var title=view==="hd"?"HD Worker Performance":"SVM In-Charge Performance";
+  var html='<div class="wrap">'+reportTabs()+
+    '<div class="controls noprint">'+
+      '<span class="flabel">Period</span><select id="persel">'+PERIODS.map(function(p){return '<option value="'+p[0]+'"'+(P.per===p[0]?" selected":"")+'>'+p[1]+'</option>';}).join("")+'</select>'+
+      (P.per==="custom"?'<input type="date" id="pfrom" class="pdate" value="'+esc(P.from)+'" aria-label="From"><span class="pfaint">→</span><input type="date" id="pto" class="pdate" value="'+esc(P.to)+'" aria-label="To">':'')+
+      '<span class="flabel">Client</span><select id="pclient"><option value="">All clients</option>'+clients.map(function(c){return '<option value="'+esc(c.name)+'"'+(c.name===P.client?" selected":"")+'>'+esc(c.name)+'</option>';}).join("")+'</select>'+
+      '<span class="flabel">Request type</span>'+mselHTML(mid)+
+      '<span class="flabel" title="People with fewer tickets are listed but not ranked or used for the team median">Rank from</span><select id="pmin">'+[1,3,5,10,20].map(function(n){return '<option value="'+n+'"'+(P.minN===n?" selected":"")+'>'+n+'+ tickets</option>';}).join("")+'</select>'+
+      '<span class="spacer"></span>'+slaBar(pc)+
+      '<button class="btn primary" id="printbtn2">\uD83D\uDDA8\uFE0F Print / Save PDF</button>'+
+    '</div>'+
+    '<div class="sheet" id="sheet">'+(pm? personHTML(view,pm,pc) : teamHTML(view,pc,title))+'</div></div>';
+  el("app").innerHTML=html;
+  bindPerf(view,pc);
+}
+function slaBar(pc){
+  var L=window.HDSlaLink; if(!L) return "";
+  if(L.isFetching&&L.isFetching()){ var pr=L.progress?L.progress():null; return '<span class="pfaint">Fetching status history… '+(pr&&pr.total?pr.done+"/"+pr.total:"")+'</span>'; }
+  var miss=pc.sc.filter(function(t){ var s=L.get(t._raw); return s&&s.state==="nohist"; });
+  if(!miss.length) return "";
+  return '<button class="btn" id="pfetch" title="SLA and “came back” need each ticket’s status history. '+miss.length+' tickets in this report don’t have it yet.">⟳ Fetch history ('+Math.min(miss.length,1500)+')</button>';
+}
+
+function teamHTML(view,pc,title){
+  var cols=TABLE_COLS[view].map(function(id){ return KPI[view].filter(function(k){return k.id===id;})[0]; });
+  var srt=P.sort[view], rows=pc.rows.slice(), q=P.q.trim().toLowerCase();
+  if(q) rows=rows.filter(function(m){ return m.name.toLowerCase().indexOf(q)>-1; });
+  var sk=srt.c==="name"?null:KPI[view].filter(function(k){return k.id===srt.c;})[0];
+  rows.sort(function(a,b){
+    if(!sk) return srt.d*a.name.localeCompare(b.name);
+    var va=sk.g(a), vb=sk.g(b); va=va==null||isNaN(va)?-Infinity:va; vb=vb==null||isNaN(vb)?-Infinity:vb;
+    return srt.d*(va-vb) || a.name.localeCompare(b.name);
+  });
+  /* team totals */
+  var all=metrics(pc.sc,pc.r,view);
+  var head='<div class="rhead"><div class="logo"><i style="height:16px;background:var(--hd)"></i><i style="height:30px;background:var(--hd2)"></i><i style="height:13px;background:var(--client2)"></i><i style="height:24px;background:var(--client)"></i></div>'+
+    '<div class="who"><div class="kicker">Reports · '+esc(title)+'</div><h1>'+(view==="hd"?"Help Desk team":"SVM in-charges")+(P.client?" · "+esc(P.client):"")+'</h1><div class="gen">'+esc(perLabel(pc.r))+' · '+esc(S.issueType.join(", ")||"all types")+' · from '+esc(FILENAME)+'</div></div>'+
+    '<div class="window">'+pc.team.length+' ranked · '+pc.rows.length+' people</div></div>';
+  var kp=view==="hd"? [
+      ["Closed",all.closedL.length,all.closedL,""],["Solved by HD",fmtP(all.hdPct),all.hdL,"hl2"],["HD resolution (median)",fmtD(all.hdResMed),all.hdL,""],
+      ["SLA met",fmtP(all.slaPct),all.slaMiss,""],["Came back",fmtP(all.cbPct),all.cbYes,""],["Open with us",all.openSvm.length,all.openSvm,"hl"],["Stale 14d+",all.stale.length,all.stale,""]]
+    : [["New",all.intake.length,all.intake,""],["Closed",all.closedL.length,all.closedL,""],["Fixed by Engineering",all.enggL.length,all.enggL,"hl2"],["Engg resolution (median)",fmtD(all.enggResMed),all.enggL,""],
+      ["Open with Engineering",all.openEngg.length,all.openEngg,"hl"],["Delivered",all.released.length,all.released,""],["SLA met",fmtP(all.slaPct),all.slaMiss,""]];
+  var kpis='<div class="kpis">'+kp.map(function(x){ return '<div class="kpi '+x[3]+'" data-dr="'+dr("Team — "+x[0],x[2])+'"><div class="lab">'+x[0]+'</div><div class="val">'+(typeof x[1]==="number"?fmtN(x[1]):x[1])+'</div></div>'; }).join("")+'</div>';
+  function th(id,l,tip){ var on=srt.c===id; return '<th class="'+(id==="name"?"":"num ")+'sortable'+(on?" on":"")+'" data-psort="'+id+'" title="'+esc(tip||"")+'">'+l+(on?(srt.d<0?" ↓":" ↑"):"")+'</th>'; }
+  var body=rows.map(function(m){
+    var ranked=pc.team.indexOf(m)>-1;
+    return '<tr class="prow'+(ranked?"":" unr")+'" data-person="'+esc(m.name)+'"><td class="pname"><a href="#" data-person="'+esc(m.name)+'">'+esc(m.name)+'</a>'+(m.group&&m.group!=="Others"?' <span class="grp">'+esc(m.group)+'</span>':'')+(ranked?'':' <span class="pfaint" title="Fewer than '+P.minN+' tickets — not ranked">·</span>')+'</td>'+
+      cols.map(function(k){
+        var v=k.g(m), s=pc.st[k.id], qv=ranked&&s?s.q(v):null, tone=qv==null?"":qv>=0.75?"good":qv<=0.25?"bad":"";
+        var shown=k.f===fmtN? num(v,m.name+" — "+k.l,k.L(m)) : (v==null||isNaN(v)?'<span class="pfaint">—</span>':'<span class="pnum" data-dr="'+dr(m.name+" — "+k.l,k.L(m))+'">'+k.f(v)+'</span>');
+        return '<td class="num '+tone+'">'+shown+'</td>';
+      }).join("")+'</tr>';
+  }).join("");
+  var medRow='<tr class="medrow"><td class="pname">Team median</td>'+cols.map(function(k){ var s=pc.st[k.id]; return '<td class="num">'+(s&&s.med!=null?k.f(s.med):"—")+'</td>'; }).join("")+'</tr>';
+  return head+'<div class="rbody">'+kpis+
+    '<div class="sectitle">'+(view==="hd"?"Every HD worker":"Every SVM in-charge")+' <span class="sub">click a name for the full report · click a number for its tickets · green = top 25%, red = bottom 25% of the team</span></div>'+
+    '<div class="noprint" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="search" id="pq" class="pdate" style="width:240px" placeholder="Find a person…" value="'+esc(P.q)+'"><button class="btn" id="pcsv">\u2B07 Export table (CSV)</button></div>'+
+    '<div class="ttable-wrap"><table class="ptab team"><thead><tr>'+th("name","Person")+cols.map(function(k){return th(k.id,k.l,k.tip);}).join("")+'</tr></thead><tbody>'+medRow+body+'</tbody></table></div>'+
+    notes(view)+'</div>';
+}
+function notes(view){
+  return '<div class="pnote"><b>How these numbers are worked out.</b> '+
+    (view==="hd"?'A ticket belongs to its <b>Current Worker</b> (for a closed ticket, the person who held it when it closed). ':'A ticket belongs to its <b>SVM In Charge</b> (the module owner). ')+
+    '<b>Closed</b> = closed with a resolved date in the period; <b>Open</b> = today. <b>Solved by HD</b> = “Solved By” HD, otherwise no linked ticket. Resolution times are <b>medians</b> of created → resolved. '+
+    '<b>SLA</b> uses the SLA Tracker’s engine and targets; <b>Came back</b> uses status history — both count only tickets whose history has been fetched (use ⟳ Fetch history). '+
+    'Ranks and the team median use people with at least '+P.minN+' ticket'+(P.minN>1?"s":"")+'.</div>';
+}
+
+function personHTML(view,m,pc){
+  var ks=KPI[view], who=m.name, ws=weekSeries(m,pc.r), st=pc.st, ranked=pc.team.indexOf(m)>-1;
+  var head='<div class="rhead"><div class="logo"><i style="height:16px;background:var(--hd)"></i><i style="height:30px;background:var(--hd2)"></i><i style="height:13px;background:var(--client2)"></i><i style="height:24px;background:var(--client)"></i></div>'+
+    '<div class="who"><div class="kicker">'+(view==="hd"?"HD worker report":"SVM in-charge report")+'</div><h1>'+esc(who)+(m.group&&m.group!=="Others"?' <span class="grp lg">'+esc(m.group)+'</span>':'')+'</h1>'+
+    '<div class="gen">'+esc(perLabel(pc.r))+(P.client?" · "+esc(P.client):"")+' · '+esc(S.issueType.join(", ")||"all types")+(window.HDGroups&&HDGroups.MEMBERS&&m.group&&m.group!=="Others"&&HDGroups.MEMBERS[m.group]?' · '+esc(HDGroups.MEMBERS[m.group]):'')+'</div></div>'+
+    '<div class="window noprint"><button class="btn" id="pback">\u2190 All '+(view==="hd"?"HD workers":"SVM in-charges")+'</button></div></div>';
+  /* KPI cards with team comparison */
+  var cards='<div class="pkpis">'+ks.map(function(k){
+    var v=k.g(m), s=st[k.id], rk=ranked&&s?s.rank(m):null, q=ranked&&s?s.q(v):null;
+    var list=k.L(m), shown=v==null||isNaN(v)?"—":k.f(v);
+    var cov=k.id==="slaPct"? (m.slaKnown+" of "+m.closedL.length+" with SLA data") : k.id==="cbPct"? (m.cbKnown+" of "+m.closedL.length+" with history") : "";
+    return '<div class="pk'+(q!=null&&q>=0.75?" top":q!=null&&q<=0.25?" low":"")+'" data-dr="'+dr(who+" — "+k.l,list)+'" title="'+esc(k.tip)+'">'+
+      '<div class="lab">'+esc(k.l)+'</div><div class="val">'+shown+'</div>'+
+      '<div class="pk-c">'+(ranked&&s?deltaChip(v,s.med,k):"")+'</div>'+
+      '<div class="pk-r">'+(rk?'#'+rk+' of '+s.n:'')+qBadge(q)+(cov?'<span class="pfaint"> · '+cov+'</span>':'')+'</div></div>';
+  }).join("")+'</div>';
+  /* comparator */
+  var peers=P.cmp[view].map(function(n){ return pc.rows.filter(function(x){return x.name===n;})[0]; }).filter(Boolean).filter(function(x){return x!==m;});
+  var others=pc.team.filter(function(x){return x!==m&&peers.indexOf(x)<0;}).sort(function(a,b){return a.name.localeCompare(b.name);});
+  var cmp='<div class="sectitle">Compared with the team <span class="sub">every member is a dot · '+esc(who)+' is the large dot · the grey line is the team median · right = stronger</span></div>'+
+    '<div class="noprint" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span class="flabel">Compare with</span>'+
+    peers.map(function(x){ return '<span class="peer">'+esc(x.name)+'<button data-unpeer="'+esc(x.name)+'" aria-label="Remove '+esc(x.name)+'">✕</button></span>'; }).join("")+
+    (peers.length<4?'<select id="paddpeer"><option value="">+ add a person…</option>'+others.map(function(x){return '<option value="'+esc(x.name)+'">'+esc(x.name)+'</option>';}).join("")+'</select>':'')+
+    (others.length&&!peers.length?'<button class="btn" id="pbestpeer">Add the best on “'+esc(ks.filter(function(k){return k.b>0;})[0].l)+'”</button>':'')+'</div>'+
+    '<div class="ttable-wrap"><table class="ptab cmp"><thead><tr><th>Measure</th><th class="num me">'+esc(who)+'</th><th class="num">Team median</th><th class="num">Best in team</th>'+peers.map(function(x){return '<th class="num">'+esc(x.name)+'</th>';}).join("")+'<th style="min-width:180px">Where '+esc(who.split(" ")[0])+' stands</th></tr></thead><tbody>'+
+    ks.map(function(k){
+      var s=st[k.id], v=k.g(m);
+      function cell(x){ var vv=k.g(x); return vv==null||isNaN(vv)?'<span class="pfaint">—</span>':'<span class="pnum" data-dr="'+dr(x.name+" — "+k.l,k.L(x))+'">'+k.f(vv)+'</span>'; }
+      return '<tr><td class="pname" title="'+esc(k.tip)+'">'+esc(k.l)+(k.b===0?' <span class="pfaint" title="Context only — not better or worse">ⓘ</span>':'')+'</td><td class="num me">'+cell(m)+'</td><td class="num">'+(s&&s.med!=null?k.f(s.med):"—")+'</td>'+
+        '<td class="num">'+(s&&s.best?'<span class="pnum" data-person="'+esc(s.best.m.name)+'" title="Open '+esc(s.best.m.name)+'’s report">'+k.f(s.best.v)+' <span class="pfaint">'+esc(s.best.m.name)+'</span></span>':'—')+'</td>'+
+        peers.map(function(x){return '<td class="num">'+cell(x)+'</td>';}).join("")+'<td>'+(k.b?spread(k,st,m):'<span class="pfaint">context</span>')+'</td></tr>';
+    }).join("")+'</tbody></table></div>';
+  /* strengths & focus areas */
+  var good=[], focus=[];
+  if(ranked) ks.forEach(function(k){ if(!k.b) return; var s=st[k.id], v=k.g(m), q=s?s.q(v):null; if(q==null||s.n<4) return; if(q>=0.75) good.push(k.l+' <b>'+k.f(v)+'</b> (team median '+k.f(s.med)+')'); else if(q<=0.25) focus.push(k.l+' <b>'+k.f(v)+'</b> (team median '+k.f(s.med)+')'); });
+  var obs='<div class="grid2">'+
+    '<div class="chartcard"><div class="ct">✅ Strengths <span class="pfaint">· top 25% of the team</span></div>'+(good.length?'<ul class="plist">'+good.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>':'<div class="empty">'+(ranked?"No measure in the top 25% this period.":"Not enough tickets to rank.")+'</div>')+'</div>'+
+    '<div class="chartcard"><div class="ct">🎯 Focus areas <span class="pfaint">· bottom 25% of the team</span></div>'+(focus.length?'<ul class="plist">'+focus.map(function(x){return '<li>'+x+'</li>';}).join("")+'</ul>':'<div class="empty">'+(ranked?"No measure in the bottom 25% this period.":"Not enough tickets to rank.")+'</div>')+'</div></div>';
+  /* activity & speed */
+  var act='<div class="sectitle">Activity &amp; speed <span class="sub">click a bar or number for its tickets</span></div><div class="grid2">'+
+    '<div class="chartcard"><div class="ct">New vs closed per week <span class="pfaint">· last 12 weeks to '+fdate(pc.r.to)+'</span></div>'+weekChart(ws,who)+'</div>'+
+    '<div class="chartcard"><div class="ct">How long tickets took <span class="pfaint">· closed in the period, created → resolved</span></div>'+resBuckets(m.closedL,who)+
+      '<div class="pfaint" style="margin-top:6px">Median '+fmtD(m.resMed)+' · 90% within '+fmtD(m.resP90)+' · HD-solved median '+fmtD(m.hdResMed)+(view==="svm"?' · Engineering median '+fmtD(m.enggResMed):'')+'</div></div></div>';
+  /* outcome split */
+  var hdN=m.hdL.length, egN=m.enggL.length, tot=Math.max(1,hdN+egN);
+  var split='<div class="chartcard" style="margin-top:11px"><div class="ct">Closed in the period: who resolved it</div>'+
+    '<div class="psplit"><i style="width:'+(hdN/tot*100)+'%;background:#0F766E" data-dr="'+dr(who+" — solved by HD",m.hdL)+'">'+(hdN?hdN+" HD":"")+'</i><i style="width:'+(egN/tot*100)+'%;background:#5B57D8" data-dr="'+dr(who+" — needed Engineering",m.enggL)+'">'+(egN?egN+" Engg":"")+'</i></div>'+
+    '<div class="pfaint" style="margin-top:6px">'+num(m.crit.length,who+" — Critical / High closed",m.crit)+' Critical / High / Show Stopper closed · '+num(m.slaBreach.length,who+" — open and SLA breached",m.slaBreach,"bad")+' open tickets past SLA · '+num(m.slaRisk.length,who+" — open and at SLA risk",m.slaRisk)+' at risk</div></div>';
+  /* mix */
+  var mix='<div class="sectitle">Where the work came from <span class="sub">closed in the period</span></div><div class="grid3">'+
+    mixTable("By client",m.closedL,function(t){return t.client;},who,true)+
+    mixTable("By component",m.closedL,function(t){return t.componentsRaw;},who,true)+
+    mixTable("By root cause",m.closedL,function(t){return t.rootCause;},who,false)+'</div>'+
+    (view==="svm"?'<div class="grid3" style="margin-top:11px">'+mixTable("Type of fix",m.enggL,function(t){return t.typeOfFix;},who,false)+mixTable("Open with Engineering by status",m.openEngg,function(t){return t.status;},who,false)+mixTable("HD worker on these tickets",m.closedL,function(t){return t.currentWorker;},who,true)+'</div>'
+                  :'<div class="grid3" style="margin-top:11px">'+mixTable("By priority",m.closedL,function(t){return t.priority;},who,true)+mixTable("By request type",m.closedL,function(t){return t.issueType;},who,true)+mixTable("SVM in-charge of these tickets",m.closedL,function(t){return t.svmInCharge;},who,true)+'</div>');
+  /* open work */
+  var openList=(view==="svm"?m.openEngg.concat(m.openSvm.filter(function(t){return m.openEngg.indexOf(t)<0;})):m.openSvm);
+  var open='<div class="sectitle">Open work now <span class="sub">'+num(m.openSvm.length,who+" — open with us",m.openSvm)+' with us · '+num(m.openClient.length,who+" — waiting on the client",m.openClient)+' with the client'+(view==="svm"?' · '+num(m.openEngg.length,who+" — with Engineering",m.openEngg)+' with Engineering':'')+' · '+num(m.stale.length,who+" — stale",m.stale,"bad")+' stale · oldest first</span></div>'+
+    (openList.length?ticketTable(openList.slice(0,40),["key","summary","status","stage","priority","component",view==="hd"?"svm":"worker","age"]):'<div class="empty">Nothing open on our side. 🎉</div>')+
+    (openList.length>40?'<div class="pfaint" style="margin-top:6px">Showing the 40 oldest of '+num(openList.length,who+" — open",openList)+'.</div>':'');
+  return head+'<div class="rbody">'+cards+cmp+obs+act+split+mix+open+notes(view)+'</div>';
+}
+
+function bindPerf(view,pc){
+  document.querySelectorAll(".rtab").forEach(function(b){ b.onclick=function(){ P.view=b.getAttribute("data-view"); setHash(); render(); window.scrollTo(0,0); }; });
+  var bb=el("backbtn2"); if(bb) bb.onclick=function(){ window.location.href="index.html"; };
+  var ps=el("persel"); if(ps) ps.onchange=function(){ P.per=ps.value; render(); };
+  var pf=el("pfrom"), pt=el("pto"); if(pf) pf.onchange=function(){ P.from=pf.value; render(); }; if(pt) pt.onchange=function(){ P.to=pt.value; render(); };
+  var pcl=el("pclient"); if(pcl) pcl.onchange=function(){ P.client=pcl.value; render(); };
+  var pmn=el("pmin"); if(pmn) pmn.onchange=function(){ P.minN=+pmn.value; render(); };
+  mselBind();
+  var pq=el("pq"); if(pq) pq.oninput=function(){ clearTimeout(P._qt); P._qt=setTimeout(function(){ var pos=pq.selectionStart; P.q=pq.value; render(); var q2=el("pq"); if(q2){ q2.focus(); try{q2.setSelectionRange(pos,pos);}catch(e){} } },250); };
+  document.querySelectorAll("[data-psort]").forEach(function(h){ h.onclick=function(){ var c=h.getAttribute("data-psort"), s=P.sort[view]; if(s.c===c) s.d=-s.d; else { s.c=c; var k=KPI[view].filter(function(x){return x.id===c;})[0]; s.d=c==="name"?1:(k&&k.b<0?1:-1); } render(); }; });
+  /* a name (or a whole leaderboard row) opens that person's report; numbers inside stop the event themselves */
+  document.querySelectorAll("[data-person]").forEach(function(a){ a.addEventListener("click",function(e){ e.preventDefault(); e.stopPropagation(); P.person[view]=a.getAttribute("data-person"); setHash(); render(); window.scrollTo(0,0); }); });
+  document.querySelectorAll("[data-dr]").forEach(function(x){ x.addEventListener("click",function(e){ if(x.hasAttribute("data-person")) return; e.stopPropagation(); var d=DR[x.getAttribute("data-dr")]; if(d) openModal(d.title,d.tix); }); });
+  var pb=el("pback"); if(pb) pb.onclick=function(){ P.person[view]=""; setHash(); render(); window.scrollTo(0,0); };
+  var ap=el("paddpeer"); if(ap) ap.onchange=function(){ if(ap.value){ P.cmp[view].push(ap.value); render(); } };
+  document.querySelectorAll("[data-unpeer]").forEach(function(b){ b.onclick=function(){ var n=b.getAttribute("data-unpeer"); P.cmp[view]=P.cmp[view].filter(function(x){return x!==n;}); render(); }; });
+  var bp=el("pbestpeer"); if(bp) bp.onclick=function(){ var k=KPI[view].filter(function(x){return x.b>0;})[0], s=pc.st[k.id]; if(s&&s.best&&s.best.m.name!==P.person[view]) P.cmp[view].push(s.best.m.name); else { var o=pc.team.filter(function(x){return x.name!==P.person[view];})[0]; if(o) P.cmp[view].push(o.name); } render(); };
+  var pr=el("printbtn2"); if(pr) pr.onclick=function(){ var o=document.title; document.title=["Report",view==="hd"?"HD-worker":"SVM-in-charge",(P.person[view]||"team").replace(/[^\w]+/g,"-"),new Date().toISOString().slice(0,10)].join("_"); window.print(); setTimeout(function(){document.title=o;},1000); };
+  var cs=el("pcsv"); if(cs) cs.onclick=function(){
+    var ks=KPI[view], lines=[["Person","Group","Ranked"].concat(ks.map(function(k){return k.l;})).join(",")];
+    pc.rows.forEach(function(m){ lines.push([m.name,m.group,pc.team.indexOf(m)>-1?"yes":"no"].concat(ks.map(function(k){ var v=k.g(m); return v==null||isNaN(v)?"":(k.f===fmtN?v:Math.round(v*10)/10); })).map(function(x){ x=String(x==null?"":x); return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x; }).join(",")); });
+    var b=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"}), u=URL.createObjectURL(b), a=document.createElement("a"); a.href=u; a.download=(view==="hd"?"hd-worker":"svm-in-charge")+"-performance-"+P.per+".csv"; a.click(); URL.revokeObjectURL(u);
+  };
+  var fb=el("pfetch"); if(fb) fb.onclick=function(){ var L=window.HDSlaLink; var miss=pc.sc.filter(function(t){ var s=L.get(t._raw); return s&&s.state==="nohist"; }).slice(0,1500); fb.disabled=true; fb.textContent="Fetching…";
+    L.fetchMissing(miss.map(function(t){return t._raw;}),{force:true,label:"Reports",onProgress:function(d,t){ fb.textContent="Fetching "+d+"/"+t+"…"; }}).then(function(){ return phLoad(); },function(e){ alert(String(e&&e.message||e).replace(/^BUSY:/,"")); }).then(function(){ render(); }); };
+}
+/* keep in sync when SLA data / history changes elsewhere */
+if(window.HDSlaLink){ var _pt=null; HDSlaLink.subscribe(function(){ if(P.view==="weekly") return; clearTimeout(_pt); _pt=setTimeout(function(){ if(!el("ovl")) render(); },400); }); }
+window.addEventListener("storage",function(e){ if(e.key==="hd-sla-hist-ping") phLoad().then(function(){ if(P.view!=="weekly"&&!el("ovl")) render(); }); });
+
 /* ═══════════════════════ BOOT ═══════════════════════ */
 function boot(){
   if(!window.HDStore){ el("app").innerHTML='<div class="loading"><div style="font-size:15px;font-weight:700">Storage unavailable</div><div style="font-size:12px;color:var(--muted)">Open this from the launcher. <a href="index.html">Go to upload</a>.</div></div>'; return; }
@@ -1143,7 +1618,9 @@ function boot(){
     var cfg=r[3]||{}; window.HDClass.setOverrides(cfg.statusOverrides); window.HDStages.setOverrides(cfg.stageOverrides);
     if(!rec){ window.location.replace("index.html"); return; }
     FILENAME=rec.name;
-    function go(rows){ RAW_ROWS=rows; RAW=normalize(rows); computeAsOf(); captureSnapshot(); render(); }
+    function go(rows){ RAW_ROWS=rows; RAW=normalize(rows); computeAsOf(); captureSnapshot(); render();
+      /* SLA config + status history feed the performance reports; re-render once they are in */
+      Promise.all([phLoad(), window.HDSlaLink&&HDSlaLink.load?Promise.resolve(HDSlaLink.load()).catch(function(){}):null]).then(function(){ if(P.view!=="weekly") render(); }); }
     if(edited && edited.length){ go(edited); }
     else { readFile(rec.blob).then(go).catch(function(err){ alert("Could not read stored file: "+err.message); window.location.replace("index.html"); }); }
   });
