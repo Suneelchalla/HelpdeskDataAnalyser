@@ -48,7 +48,8 @@
     goalPct: 90,                        // SLA % the team aims for (colours only)
     /* FIRST RESPONSE = creation → the first message to the client, i.e. the first time the ticket moves to a
        CLIENT-side status (Master Data). The automatic acknowledgement (Acknowledged, a Help Desk status) never counts. */
-    frTargetMin: 60,                    // first-response target, calendar minutes
+    frTargetMin: 30,                    // first-response SLA, minutes
+    frBasis: "calendar",                // "calendar" = 24×7 clock · "working" = the client's working calendar
     issueTypes: ["Incident", "Service Request"],
     /* Wording of the reminder posted to Jira. Two templates, chosen automatically per ticket:
          soon     → open and not yet breached (running, or paused with the client)
@@ -73,7 +74,10 @@
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
     if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
-    if (typeof saved.frTargetMin === "number" && saved.frTargetMin > 0) c.frTargetMin = saved.frTargetMin;
+    /* 60 was the earlier built-in default; a 60 that was never set by hand (no frTargetSet) becomes the real 30-minute SLA */
+    if (typeof saved.frTargetMin === "number" && saved.frTargetMin > 0 && (saved.frTargetSet || saved.frTargetMin !== 60)) c.frTargetMin = saved.frTargetMin;
+    if (saved.frTargetSet) c.frTargetSet = true;
+    if (saved.frBasis === "working" || saved.frBasis === "calendar") c.frBasis = saved.frBasis;
     if (saved.calendars && typeof saved.calendars === "object") Object.keys(saved.calendars).forEach(function (k) {
       var x = saved.calendars[k], ok = /^\d{1,2}:\d{2}$/;
       if (x && ok.test(x.businessStart) && ok.test(x.businessEnd) && Array.isArray(x.workDays) && x.workDays.length)
@@ -109,6 +113,21 @@
       if (cl || done) return { min: Math.max(0, (x.t - created) / 60000), at: x.t, to: to, from: x.from || "", by: x.by || "", closedDirect: done };
     }
     return { min: null, pending: true };
+  }
+
+  /* First-response SLA state for one ticket.
+     fr = firstResponse(…) result · cal = the client's working calendar (used when cfg.frBasis = "working").
+     → { state: met | missed | breached | risk | waiting, mins (measured), target, pct, answered } or null.
+       met = replied within target · missed = replied, but late · breached = no reply yet and already over target ·
+       risk = no reply yet, warnPct% or more of the target used · waiting = no reply yet, still inside the target. */
+  function frMeasure(created, fr, now, cfg, cal) {
+    if (!fr || created == null) return null;
+    cfg = cfg || DEFAULT_CONFIG;
+    var answered = fr.min != null, end = answered ? fr.at : now;
+    var mins = cfg.frBasis === "working" && cal ? bizMinutes(created, end, cal) : Math.max(0, (end - created) / MIN);
+    var target = cfg.frTargetMin || 30, pct = mins / target * 100;
+    var state = answered ? (mins <= target ? "met" : "missed") : (mins > target ? "breached" : pct >= (cfg.warnPct || 75) ? "risk" : "waiting");
+    return { state: state, mins: mins, target: target, pct: pct, answered: answered };
   }
 
   /* ─────────── timestamps ─────────── */
@@ -402,7 +421,7 @@
   }
 
   return {
-    DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig, firstResponse: firstResponse,
+    DEFAULT_CONFIG: DEFAULT_CONFIG, SEVERITIES: SEVERITIES, mergeConfig: mergeConfig, firstResponse: firstResponse, frMeasure: frMeasure,
     parseTs: parseTs, makeCalendar: makeCalendar, makeCalendarSet: makeCalendarSet, bizMinutes: bizMinutes,
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
