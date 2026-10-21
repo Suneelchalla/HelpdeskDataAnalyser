@@ -54,17 +54,18 @@
     /* Wording of the reminder posted to Jira. Two templates, chosen automatically per ticket:
          soon     → open and not yet breached (running, or paused with the client)
          breached → open and already over target
+       Kept short on purpose: one line on the ticket, one sentence on the SLA position, one line of facts, one request.
        Blank line = new paragraph, line break stays a line break, **text** is bold, {placeholders} are filled in.
        Only the "SLA reminder · HD SLA Tracker — <state>" heading is added automatically. */
     templates: {
-      soon: "Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n**{remaining}**\n\nRegards,\nSVM Help Desk",
-      breached: "Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n**{remaining}**\n\nRegards,\nSVM Help Desk"
+      soon: "Dear {name},\n\n**{key} – {summary}**\n\n{situation}\n\nSeverity: {severity}  |  Status: {status} ({heldBy})  |  SLA used: {pct} of {target}\n\n{extra}\n\n{ask}\n\nRegards,\nSVM Help Desk",
+      breached: "Dear {name},\n\n**{key} – {summary}**\n\n{situation}\n\nSeverity: {severity}  |  Status: {status} ({heldBy})  |  SLA target: {target}\n\n{extra}\n\n**{ask}**\n\nRegards,\nSVM Help Desk"
     }
   };
 
   /* Earlier default wordings. Settings saves the whole config, so an unedited copy of an old default can sit in
      someone's browser; it is replaced by the current default instead of overriding it. */
-  var LEGACY_TEMPLATES = { soon: ["Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n\nRegards,\nSVM Help Desk"], breached: ["Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n\nRegards,\nSVM Help Desk"] };
+  var LEGACY_TEMPLATES = { soon: ["Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n**{remaining}**\n\nRegards,\nSVM Help Desk", "Dear {name},\n\nThis is an early SLA warning for ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}**\n\nRegards,\nSVM Help Desk"], breached: ["Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n**{remaining}**\n\nRegards,\nSVM Help Desk", "Dear {name},\n\n⚠ SLA BREACH on ticket {key} - \"{summary}\".\n\n{situation}\n\nSeverity: {severity} · Held by: {heldBy} ({status})\nCreated: {created} ({age} ago) · Working time used: {used}\n\n{extra}\n\n**{ask}** Please add the reason for the delay and the expected resolution time in the ticket.\n\nRegards,\nSVM Help Desk"] };
   function isLegacy(k, v) { var n = String(v).replace(/\r\n/g, "\n").trim(); return LEGACY_TEMPLATES[k].some(function (x) { return x.trim() === n; }); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   /* Merge a saved config over the defaults so new keys always exist. */
