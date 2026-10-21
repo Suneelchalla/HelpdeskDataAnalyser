@@ -298,6 +298,10 @@ select{appearance:none;background:var(--paper);border:1px solid var(--line);bord
 .plegend i.g{background:#DCFCE7;border-color:#86EFAC}.plegend i.w{background:#fff}.plegend i.r{background:#FEE2E2;border-color:#FCA5A5}.plegend i.x{background:var(--paper)}
 .ptab th.ctx{color:var(--faint)}
 .pnote ul{margin:6px 0 0 18px}.pnote li{margin-bottom:3px}
+.pfetchst{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2)}
+.spin{width:12px;height:12px;border:2px solid var(--line2);border-top-color:var(--accent);border-radius:50%;animation:pspin .8s linear infinite}
+@keyframes pspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
 .pnote{margin-top:16px;font-size:11px;color:var(--muted);line-height:1.6;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 13px}
 @media print{ .ptab tr.prow{cursor:default} .spread{print-color-adjust:exact;-webkit-print-color-adjust:exact} .pk,.ptab td.good,.ptab td.bad{print-color-adjust:exact;-webkit-print-color-adjust:exact} }
 </style>
@@ -1514,12 +1518,30 @@ function renderPerf(){
   el("app").innerHTML=html;
   bindPerf(view,pc);
 }
+/* ── status history needed by THIS report ──
+   Only the tickets the report really uses: created in the period (first response), closed in the period (SLA,
+   came back) and open now (SLA breached / at risk). A ticket needs fetching when there is no usable saved history
+   for it (none yet, or the ticket changed in Jira since). Tickets that could not be fetched this session are not
+   asked for again, so the count always goes down. */
+var PF={ running:false, done:0, total:0, tried:{}, failed:0, stop:false };
+function histNeeded(pc){
+  var r=pc.r, L=window.HDSlaLink, seen={}, out=[];
+  pc.sc.forEach(function(t){
+    var used=isOpen(t) || (t.created&&t.created>=r.from&&t.created<=r.to) || (t.resolved&&t.resolved>=r.from&&t.resolved<=r.to);
+    if(!used||seen[t.key]) return; seen[t.key]=1;
+    var s=L&&L.ready&&L.ready()?L.get(t._raw):null;
+    var need=!phEntry(t) || (s&&s.state==="nohist");
+    if(need&&!PF.tried[t.key+"|"+(t.updated?t.updated.getTime():"")+"|"+t.status]) out.push(t);
+  });
+  return out;
+}
 function slaBar(pc){
   var L=window.HDSlaLink; if(!L) return "";
+  if(PF.running) return '<span class="pfetchst"><span class="spin" aria-hidden="true"></span>Fetching status history… <b>'+PF.done.toLocaleString()+' / '+PF.total.toLocaleString()+'</b> <button class="btn" id="pstop" style="padding:4px 10px">Stop</button></span>';
   if(L.isFetching&&L.isFetching()){ var pr=L.progress?L.progress():null; return '<span class="pfaint">Fetching status history… '+(pr&&pr.total?pr.done+"/"+pr.total:"")+'</span>'; }
-  var miss=pc.sc.filter(function(t){ var s=L.get(t._raw); return s&&s.state==="nohist"; });
-  if(!miss.length) return "";
-  return '<button class="btn" id="pfetch" title="SLA and “came back” need each ticket’s status history. '+miss.length+' tickets in this report don’t have it yet.">⟳ Fetch history ('+Math.min(miss.length,1500)+')</button>';
+  var miss=histNeeded(pc);
+  if(!miss.length) return PF.failed?'<span class="pfaint" title="Jira did not return a history for these tickets (moved, deleted or no access)">History complete · '+PF.failed+' could not be fetched</span>':'<span class="pfaint">✓ Status history complete</span>';
+  return '<button class="btn" id="pfetch" title="First response, Within SLA and Came back need each ticket’s status history. '+miss.length.toLocaleString()+' tickets used by this report don’t have it yet. Fetched once, then saved and shared with the SLA Tracker.">⟳ Fetch history for '+miss.length.toLocaleString()+' ticket'+(miss.length>1?"s":"")+'</button>';
 }
 
 function teamHTML(view,pc,title){
@@ -1681,6 +1703,22 @@ function monthly(view,m,pc){
     rows.slice().reverse().map(function(r,i,arr){ var prev=arr[i+1]; return '<tr><td class="pname">'+r.mo.label+(r.mo.to>new Date()?' <span class="pfaint">so far</span>':'')+'</td>'+ks.map(function(k){return cell(k,r,prev);}).join("")+'</tr>'; }).join("")+
     '</tbody></table></div>';
 }
+function runHistFetch(pc){
+  var L=window.HDSlaLink; if(!L||PF.running) return;
+  var all=histNeeded(pc); if(!all.length) return;
+  PF.running=true; PF.stop=false; PF.done=0; PF.total=all.length; render();
+  function sig(t){ return t.key+"|"+(t.updated?t.updated.getTime():"")+"|"+t.status; }
+  function next(){
+    var left=all.filter(function(t){ return !PF.tried[sig(t)]; });
+    if(PF.stop||!left.length){ PF.running=false; return phLoad().then(function(){ render(); }); }
+    var chunk=left.slice(0,1500), base=PF.done;
+    chunk.forEach(function(t){ PF.tried[sig(t)]=1; });
+    return L.fetchMissing(chunk.map(function(t){return t._raw;}),{force:true,label:"Reports",onProgress:function(d){ PF.done=base+d; var x=document.querySelector(".pfetchst b"); if(x) x.textContent=PF.done.toLocaleString()+" / "+PF.total.toLocaleString(); }})
+      .then(function(res){ PF.done=base+chunk.length; PF.failed+=(res&&res.failed?res.failed.length:0); if(res&&res.aborted){ PF.stop=true; alert("Fetching stopped: the HD Jira Bridge stopped answering ("+res.aborted+")."); } return phLoad(); })
+      .then(next, function(e){ var m=String(e&&e.message||e); chunk.forEach(function(t){ delete PF.tried[sig(t)]; }); PF.running=false; if(/^BUSY:/.test(m)) alert(m.slice(5)+" Try again when it has finished."); else alert("Fetching failed: "+m); render(); });
+  }
+  next();
+}
 function bindPerf(view,pc){
   document.querySelectorAll(".rtab").forEach(function(b){ b.onclick=function(){ P.view=b.getAttribute("data-view"); setHash(); render(); window.scrollTo(0,0); }; });
   var bb=el("backbtn2"); if(bb) bb.onclick=function(){ window.location.href="index.html"; };
@@ -1704,8 +1742,8 @@ function bindPerf(view,pc){
     pc.rows.forEach(function(m){ lines.push([m.name,m.group,pc.team.indexOf(m)>-1?"yes":"no"].concat(ks.map(function(k){ var v=k.g(m); return v==null||isNaN(v)?"":(k.f===fmtN?v:Math.round(v*10)/10); })).map(function(x){ x=String(x==null?"":x); return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x; }).join(",")); });
     var b=new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"}), u=URL.createObjectURL(b), a=document.createElement("a"); a.href=u; a.download=(view==="hd"?"hd-worker":"svm-in-charge")+"-performance-"+P.per+".csv"; a.click(); URL.revokeObjectURL(u);
   };
-  var fb=el("pfetch"); if(fb) fb.onclick=function(){ var L=window.HDSlaLink; var miss=pc.sc.filter(function(t){ var s=L.get(t._raw); return s&&s.state==="nohist"; }).slice(0,1500); fb.disabled=true; fb.textContent="Fetching…";
-    L.fetchMissing(miss.map(function(t){return t._raw;}),{force:true,label:"Reports",onProgress:function(d,t){ fb.textContent="Fetching "+d+"/"+t+"…"; }}).then(function(){ return phLoad(); },function(e){ alert(String(e&&e.message||e).replace(/^BUSY:/,"")); }).then(function(){ render(); }); };
+  var fb=el("pfetch"); if(fb) fb.onclick=function(){ runHistFetch(pc); };
+  var st=el("pstop"); if(st) st.onclick=function(){ PF.stop=true; st.disabled=true; st.textContent="Stopping…"; };
 }
 /* keep in sync when SLA data / history changes elsewhere */
 if(window.HDSlaLink){ var _pt=null; HDSlaLink.subscribe(function(){ if(P.view==="weekly") return; clearTimeout(_pt); _pt=setTimeout(function(){ if(!el("ovl")) render(); },400); }); }
