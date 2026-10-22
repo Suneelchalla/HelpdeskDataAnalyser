@@ -217,7 +217,13 @@
         if (e.source === root || !e.data.relay) BR.own = true; else if (PARENT && e.source === PARENT) BR.par = true; else return;
         if (!BR.ready) { BR.ready = true; notify(); } return;
       }
-      if (e.data.type !== "HD_BRIDGE_RESULT") return;
+      /* the launcher's relay answers with its own message types (HD_RELAY_READY / HD_RELAY_RESULT) — before, these
+         were ignored, so every dashboard opened as a launcher tab thought the bridge was missing */
+      if (e.data.type === "HD_RELAY_READY") {
+        if (!PARENT || e.source !== PARENT) return;
+        BR.par = true; if (!BR.ready) { BR.ready = true; notify(); } return;
+      }
+      if (e.data.type !== "HD_BRIDGE_RESULT" && !(e.data.type === "HD_RELAY_RESULT" && PARENT && e.source === PARENT)) return;
       var p = BR.pend[e.data.id]; if (!p) return; delete BR.pend[e.data.id];
       if (e.data.ok) p.res(e.data.data); else p.rej(new Error(e.data.error || "Bridge error"));
     });
