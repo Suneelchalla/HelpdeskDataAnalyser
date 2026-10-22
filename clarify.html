@@ -43,7 +43,7 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
 .hidden { display: none !important }
 @keyframes up { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
-.up { animation: up .5s cubic-bezier(.22,1,.36,1) both }
+.up { animation: up .5s cubic-bezier(.22,1,.36,1) backwards }
 .d1 { animation-delay: .05s } .d2 { animation-delay: .1s } .d3 { animation-delay: .16s }
 @media (prefers-reduced-motion: reduce) { .up { animation: none !important } }
 
@@ -479,7 +479,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   function mselRenderList(id){var inst=_mselInstances[id];if(!inst)return;var listEl=document.getElementById(id+'-list');if(!listEl)return;var q=inst.search.toLowerCase();var filtered=inst.opts.filter(function(o){return!q||o.toLowerCase().indexOf(q)>-1;});if(!filtered.length){listEl.innerHTML='<div class="msel-empty">No matches</div>';return;}listEl.innerHTML=filtered.map(function(o){var on=inst.sel.indexOf(o)>-1;return'<div class="msel-opt'+(on?' on':'')+'" data-msel-val="'+esc(o)+'" data-msel-id="'+id+'"><span class="msel-chk">'+(on?'✓':'')+'</span><span class="msel-lbl">'+esc(o)+'</span></div>';}).join('');}
   function mselUpdateBtn(id){var inst=_mselInstances[id];if(!inst)return;var btn=document.querySelector('.msel-btn[data-msel="'+id+'"]');if(!btn)return;var sel=inst.sel,allLabel=inst.allLabel;var text=sel.length===0?allLabel:sel.length<=2?sel.join(', '):sel.length+' selected';btn.querySelector('.msel-text').textContent=text;var cnt=btn.querySelector('.msel-cnt');if(sel.length>0){if(!cnt){cnt=document.createElement('span');cnt.className='msel-cnt';btn.insertBefore(cnt,btn.querySelector('.msel-arrow'));}cnt.textContent=sel.length;}else{if(cnt)cnt.remove();}}
   function mselCloseAll(){document.querySelectorAll('.msel-dd.open').forEach(function(dd){dd.classList.remove('open');var id=dd.id.replace('-dd','');var inst=_mselInstances[id];if(inst&&inst.onClose)inst.onClose();});document.querySelectorAll('.msel-btn.open').forEach(function(b){b.classList.remove('open');});}
-  function mselBind(){document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.msel;var dd=document.getElementById(id+'-dd');var wasOpen=dd.classList.contains('open');mselCloseAll();if(!wasOpen){dd.classList.add('open');btn.classList.add('open');mselRenderList(id);var si=dd.querySelector('.msel-search');if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}}};});document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){inp.onclick=function(e){e.stopPropagation();};inp.oninput=function(){_mselInstances[inp.dataset.mselSearch].search=inp.value;mselRenderList(inp.dataset.mselSearch);};});document.querySelectorAll('[data-msel-all]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselAll,inst=_mselInstances[id];inst.sel=inst.opts.slice();mselRenderList(id);mselUpdateBtn(id);inst.onChange(inst.sel.slice());};});document.querySelectorAll('[data-msel-none]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselNone,inst=_mselInstances[id];inst.sel=[];mselRenderList(id);mselUpdateBtn(id);inst.onChange([]);};});document.querySelectorAll('.msel-list').forEach(function(list){list.onclick=function(e){e.stopPropagation();var opt=e.target.closest('.msel-opt');if(!opt)return;var id=opt.dataset.mselId,val=opt.dataset.mselVal;var inst=_mselInstances[id];if(!inst)return;var idx=inst.sel.indexOf(val);if(idx>-1)inst.sel.splice(idx,1);else inst.sel.push(val);mselRenderList(id);mselUpdateBtn(id);inst.onChange(inst.sel.slice());};});}
+  function mselBind(){document.querySelectorAll('.msel-btn[data-msel]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.msel;var dd=document.getElementById(id+'-dd');var wasOpen=dd.classList.contains('open');mselCloseAll();if(!wasOpen){dd.classList.add('open');btn.classList.add('open');mselRenderList(id);var si=dd.querySelector('.msel-search');if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus({preventScroll:true});},30);}}};});document.querySelectorAll('.msel-search[data-msel-search]').forEach(function(inp){inp.onclick=function(e){e.stopPropagation();};inp.oninput=function(){_mselInstances[inp.dataset.mselSearch].search=inp.value;mselRenderList(inp.dataset.mselSearch);};});document.querySelectorAll('[data-msel-all]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselAll,inst=_mselInstances[id];inst.sel=inst.opts.slice();mselRenderList(id);mselUpdateBtn(id);inst.onChange(inst.sel.slice());};});document.querySelectorAll('[data-msel-none]').forEach(function(btn){btn.onclick=function(e){e.stopPropagation();var id=btn.dataset.mselNone,inst=_mselInstances[id];inst.sel=[];mselRenderList(id);mselUpdateBtn(id);inst.onChange([]);};});document.querySelectorAll('.msel-list').forEach(function(list){list.onclick=function(e){e.stopPropagation();var opt=e.target.closest('.msel-opt');if(!opt)return;var id=opt.dataset.mselId,val=opt.dataset.mselVal;var inst=_mselInstances[id];if(!inst)return;var idx=inst.sel.indexOf(val);if(idx>-1)inst.sel.splice(idx,1);else inst.sel.push(val);mselRenderList(id);mselUpdateBtn(id);inst.onChange(inst.sel.slice());};});}
   document.addEventListener('click',function(){mselCloseAll();});
 
   /* ── Filter state ── */
@@ -2154,5 +2154,33 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
 
 })();
 </script>
+<!-- ── Dropdown fit ──
+     Keeps every filter dropdown fully on screen: a dropdown that would run past the right edge of the window
+     (e.g. the last filter in a row) opens leftwards instead, so the page no longer shifts sideways; one that
+     would run past the bottom gets a shorter list. Works for every dropdown style used in the dashboards. -->
+<script>
+(function(){
+  var SEL=".msel-dd.open, .msel-r-dd, details.mvms[open] > .mvms-dd";
+  function fit(dd){
+    if(!dd||!dd.getBoundingClientRect) return;
+    dd.style.left=""; dd.style.right=""; dd.style.maxHeight="";
+    var vw=document.documentElement.clientWidth, vh=window.innerHeight, r=dd.getBoundingClientRect();
+    if(!r.width) return;
+    if(r.right>vw-8){ dd.style.left="auto"; dd.style.right="0"; r=dd.getBoundingClientRect();
+      if(r.left<8) dd.style.right=(r.left-8)+"px"; }
+    var room=vh-r.top-10, css=parseFloat(getComputedStyle(dd).maxHeight)||r.height;
+    if(room<css&&room>160) dd.style.maxHeight=room+"px";
+  }
+  function fixShift(x0){ if(window.scrollX!==x0&&document.documentElement.scrollWidth<=document.documentElement.clientWidth+1) window.scrollTo(x0,window.scrollY); }
+  function scan(){ document.querySelectorAll(SEL).forEach(fit); fixShift(0); }
+  var pend=false;
+  new MutationObserver(function(){ if(pend) return; pend=true; requestAnimationFrame(function(){ pend=false; scan(); }); })
+    .observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["class","open"]});
+  window.addEventListener("resize",scan);
+  /* a dropdown's search box gets focus right after it opens — never let that scroll the page sideways */
+  document.addEventListener("focusin",function(e){ var t=e.target; if(t&&t.closest&&t.closest(".msel-dd, .msel-r-dd, .mvms-dd")) requestAnimationFrame(function(){ fixShift(0); }); });
+})();
+</script>
+
 </body>
 </html>
