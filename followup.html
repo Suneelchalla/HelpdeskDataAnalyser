@@ -56,7 +56,7 @@ input[type="date"]{outline:none;font-family:inherit}
 input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes modalIn{from{opacity:0;transform:scale(.96) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-.fu{animation:fadeUp .4s cubic-bezier(.22,1,.36,1) both}
+.fu{animation:fadeUp .4s cubic-bezier(.22,1,.36,1) backwards}
 .fu1{animation-delay:.05s}.fu2{animation-delay:.1s}.fu3{animation-delay:.15s}.fu4{animation-delay:.2s}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow);transition:box-shadow .25s}
 .card:hover{box-shadow:var(--shadow2)}
@@ -1853,7 +1853,7 @@ function MultiSelect({allLabel, options, selected, onChange, minWidth}){
       </button>
       {open && (
         <div className="msel-r-dd">
-          <input className="srch" placeholder="Search…" value={search} onChange={function(e){ setSearch(e.target.value); }} onClick={function(e){ e.stopPropagation(); }} autoFocus/>
+          <input className="srch" placeholder="Search…" value={search} onChange={function(e){ setSearch(e.target.value); }} onClick={function(e){ e.stopPropagation(); }} ref={function(n){ if(n&&!n._f){ n._f=1; n.focus({preventScroll:true}); } }}/>
           <div className="acts">
             <button onClick={selectAll}>Select all</button>
             <button onClick={clearAll}>Clear</button>
@@ -3159,5 +3159,33 @@ function App(){
 }
 ReactDOM.render(<App/>,document.getElementById("root"));
 </script>
+<!-- ── Dropdown fit ──
+     Keeps every filter dropdown fully on screen: a dropdown that would run past the right edge of the window
+     (e.g. the last filter in a row) opens leftwards instead, so the page no longer shifts sideways; one that
+     would run past the bottom gets a shorter list. Works for every dropdown style used in the dashboards. -->
+<script>
+(function(){
+  var SEL=".msel-dd.open, .msel-r-dd, details.mvms[open] > .mvms-dd";
+  function fit(dd){
+    if(!dd||!dd.getBoundingClientRect) return;
+    dd.style.left=""; dd.style.right=""; dd.style.maxHeight="";
+    var vw=document.documentElement.clientWidth, vh=window.innerHeight, r=dd.getBoundingClientRect();
+    if(!r.width) return;
+    if(r.right>vw-8){ dd.style.left="auto"; dd.style.right="0"; r=dd.getBoundingClientRect();
+      if(r.left<8) dd.style.right=(r.left-8)+"px"; }
+    var room=vh-r.top-10, css=parseFloat(getComputedStyle(dd).maxHeight)||r.height;
+    if(room<css&&room>160) dd.style.maxHeight=room+"px";
+  }
+  function fixShift(x0){ if(window.scrollX!==x0&&document.documentElement.scrollWidth<=document.documentElement.clientWidth+1) window.scrollTo(x0,window.scrollY); }
+  function scan(){ document.querySelectorAll(SEL).forEach(fit); fixShift(0); }
+  var pend=false;
+  new MutationObserver(function(){ if(pend) return; pend=true; requestAnimationFrame(function(){ pend=false; scan(); }); })
+    .observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["class","open"]});
+  window.addEventListener("resize",scan);
+  /* a dropdown's search box gets focus right after it opens — never let that scroll the page sideways */
+  document.addEventListener("focusin",function(e){ var t=e.target; if(t&&t.closest&&t.closest(".msel-dd, .msel-r-dd, .mvms-dd")) requestAnimationFrame(function(){ fixShift(0); }); });
+})();
+</script>
+
 </body>
 </html>
