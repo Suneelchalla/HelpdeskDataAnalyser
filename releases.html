@@ -312,7 +312,7 @@ td:has(>.jkey){white-space:nowrap;min-width:92px}
 .mvbar b{color:var(--ink)}
 .mvmuted{color:var(--muted);font-size:11.5px}
 .mvprog{flex:0 0 160px;height:6px;border-radius:6px;background:var(--line);overflow:hidden}.mvprog i{display:block;height:100%;background:var(--vi);transition:width .3s}
-.mvspin{width:13px;height:13px;border:2px solid var(--vi-soft);border-top-color:var(--vi);border-radius:50%;animation:mvspin .8s linear infinite;flex:none}
+.mvspin{display:block;width:13px;height:13px;min-width:0;border:2px solid var(--vi-soft);border-top-color:var(--vi);border-radius:50%;animation:mvspin .8s linear infinite;flex:none}
 @keyframes mvspin{to{transform:rotate(360deg)}}
 .mvgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
 @media(max-width:1100px){.mvgrid{grid-template-columns:1fr}}
@@ -1727,12 +1727,12 @@ if(window.HDSlaLink) HDSlaLink.subscribe(function(){if(MV.err===MV_NOBRIDGE&&mvB
 /* status-history bar: progress / missing / errors — repainted on its own while fetching */
 function mvBarHTML(){
   var r=mvRange(S.mvPeriod),c=mvCollect(r.a,r.b,false),need=c.unknown.length,h="";
-  if(!MV.loaded) return '<div class="mvbar"><span class="mvspin"></span>Loading saved status history…</div>';
+  if(!MV.loaded) return '<div class="mvbar"><i class="mvspin"></i>Loading saved status history…</div>';
   if(MV.fetching&&MV.prog){
     var p=MV.prog.total?Math.round(MV.prog.done/MV.prog.total*100):0;
-    return '<div class="mvbar"><span class="mvspin"></span><span>Fetching status history from Jira — <b>'+MV.prog.done+'</b> of <b>'+MV.prog.total+'</b> tickets</span><span class="mvprog"><i style="width:'+p+'%"></i></span></div>';
+    return '<div class="mvbar"><i class="mvspin"></i><span>Fetching status history from Jira — <b>'+MV.prog.done+'</b> of <b>'+MV.prog.total+'</b> tickets</span><span class="mvprog"><i style="width:'+p+'%"></i></span></div>';
   }
-  if(MV.busy) return '<div class="mvbar"><span class="mvspin"></span><span>'+esc(MV.busy)+'</span></div>';
+  if(MV.busy) return '<div class="mvbar"><i class="mvspin"></i><span>'+esc(MV.busy)+'</span></div>';
   if(MV.err) h+='<div class="mvbar warn"><span>⚠ '+esc(MV.err)+'</span>'+'</div>';
   if(need){
     h+='<div class="mvbar warn"><span><b>'+need+'</b> ticket'+(need===1?'':'s')+' changed in Jira during this period but '+(need===1?'its':'their')+' status history isn’t fetched yet, so '+(need===1?'it is':'they are')+' not counted below.</span>'+
