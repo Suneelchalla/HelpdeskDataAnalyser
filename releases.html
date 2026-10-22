@@ -2077,5 +2077,71 @@ document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal()
 
 boot();
 </script>
+<!-- ── Tab bar scrolling ──
+     The tab strip scrolls sideways when it doesn't fit, but a normal mouse wheel only scrolls up/down and the
+     scrollbar is hidden, so tabs past the edge were reachable only with a touchpad. This adds:
+       • mouse wheel over the tabs → scrolls them sideways
+       • ‹ › arrows at the edges whenever more tabs are hidden that way
+       • the selected tab is always brought into view
+     Works however often the page re-draws its header (the tab strip is re-enhanced each time). -->
+<style>
+.tsx-edge{position:sticky;z-index:3;flex:0 0 0;width:0;align-self:stretch;pointer-events:none}
+.tsx-edge.l{left:0;order:-9999}.tsx-edge.r{right:0;order:9999}
+.tsx-edge>span{position:absolute;top:-3px;bottom:-3px;width:34px;display:flex;align-items:center;cursor:pointer;pointer-events:auto;
+  font:700 17px/1 var(--sans,system-ui);color:var(--ink2,#3E4C63);opacity:0;visibility:hidden;transition:opacity .15s;user-select:none}
+.tsx-edge.l>span{left:-3px;justify-content:flex-start;padding-left:7px;border-radius:11px 0 0 11px;background:linear-gradient(90deg,var(--paper,#F6F8FA) 55%,rgba(246,248,250,0))}
+.tsx-edge.r>span{right:-3px;justify-content:flex-end;padding-right:7px;border-radius:0 11px 11px 0;background:linear-gradient(270deg,var(--paper,#F6F8FA) 55%,rgba(246,248,250,0))}
+.tsx-edge.show>span{opacity:1;visibility:visible}
+.tsx-edge>span:hover{color:var(--ink,#111A2B)}
+</style>
+<script>
+(function(){
+  var lastLeft=null;
+  function edges(nav){
+    var l=nav.querySelector(":scope>.tsx-edge.l"), r=nav.querySelector(":scope>.tsx-edge.r");
+    if(!l||!r) return;
+    var max=nav.scrollWidth-nav.clientWidth;
+    l.classList.toggle("show",nav.scrollLeft>2);
+    r.classList.toggle("show",max>2&&nav.scrollLeft<max-2);
+  }
+  function step(nav,dir){ nav.scrollBy({left:dir*Math.max(120,nav.clientWidth*0.6),behavior:"smooth"}); }
+  function showActive(nav){
+    var on=nav.querySelector(".on"); if(!on) return;
+    var a=on.getBoundingClientRect().left-nav.getBoundingClientRect().left+nav.scrollLeft, b=a+on.offsetWidth, pad=40;
+    if(a<nav.scrollLeft+pad) nav.scrollLeft=Math.max(0,a-pad);
+    else if(b>nav.scrollLeft+nav.clientWidth-pad) nav.scrollLeft=b-nav.clientWidth+pad;
+  }
+  function enhance(nav){
+    if(nav._tsx) return; nav._tsx=1;
+    if(getComputedStyle(nav).position==="static") nav.style.position="relative";
+    ["l","r"].forEach(function(side){
+      var e=document.createElement("div"); e.className="tsx-edge "+side;
+      var s=document.createElement("span"); s.setAttribute("role","button"); s.setAttribute("aria-label",side==="l"?"Scroll tabs left":"Scroll tabs right");
+      s.textContent=side==="l"?"‹":"›";
+      s.addEventListener("click",function(ev){ev.stopPropagation();step(nav,side==="l"?-1:1);});
+      e.appendChild(s);
+      if(side==="l") nav.insertBefore(e,nav.firstChild); else nav.appendChild(e);
+    });
+    if(lastLeft!=null) nav.scrollLeft=lastLeft;          // the header was re-drawn: keep the strip where it was
+    showActive(nav);
+    nav.addEventListener("scroll",function(){lastLeft=nav.scrollLeft;edges(nav);},{passive:true});
+    edges(nav);
+  }
+  function scan(){ document.querySelectorAll(".tabs").forEach(enhance); }
+  /* mouse wheel (vertical) over the tabs → sideways */
+  document.addEventListener("wheel",function(e){
+    var nav=e.target.closest&&e.target.closest(".tabs"); if(!nav) return;
+    var max=nav.scrollWidth-nav.clientWidth; if(max<=2) return;
+    if(Math.abs(e.deltaX)>=Math.abs(e.deltaY)) return;     // touchpad sideways swipe already works
+    var d=e.deltaY*(e.deltaMode===1?32:e.deltaMode===2?nav.clientWidth:1);
+    if((d<0&&nav.scrollLeft<=0)||(d>0&&nav.scrollLeft>=max-1)) return;   // at the end: let the page scroll
+    e.preventDefault(); nav.scrollLeft+=d;
+  },{passive:false});
+  window.addEventListener("resize",function(){document.querySelectorAll(".tabs").forEach(edges);});
+  new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",scan); else scan();
+})();
+</script>
+
 </body>
 </html>
