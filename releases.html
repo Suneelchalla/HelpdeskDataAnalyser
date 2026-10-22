@@ -1733,8 +1733,8 @@ function mvBarHTML(){
     return '<div class="mvbar"><span class="mvspin"></span><span>Fetching status history from Jira — <b>'+MV.prog.done+'</b> of <b>'+MV.prog.total+'</b> tickets</span><span class="mvprog"><i style="width:'+p+'%"></i></span></div>';
   }
   if(MV.busy) return '<div class="mvbar"><span class="mvspin"></span><span>'+esc(MV.busy)+'</span></div>';
-  if(MV.err) h+='<div class="mvbar warn"><span>⚠ '+esc(MV.err)+'</span>'+(need?'<button class="ghost" id="mvFetchBtn">Try again</button>':'')+'</div>';
-  if(need&&!MV.err){
+  if(MV.err) h+='<div class="mvbar warn"><span>⚠ '+esc(MV.err)+'</span>'+'</div>';
+  if(need){
     h+='<div class="mvbar warn"><span><b>'+need+'</b> ticket'+(need===1?'':'s')+' changed in Jira during this period but '+(need===1?'its':'their')+' status history isn’t fetched yet, so '+(need===1?'it is':'they are')+' not counted below.</span>'+
       (mvBridge()?'<button class="ghost" id="mvFetchBtn">Fetch history</button>':'<span class="mvmuted">Waiting for the HD Jira Bridge…</span>')+
       '<button class="ghost" id="mvUnknownBtn">See tickets</button></div>';
