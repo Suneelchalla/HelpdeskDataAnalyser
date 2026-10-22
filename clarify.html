@@ -4,98 +4,241 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HD Similar Ticket Finder</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230891B2'/%3E%3Ccircle cx='15' cy='14' r='6' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M19.5 18.5L24 23' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F2233'/%3E%3Ccircle cx='15' cy='14' r='6' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M19.5 18.5L24 23' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg: #EEF1F4; --paper: #F6F8FA; --card: #FFFFFF;
-  --ink: #111A2B; --ink2: #3E4C63; --muted: #6B7A90; --faint: #9AA7B8;
-  --line: #E3E8EE; --line2: #D2DAE3;
-  --cy: #0891B2; --cy2: #06B6D4; --cy-soft: #CFFAFE; --cy-bg: #ECFEFF;
-  --cy-line: #A5F3FC; --cy-glow: rgba(8,145,178,.25);
-  --green: #059669; --green-bg: #ECFDF5; --green-soft: #A7F3D0;
-  --amber: #D97706; --amber-bg: #FEF7EC; --amber-soft: #FDE68A;
-  --rose: #E11D48; --rose-bg: #FFF1F2; --rose-soft: #FECDD3;
-  --violet: #7C3AED; --violet-bg: #F5F3FF; --violet-soft: #DDD6FE;
-  --indigo: #4F46E5; --indigo-bg: #EEF2FF; --indigo-soft: #C7D2FE;
-  --blue: #2563EB; --blue-bg: #EFF6FF;
-  --r: 12px; --r2: 16px;
-  --disp: 'Space Grotesk', sans-serif;
-  --sans: 'Inter', -apple-system, sans-serif;
-  --mono: 'JetBrains Mono', monospace;
-  --sh: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
-  --sh2: 0 6px 18px rgba(16,24,40,.09), 0 2px 6px rgba(16,24,40,.05);
+:root{
+  --navy:#0F2233; --navy2:#16304A; --navy3:#1D3B58; --rail-tx:#DCE6EF; --rail-mu:#8AA0B6; --rail-ln:rgba(255,255,255,.07);
+  --bg:#F3F5F8; --card:#FFFFFF; --ink:#0E1B2A; --ink2:#3A4A5E; --muted:#66788D; --faint:#97A5B6; --line:#E2E7EE; --line2:#D0D8E2; --paper:#F7F9FB;
+  --cy:#0A8FB0; --cy2:#22D3EE; --cy-bg:#E8F7FB; --cy-line:#A8E3F0;
+  --fix:#0E9F6E; --fix-bg:#E7F7F0; --fix-line:#A7E3CB;
+  --likely:#0A8FB0; --weak:#A3B1C2;
+  --chg:#5B57D8; --chg-bg:#EEEDFD;
+  --p-crit:#7C3AED; --p-high:#E11D48; --p-med:#D97706; --p-low:#64748B;
+  --amber:#B45309; --amber-bg:#FEF4E6;
+  --disp:'Space Grotesk',system-ui,sans-serif; --sans:'Inter',system-ui,-apple-system,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sh:0 1px 2px rgba(14,27,42,.06),0 1px 3px rgba(14,27,42,.05);
+  --sh2:0 8px 24px rgba(14,27,42,.10),0 2px 6px rgba(14,27,42,.06);
+  /* names the popup / dropdown styles still use */
+  --green:#0E9F6E; --green-bg:#E7F7F0; --green-soft:#A7E3CB; --rose:#E11D48; --indigo:#5B57D8; --indigo-bg:#EEEDFD; --indigo-soft:#C9C7F6;
+  --blue:#2563EB; --blue-bg:#EFF6FF; --violet:#7C3AED; --amber-soft:#FDE68A; --cy-soft:#CFF3FA; --cy-glow:rgba(10,143,176,.22);
 }
-* { margin: 0; padding: 0; box-sizing: border-box }
-html { font-size: 14px }
-body { background: var(--bg); font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased; min-height: 100vh }
-::selection { background: var(--cy); color: #fff }
-::-webkit-scrollbar { width: 7px; height: 7px }
-::-webkit-scrollbar-track { background: transparent }
-::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 9px }
-button { cursor: pointer; font-family: inherit; transition: all .18s; border: none; background: none }
-button:active { transform: translateY(1px) }
-a { color: var(--cy); text-decoration: none }
-a:hover { text-decoration: underline }
-h1, h2, h3, .disp { font-family: var(--disp) }
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
-.hidden { display: none !important }
-@keyframes up { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
-.up { animation: up .5s cubic-bezier(.22,1,.36,1) backwards }
-.d1 { animation-delay: .05s } .d2 { animation-delay: .1s } .d3 { animation-delay: .16s }
-@media (prefers-reduced-motion: reduce) { .up { animation: none !important } }
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+html{font-size:14px}
+body{background:var(--bg);font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{cursor:pointer;font-family:inherit;border:none;background:none;color:inherit}
+a{color:var(--cy);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+.hidden{display:none!important}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}::-webkit-scrollbar-track{background:transparent}
 
-/* ═══ LANDING ═══ */
-.landing { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 30px; text-align: center }
-.landing-inner { max-width: 440px }
-.landing .ico { font-size: 48px; margin-bottom: 16px }
-.landing h1 { font-size: 26px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 8px }
-.landing p { color: var(--ink2); font-size: 13.5px; line-height: 1.6; margin-bottom: 22px }
-.landing .lbtn { display: inline-flex; align-items: center; gap: 8px; background: var(--cy); color: #fff; padding: 11px 22px; border-radius: 10px; font-family: var(--disp); font-weight: 600; font-size: 13.5px }
-.wrap { max-width: 1440px; margin: 0 auto; padding: 16px 22px 60px }
+/* ── landing (no data) ── */
+.landing{display:flex;align-items:center;justify-content:center;height:100%;padding:30px;text-align:center}
+.landing-inner{max-width:440px}
+.landing h1{font-family:var(--disp);font-size:26px;letter-spacing:-.5px;margin:14px 0 8px}
+.landing p{color:var(--ink2);font-size:13.5px;line-height:1.6;margin-bottom:20px}
+.landing .lbtn{display:inline-flex;gap:8px;background:var(--navy);color:#fff;padding:11px 22px;border-radius:10px;font-family:var(--disp);font-weight:600}
 
-/* ═══ TOPBAR ═══ */
-.topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap }
-.topbar h1 { font-size: 20px; font-weight: 700; letter-spacing: -.4px; display: flex; align-items: center; gap: 10px; white-space: nowrap }
-.topbar h1 .accent { color: var(--cy) }
-.topbar .spacer { flex: 1 }
-.back-link { font-size: 12px; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 5px }
-.back-link:hover { color: var(--ink); text-decoration: none }
+/* ── app shell: header + two scrolling panes ── */
+#app{height:100%;display:flex;flex-direction:column}
+.cx-hd{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px 0;flex:none;position:relative;z-index:30}
+.cx-hd1{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.cx-back{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}.cx-back:hover{color:var(--ink);text-decoration:none}
+.cx-brand{display:flex;align-items:center;gap:9px;font-family:var(--disp);font-weight:700;font-size:17px;letter-spacing:-.3px;white-space:nowrap}
+.cx-brand svg{flex:none}
+.cx-search{flex:1;min-width:280px;position:relative;display:flex;align-items:center}
+.cx-search>svg{position:absolute;left:14px;color:var(--faint);pointer-events:none}
+.cx-search input{width:100%;height:44px;padding:0 84px 0 42px;border:1.5px solid var(--line2);border-radius:12px;font:500 14px var(--sans);color:var(--ink);background:var(--paper);transition:border-color .15s,box-shadow .15s,background .15s}
+.cx-search input::placeholder{color:var(--faint);font-weight:400}
+.cx-search input:focus{outline:none;border-color:var(--cy);background:#fff;box-shadow:0 0 0 4px var(--cy-glow)}
+.cx-search kbd{position:absolute;right:12px;font:600 11px var(--mono);color:var(--faint);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:#fff}
+.cx-search .clr{position:absolute;right:10px;width:28px;height:28px;border-radius:7px;color:var(--muted);font-size:14px;display:none;align-items:center;justify-content:center}
+.cx-search .clr:hover{background:var(--line);color:var(--ink)}
+.cx-search.has-q kbd{display:none}.cx-search.has-q .clr{display:flex}
 
-/* ═══ SEARCH ═══ */
-.search-wrap { position: relative; flex: 1; min-width: 260px; max-width: 560px }
-.search-input { width: 100%; padding: 11px 16px 11px 40px; border: 1.5px solid var(--line2); border-radius: 12px; font-size: 13.5px; font-family: var(--sans); color: var(--ink); background: var(--card); transition: border-color .2s, box-shadow .2s; box-shadow: var(--sh) }
-.search-input:focus { outline: none; border-color: var(--cy); box-shadow: 0 0 0 3px var(--cy-glow) }
-.search-input::placeholder { color: var(--faint) }
-.search-ico { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 16px; pointer-events: none }
-.search-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 6px; color: var(--muted); font-size: 14px; display: none; align-items: center; justify-content: center }
-.search-clear:hover { background: var(--paper); color: var(--ink) }
-.search-wrap.has-q .search-clear { display: flex }
+.cx-hd2{display:flex;align-items:flex-end;gap:14px;margin-top:10px;flex-wrap:wrap}
+.cx-modes{display:flex;gap:2px}
+.cx-modes button{position:relative;padding:9px 14px 11px;font:600 13px var(--disp);color:var(--muted);display:flex;align-items:center;gap:7px;border-radius:8px 8px 0 0}
+.cx-modes button:hover{color:var(--ink);background:var(--paper)}
+.cx-modes button.on{color:var(--ink)}
+.cx-modes button.on::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--cy)}
+.cx-modes .n{font:600 11px var(--mono);color:var(--faint)}
+.cx-modes button.on .n{color:var(--cy)}
+.cx-gf{margin-left:auto;display:flex;align-items:center;gap:8px;padding-bottom:7px;flex-wrap:wrap}
+.cx-gf label{font-size:11.5px;color:var(--muted);font-weight:500}
+.fsel{height:30px;padding:0 26px 0 10px;border:1px solid var(--line2);border-radius:8px;background:#fff;color:var(--ink);font:500 12px var(--sans);appearance:none;cursor:pointer;max-width:220px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2366788D' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
+.fsel:hover{border-color:var(--faint)}
+.lnk{font-size:12px;font-weight:600;color:var(--cy);padding:4px 6px;border-radius:6px}.lnk:hover{background:var(--cy-bg)}
 
-/* ═══ STATS DASHBOARD ═══ */
-.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; margin-bottom: 16px }
-.stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; box-shadow: var(--sh) }
-.stat .num { font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: -.5px }
-.stat .lbl { font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px }
-.stat .sub { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 4px }
-.stat.cy .num { color: var(--cy) }
-.stat.green .num { color: var(--green) }
-.stat.amber .num { color: var(--amber) }
-.stat.rose .num { color: var(--rose) }
-.stat.indigo .num { color: var(--indigo) }
-.stat.blue .num { color: var(--blue) }
-.minibar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; margin-top: 6px; background: var(--line) }
-.minibar span { display: block; height: 100% }
+.cx-pulse{display:flex;gap:6px 18px;flex-wrap:wrap;align-items:center;padding:8px 20px;background:var(--paper);border-top:1px solid var(--line);margin:0 -20px;font-size:12.5px;color:var(--ink2)}
+.cx-pulse button{display:inline-flex;align-items:baseline;gap:5px;padding:2px 0;border-bottom:1px dashed transparent;font-size:12.5px;color:var(--ink2)}
+.cx-pulse button:hover{border-bottom-color:var(--faint);color:var(--ink)}
+.cx-pulse b{font:700 13px var(--mono);color:var(--ink)}
+.cx-pulse .crit b{color:var(--p-crit)}
+.cx-pulse .meter{display:inline-flex;width:70px;height:6px;border-radius:4px;overflow:hidden;background:var(--line);margin-left:4px;align-self:center}
+.cx-pulse .meter i{display:block;height:100%}
 
-/* ═══ TABS ═══ */
-.tabs { display: flex; gap: 6px; margin-bottom: 14px }
-.tab { padding: 9px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink2); font-family: var(--disp); font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; box-shadow: var(--sh) }
-.tab:hover { border-color: var(--muted); color: var(--ink) }
-.tab.on { background: var(--ink); color: #fff; border-color: var(--ink) }
-.tab .cnt { font-family: var(--mono); font-size: 10px; font-weight: 700; background: rgba(0,0,0,.06); border-radius: 20px; padding: 1px 8px }
-.tab.on .cnt { background: rgba(255,255,255,.2) }
+.cx-work{flex:1;min-height:0;display:grid;grid-template-columns:minmax(340px,410px) minmax(0,1fr)}
+@media(max-width:900px){body{overflow:auto}#app{height:auto;min-height:100%}.cx-work{grid-template-columns:1fr}.cx-rail{max-height:55vh}.cx-pane{overflow:visible}}
+
+/* ── the triage rail (dark) ── */
+.cx-rail{background:var(--navy);color:var(--rail-tx);display:flex;flex-direction:column;min-height:0}
+.cx-rtools{padding:12px 14px 10px;border-bottom:1px solid var(--rail-ln);display:flex;flex-direction:column;gap:9px;flex:none}
+.cx-rrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.rchip{padding:5px 10px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--rail-mu);border:1px solid var(--rail-ln);display:inline-flex;gap:5px;align-items:center}
+.rchip:hover{color:var(--rail-tx);border-color:rgba(255,255,255,.18)}
+.rchip.on{background:var(--rail-tx);color:var(--navy);border-color:var(--rail-tx)}
+.rchip .n{font:600 10px var(--mono);opacity:.75}
+.rchip.fixonly.on{background:var(--fix);border-color:var(--fix);color:#fff}
+.rsel{height:28px;padding:0 24px 0 9px;border-radius:7px;border:1px solid var(--rail-ln);background:var(--navy2);color:var(--rail-tx);font:500 11.5px var(--sans);appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238AA0B6' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.rsel option{background:#fff;color:var(--ink)}
+.rnote{font-size:11px;color:var(--rail-mu);line-height:1.45}
+.rnote b{color:var(--rail-tx);font-weight:600}
+.rprog{height:3px;border-radius:3px;background:var(--rail-ln);overflow:hidden}.rprog i{display:block;height:100%;background:var(--cy2);transition:width .25s}
+.cx-rlist{flex:1;overflow-y:auto;min-height:0}
+.cx-rlist::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14)}
+.ri{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:11px 14px 11px 16px;border-bottom:1px solid var(--rail-ln);cursor:pointer;position:relative}
+.ri:hover{background:var(--navy2)}
+.ri.on{background:var(--navy3)}
+.ri.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cy2)}
+.ri-k{font:600 11px var(--mono);color:var(--rail-mu);display:flex;align-items:center;gap:7px;white-space:nowrap;overflow:hidden}
+.ri-k .pd{width:7px;height:7px;border-radius:50%;flex:none}
+.ri-k .ty{font-family:var(--sans);font-weight:500;color:var(--rail-mu)}
+.ri-s{grid-column:1;font-size:13px;line-height:1.38;color:var(--rail-tx);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ri-m{grid-column:1;font-size:11px;color:var(--rail-mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ri-r{grid-column:2;grid-row:1/4;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;min-width:62px}
+.ri-age{font:500 10.5px var(--mono);color:var(--rail-mu)}
+.sig{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.sig.fix{color:#5EE0AE}.sig.sim{color:#7FD7EA}.sig.new{color:var(--rail-mu)}.sig.wait{color:rgba(255,255,255,.25)}
+.ri-more{display:block;width:100%;padding:14px;color:var(--cy2);font-size:12px;font-weight:600;text-align:center}
+.ri-more:hover{background:var(--navy2)}
+.r-empty{padding:40px 22px;text-align:center;color:var(--rail-mu);font-size:12.5px;line-height:1.6}
+.r-empty b{display:block;color:var(--rail-tx);font-family:var(--disp);font-size:15px;margin-bottom:4px}
+/* hotspot rail items */
+.hi{padding:12px 14px 12px 16px;border-bottom:1px solid var(--rail-ln);cursor:pointer;position:relative}
+.hi:hover{background:var(--navy2)}.hi.on{background:var(--navy3)}
+.hi.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cy2)}
+.hi-t{display:flex;justify-content:space-between;gap:10px;font-size:13px;font-weight:600;color:var(--rail-tx)}
+.hi-t span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hi-t .mono{font-size:12px;color:var(--rail-mu)}
+.hi-bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin:7px 0 5px;background:rgba(255,255,255,.06)}
+.hi-bar i{display:block;height:100%}
+.hi-m{font-size:11px;color:var(--rail-mu)}.hi-m b{color:#FBBF77;font-weight:600}
+
+/* ── the workbench (right) ── */
+.cx-pane{overflow-y:auto;min-height:0;padding:22px 28px 60px}
+.pw{max-width:980px}
+.p-empty{max-width:520px;margin:12vh auto 0;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+.p-empty h2{font-family:var(--disp);font-size:19px;color:var(--ink);margin:14px 0 6px;letter-spacing:-.3px}
+.p-load{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;padding:30px 0}
+.spin{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--cy);border-radius:50%;animation:spin .7s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.th-k{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:600 12px var(--mono)}
+.th-k a{font-weight:700}
+.th-s{font-family:var(--disp);font-size:22px;line-height:1.3;font-weight:600;letter-spacing:-.4px;margin:8px 0 10px;max-width:60ch}
+.th-m{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12px;color:var(--muted)}
+.th-m b{color:var(--ink2);font-weight:600}
+.th-act{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.btn{height:32px;padding:0 13px;border-radius:8px;border:1px solid var(--line2);background:#fff;font-size:12.5px;font-weight:600;color:var(--ink2);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--faint);color:var(--ink)}
+.btn.pri{background:var(--navy);border-color:var(--navy);color:#fff}.btn.pri:hover{background:var(--navy3)}
+.desc{margin-top:14px;font-size:12.5px;line-height:1.6;color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere;max-height:4.8em;overflow:hidden;position:relative}
+.desc.open{max-height:none}
+.desc:not(.open)::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.6em;background:linear-gradient(transparent,var(--bg))}
+.desc-t{font-size:12px;font-weight:600;color:var(--cy);margin-top:4px}
+
+.sec{margin-top:26px}
+.sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.sec-h h3{font-family:var(--disp);font-size:15px;font-weight:600;letter-spacing:-.2px}
+.sec-h span{font-size:12px;color:var(--muted)}
+
+/* the best known fix — the one loud element */
+.fixcard{background:var(--card);border:1px solid var(--fix-line);border-left:5px solid var(--fix);border-radius:12px;padding:16px 18px;box-shadow:var(--sh)}
+.fixcard.likely{border-color:var(--cy-line);border-left-color:var(--likely)}
+.fixcard.none{border-color:var(--line);border-left-color:var(--weak);background:var(--paper);box-shadow:none}
+.fx-top{display:flex;align-items:center;gap:14px}
+.fx-t{font-family:var(--disp);font-size:16px;font-weight:600;letter-spacing:-.2px}
+.fx-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.fx-sub a{font-family:var(--mono);font-weight:600}
+.fx-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.fx-body{margin-top:10px;font-size:13px;line-height:1.6;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.fx-body .lb{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin:8px 0 2px}
+.fx-act{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+.agree{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.ag{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.ag h4{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px}
+.agr{display:grid;grid-template-columns:minmax(0,1fr) 90px 28px;gap:8px;align-items:center;font-size:12px;padding:3px 0}
+.agr span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.agr .bar{height:7px;border-radius:4px;background:var(--line);overflow:hidden}.agr .bar i{display:block;height:100%;border-radius:4px}
+.agr b{font:600 11px var(--mono);text-align:right;color:var(--ink2)}
+
+.mlist{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.mgrp{padding:7px 16px;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--paper);border-bottom:1px solid var(--line)}
+.mgrp:not(:first-child){border-top:1px solid var(--line)}
+.mr{display:grid;grid-template-columns:46px minmax(0,1fr);gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+.mr:last-child{border-bottom:none}
+.mr:hover{background:#FAFCFD}
+.mr.chg{box-shadow:inset 3px 0 0 var(--chg)}
+.mr-k{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font:600 11px var(--mono)}
+.mr-k .d{font-family:var(--sans);font-weight:400;color:var(--faint)}
+.mr-s{font-size:13px;font-weight:600;line-height:1.38;margin:3px 0 5px}
+.mr-sol{font-size:12px;color:var(--ink2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mr-sol b{font-weight:600;color:var(--ink)}
+.mr-rs{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+
+/* score ring */
+.ring{position:relative;width:46px;height:46px;flex:none}
+.ring svg{display:block;transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 12px var(--mono);color:var(--ink)}
+.cx-rail .ring b{color:var(--rail-tx)}.cx-rail .ring circle:first-child{stroke:rgba(255,255,255,.12)}
+.ring.sm{width:34px;height:34px}.ring.sm b{font-size:10px}
+.ring.lg{width:56px;height:56px}.ring.lg b{font-size:14px}
+
+/* pills & tags (shared with the detail popup) */
+.pill{font:600 10px var(--sans);padding:2px 8px;border-radius:20px;white-space:nowrap}
+.pill-as{background:#DBEAFE;color:#1D4ED8}.pill-ack{background:#FEF3C7;color:#92400E}.pill-open{background:#E0E7FF;color:#4338CA}
+.pill-res{background:var(--fix-bg);color:var(--fix)}.pill-oth{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.pill-inc{background:var(--blue-bg);color:var(--blue)}.pill-sr{background:var(--amber-bg);color:var(--amber)}.pill-chg{background:var(--chg-bg);color:var(--chg)}
+.tier{font:600 10px var(--sans);padding:2px 8px;border-radius:20px;white-space:nowrap}
+.tier-s{background:var(--fix-bg);color:var(--fix)}.tier-l{background:var(--cy-bg);color:var(--cy)}.tier-a{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.prio{font:600 11px var(--sans);display:inline-flex;align-items:center;gap:5px}
+.prio i{width:7px;height:7px;border-radius:50%}
+.rtag{font:500 10.5px var(--sans);padding:2px 7px;border-radius:5px;background:var(--paper);color:var(--ink2);border:1px solid var(--line)}
+.r-scr{background:#EFF5FF;border-color:#D6E4FD;color:#1D4ED8}.r-menu{background:#F5F0FF;border-color:#E4D9FC;color:#6D28D9}.r-rc{background:#FFF8E6;border-color:#F8E3B0;color:#92400E}
+.r-comp{background:var(--fix-bg);border-color:var(--fix-line);color:#047857}.r-txt{background:var(--cy-bg);border-color:var(--cy-line);color:#0E7490}.r-lnk{background:var(--chg-bg);border-color:#D6D4FA;color:var(--chg)}
+.r-time{background:#FFF4EC;border-color:#FAD9C2;color:#C2410C}.r-lbl{background:#FDF2F8;border-color:#F7D4E7;color:#BE185D}.r-proj{background:#EEF2FF;border-color:#D7DDFB;color:#4338CA}.r-exact{background:#FEF9C3;border-color:#F5E58A;color:#A16207}
+.stag{font:500 10.5px var(--sans);padding:2px 8px;border-radius:5px;background:var(--paper);border:1px solid var(--line);color:var(--muted)}
+.stag.rc{background:#FFF8E6;border-color:#F8E3B0;color:#92400E}.stag.fx{background:var(--fix-bg);border-color:var(--fix-line);color:#047857}
+.sim-k{font:600 11px var(--mono);display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sim-rs{display:flex;flex-wrap:wrap;gap:4px}
+.sim-sc{display:flex;align-items:center;justify-content:center;border-radius:50%;font:700 12px var(--mono)}
+.sc-h{background:var(--fix-bg);color:var(--fix);border:2px solid var(--fix)}.sc-md{background:var(--cy-bg);color:var(--cy);border:2px solid var(--cy)}.sc-lo{background:var(--paper);color:var(--muted);border:2px solid var(--line2)}
+
+/* hotspot workbench */
+.hs-facts{display:flex;gap:28px;flex-wrap:wrap;margin-top:4px}
+.hs-f{font-size:12px;color:var(--muted)}.hs-f b{display:block;font:700 22px var(--mono);color:var(--ink);letter-spacing:-.5px}
+.hs-f.open b{color:var(--amber)}
+.spark{display:flex;align-items:flex-end;gap:4px;height:64px;padding:6px 0 0}
+.spark div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.spark i{display:block;width:100%;max-width:26px;border-radius:4px 4px 0 0;background:var(--cy);min-height:2px}
+.spark span{font-size:9.5px;color:var(--faint);font-family:var(--mono)}
+.tlist{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tl{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12.5px}
+.tl:last-child{border-bottom:none}.tl:hover{background:#FAFCFD}
+.tl .k{font:600 11px var(--mono);color:var(--cy)}
+.tl .s{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl .x{display:flex;gap:6px;align-items:center}
+
+@media(max-width:700px){.cx-pane{padding:18px 16px 40px}.th-s{font-size:19px}.cx-gf{margin-left:0}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* ── multi-select dropdown ── */
 .msel{position:relative;display:inline-block}
@@ -120,162 +263,6 @@ h1, h2, h3, .disp { font-family: var(--disp) }
 .msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .msel-empty{padding:14px;text-align:center;color:var(--faint);font-size:11px}
 
-/* ── global filter bar ── */
-.gfilters{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
-.gfilters .flbl{font-size:9.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-right:2px}
-.gfilters .fdiv{width:1px;height:20px;background:var(--line2);margin:0 4px}
-.gfilters .fsel{padding:6px 26px 6px 9px;border:1px solid var(--line2);border-radius:7px;background:var(--paper);color:var(--ink);font-size:11px;font-weight:600;font-family:var(--sans);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;cursor:pointer;outline:none}
-.gfilters .greset{padding:5px 10px;border:1px solid var(--line2);border-radius:7px;background:var(--paper);color:var(--muted);font-size:10px;font-weight:600;font-family:inherit;cursor:pointer}
-.gfilters .greset:hover{color:var(--ink);border-color:var(--muted)}
-.gfilters .gcount{font-family:var(--mono);font-size:10px;color:var(--faint);margin-left:auto}
-
-/* ═══ FILTERS ═══ */
-.filters { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap }
-.flbl { font-size: 9.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; margin-right: 2px }
-.fchip { padding: 6px 11px; border: 1px solid var(--line2); border-radius: 7px; background: var(--paper); color: var(--ink2); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px }
-.fchip .fc { font-family: var(--mono); font-size: 9px; font-weight: 700; background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 10px }
-.fchip.on .fc { background: rgba(0,0,0,.08) }
-.fchip.on { background: var(--cy-bg); border-color: var(--cy-line); color: var(--cy) }
-.fchip.inc.on { background: var(--blue-bg); border-color: #BFDBFE; color: var(--blue) }
-.fchip.sr.on { background: var(--amber-bg); border-color: var(--amber-soft); color: var(--amber) }
-.fchip.chg.on { background: var(--indigo-bg); border-color: var(--indigo-soft); color: var(--indigo) }
-.fsel { padding: 6px 26px 6px 9px; border: 1px solid var(--line2); border-radius: 7px; background: var(--paper); color: var(--ink); font-size: 11px; font-weight: 600; font-family: var(--sans); appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7A90' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 7px center; cursor: pointer; outline: none }
-.fdiv { width: 1px; height: 20px; background: var(--line2); margin: 0 4px }
-
-/* ═══ TICKET CARDS ═══ */
-.queue-list { display: flex; flex-direction: column; gap: 6px }
-.tcard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--sh); overflow: hidden }
-.tcard-top { padding: 9px 14px 7px; display: flex; gap: 10px; align-items: flex-start }
-.tcard-main { flex: 1; min-width: 0 }
-.tcard-key { font-family: var(--mono); font-size: 10.5px; font-weight: 700; color: var(--cy); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 2px }
-.tcard-key a { color: var(--cy) }
-
-/* status & type pills */
-.pill { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; letter-spacing: .2px }
-.pill-as { background: #DBEAFE; color: #1D4ED8 }
-.pill-ack { background: #FEF3C7; color: #92400E }
-.pill-open { background: #E0E7FF; color: #4338CA }
-.pill-res { background: var(--green-bg); color: var(--green) }
-.pill-oth { background: var(--paper); color: var(--muted) }
-.pill-inc { background: var(--blue-bg); color: var(--blue) }
-.pill-sr { background: var(--amber-bg); color: var(--amber) }
-.pill-chg { background: var(--indigo-bg); color: var(--indigo) }
-
-.tcard-sum { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.35; margin-bottom: 3px }
-.tcard-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 10.5px; color: var(--muted) }
-.tcard-meta b { color: var(--ink2); font-weight: 600 }
-.tcard-r { flex-shrink: 0; text-align: right }
-.tcard-pri { font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 3px 7px; border-radius: 5px; text-transform: uppercase }
-.pri-c { background: #F3E8FF; color: #7C3AED }
-.pri-h { background: #FFF1F2; color: #E11D48 }
-.pri-m { background: #FEF3C7; color: #92400E }
-.pri-l { background: var(--green-bg); color: var(--green) }
-.pri-d { background: var(--paper); color: var(--muted) }
-.tcard-date { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-top: 3px }
-
-/* ═══ CONFIDENCE TIERS ═══ */
-.tier { font-family: var(--mono); font-size: 8.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .2px }
-.tier-s { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-soft) }
-.tier-l { background: var(--cy-bg); color: var(--cy); border: 1px solid var(--cy-line) }
-.tier-a { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-soft) }
-
-/* ═══ SIMILARITY SECTION ═══ */
-.sim-section { border-top: 1px solid var(--line) }
-.sim-tog { display: flex; align-items: center; gap: 8px; padding: 5px 14px; cursor: pointer; user-select: none; transition: background .12s }
-.sim-tog:hover { background: var(--paper) }
-.sim-tog .sl { font-family: var(--disp); font-size: 11.5px; font-weight: 600; color: var(--ink2) }
-.sim-tog .sc { font-family: var(--mono); font-size: 9.5px; font-weight: 700; padding: 1px 7px; border-radius: 20px }
-.sc-m { background: var(--cy-bg); color: var(--cy); border: 1px solid var(--cy-line) }
-.sc-c { background: var(--indigo-bg); color: var(--indigo); border: 1px solid var(--indigo-soft) }
-.sim-tog .sa { color: var(--faint); font-size: 11px; margin-left: auto; transition: transform .2s }
-.sim-tog.open .sa { transform: rotate(180deg) }
-.sim-body { display: none; border-top: 1px solid var(--line); background: var(--paper) }
-.sim-body.open { display: block }
-.sim-empty { padding: 14px; text-align: center; color: var(--muted); font-size: 12px }
-.sim-div { padding: 5px 16px; font-family: var(--disp); font-size: 10.5px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .5px; background: var(--line) }
-
-/* similar match rows */
-.sim-row { display: flex; gap: 8px; padding: 7px 14px; border-bottom: 1px solid var(--line); align-items: flex-start }
-.sim-row:last-child { border-bottom: none }
-.sim-row:hover { background: rgba(8,145,178,.03) }
-.sim-row.is-chg { border-left: 3px solid var(--indigo) }
-.sim-sc { flex-shrink: 0; width: 40px; height: 40px; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 700 }
-.sc-h { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-soft) }
-.sc-md { background: var(--cy-bg); color: var(--cy); border: 1px solid var(--cy-line) }
-.sc-lo { background: var(--paper); color: var(--muted); border: 1px solid var(--line) }
-.sim-i { flex: 1; min-width: 0 }
-.sim-k { font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--cy); display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap }
-.sim-s { font-size: 12px; font-weight: 600; color: var(--ink); line-height: 1.35; margin: 2px 0 4px }
-.sim-rs { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px }
-
-/* match reason tags */
-.rtag { font-family: var(--mono); font-size: 8.5px; font-weight: 600; padding: 1px 5px; border-radius: 3px }
-.r-scr { background: #DBEAFE; color: #1D4ED8 }
-.r-menu { background: #F3E8FF; color: #7C3AED }
-.r-rc { background: #FEF3C7; color: #92400E }
-.r-comp { background: #ECFDF5; color: #059669 }
-.r-txt { background: var(--cy-bg); color: var(--cy) }
-.r-lnk { background: var(--indigo-bg); color: var(--indigo) }
-.r-time { background: #FFF7ED; color: #C2410C }
-.r-lbl { background: #FDF2F8; color: #DB2777 }
-.r-proj { background: #EEF2FF; color: #4338CA }
-.r-exact { background: #FEF9C3; color: #A16207 }
-
-/* solution block inside match row */
-.sim-sol { margin-top: 5px; font-size: 11px; color: var(--ink2); line-height: 1.5; background: var(--card); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px }
-.sim-sol b { color: var(--ink); font-weight: 700; font-size: 9.5px; text-transform: uppercase; letter-spacing: .2px }
-.stag { font-family: var(--mono); font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: var(--paper); border: 1px solid var(--line); color: var(--muted) }
-.stag.rc { background: #FEF3C7; border-color: #FDE68A; color: #92400E }
-.stag.fx { background: var(--green-bg); border-color: var(--green-soft); color: var(--green) }
-
-/* ═══ CLUSTERS ═══ */
-.cl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px }
-.ccard { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); overflow: hidden }
-.ccard-h { padding: 12px 16px 10px }
-.ccard-t { font-family: var(--disp); font-size: 14px; font-weight: 700; color: var(--ink); line-height: 1.3; margin-bottom: 5px }
-.ccard-st { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap }
-.ccard-st .n { font-family: var(--mono); font-weight: 700; color: var(--cy) }
-.ccard-bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-bottom: 8px }
-.ccard-bf { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cy), var(--green)) }
-.ccard-d { display: flex; flex-wrap: wrap; gap: 3px 8px; font-size: 10.5px; color: var(--ink2) }
-.ccard-d b { font-weight: 700; color: var(--ink) }
-.ccard-x { display: flex; align-items: center; gap: 6px; padding: 9px 16px; border-top: 1px solid var(--line); font-family: var(--disp); font-size: 11.5px; font-weight: 600; color: var(--cy); cursor: pointer; width: 100%; justify-content: center }
-.ccard-x:hover { background: var(--cy-bg) }
-.ccard-b { display: none; border-top: 1px solid var(--line); background: var(--paper); max-height: 380px; overflow-y: auto }
-.ccard-b.open { display: block }
-
-/* ═══ SEARCH RESULTS ═══ */
-.sr-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px }
-.sr-hd h2 { font-size: 15px; font-weight: 700 }
-.sr-hd .tk { font-family: var(--mono); font-size: 10.5px; color: var(--faint) }
-.sr-hd .sr-exp { margin-left: auto; padding: 7px 14px; border: 1px solid var(--cy-line); border-radius: 8px; background: var(--cy-bg); color: var(--cy); font-size: 11px; font-weight: 700; font-family: var(--disp); display: inline-flex; align-items: center; gap: 5px; cursor: pointer }
-.sr-hd .sr-exp:hover { background: var(--cy); color: #fff }
-.sr-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r2); box-shadow: var(--sh); padding: 12px 16px; margin-bottom: 9px }
-.sr-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px }
-.sr-card .sim-sc { width: 44px; height: 44px; font-size: 12px }
-.sr-sol { background: var(--paper); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; margin-top: 7px }
-.sr-sol h4 { font-family: var(--disp); font-size: 11px; font-weight: 700; color: var(--cy); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px }
-.sr-sol .r { font-size: 11.5px; color: var(--ink2); line-height: 1.5; margin-bottom: 5px }
-.sr-sol .r b { color: var(--ink); font-weight: 700 }
-.sr-sol .r:last-child { margin-bottom: 0 }
-
-/* ═══ EMPTY STATE / SPINNER ═══ */
-.empty-st { text-align: center; padding: 50px 20px; color: var(--muted) }
-.empty-st .i { font-size: 36px; margin-bottom: 10px }
-.empty-st h3 { font-family: var(--disp); font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 5px }
-.empty-st p { font-size: 12.5px; line-height: 1.5; max-width: 380px; margin: 0 auto }
-.spinner { width: 20px; height: 20px; border: 2px solid var(--line); border-top-color: var(--cy); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 8px }
-@keyframes spin { to { transform: rotate(360deg) } }
-
-/* ═══ RESPONSIVE ═══ */
-@media (max-width: 700px) {
-  .topbar { flex-direction: column; align-items: stretch }
-  .search-wrap { max-width: none }
-  .cl-grid { grid-template-columns: 1fr }
-  .stats { grid-template-columns: repeat(3, 1fr) }
-}
-@media (min-width: 1921px) { body { zoom: 1.18 } }
-@media (min-width: 2560px) { body { zoom: 1.42 } }
 
 /* ── ticket detail popup ── */
 .stf-click{cursor:pointer;transition:box-shadow .15s,border-color .15s}
@@ -326,127 +313,58 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
 </head>
 <body>
 
-<!-- ═══════════════════ LANDING (no data) ═══════════════════ -->
 <div id="landing" class="landing">
-  <div class="landing-inner up">
-    <div class="ico">🔎</div>
+  <div class="landing-inner">
+    <svg width="44" height="44" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#0F2233"/><circle cx="14.5" cy="14" r="6" stroke="#22D3EE" stroke-width="2.2" fill="none"/><path d="M19 18.5l5 5" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round"/></svg>
     <h1>Similar Ticket Finder</h1>
-    <p>Finds similar historical tickets, links incidents to related changes, and surfaces root causes and solutions.</p>
-    <p style="font-size:12px; color:var(--faint); margin-bottom:18px">
-      Load a Jira export on the <a href="index.html">launcher</a> first.
-    </p>
-    <a class="lbtn" href="index.html">← Back to launcher</a>
+    <p>Load a Jira export on the launcher first. Then every new ticket is matched against everything you have already solved.</p>
+    <a class="lbtn" href="index.html">Open the launcher</a>
   </div>
 </div>
 
-<!-- ═══════════════════ MAIN APP ═══════════════════ -->
-<div id="app" class="wrap hidden">
-
-  <!-- Top bar -->
-  <div class="topbar up">
-    <a href="index.html" class="back-link">← Launcher</a>
-    <h1>🔎 <span class="accent">Similar Ticket</span> Finder</h1>
-    <div class="spacer"></div>
-    <div class="search-wrap" id="searchWrap">
-      <span class="search-ico">⌕</span>
-      <input class="search-input" id="searchInput" type="text"
-             placeholder="Paste a ticket subject or search keywords…" autocomplete="off">
-      <button class="search-clear" id="searchClear">✕</button>
+<div id="app" class="hidden">
+  <header class="cx-hd">
+    <div class="cx-hd1">
+      <a href="index.html" class="cx-back">← Launcher</a>
+      <div class="cx-brand">
+        <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0F2233"/><circle cx="14.5" cy="14" r="6" stroke="#22D3EE" stroke-width="2.2" fill="none"/><path d="M19 18.5l5 5" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round"/></svg>
+        Similar Ticket Finder
+      </div>
+      <div class="cx-search" id="searchWrap">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="searchInput" type="text" autocomplete="off" spellcheck="false" aria-label="Search tickets"
+               placeholder="Paste a ticket subject, an error message, a procedure name or a ticket key">
+        <kbd title="Press / to search">/</kbd>
+        <button class="clr" id="searchClear" aria-label="Clear search">✕</button>
+      </div>
     </div>
-  </div>
-
-  <!-- Stats dashboard -->
-  <!-- Global filters -->
-  <div class="gfilters" id="gFilters">
-    <span class="flbl">Client</span>
-    <select class="fsel" id="gClient"><option value="">All clients</option></select>
-    <div class="fdiv"></div>
-    <span class="flbl">Request type</span>
-    <span id="gTypeMselSlot"></span>
-    <div class="fdiv"></div>
-    <span class="flbl">Sort results</span>
-    <select class="fsel" id="gSort">
-      <option value="relevance">Relevance</option>
-      <option value="newest">Newest first</option>
-      <option value="oldest">Oldest first</option>
-    </select>
-    <button class="greset" id="gReset">↺ Reset</button>
-    <span class="gcount" id="gCount"></span>
-  </div>
-
-  <div class="stats up d1" id="statsRow"></div>
-
-  <!-- Tabs -->
-  <div class="tabs up d2" id="tabBar">
-    <button class="tab on" data-tab="queue">
-      📋 Active queue <span class="cnt" id="qCnt">0</span>
-    </button>
-    <button class="tab" data-tab="clusters">
-      🧩 Issue clusters <span class="cnt" id="clCnt">0</span>
-    </button>
-  </div>
-
-  <!-- Search results (shown when searching, hides tabs & views) -->
-  <div id="searchView" class="hidden"></div>
-
-  <!-- Active Queue view -->
-  <div id="queueView" class="up d3">
-    <div class="filters" id="qFilters">
-      <span class="flbl">Status</span>
-      <button class="fchip on" data-qf="active">Analysis &amp; Study + Acknowledged</button>
-      <button class="fchip" data-qf="all-open">All open</button>
-
-      <div class="fdiv"></div>
-      <span class="flbl">Type</span>
-      <button class="fchip inc on" data-qt="all">All</button>
-      <button class="fchip inc" data-qt="incident">Incident</button>
-      <button class="fchip sr" data-qt="sr">Service Request</button>
-      <button class="fchip chg" data-qt="change">Change</button>
-
-      <div class="fdiv"></div>
-      <span class="flbl">Priority</span>
-      <select class="fsel" id="qPri">
-        <option value="">All</option>
-        <option value="critical">Critical</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-      </select>
-
-      <span class="flbl">Project</span>
-      <select class="fsel" id="qProj">
-        <option value="">All projects</option>
-      </select>
+    <div class="cx-hd2">
+      <nav class="cx-modes" id="modeBar" aria-label="Views">
+        <button data-mode="queue" class="on">Waiting for analysis <span class="n" id="nQueue"></span></button>
+        <button data-mode="open">All open <span class="n" id="nOpen"></span></button>
+        <button data-mode="hotspots">Hotspots <span class="n" id="nHot"></span></button>
+        <button data-mode="search" id="modeSearch" class="hidden">Search results <span class="n" id="nSearch"></span></button>
+      </nav>
+      <div class="cx-gf" id="gFilters">
+        <label for="gClient">Client</label>
+        <select class="fsel" id="gClient"><option value="">All clients</option></select>
+        <label>Request type</label>
+        <span id="gTypeMselSlot"></span>
+        <button class="lnk" id="gReset">Reset</button>
+      </div>
     </div>
-    <div id="queueList" class="queue-list"></div>
-  </div>
+    <div class="cx-pulse" id="pulse"></div>
+  </header>
 
-  <!-- Clusters view -->
-  <div id="clusterView" class="hidden up d3">
-    <div class="filters">
-      <span class="flbl">Min tickets</span>
-      <select class="fsel" id="clMin">
-        <option value="2">2+</option>
-        <option value="3">3+</option>
-        <option value="5" selected>5+</option>
-        <option value="10">10+</option>
-        <option value="20">20+</option>
-      </select>
-      <span class="flbl">Sort</span>
-      <select class="fsel" id="clSort">
-        <option value="size">Most tickets</option>
-        <option value="open">Most open</option>
-        <option value="recent">Most recent</option>
-      </select>
-    </div>
-    <div id="clList" class="cl-grid"></div>
-  </div>
-
+  <main class="cx-work">
+    <aside class="cx-rail" aria-label="Tickets">
+      <div class="cx-rtools" id="railTools"></div>
+      <div class="cx-rlist" id="railList" tabindex="-1"></div>
+    </aside>
+    <section class="cx-pane" id="pane" aria-live="polite"></section>
+  </main>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════════
-     JAVASCRIPT — Similar Ticket Finder engine & UI
-     ═══════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
   var HS = window.HDStore;
@@ -1158,80 +1076,8 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     }).filter(function (g) { return g.members.length >= 2; });
   }
 
-  /* ══════════════════════ Stats Dashboard ══════════════════════ */
-
-  function renderStats() {
-    var gTickets = IX.tickets.filter(passesGlobal);
-    var total = gTickets.length;
-    var inc = gTickets.filter(function(t){return t.isIncident;}).length;
-    var sr = gTickets.filter(function(t){return t.isSR;}).length;
-    var chg = gTickets.filter(function(t){return t.isChange;}).length;
-    var resolved = gTickets.filter(function (t) { return t.isResolved; }).length;
-    var open = total - resolved;
-    var rpct = total ? Math.round(resolved / total * 100) : 0;
-
-    var activeCount = gTickets.filter(function (t) {
-      var s = t.status.toLowerCase();
-      return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
-    }).length;
-
-    // Priority distribution of open tickets
-    var priC = 0, priH = 0, priM = 0, priL = 0;
-    gTickets.filter(function (t) { return !t.isResolved; }).forEach(function (t) {
-      var p = (t.priority || "").toLowerCase();
-      if (p.indexOf("critical") > -1) priC++;
-      else if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) priH++;
-      else if (p.indexOf("medium") > -1) priM++;
-      else priL++;
-    });
-    var priTotal = priC + priH + priM + priL || 1;
-
-    var openChanges = gTickets.filter(function (t) { return t.isChange && !t.isResolved; }).length;
-
-    // Update global count
-    el("gCount").textContent = total.toLocaleString() + " tickets" + (F.gClient || F.gType.length ? " (filtered)" : "");
-
-    el("statsRow").innerHTML =
-      '<div class="stat cy">' +
-        '<div class="num">' + activeCount + '</div>' +
-        '<div class="lbl">Active queue</div>' +
-        '<div class="sub">Analysis &amp; Study + Acknowledged</div>' +
-      '</div>' +
-      '<div class="stat amber">' +
-        '<div class="num">' + open.toLocaleString() + '</div>' +
-        '<div class="lbl">Open tickets</div>' +
-        '<div class="sub">Across all statuses</div>' +
-      '</div>' +
-      '<div class="stat green">' +
-        '<div class="num">' + resolved.toLocaleString() + '</div>' +
-        '<div class="lbl">Resolved</div>' +
-        '<div class="sub">' + rpct + '% resolution rate</div>' +
-      '</div>' +
-      '<div class="stat blue">' +
-        '<div class="num">' + inc.toLocaleString() + '</div>' +
-        '<div class="lbl">Incidents</div>' +
-        '<div class="sub">' + sr + ' Service Requests</div>' +
-      '</div>' +
-      '<div class="stat indigo">' +
-        '<div class="num">' + chg.toLocaleString() + '</div>' +
-        '<div class="lbl">Changes</div>' +
-        '<div class="sub">' + openChanges + ' open</div>' +
-      '</div>' +
-      '<div class="stat rose">' +
-        '<div class="num">' + priC + '</div>' +
-        '<div class="lbl">Critical (open)</div>' +
-        '<div class="minibar">' +
-          '<span style="width:' + Math.round(priC / priTotal * 100) + '%;background:var(--violet)"></span>' +
-          '<span style="width:' + Math.round(priH / priTotal * 100) + '%;background:var(--rose)"></span>' +
-          '<span style="width:' + Math.round(priM / priTotal * 100) + '%;background:var(--amber)"></span>' +
-          '<span style="width:' + Math.round(priL / priTotal * 100) + '%;background:var(--green)"></span>' +
-        '</div>' +
-        '<div class="sub">C:' + priC + ' H:' + priH + ' M:' + priM + ' L:' + priL + '</div>' +
-      '</div>';
-  }
-
-  /* ══════════════════════ Rendering Helpers ══════════════════════ */
-
+  /* ══════════════════════ Rendering helpers (also used by the detail popup) ══════════════════════ */
+  var JIRA_URL = "https://svmhelpdesk.atlassian.net/browse/";
   function sPill(status, isChange) {
     var s = (status || "").toLowerCase();
     if (isChange) return '<span class="pill pill-chg">' + esc(status) + '</span>';
@@ -1241,408 +1087,29 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     if (/resolved|closed|completed|delivered/.test(s)) return '<span class="pill pill-res">' + esc(status) + '</span>';
     return '<span class="pill pill-oth">' + esc(status) + '</span>';
   }
-
   function tPill(t) {
     if (t.isIncident) return '<span class="pill pill-inc">Incident</span>';
-    if (t.isSR) return '<span class="pill pill-sr">Service Req</span>';
+    if (t.isSR) return '<span class="pill pill-sr">Service request</span>';
     if (t.isChange) return '<span class="pill pill-chg">Change</span>';
     return t.issueType ? '<span class="pill pill-oth">' + esc(t.issueType) + '</span>' : '';
   }
-
-  function pBadge(p) {
-    var lp = (p || "").toLowerCase();
-    if (lp.indexOf("critical") > -1) return '<span class="tcard-pri pri-c">' + esc(p) + '</span>';
-    if (lp.indexOf("high") > -1 || lp.indexOf("urgent") > -1) return '<span class="tcard-pri pri-h">' + esc(p) + '</span>';
-    if (lp.indexOf("medium") > -1) return '<span class="tcard-pri pri-m">' + esc(p) + '</span>';
-    if (lp.indexOf("low") > -1) return '<span class="tcard-pri pri-l">' + esc(p) + '</span>';
-    return '<span class="tcard-pri pri-d">' + esc(p || "—") + '</span>';
-  }
-
-  function scCls(score) {
-    return score >= 60 ? "sc-h" : score >= 35 ? "sc-md" : "sc-lo";
-  }
-
+  function scCls(score) { return score >= 60 ? "sc-h" : score >= 35 ? "sc-md" : "sc-lo"; }
   function tierB(tier) {
-    if (tier === "s") return '<span class="tier tier-s">sure shot</span>';
-    if (tier === "l") return '<span class="tier tier-l">likely</span>';
-    return '<span class="tier tier-a">assumption</span>';
+    if (tier === "s") return '<span class="tier tier-s">Sure shot</span>';
+    if (tier === "l") return '<span class="tier tier-l">Likely</span>';
+    return '<span class="tier tier-a">Possible</span>';
   }
-
-  function rTags(reasons) {
-    return reasons.map(function (r) {
-      return '<span class="rtag ' + r.c + '">' + esc(r.t) + '</span>';
-    }).join("");
+  function rTags(reasons, max) {
+    return (max ? reasons.slice(0, max) : reasons).map(function (r) { return '<span class="rtag ' + r.c + '">' + esc(r.t) + '</span>'; }).join("");
   }
-
-  /* ── Single similarity-match row ── */
-  function simRow(m) {
-    var t = m.t;
-    var sol = '';
-
-    if (t.analysis || t.solutionSummary) {
-      sol = '<div class="sim-sol">';
-      if (t.analysis) sol += '<b>Analysis:</b> ' + clip(t.analysis, 180) + '<br>';
-      if (t.solutionSummary) sol += '<b>Solution:</b> ' + clip(t.solutionSummary, 250);
-      sol += '<button class="stf-more">' + ((t.analysis || "").length > 180 || (t.solutionSummary || "").length > 250 ? "Read full analysis" : "Full details") + ' ›</button></div>';
-    }
-
-    return '<div class="sim-row stf-click' + (t.isChange ? " is-chg" : "") + '" data-stf="' + stfReg(m) + '" title="Click for full details">' +
-      '<div class="sim-sc ' + scCls(m.s) + '">' + m.s + '%</div>' +
-      '<div class="sim-i">' +
-        '<div class="sim-k">' +
-          '<a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a> ' +
-          sPill(t.status, t.isChange) + ' ' + tierB(m.tier) +
-        '</div>' +
-        '<div class="sim-s">' + esc(t.summary) + '</div>' +
-        '<div class="sim-rs">' + rTags(m.rs) + '</div>' +
-        '<div style="display:flex;gap:3px;flex-wrap:wrap">' +
-          (t.rootCause ? '<span class="stag rc">' + esc(t.rootCause) + '</span>' : '') +
-          (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') +
-        '</div>' +
-        sol +
-      '</div>' +
-    '</div>';
-  }
-
-  /* ── Ticket card (lightweight — similarity computed lazily on click) ── */
-  function renderCard(t, id) {
-    var meta = '';
-    if (t.project) meta += '<span>Project: <b>' + esc(t.project) + '</b></span>';
-    if (t.screenName) meta += '<span>Screen: <b>' + esc(t.screenName) + '</b></span>';
-    if (t.menuHead) meta += '<span>Menu: <b>' + esc(t.menuHead) + '</b></span>';
-    if (t.svmInCharge) meta += '<span>SVM: <b>' + esc(t.svmInCharge) + '</b></span>';
-    if (t.currentWorker) meta += '<span>Worker: <b>' + esc(t.currentWorker) + '</b></span>';
-    if (t.releaseNumber) meta += '<span>Release: <b>' + esc(t.releaseNumber) + '</b></span>';
-    if (t.releaseDataFix) meta += '<span>Data Fix: <b>' + esc(t.releaseDataFix) + '</b></span>';
-
-    return '<div class="tcard">' +
-      '<div class="tcard-top">' +
-        '<div class="tcard-main">' +
-          '<div class="tcard-key">' +
-            '<a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a> ' +
-            sPill(t.status, t.isChange) + ' ' + tPill(t) +
-          '</div>' +
-          '<div class="tcard-sum">' + esc(t.summary) + '</div>' +
-          '<div class="tcard-meta">' + meta + '</div>' +
-        '</div>' +
-        '<div class="tcard-r">' + pBadge(t.priority) +
-          '<div class="tcard-date">' + fmtD(t.created) + '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="sim-section">' +
-        '<div class="sim-tog" data-tog="' + id + '" data-tidx="' + t.idx + '">' +
-          '<span class="sl">🔍 Find similar tickets</span>' +
-          '<span class="sa">▾</span>' +
-        '</div>' +
-        '<div class="sim-body" id="sim-' + id + '">' +
-          '<div class="sim-empty" style="color:var(--cy)">Click to analyse…</div>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
-  /* ══════════════════════ Lazy Similarity Compute ══════════════════════
-     Triggered on first click of a ticket's "Find similar" toggle.
-     Shows a spinner, defers computation to next frame, then renders results. */
-
-  var _simDone = {};
-
-  function lazyCompute(ticketIdx, bodyEl, toggleBtn) {
-    var ticket = IX.tickets[ticketIdx];
-    if (!ticket) return;
-
-    // Show spinner
-    bodyEl.innerHTML = '<div class="sim-empty"><div class="spinner"></div>Analysing…</div>';
-    bodyEl.classList.add("open");
-    toggleBtn.classList.add("open");
-
-    // Defer heavy work so spinner can paint
-    setTimeout(function () {
-      // Find similar tickets
-      var allSimilar = findSimilar(ticket, 10, 15);
-      var simIncidents = allSimilar.filter(function (m) { return !m.t.isChange; });
-      var simChanges = allSimilar.filter(function (m) { return m.t.isChange; });
-
-      // Find related changes explicitly
-      var relatedChanges = findRelChanges(ticket, 6);
-
-      // Merge and deduplicate change matches
-      var changeMap = {};
-      simChanges.concat(relatedChanges).forEach(function (m) {
-        if (!changeMap[m.t.key] || changeMap[m.t.key].s < m.s) {
-          changeMap[m.t.key] = m;
-        }
-      });
-      var changeList = Object.keys(changeMap)
-        .map(function (k) { return changeMap[k]; })
-        .sort(function (a, b) { return b.s - a.s; })
-        .slice(0, 6);
-
-      // Build HTML — grouped by confidence tier
-      var html = '';
-      if (simIncidents.length) {
-        var sureShots = simIncidents.filter(function (m) { return m.tier === "s"; });
-        var likelys = simIncidents.filter(function (m) { return m.tier === "l"; });
-        var assumptions = simIncidents.filter(function (m) { return m.tier === "a"; });
-
-        if (sureShots.length) {
-          html += '<div class="sim-div">✓ Sure shot (' + sureShots.length + ')</div>';
-          html += sureShots.map(simRow).join("");
-        }
-        if (likelys.length) {
-          html += '<div class="sim-div">◎ Likely (' + likelys.length + ')</div>';
-          html += likelys.map(simRow).join("");
-        }
-        if (assumptions.length) {
-          html += '<div class="sim-div">◌ Assumptions (' + assumptions.length + ')</div>';
-          html += assumptions.map(simRow).join("");
-        }
-      } else {
-        html = '<div class="sim-empty">No similar tickets found.</div>';
-      }
-
-      if (changeList.length) {
-        html += '<div class="sim-div">🔀 Related changes (' + changeList.length + ')</div>';
-        html += changeList.map(simRow).join("");
-      }
-
-      bodyEl.innerHTML = html;
-
-      // Update toggle button with counts
-      var label = toggleBtn.querySelector(".sl");
-      if (label) label.textContent = "🔍 Similar tickets";
-
-      var arrow = toggleBtn.querySelector(".sa");
-      if (simIncidents.length) {
-        var badge = document.createElement("span");
-        badge.className = "sc sc-m";
-        badge.textContent = simIncidents.length;
-        toggleBtn.insertBefore(badge, arrow);
-      }
-      if (changeList.length) {
-        var chgBadge = document.createElement("span");
-        chgBadge.className = "sc sc-c";
-        chgBadge.textContent = changeList.length + " chg";
-        toggleBtn.insertBefore(chgBadge, arrow);
-      }
-
-      _simDone[ticketIdx] = true;
-    }, 20);
-  }
-
-  function bindToggles() {
-    document.querySelectorAll(".sim-tog").forEach(function (btn) {
-      btn.onclick = function () {
-        var id = btn.dataset.tog;
-        var ticketIdx = parseInt(btn.dataset.tidx);
-        var body = el("sim-" + id);
-        if (!body) return;
-
-        if (_simDone[ticketIdx]) {
-          // Already computed — just toggle open/close
-          var isOpen = body.classList.toggle("open");
-          btn.classList.toggle("open", isOpen);
-        } else {
-          // First click — compute then show
-          lazyCompute(ticketIdx, body, btn);
-        }
-      };
-    });
-  }
-
-  function bindClusterToggles() {
-    document.querySelectorAll(".ccard-x").forEach(function (btn) {
-      btn.onclick = function () {
-        var body = el(btn.dataset.ct);
-        if (!body) return;
-        var isOpen = body.classList.toggle("open");
-        btn.textContent = isOpen ? "Hide tickets ▴" : "Show tickets ▾";
-      };
-    });
-  }
-
-  /* ══════════════════════ Render Queue ══════════════════════ */
-
-  function renderQueue() {
-    var isActive = (F.qf === "active");
-
-    // Compute base set (global + project + priority filters, before status/type)
-    var base = IX.tickets.filter(function (t) {
-      if (!passesGlobal(t)) return false;
-      if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
-      if (F.qpri) {
-        var p = (t.priority || "").toLowerCase();
-        if (p.indexOf(F.qpri) < 0) return false;
-      }
-      return true;
-    });
-
-    // Count tickets per status filter (for badges)
-    var cntActive = 0, cntOpen = 0;
-    base.forEach(function (t) {
-      var s = t.status.toLowerCase();
-      if (s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open") cntActive++;
-      if (!t.isResolved) cntOpen++;
-    });
-
-    // Count tickets per type filter (within current status filter)
-    var statusFiltered = base.filter(function (t) {
-      if (isActive) {
-        var s = t.status.toLowerCase();
-        return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
-      }
-      return !t.isResolved;
-    });
-    var cntAllType = statusFiltered.length;
-    var cntInc = 0, cntSR = 0, cntChg = 0;
-    statusFiltered.forEach(function (t) {
-      if (t.isIncident) cntInc++;
-      if (t.isSR) cntSR++;
-      if (t.isChange) cntChg++;
-    });
-
-    // Update filter chip badges
-    document.querySelectorAll("[data-qf]").forEach(function (btn) {
-      var badge = btn.querySelector(".fc");
-      if (!badge) { badge = document.createElement("span"); badge.className = "fc"; btn.appendChild(badge); }
-      badge.textContent = btn.dataset.qf === "active" ? cntActive : cntOpen;
-    });
-    document.querySelectorAll("[data-qt]").forEach(function (btn) {
-      var badge = btn.querySelector(".fc");
-      if (!badge) { badge = document.createElement("span"); badge.className = "fc"; btn.appendChild(badge); }
-      var qt = btn.dataset.qt;
-      badge.textContent = qt === "all" ? cntAllType : qt === "incident" ? cntInc : qt === "sr" ? cntSR : cntChg;
-    });
-
-    var list = IX.tickets.filter(function (t) {
-      // Global filter
-      if (!passesGlobal(t)) return false;
-
-      // Project filter
-      if (F.qproj && t.project.toLowerCase() !== F.qproj.toLowerCase()) return false;
-
-      // Issue type filter
-      if (F.qt === "incident" && !t.isIncident) return false;
-      if (F.qt === "sr" && !t.isSR) return false;
-      if (F.qt === "change" && !t.isChange) return false;
-
-      // Priority filter
-      if (F.qpri) {
-        var p = (t.priority || "").toLowerCase();
-        if (p.indexOf(F.qpri) < 0) return false;
-      }
-
-      // Status filter
-      if (isActive) {
-        var s = t.status.toLowerCase();
-        return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open";
-      }
-      return !t.isResolved;
-    });
-
-    // Sort by created date desc (newest first), then by priority as tiebreaker
-    var priOrder = { critical: 0, highest: 0, high: 1, urgent: 1, medium: 2, normal: 2, low: 3, lowest: 4 };
-    list.sort(function (a, b) {
-      var da = a.created ? new Date(a.created).getTime() : 0;
-      var db = b.created ? new Date(b.created).getTime() : 0;
-      if (da !== db) return db - da;
-      var pa = priOrder[(a.priority || "").toLowerCase()];
-      var pb = priOrder[(b.priority || "").toLowerCase()];
-      pa = pa != null ? pa : 5;
-      pb = pb != null ? pb : 5;
-      return pa - pb;
-    });
-
-    el("qCnt").textContent = list.length;
-
-    if (!list.length) {
-      el("queueList").innerHTML =
-        '<div class="empty-st"><div class="i">✓</div>' +
-        '<h3>Queue clear</h3><p>No matching tickets found.</p></div>';
-      return;
-    }
-
-    var html = '';
-    list.forEach(function (t, i) {
-      html += renderCard(t, "q" + i);
-    });
-    el("queueList").innerHTML = html;
-    bindToggles();
-  }
-
-  /* ══════════════════════ Render Clusters ══════════════════════ */
-
-  function renderClusters() {
-    if (!CL) CL = buildClusters();
-
-    var filtered = CL.filter(function (c) { return c.members.length >= F.clMin; });
-
-    // Sort
-    if (F.clSort === "open") {
-      filtered.sort(function (a, b) { return b.open - a.open; });
-    } else if (F.clSort === "recent") {
-      filtered.sort(function (a, b) { return (b.recentDate || 0) - (a.recentDate || 0); });
-    } else {
-      filtered.sort(function (a, b) { return b.members.length - a.members.length; });
-    }
-
-    el("clCnt").textContent = filtered.length;
-
-    if (!filtered.length) {
-      el("clList").innerHTML =
-        '<div class="empty-st"><div class="i">🧩</div>' +
-        '<h3>No clusters</h3><p>Try lowering the minimum.</p></div>';
-      return;
-    }
-
-    var html = '';
-    filtered.forEach(function (c, ci) {
-      var pct = Math.round(c.resolved / c.members.length * 100);
-
-      html += '<div class="ccard"><div class="ccard-h">' +
-        '<div class="ccard-t">' + esc(c.label) + '</div>' +
-        '<div class="ccard-st">' +
-          '<span class="n">' + c.members.length + '</span> tickets · ' +
-          '<span class="n">' + c.resolved + '</span> resolved · ' +
-          '<span style="color:var(--amber);font-weight:700">' + c.open + '</span> open' +
-          (c.changes ? ' · <span style="color:var(--indigo);font-weight:700">' + c.changes + '</span> chg' : '') +
-        '</div>' +
-        '<div class="ccard-bar"><div class="ccard-bf" style="width:' + pct + '%"></div></div>' +
-        '<div class="ccard-d">' +
-          (c.rootCauses.length ? '<span>Causes: <b>' + c.rootCauses.map(esc).join(", ") + '</b></span>' : '') +
-          (c.fixes.length ? '<span>Fixes: <b>' + c.fixes.map(esc).join(", ") + '</b></span>' : '') +
-          (c.projects.length ? '<span>Projects: <b>' + c.projects.map(esc).join(", ") + '</b></span>' : '') +
-        '</div>' +
-      '</div>' +
-      '<button class="ccard-x" data-ct="cl' + ci + '">Show tickets ▾</button>' +
-      '<div class="ccard-b" id="cl' + ci + '">';
-
-      // Show up to 50 tickets in a cluster
-      c.members.slice(0, 50).forEach(function (i) {
-        var t = IX.tickets[i];
-        html += '<div class="sim-row' + (t.isChange ? " is-chg" : "") + '">' +
-          '<div class="sim-sc ' + (t.isResolved ? "sc-h" : "sc-lo") + '">' +
-            (t.isResolved ? "✓" : "○") +
-          '</div>' +
-          '<div class="sim-i">' +
-            '<div class="sim-k">' + esc(t.key) + ' ' + sPill(t.status, t.isChange) + ' ' + tPill(t) + '</div>' +
-            '<div class="sim-s">' + esc(t.summary) + '</div>' +
-            (t.rootCause ? '<span class="stag rc">' + esc(t.rootCause) + '</span> ' : '') +
-            (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') +
-            (t.solutionSummary ? '<div class="sim-sol"><b>Solution:</b> ' + esc(t.solutionSummary).substring(0, 180) + '</div>' : '') +
-          '</div>' +
-        '</div>';
-      });
-
-      if (c.members.length > 50) {
-        html += '<div class="sim-empty">Showing 50 of ' + c.members.length + '</div>';
-      }
-
-      html += '</div></div>';
-    });
-
-    el("clList").innerHTML = html;
-    bindClusterToggles();
+  /* match-strength ring: green = sure shot, cyan = likely, grey = possible */
+  function ring(score, size) {
+    var px = size === "lg" ? 56 : size === "sm" ? 34 : 46, sw = size === "sm" ? 3.5 : 4.5, r = (px - sw) / 2, c = 2 * Math.PI * r;
+    var col = score >= 65 ? "var(--fix)" : score >= 40 ? "var(--likely)" : "var(--weak)", v = Math.max(0, Math.min(100, score || 0));
+    return '<div class="ring ' + (size || "") + '" title="' + v + '% match"><svg width="' + px + '" height="' + px + '" aria-hidden="true">' +
+      '<circle cx="' + px / 2 + '" cy="' + px / 2 + '" r="' + r + '" fill="none" stroke="var(--line)" stroke-width="' + sw + '"/>' +
+      '<circle cx="' + px / 2 + '" cy="' + px / 2 + '" r="' + r + '" fill="none" stroke="' + col + '" stroke-width="' + sw + '" stroke-linecap="round" stroke-dasharray="' + (c * v / 100).toFixed(1) + " " + c.toFixed(1) + '"/>' +
+      '</svg><b>' + v + '</b></div>';
   }
 
   /* ══════════════════════ Export Search Results to Excel ══════════════════════ */
@@ -1854,272 +1321,430 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     e.preventDefault(); stfOpen(+hit.getAttribute("data-stf"));
   });
 
-  /* ══════════════════════ Render Search Results ══════════════════════ */
+  /* ══════════════════════ Workbench UI ══════════════════════
+     Left: a triage rail (the queue, all open tickets, hotspots or search results).
+     Right: the workbench for whatever is selected — the best known fix first, then what similar tickets agree on,
+     every match grouped by confidence, and related changes. Each queue ticket is scored in the background, so
+     the rail shows at a glance which tickets already have a known fix. */
+  F.mode = "queue"; F.prevMode = "queue"; F.sel = {}; F.selCl = null; F.qt = "all"; F.qpri = ""; F.qsort = "newest"; F.known = false; F.limit = 150; F.q = "";
+  var SIM = {};            // ticket idx → { sim, changes, best, sig, top }
+  var CUR = [];            // what the rail currently lists (tickets, search matches or hotspots)
+  var SEARCH = [], SEARCH_MS = 0;
+  var PRI_C = { c: "var(--p-crit)", h: "var(--p-high)", m: "var(--p-med)", l: "var(--p-low)", "": "var(--line2)" };
+  var PRI_N = { c: 0, h: 1, m: 2, l: 3, "": 4 };
+  var PRI_L = { c: "Critical", h: "High", m: "Medium", l: "Low" };
 
-  function renderSearch(query) {
-    var t0 = performance.now();
-    var results = searchText(query, 80);
+  function isWaiting(t) { var s = t.status.toLowerCase(); return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open"; }
+  function priKey(p) { p = (p || "").toLowerCase(); if (!p) return ""; if (p.indexOf("critical") > -1 || p.indexOf("show") > -1 || p === "highest") return "c"; if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) return "h"; if (p.indexOf("medium") > -1 || p === "normal") return "m"; return "l"; }
+  function prioHTML(p) { var k = priKey(p); return p ? '<span class="prio"><i style="background:' + PRI_C[k] + '"></i>' + esc(p) + '</span>' : ""; }
+  function ts(v) { if (!v) return 0; var d = v instanceof Date ? v : new Date(v), x = d.getTime(); return isNaN(x) ? 0 : x; }
+  function age(v) { var x = ts(v); if (!x) return ""; var d = Math.floor((Date.now() - x) / 864e5); return d < 1 ? "today" : d < 60 ? d + "d" : d < 730 ? Math.round(d / 30) + "mo" : Math.round(d / 365) + "y"; }
+  function num(n) { return (n || 0).toLocaleString(); }
+  function plainStf(t) { delete STF[t.idx]; return t.idx; }       // popup without a stale "why it matched"
 
-    // Apply global filters
-    results = results.filter(function (m) { return passesGlobal(m.t); });
-
-    // Apply sort
-    if (F.gSort === "newest") {
-      results.sort(function (a, b) {
-        var da = a.t.created ? new Date(a.t.created).getTime() : 0;
-        var db = b.t.created ? new Date(b.t.created).getTime() : 0;
-        return db - da;
-      });
-    } else if (F.gSort === "oldest") {
-      results.sort(function (a, b) {
-        var da = a.t.created ? new Date(a.t.created).getTime() : 0;
-        var db = b.t.created ? new Date(b.t.created).getTime() : 0;
-        return da - db;
-      });
-    }
-    // else "relevance" — already sorted by score
-
-    results = results.slice(0, 30);
-    _lastSearchResults = results;
-    _lastSearchQuery = query;
-    var ms = Math.round(performance.now() - t0);
-
-    var html = '<div class="sr-hd"><h2>Search results</h2>' +
-      '<span class="tk">' + results.length + ' matches · ' + ms + 'ms</span>' +
-      (results.length ? '<button class="sr-exp" id="srExport">⬇ Export Excel</button>' : '') +
-      '</div>';
-
-    if (!results.length) {
-      html += '<div class="empty-st"><div class="i">🔍</div>' +
-        '<h3>No matches</h3><p>Try different keywords.</p></div>';
-    } else {
-      results.forEach(function (m) {
-        var t = m.t;
-        var solBlock = '';
-
-        if (t.rootCause || t.typeOfFix || t.analysis || t.solutionSummary) {
-          solBlock = '<div class="sr-sol"><h4>Resolution details</h4>';
-          if (t.rootCause) solBlock += '<div class="r"><b>Root Cause:</b> ' + esc(t.rootCause) + '</div>';
-          if (t.typeOfFix) solBlock += '<div class="r"><b>Fix:</b> ' + esc(t.typeOfFix) + '</div>';
-          if (t.analysis) solBlock += '<div class="r"><b>Analysis:</b> ' + clip(t.analysis, 350) + '</div>';
-          if (t.solutionSummary) solBlock += '<div class="r"><b>Solution:</b> ' + clip(t.solutionSummary, 400) + '</div>';
-          solBlock += '<button class="stf-more">' + ((t.analysis || "").length > 350 || (t.solutionSummary || "").length > 400 ? "Read full analysis" : "Full details") + ' ›</button></div>';
-        }
-
-        html += '<div class="sr-card stf-click" data-stf="' + stfReg(m) + '" title="Click for full details"><div class="sr-top">' +
-          '<div class="sim-sc ' + scCls(m.s) + '">' + m.s + '%</div>' +
-          '<div style="flex:1;min-width:0">' +
-            '<div class="sim-k">' +
-              '<a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank">' + esc(t.key) + '</a> ' +
-              sPill(t.status, t.isChange) + ' ' + tPill(t) + ' ' + tierB(m.tier) +
-              ' <span style="color:var(--faint);font-size:10px">' + fmtD(t.resolved || t.created) + '</span>' +
-            '</div>' +
-            '<div class="sim-s" style="font-size:13.5px">' + esc(t.summary) + '</div>' +
-            '<div class="sim-rs">' + rTags(m.rs) + '</div>' +
-          '</div>' +
-        '</div>' + solBlock + '</div>';
-      });
-    }
-
-    el("searchView").innerHTML = html;
-    var expBtn = el("srExport");
-    if (expBtn) expBtn.onclick = exportSearchResults;
+  /* ── similarity for one ticket (cached) ── */
+  function simFor(t) {
+    if (SIM[t.idx]) return SIM[t.idx];
+    var all = findSimilar(t, 12, 15), sim = all.filter(function (m) { return !m.t.isChange; }), cm = {};
+    all.filter(function (m) { return m.t.isChange; }).concat(t.isChange ? [] : findRelChanges(t, 6)).forEach(function (m) { if (!cm[m.t.key] || cm[m.t.key].s < m.s) cm[m.t.key] = m; });
+    var changes = Object.keys(cm).map(function (k) { return cm[k]; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 6);
+    var best = null;
+    sim.forEach(function (m) { if (!best && m.s >= 40 && (m.t.solutionSummary || m.t.analysis)) best = m; });
+    var sig = best ? "fix" : sim.length && sim[0].s >= 35 ? "sim" : "new";
+    return (SIM[t.idx] = { sim: sim, changes: changes, best: best, sig: sig, top: sim.length ? sim[0].s : 0 });
+  }
+  function sigHTML(idx) {
+    var s = SIM[idx];
+    if (!s) return '<span class="sig wait" title="Checking for similar tickets…">···</span>';
+    if (s.sig === "fix") return '<span class="sig fix" title="A similar ticket (' + s.best.s + '% match) has a documented solution">● Known fix</span>';
+    if (s.sig === "sim") return '<span class="sig sim" title="Similar tickets exist, none with a documented solution">◐ Seen before</span>';
+    return '<span class="sig new" title="Nothing similar in the loaded data">○ Looks new</span>';
   }
 
-  /* ══════════════════════ Tab / Search / Filter Wiring ══════════════════════ */
+  /* ── background scoring: fills the rail's "Known fix / Seen before / Looks new" signals ── */
+  var RUN = { tok: 0, done: 0, total: 0 };
+  function scoreRun(idxs, onEach, onDone) {
+    var tok = ++RUN.tok, i = 0, todo = idxs.filter(function (x) { return !SIM[x]; });
+    RUN.done = 0; RUN.total = todo.length;
+    if (!todo.length) { if (onDone) onDone(); return; }
+    (function step() {
+      if (tok !== RUN.tok) return;
+      var t0 = performance.now();
+      while (i < todo.length && performance.now() - t0 < 14) { simFor(IX.tickets[todo[i]]); if (onEach) onEach(todo[i]); i++; }
+      RUN.done = i;
+      if (i < todo.length) setTimeout(step, 0); else if (onDone) onDone();
+    })();
+  }
+  function paintSig(idx) { if (F.mode === "search") return; var n = document.querySelector('.ri[data-ri="' + idx + '"] .sig'); if (n) n.outerHTML = sigHTML(idx); }
 
-  function switchTab(tab) {
-    F.tab = tab;
-    document.querySelectorAll(".tab").forEach(function (b) {
-      b.classList.toggle("on", b.dataset.tab === tab);
+  /* ══════════ pulse line + mode counts ══════════ */
+  function renderPulse() {
+    var g = IX.tickets.filter(passesGlobal), total = g.length, res = 0, wait = 0, crit = 0, chg = 0, chgOpen = 0;
+    g.forEach(function (t) { if (t.isResolved) res++; else { if (priKey(t.priority) === "c") crit++; } if (isWaiting(t)) wait++; if (t.isChange) { chg++; if (!t.isResolved) chgOpen++; } });
+    var open = total - res, rp = total ? Math.round(res / total * 100) : 0;
+    el("nQueue").textContent = num(wait); el("nOpen").textContent = num(open);
+    if (!CL) CL = buildClusters();
+    el("nHot").textContent = num(CL.filter(function (c) { return c.members.length >= F.clMin; }).length);
+    el("pulse").innerHTML =
+      '<button data-pulse="queue"><b>' + num(wait) + '</b> waiting for analysis</button>' +
+      '<button data-pulse="open"><b>' + num(open) + '</b> open</button>' +
+      (crit ? '<button data-pulse="crit" class="crit"><b>' + num(crit) + '</b> open critical</button>' : '') +
+      '<span><b>' + rp + '%</b> of ' + num(total) + ' resolved<span class="meter"><i style="width:' + rp + '%;background:var(--fix)"></i></span></span>' +
+      (chg ? '<span><b>' + num(chgOpen) + '</b> of ' + num(chg) + ' changes open</span>' : '') +
+      (F.gClient || F.gType.length ? '<span style="color:var(--amber)">Filtered by client / request type</span>' : '');
+  }
+  function renderModes() {
+    document.querySelectorAll("#modeBar [data-mode]").forEach(function (b) { b.classList.toggle("on", b.dataset.mode === F.mode); });
+    el("modeSearch").classList.toggle("hidden", !F.q);
+    el("nSearch").textContent = F.q ? SEARCH.length : "";
+  }
+  function setMode(m) {
+    if (m !== "search") { F.prevMode = m; if (F.q) { F.q = ""; el("searchInput").value = ""; el("searchWrap").classList.remove("has-q"); } }
+    F.mode = m; F.limit = 150; renderModes(); renderRail();
+  }
+
+  /* ══════════ rail ══════════ */
+  function ticketPool() {
+    return IX.tickets.filter(function (t) {
+      if (!passesGlobal(t)) return false;
+      if (F.mode === "queue" ? !isWaiting(t) : t.isResolved) return false;
+      if (F.qpri && priKey(t.priority) !== F.qpri) return false;
+      return true;
     });
-    el("queueView").classList.toggle("hidden", tab !== "queue");
-    el("clusterView").classList.toggle("hidden", tab !== "clusters");
-
-    if (tab === "clusters" && !el("clList").innerHTML) {
-      renderClusters();
-    }
   }
-
-  document.querySelectorAll(".tab").forEach(function (b) {
-    b.onclick = function () { switchTab(b.dataset.tab); };
-  });
-
-  // Search with debounce
-  var _searchTimer = null;
-  el("searchInput").addEventListener("input", function () {
-    var q = this.value.trim();
-    el("searchWrap").classList.toggle("has-q", !!q);
-    clearTimeout(_searchTimer);
-
-    if (!q) {
-      el("searchView").classList.add("hidden");
-      el("tabBar").classList.remove("hidden");
-      el("statsRow").classList.remove("hidden");
-      el(F.tab === "clusters" ? "clusterView" : "queueView").classList.remove("hidden");
+  function renderRail() {
+    if (F.mode === "hotspots") return railHotspots();
+    if (F.mode === "search") return railSearch();
+    railTickets();
+  }
+  function railTickets() {
+    var pool = ticketPool(), cnt = { all: pool.length, incident: 0, sr: 0, change: 0 };
+    pool.forEach(function (t) { if (t.isIncident) cnt.incident++; if (t.isSR) cnt.sr++; if (t.isChange) cnt.change++; });
+    var list = pool.filter(function (t) { return F.qt === "all" || (F.qt === "incident" ? t.isIncident : F.qt === "sr" ? t.isSR : t.isChange); });
+    var needAll = F.known || F.qsort === "fix", pending = needAll ? list.filter(function (t) { return !SIM[t.idx]; }).length : 0;
+    if (F.known) list = list.filter(function (t) { return !SIM[t.idx] || SIM[t.idx].sig === "fix"; });
+    list.sort(function (a, b) {
+      if (F.qsort === "fix") { var sa = SIM[a.idx] ? (SIM[a.idx].best ? 200 + SIM[a.idx].best.s : SIM[a.idx].top) : -1, sb = SIM[b.idx] ? (SIM[b.idx].best ? 200 + SIM[b.idx].best.s : SIM[b.idx].top) : -1; if (sa !== sb) return sb - sa; }
+      if (F.qsort === "priority") { var pa = PRI_N[priKey(a.priority)], pb = PRI_N[priKey(b.priority)]; if (pa !== pb) return pa - pb; }
+      return ts(b.created) - ts(a.created);
+    });
+    CUR = list;
+    var chip = function (k, l) { return '<button class="rchip' + (F.qt === k ? " on" : "") + '" data-qt="' + k + '">' + l + ' <span class="n">' + num(cnt[k]) + '</span></button>'; };
+    el("railTools").innerHTML =
+      '<div class="cx-rrow">' + chip("all", "All") + chip("incident", "Incidents") + chip("sr", "Service requests") + (cnt.change ? chip("change", "Changes") : "") + '</div>' +
+      '<div class="cx-rrow">' +
+        '<select class="rsel" id="qPri" aria-label="Priority"><option value="">Any priority</option>' + ["c", "h", "m", "l"].map(function (k) { return '<option value="' + k + '"' + (F.qpri === k ? " selected" : "") + '>' + PRI_L[k] + '</option>'; }).join("") + '</select>' +
+        '<select class="rsel" id="qSort" aria-label="Sort"><option value="newest"' + (F.qsort === "newest" ? " selected" : "") + '>Newest first</option><option value="priority"' + (F.qsort === "priority" ? " selected" : "") + '>Priority first</option><option value="fix"' + (F.qsort === "fix" ? " selected" : "") + '>Known fix first</option></select>' +
+        '<button class="rchip fixonly' + (F.known ? " on" : "") + '" id="qKnown" title="Only tickets a similar solved ticket can help with">Known fix only</button>' +
+      '</div>' +
+      '<div id="railProg">' + progHTML(pending, list.length) + '</div>';
+    if (!list.length) {
+      el("railList").innerHTML = '<div class="r-empty"><b>' + (F.mode === "queue" ? "Nothing waiting for analysis" : "No open tickets") + '</b>' + (F.qt !== "all" || F.qpri || F.known || F.gClient || F.gType.length ? "Loosen the filters above to see more." : "Every ticket in this export has moved on.") + '</div>';
+      paneEmpty(F.mode === "queue" ? "The queue is clear" : "No open tickets", "Pick another view above, or search for any past ticket.");
       return;
     }
+    var shown = list.slice(0, F.limit);
+    el("railList").innerHTML = shown.map(railItem).join("") + (list.length > shown.length ? '<button class="ri-more" id="riMore">Show ' + Math.min(150, list.length - shown.length) + ' more of ' + num(list.length - shown.length) + '</button>' : "");
+    var sel = F.sel[F.mode]; if (sel == null || !shown.some(function (t) { return t.idx === sel; })) sel = shown[0].idx;
+    select(sel, true);
+    /* score: everything in the list when a fix-based sort/filter needs it (then redraw once), otherwise what is shown */
+    if (needAll && pending) scoreRun(list.map(function (t) { return t.idx; }), function (x) { paintSig(x); if (RUN.done % 40 === 0) { var p = el("railProg"); if (p) p.innerHTML = progHTML(RUN.total - RUN.done, list.length); } }, function () { renderRail(); });
+    else scoreRun(shown.map(function (t) { return t.idx; }), paintSig);
+  }
+  function progHTML(pending, n) {
+    if (!pending) return "";
+    var d = RUN.total ? RUN.done : 0, tot = RUN.total || pending;
+    return '<div class="rnote">Checking <b>' + num(tot) + '</b> tickets for known fixes…</div><div class="rprog"><i style="width:' + Math.round(d / Math.max(1, tot) * 100) + '%"></i></div>';
+  }
+  function railItem(t) {
+    var k = priKey(t.priority), sub = [t.project, t.screenName || t.menuHead].filter(Boolean).join(" — ");
+    return '<div class="ri" data-ri="' + t.idx + '" role="option" aria-selected="false">' +
+      '<div class="ri-k"><i class="pd" style="background:' + PRI_C[k] + '" title="' + esc(t.priority || "No priority") + '"></i>' + esc(t.key) + '<span class="ty">' + esc(t.isIncident ? "Incident" : t.isSR ? "Service request" : t.isChange ? "Change" : t.issueType) + '</span></div>' +
+      '<div class="ri-r"><span class="ri-age" title="Created ' + esc(fmtD(t.created)) + '">' + age(t.created) + '</span>' + sigHTML(t.idx) + '</div>' +
+      '<div class="ri-s">' + esc(t.summary) + '</div>' +
+      (sub ? '<div class="ri-m">' + esc(sub) + '</div>' : '') +
+    '</div>';
+  }
+  function railSearch() {
+    CUR = SEARCH;
+    el("railTools").innerHTML =
+      '<div class="rnote"><b>' + SEARCH.length + '</b> matches for “' + esc(F.q) + '” · ' + SEARCH_MS + ' ms</div>' +
+      '<div class="cx-rrow"><select class="rsel" id="gSort" aria-label="Sort results"><option value="relevance"' + (F.gSort === "relevance" ? " selected" : "") + '>Best match first</option><option value="newest"' + (F.gSort === "newest" ? " selected" : "") + '>Newest first</option><option value="oldest"' + (F.gSort === "oldest" ? " selected" : "") + '>Oldest first</option></select>' +
+      (SEARCH.length ? '<button class="rchip" id="srExport">Export to Excel</button>' : '') + '</div>';
+    if (!SEARCH.length) {
+      el("railList").innerHTML = '<div class="r-empty"><b>No matches</b>Try fewer or different words — an error message, a screen name, a procedure name or a ticket key all work.</div>';
+      paneEmpty("No matches for “" + F.q + "”", "The search looks at summaries, descriptions, analyses, solutions, screens and code objects. Try other words.");
+      return;
+    }
+    el("railList").innerHTML = SEARCH.map(function (m, i) {
+      var t = m.t;
+      return '<div class="ri" data-ri="' + t.idx + '" data-si="' + i + '" role="option">' +
+        '<div class="ri-k"><i class="pd" style="background:' + (t.isResolved ? "var(--fix)" : PRI_C[priKey(t.priority)]) + '"></i>' + esc(t.key) + '<span class="ty">' + esc(t.isResolved ? "Resolved " + fmtD(t.resolved) : t.status) + '</span></div>' +
+        '<div class="ri-r">' + ring(m.s, "sm") + (t.hasSolution && (t.solutionSummary || t.analysis) ? '<span class="sig fix" title="Has a documented solution">● Fix</span>' : '') + '</div>' +
+        '<div class="ri-s">' + esc(t.summary) + '</div>' +
+        '<div class="ri-m">' + esc([t.project, t.screenName || t.menuHead].filter(Boolean).join(" — ")) + '</div>' +
+      '</div>';
+    }).join("");
+    var sel = F.sel.search; if (sel == null || !SEARCH.some(function (m) { return m.t.idx === sel; })) sel = SEARCH[0].t.idx;
+    select(sel, true);
+  }
+  function railHotspots() {
+    if (!CL) CL = buildClusters();
+    var list = CL.filter(function (c) { return c.members.length >= F.clMin; });
+    if (F.clSort === "open") list.sort(function (a, b) { return b.open - a.open || b.members.length - a.members.length; });
+    else if (F.clSort === "recent") list.sort(function (a, b) { return (b.recentDate || 0) - (a.recentDate || 0); });
+    else list.sort(function (a, b) { return b.members.length - a.members.length; });
+    CUR = list;
+    el("railTools").innerHTML =
+      '<div class="rnote">Screens (or menus) that keep producing tickets. Pick one to see its causes, fixes and open tickets.</div>' +
+      '<div class="cx-rrow"><select class="rsel" id="clMin" aria-label="Minimum tickets">' + [2, 3, 5, 10, 20].map(function (n) { return '<option value="' + n + '"' + (F.clMin === n ? " selected" : "") + '>' + n + '+ tickets</option>'; }).join("") + '</select>' +
+      '<select class="rsel" id="clSort" aria-label="Sort hotspots"><option value="size"' + (F.clSort === "size" ? " selected" : "") + '>Most tickets</option><option value="open"' + (F.clSort === "open" ? " selected" : "") + '>Most open</option><option value="recent"' + (F.clSort === "recent" ? " selected" : "") + '>Most recent</option></select></div>';
+    el("nHot").textContent = num(list.length);
+    if (!list.length) { el("railList").innerHTML = '<div class="r-empty"><b>No hotspots</b>Lower the minimum number of tickets.</div>'; paneEmpty("No hotspots", "No screen has that many tickets with the current filters."); return; }
+    var max = list.reduce(function (m, c) { return Math.max(m, c.members.length); }, 1);
+    el("railList").innerHTML = list.map(function (c, i) {
+      var w = c.members.length / max * 100, ow = c.open / c.members.length * w;
+      return '<div class="hi" data-hi="' + i + '"><div class="hi-t"><span>' + esc(c.label) + '</span><span class="mono">' + num(c.members.length) + '</span></div>' +
+        '<div class="hi-bar"><i style="width:' + ow + '%;background:#F59E0B"></i><i style="width:' + (w - ow) + '%;background:#2BB3D1"></i></div>' +
+        '<div class="hi-m">' + (c.open ? '<b>' + num(c.open) + ' open</b> · ' : 'All resolved · ') + (c.rootCauses[0] ? esc(c.rootCauses[0].replace(/ \(\d+\)$/, "")) : "no root cause recorded") + '</div></div>';
+    }).join("");
+    var si = 0; if (F.selCl) list.forEach(function (c, i) { if (c.label === F.selCl) si = i; });
+    selectHot(si, true);
+  }
 
-    _searchTimer = setTimeout(function () {
-      el("tabBar").classList.add("hidden");
-      el("statsRow").classList.add("hidden");
-      el("queueView").classList.add("hidden");
-      el("clusterView").classList.add("hidden");
-      el("searchView").classList.remove("hidden");
-      renderSearch(q);
-    }, 350);
+  /* ══════════ selection + keyboard ══════════ */
+  function markSel(node, keep) {
+    document.querySelectorAll("#railList .on").forEach(function (n) { n.classList.remove("on"); n.setAttribute("aria-selected", "false"); });
+    if (!node) return; node.classList.add("on"); node.setAttribute("aria-selected", "true");
+    if (!keep) node.scrollIntoView({ block: "nearest" });
+  }
+  function select(idx, keep) {
+    F.sel[F.mode] = idx;
+    markSel(document.querySelector('#railList [data-ri="' + idx + '"]'), keep);
+    var t = IX.tickets[idx], m = null;
+    if (F.mode === "search") SEARCH.forEach(function (x) { if (x.t.idx === idx) m = x; });
+    paneTicket(t, m);
+  }
+  function selectHot(i, keep) {
+    var c = CUR[i]; if (!c) return; F.selCl = c.label;
+    markSel(document.querySelector('#railList [data-hi="' + i + '"]'), keep);
+    paneHotspot(c);
+  }
+  function moveSel(d) {
+    var items = Array.prototype.slice.call(document.querySelectorAll("#railList .ri, #railList .hi")); if (!items.length) return;
+    var cur = items.findIndex(function (n) { return n.classList.contains("on"); }), nx = items[Math.max(0, Math.min(items.length - 1, cur + d))];
+    if (!nx) return;
+    if (nx.dataset.hi != null) selectHot(+nx.dataset.hi); else select(+nx.dataset.ri);
+  }
+  document.addEventListener("keydown", function (e) {
+    if (el("stfOv") || e.ctrlKey || e.metaKey || e.altKey) return;
+    var typing = /INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ""));
+    if (e.key === "/" && !typing) { e.preventDefault(); el("searchInput").focus(); el("searchInput").select(); return; }
+    if (e.key === "Escape" && e.target === el("searchInput") && el("searchInput").value) { el("searchClear").click(); return; }
+    if (typing) { if (e.target === el("searchInput") && e.key === "ArrowDown") { e.preventDefault(); el("searchInput").blur(); moveSel(1); } return; }
+    if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); moveSel(1); }
+    else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); moveSel(-1); }
+    else if (e.key === "Enter") { var s = F.sel[F.mode]; if (F.mode !== "hotspots" && s != null) stfOpen(F.mode === "search" ? s : plainStf(IX.tickets[s])); }
   });
 
-  el("searchClear").onclick = function () {
-    el("searchInput").value = "";
-    el("searchInput").dispatchEvent(new Event("input"));
-    el("searchInput").focus();
-  };
+  /* ══════════ workbench ══════════ */
+  function paneEmpty(title, text) {
+    el("pane").innerHTML = '<div class="p-empty"><svg width="40" height="40" viewBox="0 0 32 32" aria-hidden="true"><circle cx="14.5" cy="14" r="7" stroke="#C3CEDA" stroke-width="2.2" fill="none"/><path d="M19.5 19l5.5 5.5" stroke="#C3CEDA" stroke-width="2.4" stroke-linecap="round"/></svg><h2>' + esc(title) + '</h2><p>' + esc(text) + '</p></div>';
+  }
+  function ticketHead(t) {
+    var meta = [["Client", t.project], ["Screen", t.screenName], ["Menu", t.menuHead], ["SVM in charge", t.svmInCharge], ["Working on it", t.currentWorker], ["Release", t.releaseNumber || t.releaseDataFix]]
+      .filter(function (x) { return x[1]; }).map(function (x) { return '<span>' + x[0] + ' <b>' + esc(x[1]) + '</b></span>'; }).join("");
+    meta += '<span>Created <b>' + esc(fmtD(t.created)) + '</b>' + (t.isResolved ? '' : age(t.created) === 'today' ? ' (today)' : ' (' + age(t.created) + ' ago)') + '</span>';
+    if (t.isResolved && t.resolved) meta += '<span>Resolved <b>' + esc(fmtD(t.resolved)) + '</b></span>';
+    var d = String(t.description || "").trim();
+    return '<div class="th-k"><a href="' + JIRA_URL + esc(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + ' ↗</a>' + sPill(t.status, t.isChange) + tPill(t) + prioHTML(t.priority) + '</div>' +
+      '<h2 class="th-s">' + esc(t.summary) + '</h2>' +
+      '<div class="th-m">' + meta + '</div>' +
+      (d ? '<div class="desc" id="pDesc">' + esc(d.length > 3000 ? d.slice(0, 3000) + "…" : d) + '</div>' + (d.length > 220 ? '<button class="desc-t" data-desc>Show the full description</button>' : '') : '') +
+      '<div class="th-act"><button class="btn" data-open="' + t.idx + '">Open full details</button><button class="btn" data-copykey="' + esc(t.key) + '">Copy key</button>' +
+      '<button class="btn" data-q="' + esc(t.summary) + '">Search with this subject</button></div>';
+  }
+  function fixCard(m, own) {
+    var t = m ? m.t : null;
+    if (!t) return "";
+    if (!own) stfReg(m);
+    var cls = own ? "" : m.tier === "s" ? "" : " likely";
+    var body = (t.solutionSummary ? '<span class="lb">Solution</span>' + clip(t.solutionSummary, 700) : '') + (t.analysis ? '<span class="lb">Analysis</span>' + clip(t.analysis, own ? 900 : 450) : '');
+    return '<div class="fixcard' + cls + '"><div class="fx-top">' + (own ? '' : ring(m.s, "lg")) +
+      '<div><div class="fx-t">' + (own ? "How this ticket was resolved" : "Best known fix") + '</div>' +
+      '<div class="fx-sub">' + (own ? (t.resolved ? "Resolved " + esc(fmtD(t.resolved)) : "Recorded on this ticket") :
+        'From <a href="' + JIRA_URL + esc(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a>' + (t.resolved ? ', resolved ' + esc(fmtD(t.resolved)) : ', ' + esc(t.status)) + (t.project ? ' for ' + esc(t.project) : '')) + '</div></div></div>' +
+      (own ? '' : '<div class="mr-s" style="margin:10px 0 0">' + esc(t.summary) + '</div>') +
+      '<div class="fx-tags">' + (own ? '' : tierB(m.tier)) + (t.rootCause ? '<span class="stag rc">Cause: ' + esc(t.rootCause) + '</span>' : '') + (t.typeOfFix ? '<span class="stag fx">Fix: ' + esc(t.typeOfFix) + '</span>' : '') + (own ? '' : rTags(m.rs, 4)) + '</div>' +
+      '<div class="fx-body">' + body + '</div>' +
+      '<div class="fx-act"><button class="btn pri" data-open="' + t.idx + '"' + (own ? '' : ' data-openm="1"') + '>Read the full analysis</button>' + (t.solutionSummary || t.analysis ? '<button class="btn" data-copysol="' + t.idx + '">Copy solution</button>' : '') + '</div></div>';
+  }
+  function agreeHTML(sim) {
+    var withSol = sim.filter(function (m) { return m.t.rootCause || m.t.typeOfFix; });
+    if (withSol.length < 2) return "";
+    function box(title, field, color) {
+      var c = {}; withSol.forEach(function (m) { var v = m.t[field]; if (v) c[v] = (c[v] || 0) + 1; });
+      var k = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).slice(0, 4); if (!k.length) return "";
+      return '<div class="ag"><h4>' + title + '</h4>' + k.map(function (v) { return '<div class="agr"><span title="' + esc(v) + '">' + esc(v) + '</span><span class="bar"><i style="width:' + (c[v] / withSol.length * 100) + '%;background:' + color + '"></i></span><b>' + c[v] + '</b></div>'; }).join("") + '</div>';
+    }
+    return '<div class="sec"><div class="sec-h"><h3>What similar tickets agree on</h3><span>' + withSol.length + ' of ' + sim.length + ' have a recorded cause or fix</span></div>' +
+      '<div class="agree">' + box("Root cause", "rootCause", "#D59A1F") + box("Type of fix", "typeOfFix", "var(--fix)") + '</div></div>';
+  }
+  function matchRow(m) {
+    var t = m.t, sol = t.solutionSummary ? '<b>Solution:</b> ' + clip(t.solutionSummary, 240) : t.analysis ? '<b>Analysis:</b> ' + clip(t.analysis, 240) : '';
+    return '<div class="mr' + (t.isChange ? " chg" : "") + '" data-stf="' + stfReg(m) + '" title="Open full details">' + ring(m.s) +
+      '<div style="min-width:0"><div class="mr-k"><a href="' + JIRA_URL + esc(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a>' + sPill(t.status, t.isChange) +
+        '<span class="d">' + esc(fmtD(t.resolved || t.created)) + (t.project ? ' · ' + esc(t.project) : '') + '</span></div>' +
+      '<div class="mr-s">' + esc(t.summary) + '</div>' +
+      (sol ? '<div class="mr-sol">' + sol + '</div>' : '') +
+      '<div class="mr-rs">' + (t.rootCause ? '<span class="stag rc">' + esc(t.rootCause) + '</span>' : '') + (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') + rTags(m.rs, 4) + '</div></div></div>';
+  }
+  function matchesHTML(sim) {
+    if (!sim.length) return "";
+    var g = { s: [], l: [], a: [] }; sim.forEach(function (m) { g[m.tier].push(m); });
+    var names = { s: "Sure shot", l: "Likely", a: "Possible" };
+    return '<div class="sec"><div class="sec-h"><h3>Similar tickets</h3><span>' + sim.length + ' found · click one for the full analysis</span></div><div class="mlist">' +
+      ["s", "l", "a"].filter(function (k) { return g[k].length; }).map(function (k) { return '<div class="mgrp">' + names[k] + ' (' + g[k].length + ')</div>' + g[k].map(matchRow).join(""); }).join("") + '</div></div>';
+  }
+  var PANE_TOK = 0;
+  function paneTicket(t, match) {
+    var tok = ++PANE_TOK, own = t.hasSolution && (t.solutionSummary || t.analysis);
+    var head = '<div class="pw">' + ticketHead(t);
+    if (match) head += '<div class="sec"><div class="sec-h"><h3>Why it matched your search</h3></div><div style="display:flex;gap:14px;align-items:center">' + ring(match.s, "lg") + '<div>' + tierB(match.tier) + '<div class="mr-rs" style="margin-top:6px">' + rTags(match.rs, 8) + '</div></div></div></div>';
+    if (own) head += '<div class="sec">' + fixCard({ t: t }, true) + '</div>';
+    el("pane").innerHTML = head + '<div id="pRest"><div class="p-load"><span class="spin"></span>Looking for similar tickets…</div></div></div>';
+    el("pane").scrollTop = 0;
+    setTimeout(function () {
+      if (tok !== PANE_TOK) return;
+      var r = simFor(t), html = "";
+      paintSig(t.idx);
+      if (!own) {
+        if (r.best) html += '<div class="sec">' + fixCard(r.best) + '</div>';
+        else html += '<div class="sec"><div class="fixcard none"><div class="fx-t">No documented fix yet</div><div class="fx-sub" style="margin-top:4px">' +
+          (r.sim.length ? 'None of the ' + r.sim.length + ' similar tickets has a recorded solution, but they may still show who worked on this before.' : 'Nothing similar in the loaded data — this looks like a new problem. Try searching with different words from the description.') + '</div></div></div>';
+      }
+      html += agreeHTML(r.sim) + matchesHTML(r.sim);
+      if (r.changes.length) html += '<div class="sec"><div class="sec-h"><h3>Related changes</h3><span>change requests touching the same area</span></div><div class="mlist">' + r.changes.map(matchRow).join("") + '</div></div>';
+      var rest = el("pRest"); if (rest) rest.innerHTML = html;
+    }, 15);
+  }
+  function paneHotspot(c) {
+    var tix = c.members.map(function (i) { return IX.tickets[i]; }), now = new Date(), months = [], mc = {};
+    for (var i = 11; i >= 0; i--) { var d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.getFullYear() + "-" + d.getMonth()); }
+    tix.forEach(function (t) { var x = ts(t.created); if (!x) return; var d = new Date(x), k = d.getFullYear() + "-" + d.getMonth(); mc[k] = (mc[k] || 0) + 1; });
+    var mx = Math.max.apply(null, months.map(function (k) { return mc[k] || 0; }).concat([1]));
+    var MN = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+    var spark = '<div class="spark">' + months.map(function (k) { var n = mc[k] || 0; return '<div title="' + n + ' tickets"><i style="height:' + (n / mx * 100) + '%"></i><span>' + MN[+k.split("-")[1]] + '</span></div>'; }).join("") + '</div>';
+    function box(title, obj, color) {
+      var k = Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; }).slice(0, 5); if (!k.length) return "";
+      var tot = k.reduce(function (s, v) { return s + obj[v]; }, 0);
+      return '<div class="ag"><h4>' + title + '</h4>' + k.map(function (v) { return '<div class="agr"><span title="' + esc(v) + '">' + esc(v) + '</span><span class="bar"><i style="width:' + (obj[v] / obj[k[0]] * 100) + '%;background:' + color + '"></i></span><b>' + obj[v] + '</b></div>'; }).join("") + '</div>';
+    }
+    var open = tix.filter(function (t) { return !t.isResolved; }).sort(function (a, b) { return PRI_N[priKey(a.priority)] - PRI_N[priKey(b.priority)] || ts(b.created) - ts(a.created); });
+    var solved = tix.filter(function (t) { return t.isResolved && (t.solutionSummary || t.analysis); }).sort(function (a, b) { return ts(b.resolved || b.created) - ts(a.resolved || a.created); });
+    function tl(t) { return '<div class="tl" data-stf="' + plainStf(t) + '"><span class="k">' + esc(t.key) + '</span><span class="s" title="' + esc(t.summary) + '">' + esc(t.summary) + '</span><span class="x">' + (t.isResolved ? (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') : prioHTML(t.priority)) + '<span class="mr-k"><span class="d">' + age(t.isResolved ? t.resolved : t.created) + '</span></span></span></div>'; }
+    var last = c.recentDate ? fmtD(c.recentDate) : "—";
+    el("pane").innerHTML = '<div class="pw"><div class="th-k"><span class="pill pill-oth">Hotspot</span>' + (c.changes ? '<span class="pill pill-chg">' + c.changes + ' change' + (c.changes > 1 ? 's' : '') + '</span>' : '') + '</div>' +
+      '<h2 class="th-s">' + esc(c.label) + '</h2>' +
+      '<div class="hs-facts"><div class="hs-f"><b>' + num(c.members.length) + '</b>tickets</div><div class="hs-f open"><b>' + num(c.open) + '</b>still open</div><div class="hs-f"><b>' + Math.round(c.resolved / c.members.length * 100) + '%</b>resolved</div><div class="hs-f"><b style="font-size:16px;padding-top:6px">' + esc(last) + '</b>latest ticket</div></div>' +
+      '<div class="th-act"><button class="btn pri" data-q="' + esc(c.label) + '">Search everything about this screen</button></div>' +
+      '<div class="sec"><div class="sec-h"><h3>Tickets per month</h3><span>last 12 months</span></div>' + spark + '</div>' +
+      '<div class="sec"><div class="sec-h"><h3>What keeps going wrong</h3></div><div class="agree">' + box("Root cause", c.rc, "#D59A1F") + box("Type of fix", c.fx, "var(--fix)") + box("Clients", c.proj, "var(--cy)") + '</div></div>' +
+      (open.length ? '<div class="sec"><div class="sec-h"><h3>Still open</h3><span>' + open.length + ' · highest priority first</span></div><div class="tlist">' + open.slice(0, 40).map(tl).join("") + '</div></div>' : '') +
+      (solved.length ? '<div class="sec"><div class="sec-h"><h3>Recently solved, with a written solution</h3><span>' + solved.length + ' in total</span></div><div class="tlist">' + solved.slice(0, 15).map(tl).join("") + '</div></div>' : '') +
+    '</div>';
+    el("pane").scrollTop = 0;
+  }
 
-  // Status filter chips
-  document.querySelectorAll("[data-qf]").forEach(function (btn) {
-    btn.onclick = function () {
-      F.qf = btn.dataset.qf;
-      _simDone = {};
-      document.querySelectorAll("[data-qf]").forEach(function (b) {
-        b.classList.toggle("on", b.dataset.qf === F.qf);
-      });
-      renderQueue();
-    };
+  /* ══════════ search ══════════ */
+  function runSearch(q) {
+    var t0 = performance.now(), res = searchText(q, 80).filter(function (m) { return passesGlobal(m.t); });
+    if (F.gSort === "newest") res.sort(function (a, b) { return ts(b.t.created) - ts(a.t.created); });
+    else if (F.gSort === "oldest") res.sort(function (a, b) { return ts(a.t.created) - ts(b.t.created); });
+    SEARCH = res.slice(0, 50); SEARCH_MS = Math.round(performance.now() - t0);
+    _lastSearchResults = SEARCH; _lastSearchQuery = q;
+  }
+  function doSearch(q) {
+    F.q = q;
+    if (!q) { F.mode = F.prevMode; renderModes(); renderRail(); return; }
+    runSearch(q); F.sel.search = null; F.mode = "search"; renderModes(); renderRail();
+  }
+  var _sT = null;
+  el("searchInput").addEventListener("input", function () {
+    var q = this.value.trim(); el("searchWrap").classList.toggle("has-q", !!q);
+    clearTimeout(_sT); _sT = setTimeout(function () { doSearch(q); }, q ? 300 : 0);
   });
+  el("searchInput").addEventListener("keydown", function (e) { if (e.key === "Enter") { clearTimeout(_sT); doSearch(this.value.trim()); } });
+  el("searchClear").onclick = function () { el("searchInput").value = ""; el("searchWrap").classList.remove("has-q"); doSearch(""); el("searchInput").focus(); };
+  function searchFor(q) { el("searchInput").value = q; el("searchWrap").classList.add("has-q"); doSearch(q.trim()); }
 
-  // Issue type filter chips
-  document.querySelectorAll("[data-qt]").forEach(function (btn) {
-    btn.onclick = function () {
-      F.qt = btn.dataset.qt;
-      _simDone = {};
-      document.querySelectorAll("[data-qt]").forEach(function (b) {
-        b.classList.toggle("on", b.dataset.qt === F.qt);
-      });
-      renderQueue();
-    };
+  /* ══════════ wiring (delegated, so it survives every redraw) ══════════ */
+  el("modeBar").addEventListener("click", function (e) { var b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
+  el("pulse").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-pulse]"); if (!b) return;
+    if (b.dataset.pulse === "crit") { F.qpri = "c"; setMode("open"); } else { F.qpri = ""; setMode(b.dataset.pulse); }
   });
+  el("railTools").addEventListener("click", function (e) {
+    var c = e.target.closest("[data-qt]"); if (c) { F.qt = c.dataset.qt; F.limit = 150; renderRail(); return; }
+    if (e.target.closest("#qKnown")) { F.known = !F.known; F.limit = 150; renderRail(); return; }
+    if (e.target.closest("#srExport")) exportSearchResults();
+  });
+  el("railTools").addEventListener("change", function (e) {
+    var id = e.target.id, v = e.target.value;
+    if (id === "qPri") F.qpri = v; else if (id === "qSort") F.qsort = v; else if (id === "clMin") F.clMin = +v || 5; else if (id === "clSort") F.clSort = v;
+    else if (id === "gSort") { F.gSort = v; runSearch(F.q); F.sel.search = null; }
+    F.limit = 150; renderRail();
+  });
+  el("railList").addEventListener("click", function (e) {
+    if (e.target.closest("a")) return;
+    if (e.target.closest("#riMore")) { F.limit += 150; renderRail(); return; }
+    var r = e.target.closest(".ri"); if (r) { select(+r.dataset.ri); return; }
+    var h = e.target.closest(".hi"); if (h) selectHot(+h.dataset.hi);
+  });
+  el("pane").addEventListener("click", function (e) {
+    var b;
+    if ((b = e.target.closest("[data-open]"))) { var t = IX.tickets[+b.dataset.open]; if (b.dataset.openm && STF[t.idx]) stfOpen(t.idx); else stfOpen(plainStf(t)); return; }
+    if ((b = e.target.closest("[data-q]"))) { searchFor(b.dataset.q); return; }
+    if ((b = e.target.closest("[data-desc]"))) { var d = el("pDesc"); if (d) { var o = d.classList.toggle("open"); b.textContent = o ? "Show less" : "Show the full description"; } return; }
+    if ((b = e.target.closest("[data-copysol]"))) { var x = IX.tickets[+b.dataset.copysol], txt = [x.solutionSummary, x.analysis].filter(Boolean).join("\n\n"); copyText(txt, b, "Copied"); return; }
+    if ((b = e.target.closest("[data-copykey]"))) { copyText(b.dataset.copykey, b, "Copied"); }
+  });
+  function copyText(txt, btn, done) { var l = btn.textContent; try { navigator.clipboard.writeText(txt).then(function () { btn.textContent = "✓ " + done; setTimeout(function () { btn.textContent = l; }, 1600); }); } catch (e) {} }
 
-  // Priority dropdown
-  el("qPri").onchange = function () {
-    F.qpri = this.value;
-    _simDone = {};
-    renderQueue();
-  };
-
-  // Project dropdown
-  el("qProj").onchange = function () {
-    F.qproj = this.value;
-    _simDone = {};
-    renderQueue();
-  };
-
-  // Cluster controls
-  el("clMin").onchange = function () {
-    F.clMin = parseInt(this.value) || 5;
-    renderClusters();
-  };
-
-  el("clSort").onchange = function () {
-    F.clSort = this.value;
-    renderClusters();
-  };
-
-  /* ══════════════════════ Boot ══════════════════════ */
-
+  /* ══════════ boot ══════════ */
   function pickSheet(wb) {
     return wb.SheetNames.find(function (s) { return s.toLowerCase().indexOf("jira issues") > -1; })
       || wb.SheetNames.find(function (s) { return s.toLowerCase().indexOf("issue") > -1; })
       || wb.SheetNames[1] || wb.SheetNames[0];
   }
-
   function boot(rows) {
     initCols(rows);
-    IX = buildIndex(rows); OBJIX = null;
-    CL = null;   // rebuild clusters on demand
-
-    // Populate global client dropdown
-    var projects = {};
-    IX.tickets.forEach(function (t) {
-      if (t.project) projects[t.project] = (projects[t.project] || 0) + 1;
-    });
-    var gClientSel = el("gClient");
-    gClientSel.innerHTML = '<option value="">All clients (' + IX.tickets.length + ')</option>';
-    Object.keys(projects)
-      .sort(function (a, b) { return projects[b] - projects[a]; })
-      .forEach(function (p) {
-        gClientSel.innerHTML += '<option value="' + esc(p) + '">' + esc(p) + ' (' + projects[p] + ')</option>';
-      });
-
-    // Build global request type multi-select
-    var types = {};
-    IX.tickets.forEach(function (t) { if (t.issueType) types[t.issueType] = (types[t.issueType] || 0) + 1; });
-    var typeList = Object.keys(types).sort();
-    var gTypeMselId = mselCreate("gType", "All types", typeList, F.gType,
-      function (sel) { F.gType = sel; },
-      function () { globalFilterChanged(); }
-    );
-    var slot = el("gTypeMselSlot");
-    if (slot) { slot.innerHTML = mselHTML(gTypeMselId); mselBind(); }
-
-    // Wire global client dropdown
-    gClientSel.onchange = function () { F.gClient = gClientSel.value; globalFilterChanged(); };
-
-    // Wire global sort dropdown
-    el("gSort").onchange = function () {
-      F.gSort = this.value;
-      // Re-render search if active
-      var q = el("searchInput").value.trim();
-      if (q) renderSearch(q);
-    };
-
-    // Wire reset button
+    IX = buildIndex(rows); OBJIX = null; CL = null; SIM = {};
+    var projects = {}; IX.tickets.forEach(function (t) { if (t.project) projects[t.project] = (projects[t.project] || 0) + 1; });
+    var gc = el("gClient");
+    gc.innerHTML = '<option value="">All clients</option>' + Object.keys(projects).sort(function (a, b) { return projects[b] - projects[a]; })
+      .map(function (p) { return '<option value="' + esc(p) + '">' + esc(p) + ' (' + num(projects[p]) + ')</option>'; }).join("");
+    var types = {}; IX.tickets.forEach(function (t) { if (t.issueType) types[t.issueType] = 1; });
+    var gTypeId = mselCreate("gType", "All types", Object.keys(types).sort(), F.gType, function (sel) { F.gType = sel; }, function () { globalFilterChanged(); });
+    el("gTypeMselSlot").innerHTML = mselHTML(gTypeId); mselBind();
+    gc.onchange = function () { F.gClient = gc.value; globalFilterChanged(); };
     el("gReset").onclick = function () {
-      F.gClient = ""; F.gType = []; F.gSort = "relevance";
-      gClientSel.value = "";
-      el("gSort").value = "relevance";
-      // Reset multi-select instance
-      var inst = _mselInstances[gTypeMselId];
-      if (inst) { inst.sel = []; mselUpdateBtn(gTypeMselId); }
+      F.gClient = ""; F.gType = []; F.gSort = "relevance"; F.qt = "all"; F.qpri = ""; F.known = false; F.qsort = "newest"; gc.value = "";
+      var inst = _mselInstances[gTypeId]; if (inst) { inst.sel = []; mselUpdateBtn(gTypeId); }
       globalFilterChanged();
     };
-
-    // Populate per-queue project dropdown too
-    var sel = el("qProj");
-    sel.innerHTML = '<option value="">All projects</option>';
-    Object.keys(projects)
-      .sort(function (a, b) { return projects[b] - projects[a]; })
-      .forEach(function (p) {
-        sel.innerHTML += '<option value="' + esc(p) + '">' + esc(p) + ' (' + projects[p] + ')</option>';
-      });
-
-    // Show app
-    el("landing").classList.add("hidden");
-    el("app").classList.remove("hidden");
-
-    // Apply master data overrides
-    if (HS && HS.loadConfig) {
-      HS.loadConfig().then(function (cfg) {
-        if (window.HDClass) window.HDClass.setOverrides(cfg.statusOverrides);
-        if (window.HDGroups) window.HDGroups.setOverrides(cfg.groupOverrides);
-        if (window.HDStages) window.HDStages.setOverrides(cfg.stageOverrides);
-      });
-    }
-
-    renderStats();
-    renderQueue();
+    el("landing").classList.add("hidden"); el("app").classList.remove("hidden");
+    if (HS && HS.loadConfig) HS.loadConfig().then(function (cfg) {
+      if (window.HDClass) window.HDClass.setOverrides(cfg.statusOverrides);
+      if (window.HDGroups) window.HDGroups.setOverrides(cfg.groupOverrides);
+      if (window.HDStages) window.HDStages.setOverrides(cfg.stageOverrides);
+    });
+    renderPulse(); renderModes(); renderRail();
   }
-
   function globalFilterChanged() {
-    _simDone = {};
-    CL = null;  // rebuild clusters with new filter
-    renderStats();
-    renderQueue();
-    // Re-render search if active
-    var q = el("searchInput").value.trim();
-    if (q) renderSearch(q);
-    // Re-render clusters if visible
-    if (F.tab === "clusters") renderClusters();
+    CL = null; F.limit = 150;
+    if (F.q) runSearch(F.q);
+    renderPulse(); renderModes(); renderRail();
   }
 
   /* ── Load data from IndexedDB (same pattern as other dashboards) ── */
