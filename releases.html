@@ -46,7 +46,7 @@ h1,h2,h3,.disp{font-family:var(--disp)}
 @keyframes float1{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
 @keyframes float2{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(14px) rotate(8deg)}}
 @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
-.up{animation:up .5s cubic-bezier(.22,1,.36,1) both}
+.up{animation:up .5s cubic-bezier(.22,1,.36,1) backwards}
 .d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.16s}.d4{animation-delay:.22s}
 .growb{transform-origin:bottom;animation:grow .55s cubic-bezier(.22,1,.36,1) both}
 @media(prefers-reduced-motion:reduce){.up,.growb{animation:none!important}}
@@ -292,7 +292,7 @@ td:has(>.jkey){white-space:nowrap;min-width:92px}
 .exp-note{padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--ink2);background:var(--wa-bg);border:1px solid var(--wa-soft);border-radius:var(--r)}
 .exp-empty{text-align:center;padding:46px 20px;color:var(--muted);font-size:13px}
 /* ── MOVEMENT TAB ── */
-.mvtop{padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:12px}
+.mvtop{position:relative;z-index:20;padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:12px}
 .mvchips{display:flex;flex-wrap:wrap;gap:6px}
 .mvchip{background:var(--paper);border:1px solid var(--line);color:var(--ink2);padding:7px 13px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--disp);display:inline-flex;align-items:center;gap:7px}
 .mvchip:hover{border-color:var(--line2);color:var(--ink)}
@@ -429,7 +429,7 @@ function mselBind(){
         dd.classList.add('open'); btn.classList.add('open');
         mselRenderList(id);
         var si=dd.querySelector('.msel-search');
-        if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus();},30);}
+        if(si){si.value='';_mselInstances[id].search='';setTimeout(function(){si.focus({preventScroll:true});},30);}
       }
     };
   });
@@ -2140,6 +2140,34 @@ boot();
   window.addEventListener("resize",function(){document.querySelectorAll(".tabs").forEach(edges);});
   new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",scan); else scan();
+})();
+</script>
+
+<!-- ── Dropdown fit ──
+     Keeps every filter dropdown fully on screen: a dropdown that would run past the right edge of the window
+     (e.g. the last filter in a row) opens leftwards instead, so the page no longer shifts sideways; one that
+     would run past the bottom gets a shorter list. Works for every dropdown style used in the dashboards. -->
+<script>
+(function(){
+  var SEL=".msel-dd.open, .msel-r-dd, details.mvms[open] > .mvms-dd";
+  function fit(dd){
+    if(!dd||!dd.getBoundingClientRect) return;
+    dd.style.left=""; dd.style.right=""; dd.style.maxHeight="";
+    var vw=document.documentElement.clientWidth, vh=window.innerHeight, r=dd.getBoundingClientRect();
+    if(!r.width) return;
+    if(r.right>vw-8){ dd.style.left="auto"; dd.style.right="0"; r=dd.getBoundingClientRect();
+      if(r.left<8) dd.style.right=(r.left-8)+"px"; }
+    var room=vh-r.top-10, css=parseFloat(getComputedStyle(dd).maxHeight)||r.height;
+    if(room<css&&room>160) dd.style.maxHeight=room+"px";
+  }
+  function fixShift(x0){ if(window.scrollX!==x0&&document.documentElement.scrollWidth<=document.documentElement.clientWidth+1) window.scrollTo(x0,window.scrollY); }
+  function scan(){ document.querySelectorAll(SEL).forEach(fit); fixShift(0); }
+  var pend=false;
+  new MutationObserver(function(){ if(pend) return; pend=true; requestAnimationFrame(function(){ pend=false; scan(); }); })
+    .observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["class","open"]});
+  window.addEventListener("resize",scan);
+  /* a dropdown's search box gets focus right after it opens — never let that scroll the page sideways */
+  document.addEventListener("focusin",function(e){ var t=e.target; if(t&&t.closest&&t.closest(".msel-dd, .msel-r-dd, .mvms-dd")) requestAnimationFrame(function(){ fixShift(0); }); });
 })();
 </script>
 
