@@ -47,7 +47,7 @@ h1,h2,h3,.disp{font-family:var(--disp)}
 @keyframes float2{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(14px) rotate(8deg)}}
 @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 @keyframes dash{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:var(--off)}}
-.up{animation:up .5s cubic-bezier(.22,1,.36,1) both}
+.up{animation:up .5s cubic-bezier(.22,1,.36,1) backwards}
 .d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.16s}.d4{animation-delay:.22s}.d5{animation-delay:.28s}
 /* ── on-render "data materializes" animations ── */
 @keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
@@ -424,7 +424,7 @@ function mselBind() {
       if (!isOpen) {
         dd.classList.add('open'); btn.classList.add('open');
         mselRenderList(id);
-        var searchInp = dd.querySelector('.msel-search'); if (searchInp) { searchInp.value = ''; _mselInstances[id].search = ''; setTimeout(function() { searchInp.focus(); }, 30); }
+        var searchInp = dd.querySelector('.msel-search'); if (searchInp) { searchInp.value = ''; _mselInstances[id].search = ''; setTimeout(function() { searchInp.focus({preventScroll:true}); }, 30); }
       }
     };
   });
@@ -3576,6 +3576,34 @@ boot();
   window.addEventListener("resize",function(){document.querySelectorAll(".tabs").forEach(edges);});
   new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",scan); else scan();
+})();
+</script>
+
+<!-- ── Dropdown fit ──
+     Keeps every filter dropdown fully on screen: a dropdown that would run past the right edge of the window
+     (e.g. the last filter in a row) opens leftwards instead, so the page no longer shifts sideways; one that
+     would run past the bottom gets a shorter list. Works for every dropdown style used in the dashboards. -->
+<script>
+(function(){
+  var SEL=".msel-dd.open, .msel-r-dd, details.mvms[open] > .mvms-dd";
+  function fit(dd){
+    if(!dd||!dd.getBoundingClientRect) return;
+    dd.style.left=""; dd.style.right=""; dd.style.maxHeight="";
+    var vw=document.documentElement.clientWidth, vh=window.innerHeight, r=dd.getBoundingClientRect();
+    if(!r.width) return;
+    if(r.right>vw-8){ dd.style.left="auto"; dd.style.right="0"; r=dd.getBoundingClientRect();
+      if(r.left<8) dd.style.right=(r.left-8)+"px"; }
+    var room=vh-r.top-10, css=parseFloat(getComputedStyle(dd).maxHeight)||r.height;
+    if(room<css&&room>160) dd.style.maxHeight=room+"px";
+  }
+  function fixShift(x0){ if(window.scrollX!==x0&&document.documentElement.scrollWidth<=document.documentElement.clientWidth+1) window.scrollTo(x0,window.scrollY); }
+  function scan(){ document.querySelectorAll(SEL).forEach(fit); fixShift(0); }
+  var pend=false;
+  new MutationObserver(function(){ if(pend) return; pend=true; requestAnimationFrame(function(){ pend=false; scan(); }); })
+    .observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:["class","open"]});
+  window.addEventListener("resize",scan);
+  /* a dropdown's search box gets focus right after it opens — never let that scroll the page sideways */
+  document.addEventListener("focusin",function(e){ var t=e.target; if(t&&t.closest&&t.closest(".msel-dd, .msel-r-dd, .mvms-dd")) requestAnimationFrame(function(){ fixShift(0); }); });
 })();
 </script>
 
