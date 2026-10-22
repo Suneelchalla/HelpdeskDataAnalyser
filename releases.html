@@ -7,6 +7,9 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237C3AED'/%3E%3Cpath d='M10 20l4-8 4 8' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='22' cy='12' r='3.5' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M22 15.5V22' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
+<script src="sla-engine.js"></script>
+<script src="sla-history.js"></script>
+<script src="sla-link.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -288,6 +291,43 @@ td:has(>.jkey){white-space:nowrap;min-width:92px}
 .exp-age.old{color:var(--bf);font-weight:700}
 .exp-note{padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--ink2);background:var(--wa-bg);border:1px solid var(--wa-soft);border-radius:var(--r)}
 .exp-empty{text-align:center;padding:46px 20px;color:var(--muted);font-size:13px}
+/* ── MOVEMENT TAB ── */
+.mvtop{padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:12px}
+.mvchips{display:flex;flex-wrap:wrap;gap:6px}
+.mvchip{background:var(--paper);border:1px solid var(--line);color:var(--ink2);padding:7px 13px;border-radius:20px;font-size:12px;font-weight:600;font-family:var(--disp);display:inline-flex;align-items:center;gap:7px}
+.mvchip:hover{border-color:var(--line2);color:var(--ink)}
+.mvchip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.mvchip .cnt{background:rgba(0,0,0,.07);padding:1px 7px;border-radius:10px;font-size:10px;font-family:var(--mono)}
+.mvchip.on .cnt{background:rgba(255,255,255,.2)}
+.mvctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.mvrange{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--muted);padding-bottom:7px}
+.mvseg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.mvseg button{background:none;border:none;padding:5px 10px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.mvseg button.on{background:#fff;color:var(--ink);box-shadow:var(--sh)}
+.mvbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--ink2);line-height:1.45}
+.mvbar+.mvbar{margin-top:6px}
+.mvbar.warn{background:var(--wa-bg);border-color:var(--wa-soft)}
+.mvbar.ok{background:var(--green-bg);border-color:#A7F3D0}
+.mvbar>span:first-of-type{flex:1;min-width:220px}
+.mvbar b{color:var(--ink)}
+.mvmuted{color:var(--muted);font-size:11.5px}
+.mvprog{flex:0 0 160px;height:6px;border-radius:6px;background:var(--line);overflow:hidden}.mvprog i{display:block;height:100%;background:var(--vi);transition:width .3s}
+.mvspin{width:13px;height:13px;border:2px solid var(--vi-soft);border-top-color:var(--vi);border-radius:50%;animation:mvspin .8s linear infinite;flex:none}
+@keyframes mvspin{to{transform:rotate(360deg)}}
+.mvgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+@media(max-width:1100px){.mvgrid{grid-template-columns:1fr}}
+.mvmain{overflow:hidden}
+.mvside{padding:16px}
+.mvrow{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 34px;gap:8px;align-items:center;padding:5px 6px;border-radius:7px;font-size:11.5px;cursor:pointer}
+.mvrow:hover{background:var(--paper)}.mvrow.on{background:var(--vi-bg)}.mvrow.static{cursor:default}.mvrow.static:hover{background:none}
+.mvlbl{display:flex;align-items:center;gap:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink2)}
+.mvlbl i{width:7px;height:7px;border-radius:50%;flex:none}
+.mvtrack{height:7px;background:var(--paper);border-radius:6px;overflow:hidden}.mvtrack b{display:block;height:100%;border-radius:6px}
+.mvn{text-align:right;font-size:11px;font-weight:600}
+.mvchain{font-size:11px;line-height:1.7}
+.mvarr{color:var(--faint);font-weight:700}
+.mvst{display:inline-block;padding:1px 7px;border-radius:6px;border:1px solid;font-weight:600;font-size:10.5px;white-space:nowrap}
+tr.mvday td{background:var(--paper);font-size:10.5px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px;padding:7px 10px}
 </style>
 </head>
 <body>
@@ -451,7 +491,8 @@ function newState(){
     rootCause:[], statuses:[],   // multi-selects: Root Cause, and every individual Status (empty = all)
     sortCol:"created", sortDir:"desc", page:0,
     expStatus:[], expView:"list", expSortCol:"created", expSortDir:"asc",  // Expected Releases tab (local) — flat list by default
-    kpiFilter:""  // active KPI highlight
+    kpiFilter:"",  // active KPI highlight
+    mvPeriod:"today", mvFrom:"", mvTo:"", mvToSt:[], mvFromSt:[], mvView:"moves", mvPage:0  // Movement tab (local)
   };
 }
 var S=newState();
@@ -552,8 +593,8 @@ function passF(t){
     if(S.statuses.length&&S.statuses.indexOf(t.status)<0) return false;
     if(S.status==="closed"&&!t.closed) return false;
     if(S.status==="open"&&t.closed) return false;
-    if(S.from){var fd=new Date(S.from);if(t.created&&t.created<fd)return false;}
-    if(S.to){var td=new Date(S.to);td.setHours(23,59,59);if(t.created&&t.created>td)return false;}
+    if(S.from&&S.tab!=="movement"){var fd=new Date(S.from);if(t.created&&t.created<fd)return false;}
+    if(S.to&&S.tab!=="movement"){var td=new Date(S.to);td.setHours(23,59,59);if(t.created&&t.created>td)return false;}
     if(S.search){
       var q=S.search.toLowerCase();
       if(t.key.toLowerCase().indexOf(q)<0&&t.summary.toLowerCase().indexOf(q)<0&&
@@ -622,6 +663,7 @@ function render(){
         '<button class="'+(S.tab==="releases"?"on":"")+'" data-tab="releases">Releases</button>'+
         '<button class="'+(S.tab==="expected"?"on":"")+'" data-tab="expected">Expected Releases <span class="cnt">'+expPool().length+'</span></button>'+
         '<button class="'+(S.tab==="tickets"?"on":"")+'" data-tab="tickets">Tickets <span class="cnt">'+FILTERED.length+'</span></button>'+
+        '<button class="'+(S.tab==="movement"?"on":"")+'" data-tab="movement">Movement</button>'+
         '<button class="'+(S.tab==="trend"?"on":"")+'" data-tab="trend">Trend</button>'+
       '</div>'+
       '<div class="hspace"></div>'+
@@ -645,8 +687,9 @@ function render(){
       '<div class="fcell"><span class="flabel">Status</span>'+mselHTML(_stMselId)+'</div>'+
       '<div class="fcell"><span class="flabel">Root Cause</span>'+mselHTML(_rcMselId)+'</div>'+
       '<div class="fcell"><span class="flabel">Request Type</span>'+mselHTML(_itMselId)+'</div>'+
+      (S.tab==="movement"?'':
       '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
-      '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+
+      '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>')+
     '</div>'+
   '</header><main>';
 
@@ -658,7 +701,7 @@ function render(){
   var cl=FILTERED.filter(function(t){return t.closed;}).length;
   var op=total-cl;
 
-  if(S.tab!=="expected"){
+  if(S.tab!=="expected"&&S.tab!=="movement"){
   h+='<div class="kpis up">';
   h+=kpiCard("total","Total Releases",total,"","📦","");
   h+=kpiCard("df","Data Fixes",df,pct(df,total),"🛠️","border-left-color:var(--df)");
@@ -674,6 +717,7 @@ function render(){
   else if(S.tab==="expected") h+=renderExpecting();
   else if(S.tab==="tickets") h+=renderTickets();
   else if(S.tab==="trend") h+=renderTrend();
+  else if(S.tab==="movement") h+=renderMovement();
 
   h+='<div class="footer"><b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' release tickets loaded · '+FILTERED.length.toLocaleString()+' in scope · HD Release Tracker</div>';
   h+='</main>';
@@ -1526,11 +1570,332 @@ function drillTickets(filterFn,title){
   openModal(title,tix);
 }
 
+/* ══════════════ MOVEMENT TAB ══════════════
+   "What moved today / yesterday / this week…": every STATUS CHANGE a release ticket made in the chosen
+   period, read from the real Jira status history — not from "Updated", which also changes on comments.
+
+   Status history is the SLA Tracker's shared cache (HDStore "sla-history"); missing histories are fetched
+   through HDSlaLink.fetchMissing (same bridge, same one-fetch-at-a-time lock as the other dashboards), so
+   whatever is fetched here also serves the SLA Tracker, Follow-up and Trend, and vice versa.
+
+   Only tickets whose Jira "Updated" falls on or after the period start can have moved in it (a status
+   change always bumps Updated), so only those need a history — older tickets are skipped without fetching.
+   Day / week / month boundaries are IST; weeks start on Monday. */
+var MV_HIST_VER=2, MV_IST=330*60000, MV_DAY=86400000, MV_PAGE=50;
+var MV={hist:{},loaded:false,ver:0,fetching:false,prog:null,err:"",busy:"",tried:{},timer:null,wait:0};
+var MV_NOBRIDGE="The HD Jira Bridge extension did not answer, so status history can't be fetched on this page. Check that the extension is enabled, then reload the page.";
+var MV_KIND={closed:{l:"Closed",c:"#059669"},client:{l:"With client",c:"#2563EB"},engg:{l:"Engineering",c:"#7C3AED"},hd:{l:"Help Desk",c:"#D97706"}};
+
+/* ── IST calendar ── */
+function mvDay0(ms){return Math.floor((ms+MV_IST)/MV_DAY)*MV_DAY-MV_IST;}
+function mvWeek0(ms){var d=Math.floor((ms+MV_IST)/MV_DAY),wd=(d+4)%7;return (d-((wd+6)%7))*MV_DAY-MV_IST;}
+function mvMonth0(ms){var x=new Date(ms+MV_IST);return Date.UTC(x.getUTCFullYear(),x.getUTCMonth(),1)-MV_IST;}
+function mvDateMs(s){if(!s)return null;var p=s.split("-");return Date.UTC(+p[0],+p[1]-1,+p[2])-MV_IST;}
+function mvFdt(ms){return new Date(ms).toLocaleString("en-GB",{timeZone:"Asia/Kolkata",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false});}
+function mvFtime(ms){return new Date(ms).toLocaleTimeString("en-GB",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit",hour12:false});}
+function mvFday(ms){return new Date(ms).toLocaleDateString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"2-digit",month:"short",year:"numeric"});}
+function mvFd(ms){return new Date(ms).toLocaleDateString("en-GB",{timeZone:"Asia/Kolkata",day:"2-digit",month:"short"});}
+
+var MV_PERIODS=[
+  {id:"today",l:"Today"},{id:"yesterday",l:"Yesterday"},{id:"thisweek",l:"This week"},
+  {id:"lastweek",l:"Last week"},{id:"last7",l:"Last 7 days"},{id:"thismonth",l:"This month"},{id:"custom",l:"Custom"}
+];
+function mvRange(id){
+  var now=Date.now(),d0=mvDay0(now),w0=mvWeek0(now);
+  switch(id){
+    case "today": return {a:d0,b:d0+MV_DAY};
+    case "yesterday": return {a:d0-MV_DAY,b:d0};
+    case "thisweek": return {a:w0,b:d0+MV_DAY};
+    case "lastweek": return {a:w0-7*MV_DAY,b:w0};
+    case "last7": return {a:d0-6*MV_DAY,b:d0+MV_DAY};
+    case "thismonth": return {a:mvMonth0(now),b:d0+MV_DAY};
+    case "custom":
+      var a=mvDateMs(S.mvFrom),b=mvDateMs(S.mvTo);
+      if(a==null&&b==null) return {a:d0,b:d0+MV_DAY};
+      if(a==null) a=b; if(b==null) b=d0;
+      if(b<a){var x=a;a=b;b=x;}
+      return {a:a,b:b+MV_DAY};
+  }
+  return {a:d0,b:d0+MV_DAY};
+}
+function mvRangeTxt(r){var last=r.b-MV_DAY;return r.b-r.a<=MV_DAY?mvFday(r.a):mvFd(r.a)+" – "+mvFday(Math.min(last,Date.now()));}
+
+/* ── ticket → side (same rule as the SLA Tracker, from Master Data) ── */
+function mvKind(st){
+  var C=window.HDClass; if(!C||!st) return "hd";
+  if(C.isTerminal(st)) return "closed";
+  var o=C.owner(st); if(o==="client") return "client";
+  return C.classify3&&C.classify3(st)==="engg"?"engg":"hd";
+}
+function mvUpd(t){
+  if(t._mvU!==undefined) return t._mvU;
+  var raw=t._raw||{},v=null;
+  for(var k in raw) if(Object.prototype.hasOwnProperty.call(raw,k)&&k.trim().toLowerCase()==="updated"){v=raw[k];break;}
+  t._mvU=window.HDSla?HDSla.parseTs(v):(v?new Date(v).getTime():null);
+  if(t._mvU!=null&&isNaN(t._mvU)) t._mvU=null;
+  return t._mvU;
+}
+/* a cached history is only used while it still describes the ticket in this data (same rule as sla.html) */
+function mvEntry(t){
+  var e=MV.hist[t.key]; if(!e) return null;
+  var tr=e.transitions||[],last=tr.length?tr[tr.length-1].to:e.status,js=e.status||last,upd=mvUpd(t);
+  if(js!==t.status&&last!==t.status) return null;
+  if(e.updated!=null&&upd!=null&&e.updated===upd) return e;
+  if(upd!=null&&e.fetchedAt&&upd<=e.fetchedAt-300000) return e;
+  if(upd==null) return e;
+  return null;
+}
+/* could this ticket have moved at or after `a`? (status changes bump Updated) */
+function mvMayMove(t,a){var u=mvUpd(t);return u==null||u>=a;}
+
+function mvPassSt(x){
+  if(S.mvToSt.length&&S.mvToSt.indexOf(x.to)<0) return false;
+  if(S.mvFromSt.length&&S.mvFromSt.indexOf(x.from)<0) return false;
+  return true;
+}
+/* every status change of the in-scope tickets inside [a,b), plus who is still unknown */
+function mvCollect(a,b,applySt){
+  var moves=[],unknown=[],checked=0;
+  FILTERED.forEach(function(t){
+    if(!mvMayMove(t,a)) return;
+    var e=mvEntry(t); if(!e){unknown.push(t);return;}
+    checked++;
+    (e.transitions||[]).forEach(function(x){
+      if(x.t<a||x.t>=b) return;
+      if(applySt&&!mvPassSt(x)) return;
+      moves.push({t:t,at:x.t,from:x.from,to:x.to,by:x.by,suspect:!!e.suspect});
+    });
+  });
+  moves.sort(function(p,q){return q.at-p.at;});
+  return {moves:moves,unknown:unknown,checked:checked};
+}
+function mvTickets(moves){var m={},out=[];moves.forEach(function(x){if(!m[x.t.key]){m[x.t.key]={t:x.t,moves:[]};out.push(m[x.t.key]);}m[x.t.key].moves.push(x);});return out;}
+
+/* ── history: load, fetch, keep in sync with other pages ── */
+function mvLoad(){
+  if(!window.HDStore||!HDStore.loadSlaHistory){MV.loaded=true;return Promise.resolve();}
+  return HDStore.loadSlaHistory().then(function(h){
+    MV.hist=h&&h.v===MV_HIST_VER&&h.tickets?h.tickets:{};
+    MV.loaded=true; MV.ver++;
+  }).catch(function(){MV.loaded=true;});
+}
+function mvBridge(){return !!(window.HDSlaLink&&HDSlaLink.bridgeReady());}
+function mvAutoOn(){return window.HDSlaLink?HDSlaLink.autoOn():false;}
+function mvSig(t){return t.key+"|"+mvUpd(t)+"|"+t.status;}
+/* fetch scope: the chosen period, and never less than "last week" so the period chips all fill in */
+function mvScopeStart(){var now=Date.now();return Math.min(mvRange(S.mvPeriod).a,mvWeek0(now)-7*MV_DAY);}
+function mvNeed(retry){
+  var a=mvScopeStart();
+  return FILTERED.filter(function(t){return mvMayMove(t,a)&&!mvEntry(t)&&(retry||!MV.tried[mvSig(t)]);});
+}
+function mvFetch(retry){
+  if(MV.fetching||!window.HDSlaLink||!MV.loaded) return;
+  var need=mvNeed(retry);
+  if(!need.length) return;
+  if(!mvBridge()){
+    MV.wait++;
+    try{window.postMessage({type:"HD_BRIDGE_PING"},"*");}catch(e){}
+    if(MV.wait<=10){MV.err="";mvPaintBar();clearTimeout(MV.timer);MV.timer=setTimeout(function(){if(S.tab==="movement")mvFetch(retry);},3000);return;}
+    MV.wait=0;MV.err=MV_NOBRIDGE;mvPaintBar();return;
+  }
+  MV.wait=0;
+  need=need.slice(0,1500);
+  need.forEach(function(t){MV.tried[mvSig(t)]=1;});
+  MV.fetching=true;MV.err="";MV.prog={done:0,total:need.length};mvPaintBar();
+  HDSlaLink.fetchMissing(need.map(function(t){return t._raw;}),{
+    force:true,label:"Release Tracker · Movement",
+    onProgress:function(d,tt){MV.prog={done:d,total:tt};mvPaintBar();}
+  }).then(function(r){
+    MV.fetching=false;MV.prog=null;MV.busy="";
+    if(r.aborted) MV.err="Fetching stopped: the HD Jira Bridge stopped answering ("+r.aborted+"). Reload the page and try again.";
+    else if(r.failed&&r.failed.length) MV.err=r.failed.length+" ticket(s) could not be fetched, e.g. "+r.failed[0].key+": "+r.failed[0].reason;
+    return mvLoad().then(function(){mvRefresh();if(mvNeed(false).length)mvSchedule(800);});
+  },function(e){
+    MV.fetching=false;MV.prog=null;
+    need.forEach(function(t){delete MV.tried[mvSig(t)];});
+    var m=String((e&&e.message)||e);
+    if(/^BUSY:/.test(m)){MV.err="";MV.busy=m.slice(5);mvSchedule(15000);}else{MV.busy="";MV.err=m;}
+    mvPaintBar();
+  });
+}
+function mvSchedule(ms){clearTimeout(MV.timer);MV.timer=setTimeout(function(){if(S.tab==="movement"&&mvAutoOn())mvFetch(false);},ms==null?900:ms);}
+function mvModalOpen(){var m=el("modalOv");return m&&m.classList.contains("open");}
+function mvRefresh(){if(S.tab==="movement"&&!mvModalOpen()&&!document.querySelector(".msel-dd.open"))render();}
+if(window.addEventListener) window.addEventListener("storage",function(e){if(e.key==="hd-sla-hist-ping"&&!MV.fetching)mvLoad().then(mvRefresh);});
+if(window.HDSlaLink) HDSlaLink.subscribe(function(){if(MV.err===MV_NOBRIDGE&&mvBridge())MV.err="";if(S.tab==="movement"){mvPaintBar();if(!MV.fetching)mvSchedule();}});
+
+/* status-history bar: progress / missing / errors — repainted on its own while fetching */
+function mvBarHTML(){
+  var r=mvRange(S.mvPeriod),c=mvCollect(r.a,r.b,false),need=c.unknown.length,h="";
+  if(!MV.loaded) return '<div class="mvbar"><span class="mvspin"></span>Loading saved status history…</div>';
+  if(MV.fetching&&MV.prog){
+    var p=MV.prog.total?Math.round(MV.prog.done/MV.prog.total*100):0;
+    return '<div class="mvbar"><span class="mvspin"></span><span>Fetching status history from Jira — <b>'+MV.prog.done+'</b> of <b>'+MV.prog.total+'</b> tickets</span><span class="mvprog"><i style="width:'+p+'%"></i></span></div>';
+  }
+  if(MV.busy) return '<div class="mvbar"><span class="mvspin"></span><span>'+esc(MV.busy)+'</span></div>';
+  if(MV.err) h+='<div class="mvbar warn"><span>⚠ '+esc(MV.err)+'</span>'+(need?'<button class="ghost" id="mvFetchBtn">Try again</button>':'')+'</div>';
+  if(need&&!MV.err){
+    h+='<div class="mvbar warn"><span><b>'+need+'</b> ticket'+(need===1?'':'s')+' changed in Jira during this period but '+(need===1?'its':'their')+' status history isn’t fetched yet, so '+(need===1?'it is':'they are')+' not counted below.</span>'+
+      (mvBridge()?'<button class="ghost" id="mvFetchBtn">Fetch history</button>':'<span class="mvmuted">Waiting for the HD Jira Bridge…</span>')+
+      '<button class="ghost" id="mvUnknownBtn">See tickets</button></div>';
+  }
+  if(!h) h='<div class="mvbar ok"><span>✓ Status history complete for this period — <b>'+c.checked+'</b> ticket'+(c.checked===1?'':'s')+' changed in Jira, every status change is counted.</span></div>';
+  return h;
+}
+function mvPaintBar(){var b=el("mvBar");if(!b)return;b.innerHTML=mvBarHTML();mvBindBar();}
+function mvBindBar(){
+  var fb=el("mvFetchBtn");if(fb)fb.onclick=function(){MV.err="";MV.tried={};mvFetch(true);};
+  var ub=el("mvUnknownBtn");if(ub)ub.onclick=function(){
+    var r=mvRange(S.mvPeriod),set={};mvCollect(r.a,r.b,false).unknown.forEach(function(t){set[t.key]=1;});
+    drillTickets(function(t){return set[t.key];},"Changed in Jira, status history not fetched yet");
+  };
+}
+
+/* ── render ── */
+function renderMovement(){
+  if(!MV.loaded&&!MV.loading){MV.loading=true;mvLoad().then(function(){mvRefresh();mvSchedule(300);});}
+  var r=mvRange(S.mvPeriod);
+  var all=mvCollect(r.a,r.b,false), c=mvCollect(r.a,r.b,true), moves=c.moves, tix=mvTickets(moves);
+
+  /* status pickers: every status seen in this period's moves (plus any already picked) */
+  var toS={},frS={};all.moves.forEach(function(x){if(x.to)toS[x.to]=(toS[x.to]||0)+1;if(x.from)frS[x.from]=(frS[x.from]||0)+1;});
+  S.mvToSt.forEach(function(s){if(!toS[s])toS[s]=0;});S.mvFromSt.forEach(function(s){if(!frS[s])frS[s]=0;});
+  var byCount=function(m){return Object.keys(m).sort(function(a,b){return m[b]-m[a]||a.localeCompare(b);});};
+  var toId=mselCreate("mvToMsel","Any status",byCount(toS),S.mvToSt,function(sel){S.mvToSt=sel;},function(){S.mvPage=0;render();});
+  var frId=mselCreate("mvFrMsel","Any status",byCount(frS),S.mvFromSt,function(sel){S.mvFromSt=sel;},function(){S.mvPage=0;render();});
+
+  /* period chips, each with the number of tickets that moved in it (status filters applied) */
+  var h='<div class="card up mvtop"><div class="mvchips">';
+  MV_PERIODS.forEach(function(p){
+    var n="";
+    if(p.id!=="custom"){var rr=mvRange(p.id),mm=mvCollect(rr.a,rr.b,true).moves,ks={};mm.forEach(function(x){ks[x.t.key]=1;});n=Object.keys(ks).length;}
+    h+='<button class="mvchip'+(S.mvPeriod===p.id?' on':'')+'" data-mvp="'+p.id+'">'+p.l+(n!==""?' <span class="cnt">'+n+'</span>':'')+'</button>';
+  });
+  h+='</div><div class="mvctrl">';
+  if(S.mvPeriod==="custom")
+    h+='<div class="fcell"><span class="flabel">Moved from date</span><input type="date" class="dinput" id="mvFrom" value="'+esc(S.mvFrom)+'"></div>'+
+       '<div class="fcell"><span class="flabel">to date</span><input type="date" class="dinput" id="mvTo" value="'+esc(S.mvTo)+'"></div>';
+  h+='<div class="fcell"><span class="flabel">Moved into status</span>'+mselHTML(toId)+'</div>'+
+     '<div class="fcell"><span class="flabel">Moved out of status</span>'+mselHTML(frId)+'</div>'+
+     '<div class="fcell"><span class="flabel">Show</span><div class="mvseg">'+
+       '<button class="'+(S.mvView==="moves"?'on':'')+'" data-mvv="moves">Every status change</button>'+
+       '<button class="'+(S.mvView==="tickets"?'on':'')+'" data-mvv="tickets">One row per ticket</button></div></div>'+
+     '<div class="mvrange">'+esc(mvRangeTxt(r))+' · IST</div>';
+  h+='</div><div id="mvBar">'+mvBarHTML()+'</div></div>';
+
+  /* KPIs — tickets that moved, and where they ended up in the period */
+  var land={closed:{},client:{},engg:{},hd:{}};
+  tix.forEach(function(g){var last=g.moves[0];land[mvKind(last.to)][g.t.key]=1;});
+  var kc=function(k){return Object.keys(land[k]).length;};
+  h+='<div class="kpis up">'+
+    mvKpi("all","Tickets moved",tix.length,"","🔀","")+
+    mvKpi("moves","Status changes",moves.length,"","↪️","border-left-color:var(--vi2)")+
+    mvKpi("closed","Ended Closed",kc("closed"),pct(kc("closed"),tix.length),"✅","border-left-color:#059669")+
+    mvKpi("client","Ended with client",kc("client"),pct(kc("client"),tix.length),"🤝","border-left-color:#2563EB")+
+    mvKpi("engg","Ended with Engineering",kc("engg"),pct(kc("engg"),tix.length),"🛠️","border-left-color:var(--vi)")+
+    mvKpi("hd","Ended with Help Desk",kc("hd"),pct(kc("hd"),tix.length),"🎧","border-left-color:var(--wa)")+
+  '</div>';
+  window.__mvLand=land; window.__mvTix=tix;
+
+  /* side panel: statuses reached + by day */
+  var reach={};moves.forEach(function(x){reach[x.to]=(reach[x.to]||0)+1;});
+  var rk=Object.keys(reach).sort(function(a,b){return reach[b]-reach[a];}),mx=rk.length?reach[rk[0]]:1;
+  var side='<div class="card mvside"><div class="sec-head"><span class="sec-title">Moved into</span><span class="sec-sub">click to filter</span></div>';
+  if(!rk.length) side+='<div class="mvmuted" style="padding:6px 0">No status changes.</div>';
+  rk.forEach(function(s){var k=mvKind(s);
+    side+='<div class="mvrow'+(S.mvToSt.length===1&&S.mvToSt[0]===s?' on':'')+'" data-mvto="'+esc(s)+'"><span class="mvlbl" title="'+esc(s)+'"><i style="background:'+MV_KIND[k].c+'"></i>'+esc(s)+'</span>'+
+      '<span class="mvtrack"><b style="width:'+Math.max(4,reach[s]/mx*100)+'%;background:'+MV_KIND[k].c+'"></b></span><span class="mono mvn">'+reach[s]+'</span></div>';
+  });
+  if(S.mvToSt.length) side+='<button class="ghost" id="mvClearTo" style="margin-top:8px">Show all statuses</button>';
+  var days=Math.round((r.b-r.a)/MV_DAY);
+  if(days>1&&days<=62){
+    var dc={},dmx=1;moves.forEach(function(x){var d=mvDay0(x.at);dc[d]=(dc[d]||0)+1;});
+    Object.keys(dc).forEach(function(d){if(dc[d]>dmx)dmx=dc[d];});
+    side+='<div class="sec-head" style="margin-top:18px"><span class="sec-title">By day</span><span class="sec-sub">status changes</span></div>';
+    for(var d=r.b-MV_DAY;d>=r.a;d-=MV_DAY){if(d>Date.now())continue;var n=dc[d]||0;
+      side+='<div class="mvrow static"><span class="mvlbl">'+esc(mvFd(d)+" "+new Date(d).toLocaleDateString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short"}))+'</span><span class="mvtrack"><b style="width:'+(n?Math.max(4,n/dmx*100):0)+'%;background:var(--vi2)"></b></span><span class="mono mvn">'+n+'</span></div>';}
+  }
+  side+='</div>';
+
+  /* main list */
+  var list=S.mvView==="tickets"?tix:moves, pages=Math.max(1,Math.ceil(list.length/MV_PAGE));
+  if(S.mvPage>=pages)S.mvPage=pages-1;
+  var st=S.mvPage*MV_PAGE, slice=list.slice(st,st+MV_PAGE);
+  var main='<div class="card mvmain"><div class="tbl-wrap" style="border:none;border-radius:var(--r2) var(--r2) 0 0"><table><thead><tr>'+
+    '<th class="static">Key</th><th class="static">Summary</th><th class="static">Fix Type</th><th class="static">Release No</th><th class="static">Project</th><th class="static">SVM In Charge</th>'+
+    (S.mvView==="tickets"?'<th class="static">Moves in period</th><th class="static">Last moved</th>':'<th class="static">Moved</th><th class="static">When (IST)</th><th class="static">By</th>')+
+    '<th class="static">Status now</th></tr></thead><tbody>';
+  var ncol=S.mvView==="tickets"?9:10;
+  if(!slice.length) main+='<tr><td colspan="'+ncol+'" style="text-align:center;padding:40px;color:var(--muted)">'+(MV.loaded?'No release tickets moved'+(S.mvToSt.length||S.mvFromSt.length?' with these statuses':'')+' in this period.':'Loading…')+'</td></tr>';
+  var lastDay=null, multi=days>1;
+  slice.forEach(function(row){
+    var t=row.t, x=S.mvView==="tickets"?row.moves[0]:row;
+    if(multi){var dd=mvDay0(x.at);if(dd!==lastDay){lastDay=dd;main+='<tr class="mvday"><td colspan="'+ncol+'">'+esc(mvFday(dd))+'</td></tr>';}}
+    var ftC=t.fixType==="Data Fix"?"df":t.fixType==="Bug Fix"?"bf":"wa";
+    main+='<tr><td><a class="jkey" href="'+JIRA+encodeURIComponent(t.key)+'" target="_blank" rel="noreferrer">'+esc(t.key)+'</a></td>'+
+      '<td class="trunc" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td>'+
+      '<td><span class="badge '+ftC+'">'+esc(t.fixType)+'</span></td>'+
+      '<td class="mono" style="font-size:10px">'+esc(t.releaseStr||"—")+'</td>'+
+      '<td>'+esc(t.project||"—")+'</td><td>'+esc(t.svm||"—")+'</td>';
+    if(S.mvView==="tickets"){
+      var path=row.moves.slice().reverse(), chain=esc(path[0].from||"—");
+      path.forEach(function(m){chain+=' <span class="mvarr">→</span> '+mvSt(m.to);});
+      main+='<td class="mvchain">'+chain+'</td><td class="mono" style="font-size:11px;white-space:nowrap">'+esc(mvFdt(x.at))+'</td>';
+    } else {
+      main+='<td class="mvchain">'+esc(x.from||"—")+' <span class="mvarr">→</span> '+mvSt(x.to)+(x.suspect?' <span title="History unverified in Jira">⚠</span>':'')+'</td>'+
+        '<td class="mono" style="font-size:11px;white-space:nowrap">'+esc(multi?mvFdt(x.at):mvFtime(x.at))+'</td>'+
+        '<td style="font-size:11px">'+esc(x.by===undefined?"—":(x.by||"(no name)"))+'</td>';
+    }
+    main+='<td><span class="badge '+(t.closed?"closed":"open")+'">'+esc(t.status)+'</span></td></tr>';
+  });
+  main+='</tbody></table></div>';
+  main+='<div class="paging"><span>'+(list.length?'Showing '+(st+1)+'–'+Math.min(st+MV_PAGE,list.length)+' of '+list.length+(S.mvView==="tickets"?' tickets':' status changes'):'')+'</span><div style="display:flex;gap:6px">'+
+    '<button class="ghost" id="mvCsv"'+(list.length?'':' disabled')+'>⬇ CSV</button>'+
+    '<button data-mvpg="prev" '+(S.mvPage===0?'disabled':'')+'>‹ Prev</button>'+
+    '<span class="mono" style="padding:5px 8px;font-size:11px">'+(S.mvPage+1)+' / '+pages+'</span>'+
+    '<button data-mvpg="next" '+(S.mvPage>=pages-1?'disabled':'')+'>Next ›</button></div></div></div>';
+
+  h+='<div class="mvgrid up d1">'+main+side+'</div>';
+  return h;
+}
+function mvSt(s){var k=mvKind(s);return '<span class="mvst" style="color:'+MV_KIND[k].c+';border-color:'+MV_KIND[k].c+'33;background:'+MV_KIND[k].c+'12">'+esc(s||"—")+'</span>';}
+function mvKpi(id,label,val,sub,icon,style){
+  return '<div class="card kpi" data-mvkpi="'+id+'" style="'+style+'"><span class="tag">'+icon+'</span><div class="kv mono">'+fmtN(val)+'</div><div class="kl">'+esc(label)+'</div>'+(sub?'<div class="ks">'+esc(sub)+' of moved</div>':'')+'</div>';
+}
+function mvCsv(){
+  var r=mvRange(S.mvPeriod),moves=mvCollect(r.a,r.b,true).moves;
+  var q=function(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  var rows=[["Key","Summary","Fix Type","Release No","Project","SVM In Charge","From status","To status","Moved at (IST)","By","Status now"]];
+  moves.forEach(function(x){var t=x.t;rows.push([t.key,t.summary,t.fixType,t.releaseStr,t.project,t.svm,x.from,x.to,mvFdt(x.at),x.by||"",t.status]);});
+  var blob=new Blob(["\ufeff"+rows.map(function(a){return a.map(q).join(",");}).join("\r\n")],{type:"text/csv"});
+  var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="release-movement-"+S.mvPeriod+".csv";document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+}
+function bindMovement(){
+  if(S.tab!=="movement") return;
+  document.querySelectorAll("[data-mvp]").forEach(function(b){b.onclick=function(){S.mvPeriod=b.dataset.mvp;S.mvPage=0;render();mvSchedule(300);};});
+  document.querySelectorAll("[data-mvv]").forEach(function(b){b.onclick=function(){S.mvView=b.dataset.mvv;S.mvPage=0;render();};});
+  document.querySelectorAll("[data-mvto]").forEach(function(b){b.onclick=function(){var s=b.dataset.mvto;S.mvToSt=(S.mvToSt.length===1&&S.mvToSt[0]===s)?[]:[s];S.mvPage=0;render();};});
+  document.querySelectorAll("[data-mvpg]").forEach(function(b){b.onclick=function(){S.mvPage+=b.dataset.mvpg==="next"?1:-1;if(S.mvPage<0)S.mvPage=0;render();};});
+  var ct=el("mvClearTo");if(ct)ct.onclick=function(){S.mvToSt=[];S.mvPage=0;render();};
+  var f=el("mvFrom");if(f)f.onchange=function(){S.mvFrom=f.value;S.mvPage=0;render();mvSchedule(300);};
+  var t=el("mvTo");if(t)t.onchange=function(){S.mvTo=t.value;S.mvPage=0;render();mvSchedule(300);};
+  var cv=el("mvCsv");if(cv)cv.onclick=mvCsv;
+  document.querySelectorAll("[data-mvkpi]").forEach(function(k){k.onclick=function(){
+    var id=k.dataset.mvkpi,set={},lbl=mvRangeTxt(mvRange(S.mvPeriod));
+    if(id==="all"||id==="moves") (window.__mvTix||[]).forEach(function(g){set[g.t.key]=1;});
+    else set=(window.__mvLand||{})[id]||{};
+    var names={all:"Tickets moved",moves:"Tickets moved",closed:"Moved and ended Closed",client:"Moved and ended with client",engg:"Moved and ended with Engineering",hd:"Moved and ended with Help Desk"};
+    drillTickets(function(t){return set[t.key];},names[id]+" — "+lbl);
+  };});
+  mvBindBar();
+}
+
 /* ── EVENT BINDING ── */
 function bindAll(){
   // tabs
   document.querySelectorAll("[data-tab]").forEach(function(b){
-    b.onclick=function(){S.tab=b.dataset.tab;S.page=0;render();};
+    b.onclick=function(){S.tab=b.dataset.tab;S.page=0;render();if(S.tab==="movement")mvSchedule(300);};
   });
   // filters
   var gs=el("gsearch");if(gs){
@@ -1545,7 +1910,7 @@ function bindAll(){
   var ffr=el("fFrom");if(ffr)ffr.onchange=function(){S.from=ffr.value;S.page=0;render();};
   var fto=el("fTo");if(fto)fto.onchange=function(){S.to=fto.value;S.page=0;render();};
   var rb=el("resetBtn");if(rb)rb.onclick=function(){
-    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.rootCause=[];S.statuses=[];S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.expStatus=[];S.page=0;render();};
+    S.search="";S.proj="";S.svm="";S.fixType="";S.status="";S.rootCause=[];S.statuses=[];S.issueType=defaultIssueTypes();S.from="";S.to="";S.kpiFilter="";S.expStatus=[];S.mvToSt=[];S.mvFromSt=[];S.page=0;S.mvPage=0;render();};
 
   // KPI clicks → single-click opens drill modal directly
   document.querySelectorAll("[data-kpi]").forEach(function(k){
@@ -1649,6 +2014,7 @@ function bindAll(){
   });
 
   bindExpecting();
+  bindMovement();
 
   // modal close
   el("modalClose").onclick=closeModal;
