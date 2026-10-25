@@ -38,6 +38,9 @@
     "january february march april june july august september october november december anything urgent important busiest busy overloaded handling working responsible escalated " +
     "average compliance incidents screens screen type types cause causes lowest highest least most fewest bottom between").split(/\s+/).filter(Boolean);
   var VOCABSET = {}; VOCAB.forEach(function (w) { VOCABSET[w] = 1; });
+  /* words that appear in many client names but also in ordinary questions — never enough on their own to mean "that client" */
+  var GENERICTOK = {}; ("service services desk help helpdesk support space request requests incident incidents change changes team teams group limited ltd private pvt company corp inc project projects " +
+    "management systems system solutions technologies technology global international india data digital online shipping logistics marine maritime ocean lines line sea freight cargo trading").split(/\s+/).forEach(function (w) { GENERICTOK[w] = 1; });
   /* very short words are only fixed from this explicit list (guessing on 4 letters mangles ordinary words) */
   var TYPO4 = { mnth: "month", mont: "month", wek: "week", tody: "today", toda: "today", opne: "open", oepn: "open", hgih: "high", tpye: "type", shwo: "show", lsit: "list", cleint: "client", clint: "client" };
   /* ordinary words that sit one letter away from a keyword and must never be "corrected" */
@@ -274,9 +277,10 @@
       T.forEach(function (t) { if (!t.project) return; var k = t.prefix + "|" + t.project; prefCount[k] = (prefCount[k] || 0) + 1; });
       var bestProj = {}; Object.keys(prefCount).forEach(function (k) { var a = k.split("|"), p = a[0]; if (!bestProj[p] || prefCount[k] > bestProj[p][1]) bestProj[p] = [a[1], prefCount[k]]; });
       Object.keys(bestProj).forEach(function (p) { var pr = bestProj[p][0]; (prefByProj[pr] = prefByProj[pr] || []).push(p); });
-      var tokOwner = {}; Object.keys(pc).forEach(function (p) { nz(p).trim().split(" ").forEach(function (tk) { if (tk.length >= 4 && !STOP[tk]) { tokOwner[tk] = tokOwner[tk] === undefined ? p : null; } }); });
+      var tokOwner = {}; Object.keys(pc).forEach(function (p) { nz(p).trim().split(" ").forEach(function (tk) { if (tk.length >= 4 && !STOP[tk] && !VOCABSET[tk] && !GENERICTOK[tk]) { tokOwner[tk] = tokOwner[tk] === undefined ? p : null; } }); });
       Object.keys(pc).forEach(function (p) {
-        var terms = [nz(p).trim()].concat(prefByProj[p] || []);
+        var terms = [nz(p).trim()].concat(prefByProj[p] || []), pt = nz(p).trim().split(" ");
+        if (pt.length >= 3) for (var i = 0; i < pt.length; i++) for (var j = i + 2; j <= pt.length; j++) if (j - i < pt.length) terms.push(pt.slice(i, j).join(" "));   // "service desk", "desk space" for "FCSL Service Desk Space"
         Object.keys(tokOwner).forEach(function (tk) { if (tokOwner[tk] === p) terms.push(tk); });
         E.project.push({ value: p, n: pc[p], terms: uniq(terms.filter(function (x) { return x && x.length >= 2; })) });
       });
@@ -292,7 +296,8 @@
         Object.keys(c).forEach(function (v) {
           if (d === "status" && (v === "Open" || v === "Closed")) return;            // "open"/"closed" are handled as flags
           var terms = [nz(v).trim()].concat((d === "status" && STATUS_ALIAS[v.toLowerCase()]) || []);
-          E[d].push({ value: v, n: c[v], terms: terms.filter(function (x) { return x && x.length >= 3; }) });
+          if (d === "type") { if (/change/i.test(v)) terms.push("change", "changes"); if (/service req/i.test(v)) terms.push("sr", "srs"); if (/incident/i.test(v)) terms.push("incident"); }
+          E[d].push({ value: v, n: c[v], terms: uniq(terms.filter(function (x) { return x && x.length >= 2; })) });
         });
       });
     })();
@@ -349,7 +354,8 @@
       lc = lc.replace(/\b[a-z][a-z0-9]*-\d+\b/g, " ").replace(/[?!]+/g, " ");
       lc = fixTypos(loosen(lc), plan); lc0 = lc;                         // casual wording → plain wording; misspellings → real words
 
-      var follow = /^\s*(and|now|also|what about|how about|only|same|instead|but|then|plus|just|those|these|them|filter|narrow)\b/.test(lc);
+      plan.slaFocus = /\bsla\b|breach|overdue|over due|deadline|time left|time remaining|how long (is )?left|due (date|soon|in)|crossed|late\b|delay/.test(lc);
+      var follow = /^\s*(and|now|also|what about|how about|only|same|instead|but|then|plus|just|those|these|them|filter|narrow)\b/.test(lc) || (!!prev && /\b(they|them|those|these|same ones|of these|of those)\b/.test(lc));
       if (/\b(reset|clear (all|filters?)|start over|new question)\b/.test(lc)) { prev = null; plan.reset = true; }
 
       // dates
@@ -364,6 +370,9 @@
       if (/\b(in|with)\s+open\s+status|\bopen status\b|status\s+(is\s+)?open\b/.test(lc)) { f.status.push("Open"); plan.recognised++; w = w.replace(/ open status | status open | status is open /g, " "); }
       var ms = matchEntities(w, E.status, 3); w = ms.w; ms.found.forEach(function (e) { f.status.push(e.value); plan.recognised++; });
       // clients, people, other fields
+      /* "no status change", "any change", "not changed" are about movement, not about Change tickets */
+      var wP = w.replace(/ (status|no|any|without|not|never|since|a|the) changes? /g, " $1 \u0001 ").replace(/ changes? (in|for|since|of|from|to) /g, " \u0001 $1 ");
+      var mty = matchEntities(wP, E.type, 2); w = mty.w.replace(/\u0001/g, "change"); mty.found.forEach(function (e) { f.type.push(e.value); plan.recognised++; });
       var mc = matchEntities(w, E.project, 2); w = mc.w; mc.found.forEach(function (e) { f.client.push(e.value); plan.recognised++; });
       var mp = matchEntities(w, E.person, 3); w = mp.w;
       function addPerson(e) {
@@ -373,10 +382,9 @@
         if (f[field].indexOf(e.value) < 0) f[field].push(e.value); plan.recognised++; plan.personBoth = (e.w > 0 && e.s > 0);
       }
       mp.found.forEach(addPerson);
-      ["root", "screen", "fix", "menu", "type"].forEach(function (d) {
+      ["root", "screen", "fix", "menu"].forEach(function (d) {
         var r = matchEntities(w, E[d], 3); w = r.w; r.found.forEach(function (e) { f[d].push(e.value); plan.recognised++; });
       });
-      if (/ (service req(uest)?s?|sr) /.test(w) && !f.type.length) { var srv = E.type.filter(function (e) { return /service req/i.test(e.value); }); srv.forEach(function (e) { f.type.push(e.value); }); w = w.replace(/ (service req(uest)?s?|sr) /g, " "); if (srv.length) plan.recognised++; }
       // names with typos ("milha", "vijai") — only when exactly one name is clearly the closest
       fuzzyEntities(w, E.project).forEach(function (x) { f.client.push(x[1].value); plan.recognised++; w = erase(w, x[0]); plan.notes.push("I read “" + x[0] + "” as “" + x[1].value + "”"); });
       fuzzyEntities(w, E.person).forEach(function (x) { addPerson(x[1]); w = erase(w, x[0]); plan.notes.push("I read “" + x[0] + "” as “" + x[1].value + "”"); });
@@ -460,6 +468,7 @@
       plan.superl = superl;
       if (dimHit && plan.keys.length) dimHit = null;
       if (dimHit && f[FKEY[dimHit]] && f[FKEY[dimHit]].length === 1 && !(which || superl)) { /* "for MILAHA by client" is pointless — keep grouping anyway */ }
+      if (!dimHit && /\b(what|which)\s+(issue\s+)?types?\b|\btypes? of tickets\b/.test(lc)) dimHit = "type";
       var isMonthWeek = /\b(?:by|per|each|every)\s+(month|week)\b|\b(month|week)\s*wise\b/.test(lc);
 
       // decide the metric
@@ -482,6 +491,8 @@
       if (plan.metric === "count" && (f.type.length > 1 || f.priority.length > 1)) { plan.metric = "group"; plan.group = f.type.length > 1 ? "type" : "priority"; }
       if (plan.metric === "group" || plan.metric === "slaMet") { if (slaMetW) plan.measure = "slaMet"; else if (avgW) plan.measure = "avg"; }
       if (plan.metric === "group" && plan.measure === "count" && slaMetW) plan.measure = "slaMet";
+      if (/\b(are|is|were|was)\s+(they|these|those|it|all)\b/.test(lc) && f.type.length >= 1 && !plan.keys.length) { plan.metric = "group"; plan.group = "type"; f.type = []; f.typeAll = true; plan.inferred = false; }
+      if (plan.metric === "group" && plan.group === "type" && !f.type.length) f.typeAll = true;
       plan.explicit = !!plan.metric && !plan.inferred;
 
       if (plan.metric === "focus" && f.range && /^(today|yesterday)$/.test(f.range.label)) { f.range = null; plan.recognised--; }
@@ -497,7 +508,7 @@
 
       // anything left over that we did not understand
       var left = w.trim().split(/\s+/).filter(function (t) { return t.length >= 3 && !STOP[t] && !/^\d+$/.test(t); });
-      var GEN = { tickets: 1, ticket: 1, issues: 1, issue: 1, open: 1, closed: 1, client: 1, clients: 1, worker: 1, workers: 1, priority: 1, status: 1, month: 1, week: 1, wise: 1, breakdown: 1, analysis: 1, report: 1, data: 1, info: 1, sla: 1, svm: 1, charge: 1, assigned: 1, assignee: 1 };
+      var GEN = { tickets: 1, ticket: 1, issues: 1, issue: 1, open: 1, closed: 1, client: 1, clients: 1, worker: 1, workers: 1, priority: 1, status: 1, month: 1, week: 1, wise: 1, breakdown: 1, analysis: 1, report: 1, data: 1, info: 1, sla: 1, svm: 1, charge: 1, assigned: 1, assignee: 1, percentage: 1, percent: 1, rate: 1, compliance: 1, performance: 1, met: 1, score: 1, achievement: 1, adherence: 1 };
       plan.ignored = left.filter(function (t) { return !GEN[t]; }).slice(0, 5);
 
       // follow-up: a short message that only adds filters refines the previous question
@@ -604,7 +615,7 @@
     /* ── ticket row for lists ── */
     function row(t) {
       var s = sla(t), a = age(t);
-      return { key: t.key, url: base + t.key, summary: t.summary, status: t.status, project: t.project, priority: t.priority, type: t.type, worker: t.worker, svm: t.svmRaw,
+      return { raw: t.raw, key: t.key, url: base + t.key, summary: t.summary, status: t.status, project: t.project, priority: t.priority, type: t.type, worker: t.worker, svm: t.svmRaw,
         age: a, idle: t.closed ? null : idle(t), created: t.created, sla: s && (s.state === "na" || s.state === "loading") ? null : s ? { label: s.label || "", state: s.state, tone: s.tone || "" } : null, closed: t.closed };
     }
     function csvTickets(list, name) {
@@ -665,6 +676,7 @@
       var total = list.length, lim = plan.limit || null, shown = lim ? list.slice(0, lim) : list;
       var a = { type: "tickets", title: total + (total === 1 ? " ticket" : " tickets"), total: total, items: shown.slice(0, 300).map(row), more: Math.max(0, shown.length - 300), chips: describe(plan),
         csv: csvTickets(shown, "tickets"), follow: total === 0 ? relaxChips(plan) : followChips(plan).filter(function (x) { return x.patch.metric !== "list"; }), limited: lim && total > lim ? total : 0 };
+      a.slaContext = !!f.sla || !!plan.slaFocus;
       if (total === 0) a.emptyHint = "Nothing matches all of those conditions together. Try loosening one:";
       if (f_hasSla(plan) && !slaOk()) a.warn = "SLA data isn’t available on this page — open the Follow-up Tracker for SLA questions.";
       return a;
@@ -783,16 +795,17 @@
         csv: { name: "trend", header: ["Period"].concat(S.map(function (s) { return s.name; })), rows: keysList.map(function (k, i) { return [lab(k)].concat(S.map(function (s) { return s.values[i]; })); }) },
         follow: [{ label: bucket === "week" ? "Monthly" : "Weekly", patch: { bucket: bucket === "week" ? "month" : "week" } }].concat(both ? [] : [{ label: "Created vs closed", patch: { series: "both" } }]) };
     };
+    function ticketItem(t) {
+      var s = sla(t), r = row(t), lk = t.linked ? t.linked.split(/\s*[,;]\s*/).filter(Boolean) : [];
+      return { raw: t.raw, key: t.key, url: base + t.key, summary: t.summary, fields: [["Status", t.status], ["Priority", t.priority || "—"], ["Client", t.project || "—"], ["Type", t.type || "—"], ["Current worker", t.worker || "—"], ["SVM in charge", t.svmRaw || "—"],
+        ["Created", fmtD(t.created) + (r.age != null ? " (" + r.age + " days ago)" : "")], ["In current status", r.idle != null ? r.idle + " days" : "—"], ["Root cause", t.root || "—"], ["Screen", t.screen || "—"]],
+        sla: s && s.state !== "na" && s.state !== "loading" ? { label: s.label || s.state, tip: s.tip || "", tone: s.tone || "" } : null, linked: lk.map(function (k) { return { key: k, url: base + k }; }), closed: t.closed, owner: ownerOf(t) };
+    }
     B.ticket = function (plan) {
       var out = [], missing = [];
       plan.keys.slice(0, 3).forEach(function (k) { var t = byKey[k.toLowerCase()]; if (t) out.push(t); else missing.push(k); });
       if (!out.length) return { type: "text", text: "I couldn’t find " + missing.join(", ") + " in the loaded data. It may be newer than the file, or from a project that isn’t in it.", chips: [] };
-      return { type: "ticketDetail", items: out.map(function (t) {
-        var s = sla(t), r = row(t), lk = t.linked ? t.linked.split(/\s*[,;]\s*/).filter(Boolean) : [];
-        return { key: t.key, url: base + t.key, summary: t.summary, fields: [["Status", t.status], ["Priority", t.priority || "—"], ["Client", t.project || "—"], ["Type", t.type || "—"], ["Current worker", t.worker || "—"], ["SVM in charge", t.svmRaw || "—"],
-          ["Created", fmtD(t.created) + (r.age != null ? " (" + r.age + " days ago)" : "")], ["In current status", r.idle != null ? r.idle + " days" : "—"], ["Root cause", t.root || "—"], ["Screen", t.screen || "—"]],
-          sla: s && s.state !== "na" && s.state !== "loading" ? { label: s.label || s.state, tip: s.tip || "", tone: s.tone || "" } : null, linked: lk.map(function (k) { return { key: k, url: base + k }; }), closed: t.closed, owner: ownerOf(t) };
-      }), missing: missing, chips: [] };
+      return { type: "ticketDetail", focus: plan.slaFocus ? "sla" : "details", items: out.map(ticketItem), missing: missing, chips: [] };
     };
 
     /* ── fallback ── */
@@ -833,7 +846,7 @@
       if (c) list.splice(5, 0, "Tell me about " + c.value);
       return list.slice(0, 6);
     }
-    return { ask: ask, run: run, parse: parse, suggest: suggest, starters: starters, applyPatch: applyPatch,
+    return { ticketInfo: function (key) { var t = byKey[String(key || "").toLowerCase()]; return t ? ticketItem(t) : null; }, ask: ask, run: run, parse: parse, suggest: suggest, starters: starters, applyPatch: applyPatch,
       stats: { tickets: T.length, open: T.filter(function (t) { return !t.closed && t.support; }).length, clients: E.project.length, people: E.person.length } };
   }
   var api = { createEngine: createEngine, applyPatch: applyPatch, _util: { extractRange: extractRange, nz: nz } };
@@ -851,7 +864,7 @@
   var Eng = window.HDChatEngine;
   if (!Eng) return;
 
-  var S = { engine: null, rows: null, loading: null, loadedAt: 0, stale: false, prev: null, answers: [], hist: [], hpos: 0, open: false, wide: false, misses: [] };
+  var S = { modal: null, engine: null, rows: null, loading: null, loadedAt: 0, stale: false, prev: null, answers: [], hist: [], hpos: 0, open: false, wide: false, misses: [] };
   try { S.misses = JSON.parse(localStorage.getItem("hd-chat-misses") || "[]") || []; } catch (e) { S.misses = []; }
   function saveMisses() { try { localStorage.setItem("hd-chat-misses", JSON.stringify(S.misses.slice(-200))); } catch (e) {} }
 
@@ -967,6 +980,23 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
 .in input{flex:1;border:none;background:transparent;outline:none;font-size:14px;color:#0F172A;padding:9px 0;min-width:0}.in input::placeholder{color:#94A3B8}\
 .send{width:36px;height:36px;border-radius:11px;border:none;background:linear-gradient(135deg,#2563EB,#4F46E5);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}.send:disabled{opacity:.45;cursor:default}\
 .note{font-size:10.5px;color:#94A3B8;text-align:center;margin-top:7px}\
+.tr{cursor:pointer;border-radius:10px;padding:9px 8px;margin:0 -8px;transition:background .12s}.tr:hover{background:#F5F7FF}.tr .key{color:#2563EB}\
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:26px 14px;overflow:auto;z-index:10}.ov.open{display:flex;animation:fade .15s ease}@keyframes fade{from{opacity:0}to{opacity:1}}\
+.mod{background:#fff;border-radius:20px;width:min(920px,100%);box-shadow:0 30px 80px -10px rgba(15,23,42,.5);margin:auto 0;animation:pop .22s cubic-bezier(.22,1,.36,1);color:#0F172A}\
+.mh{display:flex;gap:14px;align-items:flex-start;padding:18px 22px 14px;border-bottom:1px solid #EEF2F7;position:sticky;top:0;background:#fff;border-radius:20px 20px 0 0;z-index:2}.mh .l{flex:1;min-width:0}\
+.mt{font-size:15px;font-weight:600;margin-top:6px;line-height:1.35}.mm{font-size:11.5px;color:#64748B;margin-top:4px;line-height:1.5}\
+.tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid #EEF2F7;background:#fff}.tabs button{border:none;background:none;padding:11px 14px;font-size:12.5px;font-weight:700;color:#64748B;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}.tabs button.on{color:#2563EB;border-bottom-color:#2563EB}\
+.mb{padding:16px 22px 24px}.kpis{display:flex;gap:10px;flex-wrap:wrap}.kp{flex:1 1 170px;border:1px solid #E5EAF1;border-left:4px solid #94A3B8;border-radius:12px;padding:12px 14px;background:#fff}\
+.kv1{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:21px;font-weight:800;line-height:1.1}.kl{font-size:12px;font-weight:600;color:#475569;margin-top:6px}.ks{font-size:11px;color:#94A3B8;margin-top:1px}\
+.expl{background:#F8FAFC;border:1px solid #E5EAF1;border-radius:10px;padding:11px 14px;font-size:12.5px;color:#475569;line-height:1.65;margin:10px 0}.expl b{color:#0F172A}.expl .w{color:#B45309;margin-top:6px}\
+.bx{border:1px solid #E5EAF1;border-radius:10px;padding:10px 14px;margin:0 0 12px;background:#fff}.bx h5{margin:0 0 6px;font-size:13px;font-weight:700;color:#0F172A}.bx h5 span{font-weight:500;font-size:11.5px;color:#94A3B8}\
+.bx table{margin:0}.bx th{width:120px;text-align:left;font-weight:600;color:#94A3B8;padding:4px 10px 4px 0;vertical-align:top;font-size:12px;letter-spacing:0;text-transform:none;border:none;white-space:nowrap}.bx td{padding:4px 0;font-size:12.5px;color:#475569;border:none;white-space:normal}\
+.h6{font-size:13px;font-weight:700;margin:14px 0 6px}.kc{padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap}\
+.sh{height:10px;background:#E8EDF3;border-radius:5px;overflow:hidden;min-width:120px}.sh i{display:block;height:100%}\
+.empty{padding:34px 18px;text-align:center;color:#475569;font-size:13px;line-height:1.6}.empty b{color:#0F172A}\
+details.st{margin-top:12px;border:1px solid #E5EAF1;border-radius:10px;padding:0 12px}details.st summary{cursor:pointer;font-size:13px;font-weight:700;padding:10px 0;color:#0F172A}details.st table{margin-bottom:10px}\
+a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:#4338CA}\
+@media(max-width:520px){.ov{padding:0}.mod{border-radius:0;min-height:100%}.mh{border-radius:0}.mb{padding:14px 14px 22px}.tabs{padding:0 12px}}\
 ";
   var SVG_CHAT = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14.5h4"/></svg>';
   root.innerHTML = '<style>' + CSS + '</style>' +
@@ -978,9 +1008,10 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
       '<div class="msgs" id="msgs"></div>' +
       '<div class="foot"><div class="ac" id="ac"></div><div class="in"><input id="inp" type="text" autocomplete="off" spellcheck="false" placeholder="Ask about tickets, clients, SLA, workers…" maxlength="300"/><button class="send" id="send" title="Send">' +
       '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>' +
-      '<div class="note">Rule-based assistant — no AI, nothing leaves your browser.</div></div></div>';
+      '<div class="note">Rule-based assistant — no AI, nothing leaves your browser.</div></div></div>' +
+    '<div class="ov" id="ov"></div>';
   function $(id) { return root.getElementById ? root.getElementById(id) : root.querySelector("#" + id); }
-  var fab, panel, msgs, inp, send, ac, menu;
+  var fab, panel, msgs, inp, send, ac, menu, ov;
 
   function setStatus() {
     var el = $("status"); if (!el) return;
@@ -1006,11 +1037,11 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
     if (!s) return "grey"; if (s.tone) return { red: "red", orange: "orange", amber: "amber", green: "green", grey: "grey" }[s.tone] || "grey";
     return s.state === "breached" || s.state === "missed" ? "red" : s.state === "met" ? "green" : "grey";
   }
-  function ticketRow(t) {
+  function ticketRow(t, id, i) {
     var pr = t.priority ? '<span class="pill p-' + esc(t.priority.toLowerCase().replace(/\s+/g, "-")) + '">' + esc(t.priority) + "</span>" : "";
     var sl = t.sla && t.sla.label ? '<span class="sla s-' + tone(t.sla) + '">' + esc(t.sla.label) + "</span>" : "";
     var meta = [t.project, t.worker, t.age != null ? t.age + "d old" : "", t.idle != null ? t.idle + "d in status" : ""].filter(Boolean).map(esc).join(" · ");
-    return '<div class="tr"><div class="t1"><a class="key" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + esc(t.key) + '</a><span class="pill">' + esc(t.status) + "</span>" + pr + sl + '</div><div class="t2">' + esc(t.summary) + '</div><div class="t3">' + meta + "</div></div>";
+    return '<div class="tr" data-act="open" data-a="' + id + '" data-i="' + i + '" title="Click for details"><div class="t1"><span class="key" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:12px">' + esc(t.key) + '</span><span class="pill">' + esc(t.status) + "</span>" + pr + sl + '</div><div class="t2">' + esc(t.summary) + '</div><div class="t3">' + meta + "</div></div>";
   }
   function barSvg(a) {
     var W = 400, H = 176, L = 28, B = 24, T = 10, labels = a.labels, ns = a.series.length, max = 1;
@@ -1036,7 +1067,7 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
           (a.warn ? '<div class="warn">' + esc(a.warn) + "</div>" : "") + chipsHtml(a.chips) + notesHtml(a) + followHtml(a, id) + (a.ignored && a.ignored.length ? '<div class="ign">Ignored: ' + a.ignored.map(esc).join(", ") + "</div>" : "") + "</div>"; break;
       case "tickets": {
         var items = a.items, first = items.slice(0, 8);
-        h = '<div class="card"><h4>' + esc(a.title) + (a.limited ? " · showing " + a.items.length : "") + "</h4>" + (a.total ? '<div data-list="' + id + '">' + first.map(ticketRow).join("") + "</div>" : '<div class="say">No tickets match.' + (a.emptyHint ? "<br><span style=\"color:#64748B\">" + esc(a.emptyHint) + "</span>" : "") + "</div>") +
+        h = '<div class="card"><h4>' + esc(a.title) + (a.limited ? " · showing " + a.items.length : "") + '</h4>' + (a.total ? '<div class="hint" style="margin:2px 0 4px">Click a ticket for its ' + (a.slaContext ? "SLA breakdown" : "details and SLA") + ".</div>" : "") + (a.total ? '<div data-list="' + id + '">' + first.map(function (t, i) { return ticketRow(t, id, i); }).join("") + "</div>" : '<div class="say">No tickets match.' + (a.emptyHint ? "<br><span style=\"color:#64748B\">" + esc(a.emptyHint) + "</span>" : "") + "</div>") +
           (items.length > 8 ? '<div class="fl" style="border:none;margin-top:4px;padding-top:0"><button class="btn" data-act="more" data-a="' + id + '">Show more (' + fmt(items.length - 8) + ")</button></div>" : "") +
           (a.more ? '<div class="hint">+' + fmt(a.more) + " more — download the CSV to see all.</div>" : "") + (a.warn ? '<div class="warn">' + esc(a.warn) + "</div>" : "") + chipsHtml(a.chips) + notesHtml(a) + followHtml(a, id) +
           (a.ignored && a.ignored.length ? '<div class="ign">Ignored: ' + a.ignored.map(esc).join(", ") + "</div>" : "") + "</div>"; break; }
@@ -1049,9 +1080,11 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
         h = '<div class="card"><h4>' + esc(a.title) + "</h4>" + (a.series.length > 1 ? '<div class="legend"><span><i style="background:#2563EB"></i>' + esc(a.series[0].name) + '</span><span><i style="background:#10B981"></i>' + esc(a.series[1].name) + "</span></div>" : "") + barSvg(a) + chipsHtml(a.chips) + notesHtml(a) + followHtml(a, id) + "</div>"; break;
       case "ticketDetail":
         h = a.items.map(function (t, i) {
-          return '<div class="card" style="margin-bottom:8px"><h4>Ticket</h4><div class="t1" style="margin-top:2px"><a class="key" style="font-size:15px" href="' + esc(t.url) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a>" + (t.sla ? '<span class="sla s-' + tone(t.sla) + '" title="' + esc(t.sla.tip) + '">' + esc(t.sla.label) + "</span>" : "") + "</div>" +
-            '<div class="say" style="margin-top:4px">' + esc(t.summary) + '</div><div class="kv">' + t.fields.map(function (f) { return "<div><span>" + esc(f[0]) + "</span>" + esc(f[1]) + "</div>"; }).join("") + "</div>" +
-            (t.linked.length ? '<div class="chips"><span class="lab">Linked</span>' + t.linked.map(function (l) { return '<a class="tag" style="text-decoration:none" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.key) + "</a>"; }).join("") + "</div>" : "") + '<div class="tl-slot" data-key="' + esc(t.key) + '"></div></div>';
+          var slaBlock = a.focus === "sla" ? slaHtml(t.raw, true) : (t.sla && t.sla.tip ? '<div class="sub" style="margin-top:6px">' + esc(t.sla.tip) + "</div>" : "");
+          return '<div class="card" style="margin-bottom:8px"><h4>Ticket</h4><div class="t1" style="margin-top:2px"><span class="key" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:15px">' + esc(t.key) + "</span>" + (t.sla ? '<span class="sla s-' + tone(t.sla) + '">' + esc(t.sla.label) + "</span>" : "") + "</div>" +
+            '<div class="say" style="margin-top:4px">' + esc(t.summary) + "</div>" + (a.focus === "sla" ? '<div style="margin-top:10px">' + slaBlock + "</div>" : slaBlock) + '<div class="kv">' + t.fields.map(function (f) { return "<div><span>" + esc(f[0]) + "</span>" + esc(f[1]) + "</div>"; }).join("") + "</div>" +
+            (t.linked.length ? '<div class="chips"><span class="lab">Linked</span>' + t.linked.map(function (l) { return '<a class="tag" style="text-decoration:none" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.key) + "</a>"; }).join("") + "</div>" : "") +
+            '<div class="fl"><button class="btn pri" data-act="openk" data-a="' + id + '" data-i="' + i + '">Full SLA breakdown</button><a class="btn" href="' + esc(t.url) + '" target="_blank" rel="noopener">Open in Jira ↗</a></div></div>';
         }).join("") + (a.missing && a.missing.length ? '<div class="card"><div class="say">Not found in the data: ' + a.missing.map(esc).join(", ") + "</div></div>" : ""); break;
       case "help":
         h = '<div class="card ex"><h4>What you can ask</h4><div class="say" style="margin-top:4px">Counts, lists, rankings, SLA, trends and comparisons — in your own words. Click any example:</div>' +
@@ -1068,29 +1101,101 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
     var id = S.answers.push(a) - 1, d = addRow("b", render(a, id));
     /* a tall answer starts at its top, so you read it from the first line instead of landing at its end */
     setTimeout(function () { if (d.offsetHeight > msgs.clientHeight * 0.75) msgs.scrollTop = Math.max(0, d.offsetTop - 12); }, 60);
-    if (a.type === "ticketDetail") loadTimelines(d);
     if (a.type === "text" && a.miss && a.question) { S.misses.push({ q: a.question, t: new Date().toISOString().slice(0, 16).replace("T", " ") }); saveMisses(); var mc = $("mc"); if (mc) mc.textContent = S.misses.length; }
     return d;
   }
 
-  /* ───────── ticket timeline (from the SLA Tracker's saved history) ───────── */
-  function loadTimelines(el) {
-    var HS = window.HDStore; if (!HS || !HS.loadSlaHistory) return;
-    var p = S.histP || (S.histP = HS.loadSlaHistory().catch(function () { return null; }));
-    p.then(function (h) {
-      if (!h || !h.tickets) return;
-      Array.prototype.forEach.call(el.querySelectorAll(".tl-slot"), function (slot) {
-        var e = h.tickets[slot.getAttribute("data-key")]; if (!e || !e.transitions || !e.transitions.length) { slot.innerHTML = '<div class="hint">No status history saved for this ticket yet.</div>'; return; }
-        var tr = e.transitions, out = "";
-        for (var i = Math.max(0, tr.length - 10); i < tr.length; i++) {
-          var nx = tr[i + 1] ? tr[i + 1].t : Date.now(), days = Math.max(0, Math.round((nx - tr[i].t) / 864e5));
-          out += "<div><b>" + esc(tr[i].from || "—") + " → " + esc(tr[i].to) + "</b> <small>" + new Date(tr[i].t).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) + " · " + days + "d" + (tr[i].by ? " · " + esc(tr[i].by) : "") + "</small></div>";
-        }
-        slot.innerHTML = '<h4 style="margin-top:12px">Status history' + (tr.length > 10 ? " (last 10)" : "") + '</h4><div class="tl">' + out + "</div>";
-      });
-      scrollDown();
-    });
+  /* ───────── ticket pop-up: SLA breakdown + ticket details (same numbers as the SLA Tracker) ───────── */
+  var IST = "Asia/Kolkata", KIND = { hd: ["Help Desk", "#0F766E", "#D6F3EE", "#14B8A6"], engg: ["Engineering", "#5B57D8", "#E2E1FB", "#5B57D8"], client: ["Client", "#B45309", "#FEF3C7", "#F0A838"], closed: ["Closed", "#475569", "#E5E9EF", "#B8C2CF"] };
+  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function W(ms) { return ms == null ? "—" : new Date(ms).toLocaleString("en-GB", { timeZone: IST, weekday: "short", day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); }
+  function isoTxt(iso) { var p = iso.split("-"); return p[2] + " " + MON[+p[1] - 1] + " " + p[0].slice(2); }
+  function kindChip(k) { var c = KIND[k] || KIND.hd; return '<span class="kc" style="background:' + c[2] + ";color:" + c[1] + '">' + c[0] + "</span>"; }
+  function kpi(label, value, sub, color) { return '<div class="kp" style="border-left-color:' + color + '"><div class="kv1">' + esc(value) + '</div><div class="kl">' + esc(label) + '</div><div class="ks">' + esc(sub) + "</div></div>"; }
+  function breachSentence(bi, d) {
+    var F = d.fmt; if (!bi) return "";
+    switch (bi.state) {
+      case "running": return "At the current pace it <b>breaches on " + W(bi.breachAt) + " IST</b> (" + F(bi.remainingMin) + " of working time left). ";
+      case "paused": return "The clock is <b>paused</b> while the ticket is with the client, with " + F(bi.remainingMin) + " of working time left. If it came back now it would breach on <b>" + W(bi.ifResumedAt) + " IST</b>. ";
+      case "breached": return "<b>Breached on " + W(bi.breachedAt) + " IST</b> and now " + F(bi.overByMin) + " over target. ";
+      case "missed": return "Closed after breaching on <b>" + W(bi.breachedAt) + " IST</b>. ";
+    } return "";
   }
+  /* compact = the four clock tiles + one explanation (used inside a chat card); full = the whole breakdown */
+  function slaHtml(raw, compact) {
+    var L = window.HDSlaLink;
+    if (!raw) return "";
+    if (!L || !L.detail) return '<div class="empty"><b>SLA data isn’t available on this page.</b><br>Open the Follow-up Tracker for SLA details.</div>';
+    var d, x, r; try { d = L.detail(raw); } catch (er) { return '<div class="empty"><b>Could not work out the SLA for this ticket.</b></div>'; }
+    x = d.info || {}; r = d.r;
+    if (!r) {
+      var ttl = x.state === "na" ? "Not tracked for SLA" : x.state === "none" ? "No SLA target" : x.state === "nohist" ? "No valid status history for this ticket" : "SLA data isn’t ready yet";
+      return '<div class="empty"><b>' + ttl + "</b><br>" + esc(x.tip || "") + (x.state === "nohist" && L.bridgeReady && L.bridgeReady() ? '<div style="margin-top:14px"><button class="btn pri" data-act="fetchsla">Load history for this ticket</button></div><div id="fetchmsg" class="hint"></div>' : "") + "</div>";
+    }
+    var F = d.fmt, C = d.fcal, bi = d.bi, e = d.entry;
+    var tiles = '<div class="kpis">' + kpi("Working time counted", F(r.elapsedMin), "of " + (r.targetMin != null ? F(r.targetMin) + " target" : "no target"), "#EA580C") +
+      kpi(r.remainingMin != null && r.remainingMin < 0 ? "Over target by" : "Remaining", r.remainingMin == null ? "—" : r.remainingMin === 0 ? "At limit" : F(Math.abs(r.remainingMin)), r.pct != null ? Math.round(r.pct) + "% used" : "", r.remainingMin != null && r.remainingMin <= 0 ? "#BE123C" : "#059669") +
+      kpi("Not counted (with client)", F(r.pausedMin), r.clientRounds + " time" + (r.clientRounds === 1 ? "" : "s") + " with client", "#F0A838") +
+      kpi("Age since created", C(r.ageCalMin), "calendar time, incl. weekends", "#334155") + "</div>";
+    var s = "";
+    if (!r.isClosed && !r.isPaused && r.elapsedMin < 0.5 && window.HDSla && window.HDSla.nextWorkStart) { var nw = window.HDSla.nextWorkStart(d.now, d.cal); if (nw) s += "<b>No working time has passed yet</b> — the ticket was raised outside working hours, so the clock starts <b>" + W(nw) + " IST</b>. "; }
+    s += breachSentence(bi, d) + (r.isClosed ? "Closed " + d.fdt(r.closedAt) + ". " : "") + "Created <b>" + C(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(d.calText) + "), which came to <b>" + F(r.elapsedMin) + "</b>" +
+      (r.targetMin != null ? " against a target of <b>" + F(r.targetMin) + "</b>" : "") + ". " + (r.pausedMin > 0 ? "<b>" + F(r.pausedMin) + "</b> of working time was spent with the client and was <b>not</b> counted." : "This ticket has not been with the client.");
+    if (compact) return tiles + '<div class="expl">' + s + "</div>";
+
+    var cur = d.classify(raw.Status || ""), notes = "";
+    notes += '<div style="margin-top:6px">Current status <b>“' + esc(raw.Status) + "”</b> is classified as " + kindChip(cur.kind) + " in Master Data — clock " + (cur.kind === "client" ? "paused" : cur.kind === "closed" ? "stopped" : "running") + ".</div>";
+    if (r.statusMismatch) notes += '<div class="w">Jira’s history ends in “' + esc(r.statusMismatch.history) + "” (usually an old name of a renamed status); the time since that last recorded change is counted under the current status.</div>";
+    if (e && e.suspect) notes += '<div class="w"><b>Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</div>';
+    if (r.unmapped && r.unmapped.length) notes += '<div class="w">Status(es) not in Master Data (counted as running): <b>' + r.unmapped.map(esc).join(", ") + "</b>.</div>";
+    if (e && e.fetchedAt) notes += '<div class="ks" style="margin-top:6px">History fetched ' + W(e.fetchedAt) + " IST</div>";
+    var out = tiles + '<div class="expl">' + s + notes + "</div>";
+
+    var B = d.basis, LF = d.life;
+    if (B && LF) {
+      var cn = esc(raw.Project || B.prefix), R = function (k, v) { return "<tr><th>" + k + "</th><td>" + v + "</td></tr>"; }, M = function (z) { return '<span style="color:#94A3B8">' + z + "</span>"; }, nc = [];
+      if (LF.weekend > 0.5) nc.push("<b>" + LF.nWeekendDays + " weekend day" + (LF.nWeekendDays === 1 ? "" : "s") + "</b> (" + C(LF.weekend) + ")");
+      if (LF.holiday > 0.5) nc.push("<b>" + LF.nHolidayDays + " holiday" + (LF.nHolidayDays === 1 ? "" : "s") + "</b> (" + C(LF.holiday) + ")");
+      if (LF.night > 0.5) nc.push("<b>" + C(LF.night) + "</b> outside working hours");
+      if (r.pausedMin > 0) nc.push("<b>" + F(r.pausedMin) + "</b> of working time with the client");
+      out += '<div class="bx"><h5>How this SLA was calculated <span>· rules from SLA Tracker → Settings</span></h5><table><tbody>' +
+        R("Calendar", B.own ? "<b>" + cn + "’s own calendar</b> " + M("(Client calendars · " + esc(B.prefix) + ")") : "<b>Default working calendar</b> " + M("(" + cn + " has no calendar of its own)")) +
+        R("Working days", "<b>" + esc(B.days) + "</b> · " + M(B.offDays.length ? "not counted: " + B.offDays.join(", ") : "weekends count")) +
+        R("Working hours", "<b>" + esc(B.hours) + "</b>" + (B.dayMin < 1440 ? " · " + M("1 working day = " + C(B.dayMin).replace(/ 0m$/, "")) : "")) +
+        R("Holidays", B.holidaysSkipped ? "<b>Skipped</b> · " + B.holidaysListed + " listed · " + (B.holidaysInLife.length ? "in this ticket’s life: " + B.holidaysInLife.map(function (h) { return "<b>" + isoTxt(h.date) + "</b>" + (h.name ? " " + esc(h.name) : ""); }).join(", ") : M("none fell in this ticket’s life")) : "<b>Not skipped</b> " + M("(this client’s calendar works on holidays)")) +
+        R("Target", B.targetH ? "<b>" + esc(B.sevName) + " · " + B.targetH + "h of working time</b>" + (B.dayMin < 1440 && B.targetH * 60 >= B.dayMin ? " = " + F(B.targetH * 60) : "") + " · " + M(B.targetSrc === "client" ? cn + "’s own target" : "default target for " + esc(B.sevName)) : "<b>None</b> " + M("(priority “" + esc(raw.Priority || "blank") + "” has no target)")) +
+        R("Clock", "Runs while with <b>Help Desk</b> or <b>Engineering</b> · pauses while with the <b>client</b> · stops when <b>closed</b> · " + M("At risk from " + B.warnPct + "%, Due soon from " + B.dangerPct + "%")) +
+        R("Not counted", nc.length ? nc.join(" · ") : "Nothing — every minute was working time with Help Desk or Engineering.") + "</tbody></table>" +
+        (!B.is247 && B.dayMin >= 1440 && B.offDays.length > 0 ? '<div class="expl" style="background:#FEF3C7;color:#B45309;margin:8px 0 0">This calendar runs <b>24 hours a day</b> but only on <b>' + esc(B.days) + "</b>, so " + B.offDays.join(" and ") + " are still not counted. For a true 24/7 contract, tick every day (or use the 24/7 button) in SLA Tracker → Settings.</div>" : "") + "</div>";
+    }
+    var tot = r.segs.reduce(function (acc, sg) { return acc + Math.max(sg.calMin, 0); }, 0) || 1, kinds = ["hd", "engg", "client", "closed"].filter(function (k) { return r.byKind[k].cal > 0.5; });
+    out += '<div class="h6">Who had this ticket</div><div class="tw"><table><thead><tr><th>Held by</th><th class="n">Working time</th><th class="n">Calendar time</th><th>Share of its life</th><th>Counts towards SLA?</th></tr></thead><tbody>' + kinds.map(function (k) {
+      var o = r.byKind[k], counted = k === "hd" || k === "engg";
+      return "<tr><td>" + kindChip(k) + '</td><td class="n">' + (k === "closed" ? "—" : F(o.biz)) + '</td><td class="n">' + C(o.cal) + '</td><td><div class="sh"><i style="width:' + Math.max(1, o.cal / tot * 100).toFixed(1) + "%;background:" + KIND[k][3] + '"></i></div></td><td>' + (counted ? (o.biz >= 0.5 ? "Yes — counted" : "Yes — none in working hours yet") : k === "client" ? "No — clock paused" : "No — clock stopped") + "</td></tr>";
+    }).join("") + "</tbody></table></div>";
+    out += '<details class="st"><summary>Status by status (' + r.segs.length + " step" + (r.segs.length === 1 ? "" : "s") + ')</summary><div class="tw"><table><thead><tr><th>Status</th><th>Held by</th><th>From</th><th>To</th><th class="n">Calendar</th><th class="n">Working</th></tr></thead><tbody>' + r.segs.map(function (sg) {
+      return "<tr><td>" + esc(sg.status) + "</td><td>" + kindChip(sg.kind) + "</td><td>" + esc(d.fdt(sg.start)) + "</td><td>" + (sg.open ? "now" : esc(d.fdt(sg.end))) + '</td><td class="n">' + C(sg.calMin) + '</td><td class="n">' + (sg.kind === "client" || sg.kind === "closed" ? "—" : F(sg.bizMin)) + "</td></tr>";
+    }).join("") + "</tbody></table></div></details>";
+    return out;
+  }
+  function detailsHtml(raw) {
+    var info = S.engine ? S.engine.ticketInfo(raw.Key) : null; if (!info) return '<div class="empty">No details found for this ticket.</div>';
+    return '<div class="kv" style="margin-top:0">' + info.fields.map(function (f) { return "<div><span>" + esc(f[0]) + "</span>" + esc(f[1]) + "</div>"; }).join("") + "</div>" +
+      (info.linked.length ? '<div class="chips"><span class="lab">Linked</span>' + info.linked.map(function (l) { return '<a class="tag" style="text-decoration:none" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.key) + "</a>"; }).join("") + "</div>" : "");
+  }
+  function renderModal() {
+    var m = S.modal; if (!m) return; var raw = m.raw, L = window.HDSlaLink, x = null, url = (S.engine && S.engine.ticketInfo(raw.Key) || {}).url || "#";
+    try { x = L && L.get ? L.get(raw) : null; } catch (er) {}
+    var badge = x && x.label && x.state !== "na" && x.state !== "loading" ? '<span class="sla s-' + tone(x) + '">' + esc(x.label) + "</span>" : "";
+    var created = raw.Created instanceof Date ? raw.Created.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }) : String(raw.Created || "");
+    var meta = [raw.Project, raw["Issue Type"], raw.Priority || "No priority", "status " + (raw.Status || "?"), "worker " + (raw["Current Worker"] || "?"), "SVM " + (raw["SVM In Charge"] || "?"), created ? "created " + created : ""].filter(Boolean).map(esc).join(" · ");
+    ov.innerHTML = '<div class="mod" role="dialog" aria-label="Ticket details"><div class="mh"><div class="l"><div class="t1"><a class="key" style="font-size:15px" href="' + esc(url) + '" target="_blank" rel="noopener" title="Open in Jira">' + esc(raw.Key) + " ↗</a>" + badge + '</div><div class="mt">' + esc(raw.Summary) + '</div><div class="mm">' + meta + "</div></div>" +
+      '<button class="ib" data-act="mclose" title="Close" style="border:1px solid #E2E8F0">✕</button></div>' +
+      '<div class="tabs"><button data-act="mtab" data-t="sla" class="' + (m.tab === "sla" ? "on" : "") + '">SLA</button><button data-act="mtab" data-t="details" class="' + (m.tab === "details" ? "on" : "") + '">Ticket details</button></div>' +
+      '<div class="mb">' + (m.tab === "sla" ? slaHtml(raw, false) : detailsHtml(raw)) + "</div></div>";
+  }
+  function openTicket(raw, tab) { if (!raw) return; S.modal = { raw: raw, tab: tab === "details" || !window.HDSlaLink ? "details" : "sla" }; renderModal(); ov.className = "ov open"; ov.scrollTop = 0; }
+  function closeModal() { S.modal = null; ov.className = "ov"; ov.innerHTML = ""; }
 
   /* ───────── CSV ───────── */
   function csvCell(v) { var s = String(v == null ? "" : v); if (/^[=+@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
@@ -1153,7 +1258,7 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
 
   function init() {
     document.body.appendChild(host);
-    fab = $("fab"); panel = $("panel"); msgs = $("msgs"); inp = $("inp"); send = $("send"); ac = $("ac"); menu = $("menu");
+    ov = $("ov"); fab = $("fab"); panel = $("panel"); msgs = $("msgs"); inp = $("inp"); send = $("send"); ac = $("ac"); menu = $("menu");
     welcome();
     var PH = ["What needs attention today?", "What’s overdue for MILAHA?", "Who has the most work?", "How many tickets are pending with the client?", "Which tickets are stuck?", "How are we doing?", "Tickets raised each month", "Are we meeting SLA?"], phI = 0;
     setInterval(function () { if (S.open && !inp.value) { phI = (phI + 1) % PH.length; inp.placeholder = "Try: " + PH[phI]; } }, 4000);
@@ -1163,6 +1268,7 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
     $("more").addEventListener("click", function (e) { e.stopPropagation(); menu.className = menu.className.indexOf("open") > -1 ? "menu" : "menu open"; var mc = $("mc"); if (mc) mc.textContent = S.misses.length; });
     root.addEventListener("click", function (e) {
       var t = e.target; if (!(t instanceof Element)) return;
+      if (t.id === "ov") { closeModal(); return; }
       if (menu.className.indexOf("open") > -1 && !t.closest("#menu") && t.id !== "more") menu.className = "menu";
       if (!t.closest(".ac") && t.id !== "inp") closeAc();
       var m = t.closest("[data-m]"); if (m) { menu.className = "menu"; var k = m.getAttribute("data-m");
@@ -1173,9 +1279,17 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
       var act = el.getAttribute("data-act"), id = +el.getAttribute("data-a"), i = +el.getAttribute("data-i");
       if (act === "ask") ask(el.getAttribute("data-q")); else if (act === "follow") followUp(id, i); else if (act === "drill") drill(id, i);
       else if (act === "csv") { var a = S.answers[id]; if (a && a.csv) downloadCsv(a.csv); }
+      else if (act === "open") { var ao = S.answers[id], it = ao && ao.items && ao.items[i]; if (it) openTicket(it.raw, ao.slaContext ? "sla" : "details"); }
+      else if (act === "openk") { var ak = S.answers[id], ik = ak && ak.items && ak.items[i]; if (ik) openTicket(ik.raw, "sla"); }
+      else if (act === "mclose") closeModal();
+      else if (act === "mtab") { if (S.modal) { S.modal.tab = el.getAttribute("data-t"); renderModal(); } }
+      else if (act === "fetchsla") {
+        var Lf = window.HDSlaLink, mm = S.modal; if (!Lf || !mm) return; el.disabled = true; el.textContent = "Loading…";
+        Lf.fetchMissing([mm.raw], { force: true }).then(function (res) { if (S.modal === mm) { renderModal(); if (res && res.failed && res.failed.length) { var fm = ov.querySelector("#fetchmsg"); if (fm) fm.textContent = res.failed[0].reason; } } }, function (er) { if (S.modal === mm) { renderModal(); var fm = ov.querySelector("#fetchmsg"); if (fm) fm.textContent = String((er && er.message) || er).replace(/^BUSY:/, ""); } });
+      }
       else if (act === "more") {
         var a2 = S.answers[id], box = msgs.querySelector('[data-list="' + id + '"]'); if (!a2 || !box) return; var shown = box.children.length, next = a2.items.slice(shown, shown + 25);
-        box.insertAdjacentHTML("beforeend", next.map(ticketRow).join("")); var left = a2.items.length - box.children.length; if (left > 0) el.textContent = "Show more (" + fmt(left) + ")"; else el.remove();
+        box.insertAdjacentHTML("beforeend", next.map(function (t, k) { return ticketRow(t, id, shown + k); }).join("")); var left = a2.items.length - box.children.length; if (left > 0) el.textContent = "Show more (" + fmt(left) + ")"; else el.remove();
       }
     });
     $("reload").addEventListener("click", function () { S.engine = null; S.loading = null; $("status").textContent = "Reloading data…"; loadData(true).then(function () { welcome(); showAnswer({ type: "text", text: "Data reloaded — " + fmt(S.engine.stats.tickets) + " tickets.", chips: [] }); }, noData); });
@@ -1186,9 +1300,11 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
       else if (e.key === "Tab" && acList.length) { pickAc(acPos > -1 ? acPos : 0); e.preventDefault(); }
       else if (e.key === "ArrowDown" && acList.length) { acPos = (acPos + 1) % acList.length; Array.prototype.forEach.call(ac.children, function (b, k) { b.className = k === acPos ? "on" : ""; }); e.preventDefault(); }
       else if (e.key === "ArrowUp") { if (acList.length) { acPos = (acPos - 1 + acList.length) % acList.length; Array.prototype.forEach.call(ac.children, function (b, k) { b.className = k === acPos ? "on" : ""; }); } else if (S.hist.length) { S.hpos = Math.max(0, S.hpos - 1); inp.value = S.hist[S.hpos] || ""; } e.preventDefault(); }
-      else if (e.key === "Escape") { if (acList.length) closeAc(); else closePanel(); }
+      else if (e.key === "Escape") { if (S.modal) closeModal(); else if (acList.length) closeAc(); else closePanel(); }
     });
-    ["keydown", "keyup", "keypress"].forEach(function (ev) { panel.addEventListener(ev, function (e) { e.stopPropagation(); }); });   // page shortcuts must not fire while typing here
+    ["keydown", "keyup", "keypress"].forEach(function (ev) { panel.addEventListener(ev, function (e) { e.stopPropagation(); }); ov.addEventListener(ev, function (e) { e.stopPropagation(); }); });
+    /* Escape closes the pop-up even when focus has fallen back to the page (the pop-up redraws when you switch tabs) */
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && S.modal) { closeModal(); e.stopPropagation(); e.preventDefault(); } }, true);   // page shortcuts must not fire while typing here
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
   window.HDChat = { open: function () { openPanel(); }, close: closePanel, ask: function (q) { openPanel(); ask(q); } };
