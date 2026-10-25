@@ -159,6 +159,50 @@ input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
   body { zoom: 1.9; }
 }
 @keyframes slaSpin{to{transform:rotate(360deg)}}
+
+/* ── Hero greeting + alert tiles ── */
+.hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:20px 28px;flex-wrap:wrap;
+  padding:22px 28px;margin-bottom:12px;border-radius:20px;border:1px solid var(--border);
+  background:linear-gradient(120deg,#FFFFFF 0%,#F4F8FF 55%,#EEF0FF 100%);box-shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -12px rgba(37,99,235,.18)}
+.hero-glow{position:absolute;right:-60px;top:-80px;width:280px;height:280px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(99,102,241,.16),rgba(99,102,241,0) 70%)}
+.hero-left,.hero-pills{position:relative;z-index:1}
+.hero-eyebrow{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--t3)}
+.hero-title{margin:4px 0 0;font-size:28px;font-weight:800;letter-spacing:-.8px;line-height:1.15;color:var(--t1)}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .hero-title{background:linear-gradient(90deg,#0F172A 0%,#1D4ED8 60%,#7C3AED 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}}
+.hero-sub{margin:6px 0 0;font-size:13.5px;color:var(--t2)}
+.hero-pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.hero-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 14px 8px 12px;border-radius:999px;background:rgba(255,255,255,.85);
+  border:1px solid var(--border);box-shadow:0 1px 2px rgba(15,23,42,.05);backdrop-filter:blur(6px);transition:transform .15s,box-shadow .15s,border-color .15s}
+.hero-pill.clk{cursor:pointer}
+.hero-pill.clk:hover{transform:translateY(-1px);box-shadow:0 6px 14px -6px rgba(15,23,42,.25)}
+.hero-pill .hp-dot{width:8px;height:8px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 3px color-mix(in srgb,var(--pc) 18%,transparent)}
+.hero-pill .hp-n{font-size:16px;font-weight:800;letter-spacing:-.4px;color:var(--pc);font-variant-numeric:tabular-nums}
+.hero-pill .hp-l{font-size:12px;font-weight:600;color:var(--t2)}
+.hero-pill.p-ink{--pc:#0F172A}.hero-pill.p-cyan{--pc:#0891B2}.hero-pill.p-amber{--pc:#D97706}.hero-pill.p-violet{--pc:#7C3AED}
+.hero-pill.p-cyan:hover{border-color:#A5F3FC}.hero-pill.p-amber:hover{border-color:#FDE68A}.hero-pill.p-violet:hover{border-color:#DDD6FE}
+
+.alert-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:12px}
+.alert-tile{--ac:#E11D48;--acbg:#FFF1F2;position:relative;display:flex;align-items:center;gap:16px;padding:16px 18px 16px 22px;border-radius:16px;cursor:pointer;
+  background:#fff;border:1px solid var(--border);box-shadow:0 1px 2px rgba(15,23,42,.04);overflow:hidden;transition:transform .15s,box-shadow .2s,border-color .2s}
+.alert-tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--ac)}
+.alert-tile::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,var(--acbg) 0%,rgba(255,255,255,0) 55%);opacity:.9}
+.alert-tile>*{position:relative;z-index:1}
+.alert-tile:hover{transform:translateY(-2px);border-color:var(--ac);box-shadow:0 12px 24px -14px var(--ac)}
+.alert-tile.a-amber{--ac:#D97706;--acbg:#FFFBEB}
+.at-icon{flex-shrink:0;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--ac);background:#fff;border:1px solid color-mix(in srgb,var(--ac) 25%,transparent)}
+.at-num{flex-shrink:0;font-size:34px;font-weight:800;letter-spacing:-1.5px;line-height:1;color:var(--ac);font-variant-numeric:tabular-nums;min-width:62px}
+.at-body{flex:1;min-width:0}
+.at-title{font-size:14px;font-weight:800;color:var(--t1)}
+.at-desc{font-size:12px;color:var(--t2);margin-top:2px;line-height:1.4}
+.at-meter{height:5px;border-radius:99px;background:rgba(15,23,42,.07);margin-top:9px;overflow:hidden}
+.at-meter>span{display:block;height:100%;border-radius:99px;background:var(--ac)}
+.at-go{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:700;color:var(--ac);background:#fff;border:1px solid color-mix(in srgb,var(--ac) 30%,transparent);transition:background .15s,color .15s}
+.at-go span{transition:transform .15s}
+.alert-tile:hover .at-go{background:var(--ac);color:#fff}
+.alert-tile:hover .at-go span{transform:translateX(3px)}
+@media(max-width:700px){.hero{padding:18px}.hero-title{font-size:23px}.hero-pills{justify-content:flex-start}.at-go{display:none}.at-num{font-size:28px;min-width:0}}
 </style>
 </head>
 <body>
@@ -1230,6 +1274,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   const [enggSearch, setEnggSearch] = useState("");
   const scrollRef=useRef(null), savedScroll=useRef(0);
   const [slaView, setSlaView] = useState({sla:"",sort:""}); // SLA filter + Created sort, shared by every tab's table
+  const [statusSel, setStatusSel] = useState([]);           // selected Status chips (multi-select); empty = all statuses
 
   /* Fetch all linked ticket assignees in batches of 5 */
   function loadEnggAssignees(force){
@@ -1302,7 +1347,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
   /* Reset engg-tab view state whenever the modal's ticket set changes (e.g. Engg vs Client). */
   useEffect(function(){
-    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");setClientProj("");setSlaView({sla:"",sort:""});
+    setEnggMap(null);setEnggLoading(false);setEnggBridgeMissing(false);setEnggSearch("");setClientProj("");setSlaView({sla:"",sort:""});setStatusSel([]);
   },[data&&data.title]);
 
   /* Keep the user's scroll position stable across the periodic pivot repaints while loading. */
@@ -1329,7 +1374,17 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
   /* When a client is selected in the Client modal, every tab/list/count below
      is driven by viewTix so the selection actually filters what's shown
      (not just the report/mail buttons). Otherwise it's the full ticket set. */
-  var viewTix = (data.showClientReport && clientProj) ? clientTix : tix;
+  var baseTix = (data.showClientReport && clientProj) ? clientTix : tix;
+  /* Status filter: chips are counted on the tickets left after the client selection, so the numbers always match
+     what you would get by ticking that status. Every tab, the counts and the CSV export follow the selection. */
+  function statusOf(t){return String(t.Status==null?"":t.Status).trim()||"(No status)";}
+  var statusCounts={};
+  baseTix.forEach(function(t){var s=statusOf(t);statusCounts[s]=(statusCounts[s]||0)+1;});
+  var statusList=Object.entries(statusCounts).sort(function(a,b){return b[1]-a[1]||a[0].localeCompare(b[0]);});
+  var activeStatus=statusSel.filter(function(s){return statusCounts[s];});
+  var viewTix = activeStatus.length ? baseTix.filter(function(t){return activeStatus.indexOf(statusOf(t))>-1;}) : baseTix;
+  var csvList = applySlaView(viewTix,slaView);              // exactly what the All Tickets table shows (status + client + SLA)
+  var isFiltered = activeStatus.length>0 || (data.showClientReport&&clientProj) || !!slaView.sla;
 
   /* ── Ageing buckets based on Created date ── */
   var ageLabels=["< 7 days","7–30 days","31–60 days","61–90 days","90+ days"];
@@ -1432,7 +1487,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
           <div style={{width:44,height:44,borderRadius:12,background:catBg,border:"1px solid "+catBorder,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{catIcon}</div>
           <div style={{flex:1}}>
             <div style={{fontSize:18,fontWeight:800,color:"var(--t1)"}}>{catTitle}</div>
-            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{catSubtitle}</div>
+            <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{catSubtitle}{isFiltered?" · "+csvList.length+" shown":""}</div>
           </div>
           {data.showReport&&onReport&&<button onClick={function(){onReport();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--violet)",background:"var(--violet-bg)",fontSize:12,fontWeight:700,color:"var(--violet)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Engg Report</button>}
           {data.showReport&&onMail&&<button onClick={function(){onMail();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Engg Mail</button>}
@@ -1440,7 +1495,11 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
           {data.showClientReport&&clientProj&&onClientReport&&<button onClick={function(){onClientReport(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Client Report</button>}
           {data.showClientReport&&clientProj&&onClientMail&&<button onClick={function(){onClientMail(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Client Mail</button>}
           <SlaFetchBtn rows={tix}/>
-          <button onClick={function(){exportFullCSV(tix,(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase()+"-full");}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",fontSize:12,fontWeight:700,color:"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title="Export all columns to CSV">⬇ CSV</button>
+          <button onClick={function(){
+            var nm=(catTitle||"tickets").replace(/[^\w]+/g,"-").toLowerCase();
+            if(activeStatus.length)nm+="-"+activeStatus.slice(0,3).join("_").replace(/[^\w]+/g,"-").toLowerCase()+(activeStatus.length>3?"-plus"+(activeStatus.length-3):"");
+            exportFullCSV(csvList,nm+(isFiltered?"-filtered":"-full"));
+          }} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:isFiltered?"var(--blue-bg)":"var(--bg)",fontSize:12,fontWeight:700,color:isFiltered?"var(--blue)":"var(--t2)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}} title={isFiltered?"Export the filtered tickets ("+csvList.length+") with all columns to CSV":"Export all columns to CSV"}>⬇ CSV{isFiltered?" ("+csvList.length+")":""}</button>
           <button onClick={onClose} style={{width:36,height:36,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"var(--t2)"}}>✕</button>
         </div>
 
@@ -1454,6 +1513,18 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
             }}>{label}{cnt!==null&&<span style={{background:active?catColor+"18":"var(--bg)",color:active?catColor:"var(--t3)",padding:"1px 7px",borderRadius:10,fontSize:10,fontWeight:800,border:"1px solid "+(active?catColor+"44":"var(--border)")}}>{cnt}</span>}</button>);
           })}
         </div>
+
+        {/* Status filter — multi-select chips with counts; applies to every tab and to the CSV export */}
+        {statusList.length>1&&<div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",padding:"10px 24px",borderBottom:"1px solid var(--border)",background:"#fff",maxHeight:96,overflowY:"auto",flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",marginRight:2}}>Status</span>
+          <button onClick={function(){setStatusSel([]);}} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:700,whiteSpace:"nowrap",border:"1px solid "+(!activeStatus.length?"var(--blue)":"var(--border)"),background:!activeStatus.length?"var(--blue)":"#fff",color:!activeStatus.length?"#fff":"var(--blue)"}}>All <span style={{opacity:.8,fontFamily:"var(--mono)"}}>{baseTix.length}</span></button>
+          {statusList.map(function(e){
+            var s=e[0],n=e[1],on=activeStatus.indexOf(s)>-1;
+            return <button key={s} onClick={function(){setStatusSel(function(p){return p.indexOf(s)>-1?p.filter(function(x){return x!==s;}):p.concat([s]);});}} title={on?"Click to remove this status from the filter":"Click to filter by this status (select several if needed)"}
+              style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:700,whiteSpace:"nowrap",border:"1px solid "+(on?badgeColor:"var(--border)"),background:on?badgeColor:"#fff",color:on?"#fff":"var(--t2)"}}>{on?"✓ ":""}{s} <span style={{opacity:.8,fontFamily:"var(--mono)"}}>{n}</span></button>;
+          })}
+          {activeStatus.length>0&&<button onClick={function(){setStatusSel([]);}} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:700,border:"none",background:"transparent",color:"var(--rose)"}}>✕ Clear</button>}
+        </div>}
 
         {/* Tab content */}
         <div ref={scrollRef} style={{flex:1,minHeight:0,overflow:"auto"}}>
@@ -2834,20 +2905,30 @@ function App(){
       {/* ═══ FOLLOW-UPS ═══ */}
       {tab==="followup"&&(<>
 
-        {/* Greeting */}
-        <div className="fu" style={{marginBottom:10}}>
-          <h2 style={{fontSize:22,fontWeight:800,letterSpacing:"-.3px",color:"var(--t1)"}}>
-            {greeting()}{w.length===1?`, ${w[0].split(" ")[0]}`:""}!
-          </h2>
-          <p style={{color:"var(--t2)",fontSize:13,marginTop:4}}>
-            <b onClick={function(){openAllModal();}} style={{color:"var(--t1)",cursor:"pointer",borderBottom:"1px dashed var(--t3)"}}>{st.n.toLocaleString()} open ticket{st.n!==1?"s":""}</b>
-            {" "}{w.length===1?`for ${w[0].split(" ")[0]}`:w.length>1?`for ${w.length} workers`:pf.length?`in ${pf.length} project${pf.length>1?"s":""}`:`across ${wks.length} workers`}
-            {st.hd.length>0&&<> · <b style={{color:"var(--cyan)"}}>{st.hd.length} need action</b></>}
-            {st.cl.length>0&&<> · <b onClick={function(){openClientModal();}} style={{color:"var(--amber)",cursor:"pointer",background:"var(--amber-bg)",border:"1px solid var(--amber-border)",padding:"2px 10px",borderRadius:8,fontSize:14,fontWeight:800,letterSpacing:"-.3px"}}>{st.cl.length} awaiting client</b></>}
-            {st.eng.length>0&&<> · <b onClick={function(){openEnggModal();}} style={{color:"var(--violet)",cursor:"pointer",background:"var(--violet-bg)",border:"1px solid var(--violet-border)",padding:"2px 10px",borderRadius:8,fontSize:14,fontWeight:800,letterSpacing:"-.3px"}}>{st.eng.length} with engineering</b></>}
-            {!w.length&&!pf.length&&<>. Select a worker to drill down.</>}
-          </p>
-        </div>
+        {/* Greeting — hero card */}
+        {(function(){
+          var scope=w.length===1?"for "+w[0].split(" ")[0]:w.length>1?"for "+w.length+" workers":pf.length?"in "+pf.length+" project"+(pf.length>1?"s":""):"across "+wks.length+" workers";
+          var dateTxt=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short"});
+          function pill(cls,n,label,onClick){
+            return <div className={"hero-pill "+cls+(onClick?" clk":"")} onClick={onClick||undefined} role={onClick?"button":undefined}>
+              <span className="hp-dot"/><span className="hp-n">{n.toLocaleString()}</span><span className="hp-l">{label}</span>
+            </div>;
+          }
+          return(<div className="fu hero">
+            <div className="hero-glow"/>
+            <div className="hero-left">
+              <div className="hero-eyebrow">{dateTxt}</div>
+              <h2 className="hero-title">{greeting()}{w.length===1?<span>, {w[0].split(" ")[0]}</span>:null}</h2>
+              <p className="hero-sub">{st.n!==1?"Here are your open tickets ":"Here is your open ticket "}{scope}{!w.length&&!pf.length?" — pick a worker to drill down.":"."}</p>
+            </div>
+            <div className="hero-pills">
+              {pill("p-ink",st.n,"open "+(st.n!==1?"tickets":"ticket"),function(){openAllModal();})}
+              {st.hd.length>0&&pill("p-cyan",st.hd.length,"need action",function(){openCatModal("hd");})}
+              {st.cl.length>0&&pill("p-amber",st.cl.length,"awaiting client",function(){openClientModal();})}
+              {st.eng.length>0&&pill("p-violet",st.eng.length,"with engineering",function(){openEnggModal();})}
+            </div>
+          </div>);
+        })()}
 
         {/* HD action banner */}
         {w.length>0&&st.hd.length>0&&(
@@ -2872,11 +2953,23 @@ function App(){
           var fires=all.filter(function(t){var p=t.Priority;return (p==="Show Stopper"||p==="Critical")&&idle(t)>14;});
           var stale=st.cl.filter(function(t){return idle(t)>14;});
           if(!fires.length&&!stale.length)return null;
-          return(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:10,marginBottom:9}}>
-            {fires.length>0&&<div onClick={function(){setModal({title:"Fires — high priority & ageing",icon:"🔥",color:"#E11D48",tickets:fires});}} className="card" style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderColor:"var(--rose-border)",background:"var(--rose-bg)"}}>
-              <span style={{fontSize:20}}>🔥</span><div><div style={{color:"var(--rose)",fontWeight:800,fontSize:13.5}}>{fires.length} fire{fires.length!==1?"s":""} — high priority &amp; ageing</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Show Stopper / Critical with no status change for 14+ days — tackle first.</div></div></div>}
-            {stale.length>0&&<div onClick={function(){setModal({title:"Stale client follow-ups (over 14 days)",icon:"💬",color:"#D97706",tickets:stale});}} className="card" style={{padding:"11px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",borderColor:"var(--amber-border)",background:"var(--amber-bg)"}}>
-              <span style={{fontSize:20}}>💬</span><div><div style={{color:"var(--amber)",fontWeight:800,fontSize:13.5}}>{stale.length} client follow-up{stale.length!==1?"s":""} going stale</div><div style={{color:"var(--t2)",fontSize:11.5,marginTop:1}}>Waiting on the client with no status change for 14+ days — worth a nudge.</div></div></div>}
+          function tile(cls,icon,n,title,desc,pct,pctLabel,onClick){
+            return <div className={"alert-tile "+cls} onClick={onClick} role="button">
+              <div className="at-icon">{icon}</div>
+              <div className="at-num">{n.toLocaleString()}</div>
+              <div className="at-body">
+                <div className="at-title">{title}</div>
+                <div className="at-desc">{desc}</div>
+                <div className="at-meter" title={pctLabel}><span style={{width:Math.max(3,Math.min(100,pct))+"%"}}/></div>
+              </div>
+              <div className="at-go">Review <span>→</span></div>
+            </div>;
+          }
+          var fireIcon=<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c1 3 4 5 4 9a4 4 0 0 1-8 0c0-1.5.6-2.6 1.5-3.5C9.5 9.5 11 8 12 2z"/><path d="M12 22a6 6 0 0 0 6-6c0-2-1-3.5-2-4.5"/></svg>;
+          var chatIcon=<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M12 8v4l2.5 1.5"/></svg>;
+          return(<div className="alert-grid">
+            {fires.length>0&&tile("a-rose",fireIcon,fires.length,"Fires — high priority & ageing","Show Stopper / Critical with no status change for 14+ days. Tackle these first.",all.length?fires.length/all.length*100:0,fires.length+" of "+all.length+" open tickets",function(){setModal({title:"Fires — high priority & ageing",icon:"🔥",color:"#E11D48",tickets:fires});})}
+            {stale.length>0&&tile("a-amber",chatIcon,stale.length,"Client follow-ups going stale","Waiting on the client with no status change for 14+ days. Worth a nudge.",st.cl.length?stale.length/st.cl.length*100:0,stale.length+" of "+st.cl.length+" client tickets ("+(st.cl.length?Math.round(stale.length/st.cl.length*100):0)+"%)",function(){setModal({title:"Stale client follow-ups (over 14 days)",icon:"💬",color:"#D97706",tickets:stale});})}
           </div>);
         })()}
 
