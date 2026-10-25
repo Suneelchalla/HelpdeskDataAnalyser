@@ -40,7 +40,7 @@
   var VOCABSET = {}; VOCAB.forEach(function (w) { VOCABSET[w] = 1; });
   /* words that appear in many client names but also in ordinary questions — never enough on their own to mean "that client" */
   var GENERICTOK = {}; ("service services desk help helpdesk support space request requests incident incidents change changes team teams group limited ltd private pvt company corp inc project projects " +
-    "management systems system solutions technologies technology global international india data digital online shipping logistics marine maritime ocean lines line sea freight cargo trading").split(/\s+/).forEach(function (w) { GENERICTOK[w] = 1; });
+    "management systems system solutions technologies technology global international india data digital online shipping logistics marine maritime ocean lines line sea freight cargo trading svm").split(/\s+/).forEach(function (w) { GENERICTOK[w] = 1; });
   /* very short words are only fixed from this explicit list (guessing on 4 letters mangles ordinary words) */
   var TYPO4 = { mnth: "month", mont: "month", wek: "week", tody: "today", toda: "today", opne: "open", oepn: "open", hgih: "high", tpye: "type", shwo: "show", lsit: "list", cleint: "client", clint: "client" };
   /* ordinary words that sit one letter away from a keyword and must never be "corrected" */
@@ -76,7 +76,8 @@
       .replace(/\b(did|have|has) (we|the team|team|you) (close|finish|solve|resolve|complete)d?\b/g, "closed")
       .replace(/\b(we|team) (closed|solved|resolved|completed|finished)\b/g, "closed")
       .replace(/\bmnths?\b/g, "month").replace(/\bwks?\b/g, "week").replace(/\byrs?\b/g, "year");
-    lc = lc.replace(/\b(new|fresh|newly (?:created|raised|logged|opened))\s+(tickets?|issues?|cases?|incidents?|requests?|problems?)\b/g, function (m, a, b) { return /\b(today|yesterday|week|month|year|last|since|between|ago|\d)/.test(lc) ? b : "created last 7 days " + b; })
+    var queueCtx = /\b(open|hd|help ?desk|pending|queue|analysis|unattended|not started|picked up|acknowledged)\b/.test(lc);
+    lc = lc.replace(/\b(new|fresh|newly (?:created|raised|logged|opened))\s+((?:open|pending|unassigned|support)\s+)?(tickets?|issues?|cases?|incidents?|requests?|problems?)\b/g, function (m, a, mid, b) { mid = mid || ""; return /\b(today|yesterday|week|month|year|last|since|between|ago|\d)/.test(lc) ? mid + b : queueCtx ? "brand new " + mid + b : "created last 7 days " + mid + b; })
       .replace(/\b(recently|lately|these days|past few days|last few days|couple of days|past couple of days)\b/g, "last 7 days")
       .replace(/\bpast (week|7 days)\b/g, "last 7 days").replace(/\bpast month\b/g, "last 30 days").replace(/\bpast year\b/g, "last 12 months");
     return lc;
@@ -181,6 +182,18 @@
     var N = plan.notes;
     function note(s) { if (N.indexOf(s) < 0) N.push(s); return ""; }
     return [
+      // the Help Desk front-line queue
+      [/ (?:waiting (?:for|on) (?:the )?analysis|analysis (?:queue|pending|backlog)|pending (?:for )?analysis|yet to (?:be )?analy[sz]ed?|needs? analysis|awaiting analysis|to be analy[sz]ed|analysis needed)(?= )/g, function () {
+        var s = ctx.statusIf(["Open", "Acknowledged", "Analysis & Study"]); if (!s.length || plan.f.status.length) return " "; plan.f.status = s; plan.recognised++; plan.queueMode = "analysis";
+        note("“Waiting for analysis” = status " + s.join(" / ") + " — the same queue the Similar Ticket Finder shows."); return " "; }],
+      [/ (?:brand new|not (?:yet )?(?:started|picked up|picked|acknowledged|attended)|yet to (?:start|pick up|be picked up|be started|be acknowledged)|unattended|unstarted|just arrived)(?= )/g, function () {
+        var s = ctx.statusIf(["Open", "Acknowledged"]); if (!s.length || plan.f.status.length) return " "; plan.f.status = s; plan.recognised++; plan.queueMode = "new";
+        note("“New” = tickets Help Desk has not started yet (status " + s.join(" / ") + ")."); return " "; }],
+      [/ (?:in|with|at|under|on|for) (?:the )?(?:hd|help ?desk)(?= )/g, " hd action"],
+      // "SVM" = our side (Help Desk or Engineering) — as in the SLA Tracker's "SVM pending tickets"
+      [/ (?:svm (?:pending|side|team|court|end|queue|action)|(?:pending )?(?:with|at|on|for|under|by) (?:the )?svm(?! in charge| incharge| help)(?: team| side| end| court)?)(?= )/g, function () {
+        if (!ctx.slaOk()) { note("SVM-side questions need SLA data, which isn’t available on this page — open the Follow-up Tracker."); return " "; }
+        plan.f.holder = ["Help Desk", "Engineering"]; plan.svmSide = true; plan.recognised++; note("“SVM” = tickets currently with Help Desk or Engineering (clock running) — the same as the SLA Tracker’s “SVM pending tickets”."); return " "; }],
       // people questions
       [/ who (?:is |are )?(?:handling|working on|working with|looking after|looking at|taking care of|managing|owning|owns|responsible for|dealing with|assigned to|covering|supporting)(?= )/g, " who has the most open tickets for"],
       [/ (?:who (?:is|are) (?:the )?(?:busiest|most busy|most loaded|most overloaded|overloaded|overburdened|swamped|stretched)|busiest|most overloaded|most loaded|who has (?:the )?(?:most|more|maximum|highest|max) (?:work|workload|load)|who (?:is )?(?:got|has) (?:the )?(?:most|more) (?:work|load))(?= )/g, " who has the most open tickets"],
@@ -196,7 +209,7 @@
       [/ (?:are there|is there|do we have|do i have|have we got|have i got|are we having)(?: any| some| a| an)?(?= )/g, " how many"],
       // SLA wording
       [/ (?:overdue|over due|late|delayed|delays?|behind schedule|behind sla|crossed (?:the )?(?:sla|deadline|target|limit)|missed (?:the )?(?:deadline|target|sla)|past (?:the )?(?:deadline|due date|due|sla|target)|beyond (?:the )?(?:sla|deadline|target)|out of sla|sla crossed|sla over|sla exceeded|exceeded (?:the )?sla|violated|violating|violations?|not met sla|failed sla|sla failed|sla fail|red tickets?)(?= )/g, " breached"],
-      [/ (?:about to (?:breach|breached|miss|cross)|going to (?:breach|miss|cross)|will (?:breach|miss|cross)|likely to (?:breach|miss)|nearing (?:the )?(?:deadline|sla|breach)|close to (?:deadline|sla|the deadline)|almost (?:due|late|breached|overdue)|running out of time|time running out|breaching soon|breach soon)(?= )/g, " will breach soon"],
+      [/ (?:ready to breach|about to (?:breach|breached|miss|cross)|going to (?:breach|miss|cross)|will (?:breach|miss|cross)|likely to (?:breach|miss)|nearing (?:the )?(?:deadline|sla|breach)|close to (?:deadline|sla|the deadline)|almost (?:due|late|breached|overdue)|running out of time|time running out|breaching soon|breach soon)(?= )/g, " will breach soon"],
       // open / closed
       [/ (?:pending|outstanding|unresolved|not closed|not yet closed|yet to (?:be )?(?:close|closed|resolve|resolved|finish)|not done|not completed|not finished|still open|still pending|unclosed|in progress|ongoing|running|being worked on|being handled|active|live)(?= )/g, " open"],
       [/ (?:completed|done|finished|solved|fixed|wrapped up|dealt with|sorted)(?= )/g, " closed"],
@@ -223,7 +236,7 @@
   }
   function blankF() {
     return { closed: null, status: [], owner: [], priority: [], client: [], worker: [], svm: [], type: [], root: [], screen: [], fix: [], menu: [], missing: [],
-      ageMin: null, ageMax: null, idleMin: null, sla: null, text: null, range: null, dateField: "created", typeAll: false, allStatuses: false };
+      holder: [], ageMin: null, ageMax: null, idleMin: null, sla: null, text: null, range: null, dateField: "created", typeAll: false, allStatuses: false };
   }
   function clonePlan(p) { return JSON.parse(JSON.stringify(p)); }
   function applyPatch(plan, patch) {
@@ -253,7 +266,7 @@
         root: clean(r["Root Cause"]), screen: clean(r["Screen Name"]), fix: clean(r["Type of Fix"]), menu: clean(r["Menu Head"]),
         linked: clean(r["Linked Issues"]), closed: status === "Closed", support: isSupportType(r["Issue Type"]) });
     });
-    var byKey = {}; T.forEach(function (t) { byKey[t.key.toLowerCase()] = t; });
+    var byKey = {}, STAT = {}; T.forEach(function (t) { byKey[t.key.toLowerCase()] = t; if (t.status) STAT[t.status] = 1; });
 
     function ownerOf(t) { if (t._own) return t._own; return (t._own = t.status === "On-Hold" ? "hold" : t.status === "Invoice Yet to Raise" ? "inv" : classify3(t.status)); }
     function age(t) { return t.created == null ? null : Math.max(0, Math.floor((nowMs - t.created) / DAY)); }
@@ -286,7 +299,7 @@
       });
       // people (worker and SVM in charge share one name list)
       var wc = counts(function (t) { return t.worker; }), sc = counts(function (t) { return t.svm; }), names = uniq(Object.keys(wc).concat(Object.keys(sc))), first = {};
-      names.forEach(function (n) { var f = nz(n).trim().split(" ")[0]; if (f.length >= 3 && !STOP[f]) first[f] = first[f] === undefined ? n : null; });
+      names.forEach(function (n) { var f = nz(n).trim().split(" ")[0]; if (f.length >= 3 && !STOP[f] && !GENERICTOK[f]) first[f] = first[f] === undefined ? n : null; });
       names.forEach(function (n) {
         var terms = [nz(n).trim()]; Object.keys(first).forEach(function (f) { if (first[f] === n) terms.push(f); });
         E.person.push({ value: n, w: wc[n] || 0, s: sc[n] || 0, n: (wc[n] || 0) + (sc[n] || 0), terms: uniq(terms) });
@@ -391,7 +404,7 @@
       if (/ all (issue )?types | every type | including (changes|all types) | all issue types /.test(w)) { f.typeAll = true; w = w.replace(/ all (issue )?types | every type | including (changes|all types) | all issue types /g, " "); }
 
       // everyday wording → the words the rules below understand ("overdue" → breached, "pending with client" → with client …)
-      var lctx = { w: function () { return w; }, hasEntity: function () { return f.client.length || f.worker.length || f.svm.length; }, group: function (d) { plan.forceGroup = d; } };
+      var lctx = { w: function () { return w; }, hasEntity: function () { return f.client.length || f.worker.length || f.svm.length; }, group: function (d) { plan.forceGroup = d; }, slaOk: function () { return slaOk(); }, statusIf: function (names) { return names.filter(function (n) { return STAT[n]; }); } };
       LAYMAN(plan, lctx).forEach(function (r) { w = w.replace(r[0], r[1]); });
       // owner side
       if (/ (awaiting|waiting (on|for)|pending (with|on|from)|with|on) (the )?(client|customer)s? | client side | client follow ?ups? | client followup | waiting client | client action /.test(w)) { f.owner.push("client"); w = w.replace(/ (awaiting|waiting on|waiting for|pending with|pending on|pending from|with|on) (the )?(client|customer)s? | client side | client follow ?ups? | client followup | waiting client | client action /g, " "); plan.recognised++; }
@@ -415,7 +428,7 @@
       // SLA wording
       var slaMetW = /sla\s*%|%\s*sla/.test(lc) || / sla (met|compliance|percent|percentage|performance|achievement|score|rate|adherence) | (met|meeting|hit|within) sla | sla % | sla met /.test(w);
       if (!slaMetW) {
-        if (/ (will breach|going to breach|likely to breach|breach soon|breaching soon|soon to breach|to breach) /.test(w)) { f.sla = "atrisk"; plan.recognised++; w = w.replace(/ (will breach|going to breach|likely to breach|breach soon|breaching soon|soon to breach|to breach) /g, " "); }
+        if (/ (will breach soon|will breach|going to breach|likely to breach|breach soon|breaching soon|soon to breach|to breach) /.test(w)) { f.sla = "atrisk"; plan.recognised++; w = w.replace(/ (will breach soon|will breach|going to breach|likely to breach|breach soon|breaching soon|soon to breach|to breach) /g, " "); }
         else if (/ (breach|breaches|breached|breaching|over sla|missed sla|sla breach(es|ed)?|violat(ed|ion|ions)) /.test(w)) { f.sla = "breached"; plan.recognised++; }
         else if (/ (at risk|due soon|about to breach|near(ly)? breach(ing)?|close to breach|critical sla) /.test(w)) { f.sla = / due soon | about to breach | close to breach /.test(w) ? "duesoon" : "atrisk"; plan.recognised++; }
         else if (/ (paused|clock paused|sla paused) /.test(w)) { f.sla = "paused"; plan.recognised++; }
@@ -474,12 +487,13 @@
       // decide the metric
       if (plan.keys.length) plan.metric = "ticket";
       else if (/ todays focus /.test(w)) plan.metric = "focus";
+      else if (plan.svmSide && !f.sla && !countW && !dimHit && !plan.keys.length) plan.metric = "svmPending";
       else if (/^\s*(help|\?|hi|hello|hey|what can you do|how (do|to) (i )?use|examples?|commands?)\b/.test(lc) || / (what can you do|how to use|show examples|example questions) /.test(w)) plan.metric = "help";
       else if (cmpW && (f.client.length > 1 || f.worker.length + f.svm.length > 1 || f.priority.length > 1 || f.type.length > 1 || (f.worker.length && f.svm.length))) plan.metric = "compare";
       else if (cmpW && !vsW) plan.metric = "compare";
       else if (vsW || trendW || isMonthWeek) { plan.metric = "trend"; plan.series = vsW ? "both" : "single"; plan.bucket = /week/.test(lc) ? "week" : "month"; }
       else if (dimHit) { plan.metric = "group"; plan.group = dimHit; }
-      else if (overviewW && / sla /.test(w) && !f.sla) plan.metric = "slaSummary";
+      else if (overviewW && / sla /.test(w) && !f.sla && !slaMetW) plan.metric = "slaSummary";
       else if (slaMetW) plan.metric = "slaMet";
       else if (avgW) plan.metric = "avg";
       else if (countW) plan.metric = "count";
@@ -487,7 +501,6 @@
       else if (/ (about|status of|everything about|info on|information on|details of|details on|update on) /.test(" " + lc.replace(/[^a-z]+/g, " ") + " ") && (f.client.length || f.worker.length || f.svm.length) && !/ tickets /.test(w)) plan.metric = "overview";
       else if (/ sla /.test(w) && !f.sla) plan.metric = "slaSummary";
       else if (listW || / (tickets|ticket|issues|incidents|requests) /.test(" " + lc.replace(/[^a-z]+/g, " ") + " ") || plan.recognised > 0) { plan.metric = "list"; plan.inferred = !listW && !/ (tickets|ticket|issues|incidents|requests) /.test(" " + lc.replace(/[^a-z]+/g, " ") + " "); }
-      if (plan.metric === "slaMet" && f.range && f.dateField === "created" && !/\b(created|raised|logged|opened)\b/.test(lc0)) f.dateField = "resolved";
       if (plan.metric === "count" && (f.type.length > 1 || f.priority.length > 1)) { plan.metric = "group"; plan.group = f.type.length > 1 ? "type" : "priority"; }
       if (plan.metric === "group" || plan.metric === "slaMet") { if (slaMetW) plan.measure = "slaMet"; else if (avgW) plan.measure = "avg"; }
       if (plan.metric === "group" && plan.measure === "count" && slaMetW) plan.measure = "slaMet";
@@ -508,7 +521,7 @@
 
       // anything left over that we did not understand
       var left = w.trim().split(/\s+/).filter(function (t) { return t.length >= 3 && !STOP[t] && !/^\d+$/.test(t); });
-      var GEN = { tickets: 1, ticket: 1, issues: 1, issue: 1, open: 1, closed: 1, client: 1, clients: 1, worker: 1, workers: 1, priority: 1, status: 1, month: 1, week: 1, wise: 1, breakdown: 1, analysis: 1, report: 1, data: 1, info: 1, sla: 1, svm: 1, charge: 1, assigned: 1, assignee: 1, percentage: 1, percent: 1, rate: 1, compliance: 1, performance: 1, met: 1, score: 1, achievement: 1, adherence: 1 };
+      var GEN = { tickets: 1, ticket: 1, issues: 1, issue: 1, open: 1, closed: 1, client: 1, clients: 1, worker: 1, workers: 1, priority: 1, status: 1, month: 1, week: 1, wise: 1, breakdown: 1, analysis: 1, report: 1, data: 1, info: 1, sla: 1, svm: 1, charge: 1, assigned: 1, assignee: 1, percentage: 1, percent: 1, rate: 1, created: 1, raised: 1, logged: 1, brand: 1, queue: 1, compliance: 1, performance: 1, met: 1, score: 1, achievement: 1, adherence: 1 };
       plan.ignored = left.filter(function (t) { return !GEN[t]; }).slice(0, 5);
 
       // follow-up: a short message that only adds filters refines the previous question
@@ -518,6 +531,7 @@
         var wc = raw.split(/\s+/).length;
         if (follow || shortRefine || (!plan.explicit && addsFilters && plan.metric !== "help" && wc <= 3)) {
           var merged = clonePlan(prev); merged.ignored = plan.ignored; merged.notes = plan.notes;
+          merged.queueMode = plan.queueMode || (f.status.length ? undefined : merged.queueMode);       // the "new vs whole queue" switch follows the latest wording
           Object.keys(f).forEach(function (k) {
             var v = f[k], b = blankF()[k];
             if (JSON.stringify(v) !== JSON.stringify(b)) merged.f[k] = v;
@@ -537,8 +551,7 @@
       var f = plan.f, m = plan.metric, ef = { closed: f.closed, dateField: f.dateField };
       var openDefault = ["count", "list", "group", "avg", "compare", "overview", "slaSummary"].indexOf(m) > -1;
       if (ef.closed === null && !f.allStatuses) {
-        if (m === "slaMet" || (m === "group" && plan.measure === "slaMet")) ef.closed = true;
-        else if (f.sla === "met" || f.sla === "missed") ef.closed = true;
+        if (f.sla === "met" || f.sla === "missed") ef.closed = true;
         else if (f.dateField === "resolved" && f.range) ef.closed = true;
         else if (f.status.indexOf("Closed") > -1) ef.closed = true;
         else if (openDefault && !f.range && !f.status.length) ef.closed = false;
@@ -576,6 +589,7 @@
         return true;
       });
       if (f.idleMin != null) out = out.filter(function (t) { if (t.closed) return false; var d = idle(t); return d != null && d >= f.idleMin; });
+      if (f.holder.length) { if (!slaOk()) return out.slice(0, 0); out = out.filter(function (t) { var s = sla(t); return s && f.holder.indexOf(s.heldBy) > -1; }); }
       if (f.sla) { if (!slaOk()) return out.slice(0, 0); out = out.filter(function (t) { return slaPass(sla(t), f.sla); }); }
       return out;
     }
@@ -591,6 +605,7 @@
       if (f.status.length) P("status: " + f.status.join(", "), { status: [] }); if (f.owner.length) P({ client: "with client", engg: "with engineering", hd: "HD action", hold: "on hold", inv: "invoice pending" }[f.owner[0]] + (f.owner.length > 1 ? " +" : ""), { owner: [] });
       ["root", "screen", "fix", "menu"].forEach(function (d) { if (f[d].length) { var r = {}; r[d] = []; P(DIMLBL[d].toLowerCase() + ": " + f[d].join(", "), r); } });
       f.missing.forEach(function (k) { P("no " + (k === "svm" ? "SVM in charge" : k === "linked" ? "linked issue" : k === "root" ? "root cause" : k), { missing: f.missing.filter(function (x) { return x !== k; }) }); });
+      if (f.holder.length) P("with SVM (Help Desk / Engineering)", { holder: [] });
       if (f.sla) P({ breached: "SLA breached", atrisk: "SLA at risk", duesoon: "SLA due soon", ontrack: "SLA on track", paused: "SLA paused (with client)", nohist: "no SLA data", none: "no SLA target", met: "SLA met", missed: "SLA missed" }[f.sla], { sla: null });
       if (f.idleMin != null) P("no status change " + f.idleMin + "+ days", { idleMin: null }); if (f.ageMin != null) P("older than " + f.ageMin + " days", { ageMin: null }); if (f.ageMax != null) P("younger than " + (f.ageMax + 1) + " days", { ageMax: null });
       if (f.range) P((ef.dateField === "resolved" ? "closed " : ef.dateField === "updated" ? "updated " : "created ") + f.range.label, { range: null });
@@ -608,7 +623,7 @@
       return out.slice(0, 5);
     }
     function followChips(plan, skip) {
-      var all = [["List them", { metric: "list" }], ["By client", { metric: "group", group: "project" }], ["By priority", { metric: "group", group: "priority" }], ["By status", { metric: "group", group: "status" }], ["By worker", { metric: "group", group: "worker" }], ["Trend by month", { metric: "trend", series: "single", bucket: "month" }]];
+      var all = [["List them", { metric: "list" }], ["By client", { metric: "group", group: "project", measure: "count" }], ["By priority", { metric: "group", group: "priority", measure: "count" }], ["By status", { metric: "group", group: "status", measure: "count" }], ["By worker", { metric: "group", group: "worker", measure: "count" }], ["Trend by month", { metric: "trend", series: "single", bucket: "month" }]];
       return all.filter(function (x) { return !(x[1].metric === plan.metric && (x[1].group || "") === (plan.group || "")) && x[1].group !== skip && !(x[1].metric === "group" && plan.f[FKEY[x[1].group]] && plan.f[FKEY[x[1].group]].length === 1); }).slice(0, 5).map(function (x) { return { label: x[0], patch: x[1] }; });
     }
 
@@ -654,7 +669,7 @@
         ["Counts", ["How many open tickets?", "How many tickets are late for " + c + "?", "Open tickets by client"]],
         ["Lists", ["Which tickets are stuck for more than 30 days?", "Oldest 10 tickets for " + p, "Anything urgent for " + c + "?"]],
         ["Rankings", ["Top 5 clients by breaches", "Who is free?", "Which root cause is most common?"]],
-        ["SLA", ["Are we meeting SLA?", "What is about to breach?", "SLA met % last month"]],
+        ["SLA", ["SVM pending tickets", "What is about to breach with SVM?", "Are we meeting SLA?", "SLA met % last month"]],
         ["Trends & compare", ["How many tickets were raised each month?", "Compare " + p + " and " + (E.person[1] ? E.person[1].value : "Naveen"), "What did we close last week?"]],
         ["One ticket or one client", [(T[0] ? T[0].key : "MILAHA-1058"), "Tell me about " + c]] ], note: "Spelling mistakes are fine. After an answer, type what to change — “only critical”, “last month”, “for " + p + "”. Hinglish works too: “kitne open tickets hai”." };
     };
@@ -670,6 +685,8 @@
       var list = select(plan), f = plan.f, sort = plan.sort;
       if (sort === "oldest" || (!sort && f.ageMin != null)) list.sort(function (a, b) { return (a.created || 0) - (b.created || 0); });
       else if (sort === "newest") list.sort(function (a, b) { return (b.created || 0) - (a.created || 0); });
+      else if (f.holder.length && !f.sla) { var ord = { atrisk: 0, breached: 1, ontrack: 2 }; var oo = function (x) { var k = ord[svmBucket(sla(x))]; return k === undefined ? 3 : k; }; list.sort(function (a, b) { return (oo(a) - oo(b)) || (urgentAt(a) - urgentAt(b)); }); }
+      else if (f.sla === "atrisk" || f.sla === "duesoon" || f.sla === "ontrack") list.sort(function (a, b) { return urgentAt(a) - urgentAt(b); });
       else if (f.sla === "breached") list.sort(function (a, b) { return ((sla(b) || {}).overByMin || 0) - ((sla(a) || {}).overByMin || 0); });
       else if (f.idleMin != null || effective(plan).closed === false) list.sort(function (a, b) { return (idle(b) || 0) - (idle(a) || 0); });
       else list.sort(function (a, b) { return (b.created || 0) - (a.created || 0); });
@@ -688,14 +705,16 @@
       p.f[FKEY[dim]] = [value]; return p;
     }
     B.group = function (plan) {
-      var dim = plan.group || "project", ef = effective(plan), meas = plan.measure, groups = {};
+      var dim = plan.group || "project", meas = plan.measure, groups = {};
+      if (meas === "slaMet") { plan = clonePlan(plan); plan.f.sla = null; }          // never filter by SLA state while computing an SLA %
+      var ef = effective(plan);
       if (meas === "slaMet" && !slaOk()) return { type: "text", text: "SLA numbers come from the SLA Tracker data, which isn’t available on this page. Open the Follow-up Tracker and ask again.", chips: [] };
       var list = select(plan);
       list.forEach(function (t) { groupKeys(t, dim).forEach(function (k) { (groups[k] = groups[k] || []).push(t); }); });
       var rows = Object.keys(groups).map(function (k) {
         var g = groups[k], r = { label: k, n: g.length, list: g };
         if (meas === "avg") { var vals = g.map(function (t) { return ef.closed === true ? resDays(t) : age(t); }).filter(function (x) { return x != null; }); r.v = vals.length ? vals.reduce(function (x, y) { return x + y; }, 0) / vals.length : 0; }
-        else if (meas === "slaMet") { var met = 0, mis = 0, nh = 0; g.forEach(function (t) { var s = sla(t); if (!s) { nh++; return; } if (s.state === "met") met++; else if (s.state === "missed") mis++; else if (s.state === "nohist") nh++; }); r.met = met; r.mis = mis; r.nh = nh; r.v = met + mis ? met / (met + mis) * 100 : -1; }
+        else if (meas === "slaMet") { var c = slaTally(g); r.met = c.met; r.mis = c.mis; r.br = c.br; r.nh = c.nh; r.v = c.pct == null ? -1 : c.pct; }
         else r.v = g.length;
         return r;
       });
@@ -703,13 +722,13 @@
       else { if (meas === "slaMet") rows = rows.filter(function (r) { return r.v >= 0; }); rows.sort(function (a, b) { return plan.asc ? a.v - b.v || a.n - b.n : b.v - a.v || b.n - a.n; }); }
       var total = rows.length, topN = plan.top || (which_most(plan) ? 5 : 12); if (dim !== "age") rows = rows.slice(0, topN);
       var max = rows.reduce(function (m, r) { return Math.max(m, r.v); }, 1), sumN = list.length;
-      var title = (meas === "avg" ? (ef.closed === true ? "Average resolution days" : "Average age (days)") : meas === "slaMet" ? "SLA met %" : "Tickets") + " by " + DIMLBL[dim].toLowerCase();
-      var a = { type: "table", title: title, columns: meas === "slaMet" ? [DIMLBL[dim], "SLA met", "Met", "Missed", "No history"] : meas === "avg" ? [DIMLBL[dim], ef.closed === true ? "Avg days" : "Avg age (d)", "Tickets"] : [DIMLBL[dim], "Tickets", "Share"],
+      var title = (meas === "avg" ? (ef.closed === true ? "Average resolution days" : "Average age (days)") : meas === "slaMet" ? "SLA met % (SLA Tracker definition)" : "Tickets") + " by " + DIMLBL[dim].toLowerCase();
+      var a = { type: "table", title: title, columns: meas === "slaMet" ? [DIMLBL[dim], "SLA met", "Met", "Missed", "Breached", "No hist."] : meas === "avg" ? [DIMLBL[dim], ef.closed === true ? "Avg days" : "Avg age (d)", "Tickets"] : [DIMLBL[dim], "Tickets", "Share"],
         rows: rows.map(function (r) {
-          var cells = meas === "slaMet" ? [r.label, r.v.toFixed(1) + "%", r.met, r.mis, r.nh] : meas === "avg" ? [r.label, Math.round(r.v * 10) / 10, r.n] : [r.label, r.n, pct(r.n, sumN) + "%"];
+          var cells = meas === "slaMet" ? [r.label, r.v.toFixed(1) + "%", r.met, r.mis, r.br, r.nh] : meas === "avg" ? [r.label, Math.round(r.v * 10) / 10, r.n] : [r.label, r.n, pct(r.n, sumN) + "%"];
           return { cells: cells, bar: max ? Math.max(0, r.v) / (meas === "slaMet" ? 100 : max) : 0, drill: drillPlan(plan, dim, r.label) };
         }), foot: total > rows.length ? "Showing " + rows.length + " of " + total + " — ask “top 30 …” for more." : "", total: sumN, chips: describe(plan),
-        csv: { name: "by-" + dim, header: meas === "slaMet" ? [DIMLBL[dim], "SLA met %", "Met", "Missed", "No history"] : meas === "avg" ? [DIMLBL[dim], "Average", "Tickets"] : [DIMLBL[dim], "Tickets"], rows: rows.map(function (r) { return meas === "slaMet" ? [r.label, r.v.toFixed(1), r.met, r.mis, r.nh] : meas === "avg" ? [r.label, Math.round(r.v * 10) / 10, r.n] : [r.label, r.n]; }) },
+        csv: { name: "by-" + dim, header: meas === "slaMet" ? [DIMLBL[dim], "SLA met %", "Met", "Missed", "Breached (open)", "No history"] : meas === "avg" ? [DIMLBL[dim], "Average", "Tickets"] : [DIMLBL[dim], "Tickets"], rows: rows.map(function (r) { return meas === "slaMet" ? [r.label, r.v.toFixed(1), r.met, r.mis, r.br, r.nh] : meas === "avg" ? [r.label, Math.round(r.v * 10) / 10, r.n] : [r.label, r.n]; }) },
         follow: [{ label: "List all " + fmtN(sumN), patch: { metric: "list", group: null } }].concat(followChips(plan, dim).filter(function (x) { return x.patch.metric === "group"; }).slice(0, 3)), hint: "Click a row to see its tickets." };
       if (!rows.length) { a.type = "text"; a.text = "No tickets match, so there is nothing to group. Try loosening one of these:"; a.chips = describe(plan); a.follow = relaxChips(plan); a.csv = null; }
       if (f_hasSla(plan) && !slaOk()) a.warn = "SLA data isn’t available on this page — open the Follow-up Tracker for SLA questions.";
@@ -723,13 +742,53 @@
         sub: vals.length ? "median " + Math.round(median(vals)) + " days · oldest " + Math.round(Math.max.apply(null, vals)) + " days · " + fmtN(vals.length) + " tickets" + (idl.length ? " · avg " + Math.round(idl.reduce(function (x, y) { return x + y; }, 0) / idl.length) + " days since last status change" : "") : "No tickets match.",
         chips: describe(plan), follow: followChips(plan).filter(function (x) { return x.patch.metric === "group"; }).slice(0, 4).map(function (x) { return { label: "Average " + x.label.toLowerCase(), patch: { metric: "group", group: x.patch.group, measure: "avg" } }; }) };
     };
+    /* SLA % exactly as the SLA Tracker defines it: Met ÷ (Met + Missed + open tickets already over target).
+       Open tickets still inside their target are not counted until they resolve or breach. */
+    function slaTally(list) {
+      var c = { met: 0, mis: 0, br: 0, open: 0, nh: 0, none: 0, na: 0 };
+      list.forEach(function (t) { var s = sla(t); if (!s || s.state === "na" || s.state === "loading") c.na++; else if (s.state === "met") c.met++; else if (s.state === "missed") c.mis++; else if (s.state === "breached") c.br++; else if (s.state === "nohist") c.nh++; else if (s.state === "none") c.none++; else c.open++; });
+      c.decided = c.met + c.mis + c.br; c.pct = c.decided ? c.met / c.decided * 100 : null; return c;
+    }
     B.slaMet = function (plan) {
+      plan = clonePlan(plan); plan.f.sla = null;                        // a leftover "missed" / "breached" filter must never leak into a percentage
       if (!slaOk()) return { type: "text", text: "SLA numbers come from the SLA Tracker data, which isn’t available on this page. Open the Follow-up Tracker and ask again.", chips: [] };
-      var list = select(plan), met = 0, mis = 0, nh = 0, none = 0;
-      list.forEach(function (t) { var s = sla(t); if (!s) { nh++; return; } if (s.state === "met") met++; else if (s.state === "missed") mis++; else if (s.state === "nohist") nh++; else none++; });
-      var dec = met + mis, v = dec ? pct(met, dec) : null;
-      return { type: "number", title: "SLA met", value: v == null ? "—" : v, unit: v == null ? "" : "%", sub: dec ? fmtN(met) + " met · " + fmtN(mis) + " missed (of " + fmtN(dec) + " closed with history)" + (nh ? " · " + fmtN(nh) + " closed tickets have no history and are NOT counted" : "") : "No closed tickets with status history match.",
-        chips: describe(plan), follow: [{ label: "By client", patch: { metric: "group", group: "project", measure: "slaMet" } }, { label: "By priority", patch: { metric: "group", group: "priority", measure: "slaMet" } }, { label: "Missed tickets", patch: { metric: "list", f: Object.assign({}, plan.f, { sla: "missed", closed: true }) } }] };
+      var list = select(plan), c = slaTally(list), v = c.pct == null ? null : Math.round(c.pct * 10) / 10, ef = effective(plan);
+      var basis = ef.dateField === "resolved" ? "closed in the period" : "created in the period";
+      var sub = c.decided ? fmtN(c.met) + " met · " + fmtN(c.mis) + " missed · " + fmtN(c.br) + " breached and still open = " + fmtN(c.decided) + " decided (" + basis + "). " +
+        (c.open ? fmtN(c.open) + " open tickets are still inside their target and aren’t counted yet. " : "") + (c.nh ? fmtN(c.nh) + " have no status history yet (not counted). " : "") + (c.none ? fmtN(c.none) + " have no SLA target (priority blank)." : "") : "No tickets with status history and a target match.";
+      var flt = Object.assign({}, plan.f, { sla: null });
+      return { type: "number", title: "SLA met", value: v == null ? "—" : v, unit: v == null ? "" : "%", sub: sub.trim(), chips: describe(plan), notes: ["Same definition as the SLA Tracker: Met ÷ (Met + Missed + open tickets already over target)."],
+        follow: [{ label: "By client", patch: { metric: "group", group: "project", measure: "slaMet", f: { sla: null } } }, { label: "By priority", patch: { metric: "group", group: "priority", measure: "slaMet", f: { sla: null } } },
+          { label: "Missed tickets", patch: { metric: "list", f: { sla: "missed" } } }, { label: "Breached (still open)", patch: { metric: "list", f: { sla: "breached", closed: false } } }] };
+    };
+    function svmBucket(s) { return !s ? null : s.state === "breached" ? "breached" : s.state === "running" ? (s.atRisk ? "atrisk" : "ontrack") : null; }
+    function urgentAt(t) { var s = sla(t); if (!s) return 9e15; return s.state === "breached" ? (s.breachedAt || 9e15) : (s.breachAt || 9e15); }
+    /* "SVM pending tickets" — same table as the SLA Tracker: every open ticket that is with Help Desk or Engineering right now,
+       not limited by the Created range, in order of urgency. */
+    B.svmPending = function (plan) {
+      if (!slaOk()) return { type: "text", text: "This view comes from the SLA Tracker data, which isn’t available on this page. Open the Follow-up Tracker and ask again.", chips: [] };
+      var base = clonePlan(plan); base.f.holder = []; base.f.sla = null; base.f.range = null; base.f.closed = false; base.f.allStatuses = false;
+      var list = select(base), defs = [["atrisk", "Ready to breach", "75% or more of the target used"], ["breached", "Breached", "already past their target"], ["ontrack", "Not yet breached", "under 75% used"]], R = {}, wait = 0, hold = 0, nohist = 0, notgt = 0;
+      defs.forEach(function (d) { R[d[0]] = { inc: 0, sr: 0, hd: 0, eng: 0, n: 0, top: null }; });
+      var TOT = { inc: 0, sr: 0, hd: 0, eng: 0, n: 0 };
+      list.forEach(function (t) {
+        var s = sla(t); if (!s || s.state === "na" || s.state === "loading") return;
+        var b = svmBucket(s), mine = s.heldBy === "Help Desk" || s.heldBy === "Engineering";
+        if (b && mine) {
+          var r = R[b]; r.n++; TOT.n++; if (/incident/i.test(t.type)) { r.inc++; TOT.inc++; } else { r.sr++; TOT.sr++; } if (s.heldBy === "Help Desk") { r.hd++; TOT.hd++; } else { r.eng++; TOT.eng++; }
+          if (!r.top || urgentAt(t) < urgentAt(r.top)) r.top = t;
+        } else if (s.state === "nohist") nohist++; else if (s.state === "none") notgt++; else if (s.heldBy === "Client" || ownerOf(t) === "client" || ownerOf(t) === "hold") { wait++; if (t.status === "On-Hold") hold++; }
+      });
+      function W(ms) { return ms == null ? "" : new Date(ms).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); }
+      function drill(bucket) { var p = clonePlan(plan); p.metric = "list"; p.svmSide = false; p.notes = []; p.f.holder = ["Help Desk", "Engineering"]; p.f.sla = bucket; p.f.range = null; p.f.closed = false; p.slaFocus = true; return p; }
+      var rows = defs.map(function (d) { var r = R[d[0]]; return { cells: [d[1], r.inc, r.sr, r.n, r.hd, r.eng], bar: 0, drill: drill(d[0]) }; });
+      rows.push({ cells: ["Total SVM pending", TOT.inc, TOT.sr, TOT.n, TOT.hd, TOT.eng], bar: 0, drill: drill(null) });
+      var urgent = []; defs.forEach(function (d) { var r = R[d[0]]; if (r.top) { var s = sla(r.top); urgent.push({ label: d[1], key: r.top.key, raw: r.top.raw, when: (s.state === "breached" ? "breached " + W(s.breachedAt) : "breaks " + W(s.breachAt)) + " IST" }); } });
+      var best = null; ["atrisk", "breached", "ontrack"].forEach(function (k) { if (!best && R[k].top) best = R[k].top; }); 
+      var foot = []; if (wait) foot.push(fmtN(wait) + " more open tickets are waiting with the client (clock paused)" + (hold ? ", including " + fmtN(hold) + " On-Hold," : "") + " and are not counted here."); if (nohist) foot.push(fmtN(nohist) + " have no SLA history yet."); if (notgt) foot.push(fmtN(notgt) + " have no SLA target (priority blank).");
+      return { type: "table", wide: true, title: "SVM pending tickets", columns: ["Where they stand", "Incident", "Svc req.", "Total", "Help Desk", "Engg"], rows: rows, urgent: urgent,
+        hint: "Every open ticket that is with Help Desk or Engineering right now, whenever it was created — most urgent first. Click a row to see its tickets.", foot: foot.join(" "), total: TOT.n, chips: describe(base).filter(function (c) { return !/^(open tickets|all statuses)$/.test(c); }),
+        csv: { name: "svm-pending", header: ["Where they stand", "Incident", "Service Request", "Total", "Help Desk", "Engineering"], rows: rows.map(function (r) { return r.cells; }) }, follow: [] };
     };
     B.slaSummary = function (plan) {
       if (!slaOk()) return { type: "text", text: "SLA data isn’t available on this page — open the Follow-up Tracker.", chips: [] };
@@ -823,6 +882,10 @@
       if (!plan || !plan.metric) return fallback(plan || parse(""), "");
       var fn = B[plan.metric]; var a = fn ? fn(plan) : fallback(plan, "");
       if (plan.notes && plan.notes.length && a.type !== "help") a.notes = plan.notes.slice(0, 4);
+      if (plan.queueMode && a.follow) {
+        var sw = plan.queueMode === "new" ? ["Whole analysis queue (+ Analysis & Study)", ["Open", "Acknowledged", "Analysis & Study"]] : ["Only not started (Open / Acknowledged)", ["Open", "Acknowledged"]];
+        var have = sw[1].filter(function (n) { return STAT[n]; }); if (have.length) a.follow = [{ label: sw[0], patch: { f: { status: have } } }].concat(a.follow).slice(0, 5);
+      }
       if (plan.personBoth && plan.f.worker.length && a.follow) a.follow = [{ label: "As SVM in charge instead", patch: { f: { worker: [], svm: plan.f.worker } } }].concat(a.follow).slice(0, 5);
       if (plan.ignored && plan.ignored.length && a.type !== "text") a.ignored = plan.ignored;
       return a;
@@ -842,9 +905,9 @@
       return uniq(out.map(function (x) { return x.value; })).slice(0, 6);
     }
     function starters() {
-      var c = E.project.slice().sort(function (a, b) { return b.n - a.n; })[0], list = ["What needs attention today?", "How many open tickets?", "What's overdue?", "Who has the most work?", "Open tickets by client", "How are we doing?"];
-      if (c) list.splice(5, 0, "Tell me about " + c.value);
-      return list.slice(0, 6);
+      var c = E.project.slice().sort(function (a, b) { return b.n - a.n; })[0], list = ["SVM pending tickets", "What needs attention today?", "How many open tickets?", "What's overdue?", "Who has the most work?", "Open tickets by client", "How are we doing?"];
+      if (c) list.splice(6, 0, "Tell me about " + c.value);
+      return list.slice(0, 7);
     }
     return { ticketInfo: function (key) { var t = byKey[String(key || "").toLowerCase()]; return t ? ticketItem(t) : null; }, ask: ask, run: run, parse: parse, suggest: suggest, starters: starters, applyPatch: applyPatch,
       stats: { tickets: T.length, open: T.filter(function (t) { return !t.closed && t.support; }).length, clients: E.project.length, people: E.person.length } };
@@ -961,7 +1024,7 @@ box-shadow:0 24px 70px -12px rgba(15,23,42,.35),0 4px 14px rgba(15,23,42,.1);col
 table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}th{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#94A3B8;text-align:left;padding:5px 8px;border-bottom:1px solid #E5EAF1}\
 td{padding:7px 8px;border-bottom:1px solid #F1F5F9;vertical-align:middle}tr.dr{cursor:pointer}tr.dr:hover td{background:#F5F7FF}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}td.l{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\
 .bar{height:6px;border-radius:9px;background:#EEF2F7;overflow:hidden;min-width:60px}.bar i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#3B82F6,#6366F1)}\
-.tw{overflow-x:auto}.hint{font-size:11.5px;color:#94A3B8;margin-top:8px}\
+.tw{overflow-x:auto}.tw td,.tw th{white-space:nowrap}table.dense td,table.dense th{padding-left:4px;padding-right:4px}table.dense td.n{font-size:12.5px}table.dense th{letter-spacing:.2px}.hint{font-size:11.5px;color:#94A3B8;margin-top:8px}\
 .tr{padding:9px 0;border-bottom:1px solid #F1F5F9}.tr:last-child{border:none}.t1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}\
 a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:12px;color:#2563EB;text-decoration:none}a.key:hover{text-decoration:underline}\
 .pill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px;background:#F1F5F9;color:#475569;white-space:nowrap}\
@@ -980,6 +1043,7 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
 .in input{flex:1;border:none;background:transparent;outline:none;font-size:14px;color:#0F172A;padding:9px 0;min-width:0}.in input::placeholder{color:#94A3B8}\
 .send{width:36px;height:36px;border-radius:11px;border:none;background:linear-gradient(135deg,#2563EB,#4F46E5);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}.send:disabled{opacity:.45;cursor:default}\
 .note{font-size:10.5px;color:#94A3B8;text-align:center;margin-top:7px}\
+.urg{margin-top:10px;border:1px solid #E5EAF1;border-radius:10px;padding:8px 12px;background:#FAFBFF}.urg h5{margin:0 0 4px;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#64748B}.ur{display:flex;gap:8px;align-items:center;padding:5px 4px;cursor:pointer;flex-wrap:wrap;border-radius:7px}.ur:hover{background:#EEF2FF}.ur b{font-size:12px;min-width:104px}.ur .key{color:#2563EB}\
 .tr{cursor:pointer;border-radius:10px;padding:9px 8px;margin:0 -8px;transition:background .12s}.tr:hover{background:#F5F7FF}.tr .key{color:#2563EB}\
 .ov{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:26px 14px;overflow:auto;z-index:10}.ov.open{display:flex;animation:fade .15s ease}@keyframes fade{from{opacity:0}to{opacity:1}}\
 .mod{background:#fff;border-radius:20px;width:min(920px,100%);box-shadow:0 30px 80px -10px rgba(15,23,42,.5);margin:auto 0;animation:pop .22s cubic-bezier(.22,1,.36,1);color:#0F172A}\
@@ -1073,8 +1137,9 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
           (a.ignored && a.ignored.length ? '<div class="ign">Ignored: ' + a.ignored.map(esc).join(", ") + "</div>" : "") + "</div>"; break; }
       case "table": {
         var meas = a.rows.length && typeof a.rows[0].bar === "number";
-        h = '<div class="card"><h4>' + esc(a.title) + '</h4><div class="tw"><table><thead><tr>' + a.columns.map(function (c, i) { return "<th" + (i > 0 ? ' class="n"' : "") + ">" + esc(c) + "</th>"; }).join("") + (meas && !a.wide ? "<th></th>" : "") + "</tr></thead><tbody>" +
-          a.rows.map(function (r, ri) { return '<tr class="' + (r.drill ? "dr" : "") + '"' + (r.drill ? ' data-act="drill" data-a="' + id + '" data-i="' + ri + '"' : "") + ">" + r.cells.map(function (c, i) { return i === 0 ? '<td class="l" title="' + esc(c) + '">' + esc(c) + "</td>" : '<td class="n">' + fmt(c) + "</td>"; }).join("") + (meas && !a.wide ? '<td style="width:22%"><div class="bar"><i style="width:' + Math.round(Math.min(1, r.bar) * 100) + '%"></i></div></td>' : "") + "</tr>"; }).join("") + "</tbody></table></div>" +
+        h = '<div class="card"><h4>' + esc(a.title) + '</h4><div class="tw"><table' + (a.columns.length >= 6 ? ' class="dense"' : "") + '><thead><tr>' + a.columns.map(function (c, i) { return "<th" + (i > 0 ? ' class="n"' : "") + ">" + esc(c) + "</th>"; }).join("") + (meas && !a.wide && a.columns.length < 5 ? "<th></th>" : "") + "</tr></thead><tbody>" +
+          a.rows.map(function (r, ri) { return '<tr class="' + (r.drill ? "dr" : "") + '"' + (r.drill ? ' data-act="drill" data-a="' + id + '" data-i="' + ri + '"' : "") + ">" + r.cells.map(function (c, i) { return i === 0 ? '<td class="l" title="' + esc(c) + '"' + (a.columns.length >= 5 ? ' style="max-width:' + (a.wide ? 112 : 105) + 'px"' : "") + ">" + esc(c) + "</td>" : '<td class="n">' + fmt(c) + "</td>"; }).join("") + (meas && !a.wide && a.columns.length < 5 ? '<td style="width:22%"><div class="bar"><i style="width:' + Math.round(Math.min(1, r.bar) * 100) + '%"></i></div></td>' : "") + "</tr>"; }).join("") + "</tbody></table></div>" +
+          (a.urgent && a.urgent.length ? '<div class="urg"><h5>Most urgent</h5>' + a.urgent.map(function (x, k) { return '<div class="ur" data-act="openu" data-a="' + id + '" data-i="' + k + '" title="Click for the SLA breakdown"><b>' + esc(x.label) + '</b><span class="key" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:12px">' + esc(x.key) + '</span><span class="ks">' + esc(x.when) + "</span></div>"; }).join("") + "</div>" : "") +
           (a.hint ? '<div class="hint">' + esc(a.hint) + "</div>" : "") + (a.foot ? '<div class="hint">' + esc(a.foot) + "</div>" : "") + (a.warn ? '<div class="warn">' + esc(a.warn) + "</div>" : "") + chipsHtml(a.chips) + notesHtml(a) + followHtml(a, id) + (a.ignored && a.ignored.length ? '<div class="ign">Ignored: ' + a.ignored.map(esc).join(", ") + "</div>" : "") + "</div>"; break; }
       case "trend":
         h = '<div class="card"><h4>' + esc(a.title) + "</h4>" + (a.series.length > 1 ? '<div class="legend"><span><i style="background:#2563EB"></i>' + esc(a.series[0].name) + '</span><span><i style="background:#10B981"></i>' + esc(a.series[1].name) + "</span></div>" : "") + barSvg(a) + chipsHtml(a.chips) + notesHtml(a) + followHtml(a, id) + "</div>"; break;
@@ -1280,6 +1345,7 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
       if (act === "ask") ask(el.getAttribute("data-q")); else if (act === "follow") followUp(id, i); else if (act === "drill") drill(id, i);
       else if (act === "csv") { var a = S.answers[id]; if (a && a.csv) downloadCsv(a.csv); }
       else if (act === "open") { var ao = S.answers[id], it = ao && ao.items && ao.items[i]; if (it) openTicket(it.raw, ao.slaContext ? "sla" : "details"); }
+      else if (act === "openu") { var au = S.answers[id], uu = au && au.urgent && au.urgent[i]; if (uu) openTicket(uu.raw, "sla"); }
       else if (act === "openk") { var ak = S.answers[id], ik = ak && ak.items && ak.items[i]; if (ik) openTicket(ik.raw, "sla"); }
       else if (act === "mclose") closeModal();
       else if (act === "mtab") { if (S.modal) { S.modal.tab = el.getAttribute("data-t"); renderModal(); } }
