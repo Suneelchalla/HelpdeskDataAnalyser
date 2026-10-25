@@ -622,6 +622,9 @@ function SlaStrip({rows,onOpen}){
   var s=L.summarize(rows);
   if(!s.total)return null;
   var have=s.total-s.nohist-s.none;
+  /* tickets that get NO SLA are listed too, so the boxes always add up to the ticket count */
+  var noTarget=s.none?rows.filter(function(r){return L.get(r).state==="none";}):[];
+  var notTracked=s.na?rows.filter(function(r){return L.get(r).state==="na";}):[];
   function box(label,n,list,bg,fg,sub){
     return <button onClick={function(){if(n)onOpen(label,list,fg);}} disabled={!n} title={n?"Show these tickets":""}
       style={{flex:"1 1 120px",textAlign:"left",background:bg,border:"1px solid "+fg+"33",borderRadius:10,padding:"8px 12px",cursor:n?"pointer":"default",opacity:n?1:.6}}>
@@ -647,6 +650,8 @@ function SlaStrip({rows,onOpen}){
       {box("On track",s.onTrack,s.lists.onTrack,"#F0FDF4","#047857","under "+L.config().warnPct+"% used")}
       {box("With client",s.paused,s.lists.paused,"#F8FAFC","#475569","clock paused")}
       {box("No SLA data",s.nohist,s.lists.nohist,"#F8FAFC","#94A3B8",L.isFetching()?"being calculated…":"history not fetched")}
+      {s.none>0&&box("No target",s.none,noTarget,"#FFFBEB","#B45309","Priority missing / not in SLA settings")}
+      {s.na>0&&box("Not tracked",s.na,notTracked,"#F8FAFC","#64748B","issue type not in SLA settings")}
     </div>
   </div>);
 }
@@ -882,7 +887,7 @@ function generateDailyReport(p){
   s1.push([_v("Open — breached","a"),_v(so.breached,"ar"),_v("Over target, still open","a")]);
   s1.push([_v("Open — at risk","n"),_v(so.atRisk,"nr"),"Close to target"]);
   s1.push([_v("Open — on track / with client","a"),_v(so.onTrack+" / "+so.paused,"ar"),_v("","a")]);
-  s1.push([_v("SLA met (closed in range)","n"),_v(sr.metPct==null?"—":sr.metPct+"%","nr"),sr.decided?sr.met+" of "+sr.decided+" closed":""]);
+  s1.push([_v("SLA met (closed in range)","n"),_v(sr.metPct==null?"—":sr.metPct+"%","nr"),(sr.decided?sr.met+" of "+sr.decided+" closed":"")+(slaData.closedNoHist?" · "+slaData.closedNoHist+" closed ticket(s) without history are NOT counted":"")]);
   if(so.nohist)s1.push([_v("No SLA data yet","a"),_v(so.nohist,"ar"),_v("Use Calculate SLA or the SLA Tracker","a")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,14,50]),"Summary");
   /* Detail sheets */
@@ -2511,6 +2516,7 @@ function App(){
       allFiltered.forEach(function(t){var s=checkSLA(t);if(s.anyBreach){var x=Object.assign({},t,{_sla:s});_all.push(x);_res.push(x);}});
     }
     return{fr:[],open:open,total:allFiltered.length,
+      get closedNoHist(){return allFiltered.filter(function(t){return t.Status==="Closed"&&checkSLA(t).info.state==="nohist";}).length;},
       get range(){if(!_rangeDone){_range=L?L.summarize(allFiltered):null;_rangeDone=true;}return _range;},
       get all(){buildBreached();return _all;},
       get res(){buildBreached();return _res;}};
