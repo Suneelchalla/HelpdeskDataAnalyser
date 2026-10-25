@@ -12,7 +12,7 @@
     "have has had show list give display find get fetch see view pull tell what which who whom whose how many much any all every each there " +
     "tickets ticket issues issue incidents incident requests request please can could would should will also only just now then than too very " +
     "number count total average avg mean median top bottom most least highest lowest fewest more less over under above below about around " +
-    "than as if so not no without per wise vs versus compare comparison between across against still yet already currently today").split(" ").forEach(function (w) { STOP[w] = 1; });
+    "than as if so not no without per wise vs versus compare comparison between across against still yet already currently today want wants need needs wanna like where owned").split(" ").forEach(function (w) { STOP[w] = 1; });
 
   function esc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   function nz(s) { return " " + String(s == null ? "" : s).toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim() + " "; }
@@ -233,7 +233,8 @@
       var mp = matchEntities(w, E.person, 3); w = mp.w;
       mp.found.forEach(function (e) {
         var svmCue = /\b(svm|in charge|incharge|in-charge)\b/.test(lc), wkCue = /\b(worker|assigned|assignee|current worker|owner)\b/.test(lc);
-        var field = svmCue && !wkCue ? "svm" : wkCue && !svmCue ? "worker" : (e.w > 0 ? "worker" : "svm");
+        /* the wording picks the field, but never a field where this person has no tickets at all */
+        var field = svmCue && !wkCue ? (e.s > 0 ? "svm" : "worker") : wkCue && !svmCue ? (e.w > 0 ? "worker" : "svm") : (e.w > 0 ? "worker" : "svm");
         f[field].push(e.value); plan.recognised++; plan.personBoth = (e.w > 0 && e.s > 0); 
       });
       ["root", "screen", "fix", "menu", "type"].forEach(function (d) {
