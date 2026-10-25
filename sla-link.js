@@ -198,7 +198,15 @@
       L.types = {}; L.cfg.issueTypes.forEach(function (t) { L.types[String(t).toLowerCase()] = 1; });
       var h = a[1] || { tickets: {} };
       L.hist = h.v === HIST_VER ? h : { v: HIST_VER, tickets: {} };      // older caches are untrusted (sla.html discards them too)
-      L.now = Date.now(); L.loaded = true; notify();
+      /* A reload (5-minute timer, tab focus, another tab's ping) used to clear the whole SLA cache and re-render every
+         page each time — a full recalculation of every ticket, which froze the page for seconds. Now it only does that
+         when the saved history / settings really changed, or the clocks are over 5 minutes old. */
+      var ids = Object.keys(L.hist.tickets || {}), mx = 0;
+      ids.forEach(function (k) { var f = L.hist.tickets[k] && L.hist.tickets[k].fetchedAt; if (f > mx) mx = f; });
+      var sig = ids.length + "|" + mx + "|" + JSON.stringify(L.cfg);
+      var wasLoaded = L.loaded, changed = sig !== L.sig, clocksOld = Date.now() - L.now > 5 * 60000;
+      L.sig = sig; L.loaded = true;
+      if (!wasLoaded || changed || clocksOld) { L.now = Date.now(); notify(); }
     }).catch(function () { L.loaded = true; notify(); });
   }
   /* keep the clocks moving and pick up fetches done in the SLA Tracker tab */
