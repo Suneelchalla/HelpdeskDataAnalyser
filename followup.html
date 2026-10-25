@@ -2300,126 +2300,6 @@ function fmtCell(v){
   if(v instanceof Date)return isNaN(v)?"":v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
   return String(v);
 }
-function DataEditor({rows,fileName,onApply,onRevert}){
-  const PAGE=50;
-  const[data,setData]=useState([]);
-  const[dirty,setDirty]=useState(false);
-  const[filters,setFilters]=useState({});
-  const[search,setSearch]=useState("");
-  const[sortCol,setSortCol]=useState(null);
-  const[sortDir,setSortDir]=useState("asc");
-  const[page,setPage]=useState(0);
-  const idRef=useRef(0);
-
-  // (Re)initialise the working copy whenever the source rows change (load / revert)
-  useEffect(function(){
-    idRef.current=0;
-    setData((rows||[]).map(function(r){return Object.assign({__id:idRef.current++},r);}));
-    setDirty(false);setPage(0);setFilters({});setSearch("");setSortCol(null);
-  },[rows]);
-
-  const cols=useMemo(function(){
-    var seen={};var out=[];
-    (data||[]).forEach(function(r){Object.keys(r).forEach(function(k){if(k!=="__id"&&!seen[k]){seen[k]=1;out.push(k);}});});
-    return out;
-  },[data]);
-
-  const view=useMemo(function(){
-    var l=data;
-    var active=Object.keys(filters).filter(function(k){return filters[k];});
-    if(active.length)l=l.filter(function(r){return active.every(function(k){return fmtCell(r[k]).toLowerCase().indexOf(filters[k].toLowerCase())>-1;});});
-    if(search){var q=search.toLowerCase();l=l.filter(function(r){return cols.some(function(k){return fmtCell(r[k]).toLowerCase().indexOf(q)>-1;});});}
-    if(sortCol){
-      l=[].concat(l).sort(function(a,b){
-        var av=a[sortCol],bv=b[sortCol];
-        if(av instanceof Date&&bv instanceof Date){return sortDir==="asc"?av-bv:bv-av;}
-        var as=fmtCell(av),bs=fmtCell(bv);
-        var an=parseFloat(as),bn=parseFloat(bs);
-        if(!isNaN(an)&&!isNaN(bn)&&as.trim()!==""&&bs.trim()!==""){return sortDir==="asc"?an-bn:bn-an;}
-        return sortDir==="asc"?as.localeCompare(bs):bs.localeCompare(as);
-      });
-    }
-    return l;
-  },[data,filters,search,sortCol,sortDir,cols]);
-
-  const pageCount=Math.max(1,Math.ceil(view.length/PAGE));
-  const cur=Math.min(page,pageCount-1);
-  const pageRows=view.slice(cur*PAGE,cur*PAGE+PAGE);
-
-  function edit(id,col,val){setData(function(prev){return prev.map(function(r){return r.__id===id?Object.assign({},r,{[col]:val}):r;});});setDirty(true);}
-  function delRow(id){setData(function(prev){return prev.filter(function(r){return r.__id!==id;});});setDirty(true);}
-  function addRow(){var blank={__id:idRef.current++};cols.forEach(function(c){blank[c]="";});setData(function(prev){return[blank].concat(prev);});setDirty(true);setPage(0);}
-  function toggleSort(c){if(sortCol===c){setSortDir(function(d){return d==="asc"?"desc":"asc";});}else{setSortCol(c);setSortDir("asc");}}
-  function setFilter(c,v){setFilters(function(prev){var n=Object.assign({},prev);if(v)n[c]=v;else delete n[c];return n;});setPage(0);}
-  function clearFilters(){setFilters({});setSearch("");setPage(0);}
-  function apply(){var clean=data.map(function(r){var o={};cols.forEach(function(c){o[c]=r[c];});return o;});onApply(clean);setDirty(false);}
-
-  var hdrStyle={padding:"8px 10px",textAlign:"left",fontSize:10,fontWeight:800,color:"var(--t2)",textTransform:"uppercase",letterSpacing:".4px",borderBottom:"2px solid var(--border2)",background:"var(--bg)",position:"sticky",top:0,zIndex:3,whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
-  var inpStyle={width:"100%",minWidth:110,border:"1px solid transparent",borderRadius:6,padding:"5px 7px",fontSize:12,color:"var(--t1)",background:"transparent",fontFamily:"var(--sans)"};
-
-  return(<>
-    <div className="card" style={{padding:"11px 15px",marginBottom:9,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-      <div style={{width:42,height:42,borderRadius:10,background:"var(--blue-bg)",border:"1px solid var(--blue-light)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>✏️</div>
-      <div style={{minWidth:0}}>
-        <div style={{fontWeight:800,fontSize:15,color:"var(--t1)"}}>Edit Data {dirty&&<span style={{color:"var(--amber)",fontSize:11,fontWeight:700,marginLeft:6}}>● unsaved edits</span>}</div>
-        <div style={{fontSize:12,color:"var(--t2)",marginTop:2}}>{data.length.toLocaleString()} rows · {cols.length} columns · correct any field, then Recalculate. Edits are shared with the Trend Tracker too.</div>
-      </div>
-      <div style={{flex:1}}/>
-      <input value={search} onChange={function(e){setSearch(e.target.value);setPage(0);}} placeholder="🔍 Search all columns…" style={{padding:"8px 12px",border:"1px solid var(--border)",borderRadius:8,fontSize:12,color:"var(--t1)",background:"var(--card)",fontFamily:"var(--sans)",minWidth:200}}/>
-      <button onClick={addRow} style={{background:"var(--card)",border:"1px solid var(--border2)",color:"var(--t2)",padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:600}}>＋ Row</button>
-      <button onClick={onRevert} style={{background:"var(--card)",border:"1px solid var(--border2)",color:"var(--t2)",padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:600}}>↺ Revert to upload</button>
-      <button onClick={apply} disabled={!dirty} style={{background:dirty?"var(--blue)":"var(--border)",border:"none",color:"#fff",padding:"8px 18px",borderRadius:8,fontSize:12,fontWeight:800,cursor:dirty?"pointer":"default"}}>⟳ Apply &amp; Recalculate</button>
-    </div>
-
-    {(Object.keys(filters).length>0||search)&&(<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,padding:"9px 16px",background:"var(--blue-bg)",borderRadius:8,border:"1px solid var(--blue-light)"}}>
-      <span style={{color:"var(--blue-dark)",fontSize:12,fontWeight:600}}>Showing {view.length.toLocaleString()} of {data.length.toLocaleString()} rows</span>
-      <button onClick={clearFilters} style={{marginLeft:"auto",background:"var(--blue)",color:"#fff",border:"none",padding:"5px 14px",borderRadius:6,fontSize:10,fontWeight:700}}>✕ Clear filters</button>
-    </div>)}
-
-    <div className="card" style={{overflow:"hidden"}}>
-      <div style={{overflow:"auto",maxHeight:"62vh"}}>
-        <table style={{borderCollapse:"collapse",fontSize:12,minWidth:"100%"}}>
-          <thead>
-            <tr>
-              <th style={Object.assign({},hdrStyle,{left:0,zIndex:4,minWidth:36,textAlign:"center",cursor:"default"})}>#</th>
-              {cols.map(function(c){return(<th key={c} onClick={function(){toggleSort(c);}} style={hdrStyle} title="Click to sort">{c} <span style={{color:"var(--blue)",fontSize:9}}>{sortCol===c?(sortDir==="asc"?"↑":"↓"):""}</span></th>);})}
-            </tr>
-            <tr>
-              <th style={{position:"sticky",top:33,left:0,zIndex:4,background:"var(--bg)",borderBottom:"1px solid var(--border)"}}></th>
-              {cols.map(function(c){return(<th key={c} style={{position:"sticky",top:33,zIndex:3,background:"var(--bg)",borderBottom:"1px solid var(--border)",padding:"4px 6px"}}>
-                <input value={filters[c]||""} onChange={function(e){setFilter(c,e.target.value);}} placeholder="filter…" style={{width:"100%",minWidth:100,border:"1px solid var(--border2)",borderRadius:5,padding:"3px 6px",fontSize:11,color:"var(--t2)",background:"var(--card)",fontFamily:"var(--sans)"}}/>
-              </th>);})}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map(function(r){return(<tr key={r.__id} style={{borderBottom:"1px solid var(--border)"}}>
-              <td style={{position:"sticky",left:0,zIndex:1,background:"var(--card)",padding:"2px 4px",textAlign:"center"}}>
-                <button onClick={function(){delRow(r.__id);}} title="Delete row" style={{background:"transparent",border:"none",color:"var(--t4)",fontSize:13,padding:2}}>🗑</button>
-              </td>
-              {cols.map(function(c){return(<td key={c} style={{padding:0,borderRight:"1px solid var(--bg)"}}>
-                <input value={fmtCell(r[c])} onChange={function(e){edit(r.__id,c,e.target.value);}}
-                  style={inpStyle}
-                  onFocus={function(e){e.target.style.border="1px solid var(--blue)";e.target.style.background="var(--card)";}}
-                  onBlur={function(e){e.target.style.border="1px solid transparent";e.target.style.background="transparent";}}/>
-              </td>);})}
-            </tr>);})}
-            {pageRows.length===0&&(<tr><td colSpan={cols.length+1} style={{padding:24,textAlign:"center",color:"var(--t3)",fontSize:12}}>No rows match the current filters.</td></tr>)}
-          </tbody>
-        </table>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderTop:"1px solid var(--border)",background:"var(--bg)"}}>
-        <span style={{fontSize:11,color:"var(--t2)"}}>Rows {view.length?cur*PAGE+1:0}–{Math.min(cur*PAGE+PAGE,view.length)} of {view.length.toLocaleString()}</span>
-        <div style={{flex:1}}/>
-        <button onClick={function(){setPage(0);}} disabled={cur===0} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur===0?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>« First</button>
-        <button onClick={function(){setPage(cur-1);}} disabled={cur===0} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur===0?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>‹ Prev</button>
-        <span style={{fontSize:11,color:"var(--t2)",fontWeight:700}}>Page {cur+1} / {pageCount}</span>
-        <button onClick={function(){setPage(cur+1);}} disabled={cur>=pageCount-1} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur>=pageCount-1?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>Next ›</button>
-        <button onClick={function(){setPage(pageCount-1);}} disabled={cur>=pageCount-1} style={{background:"var(--card)",border:"1px solid var(--border2)",color:cur>=pageCount-1?"var(--t4)":"var(--t2)",padding:"5px 10px",borderRadius:6,fontSize:11,fontWeight:600}}>Last »</button>
-      </div>
-    </div>
-  </>);
-}
-
 function App(){
   const[raw,setRaw]=useState(null);
   const[w,setW]=useState([]);
@@ -2471,7 +2351,7 @@ function App(){
     return function(){document.removeEventListener("keydown",handleKey);};
   },[modal,catModal,globalSearchOpen,reminderData,mailModal]);
 
-  /* Load the shared data. Prefer in-app edits (from the Edit Data tab); fall
+  /* Load the shared data. Prefer in-app edits (saved earlier); fall
      back to parsing the uploaded Excel and seeding the edit store from it. */
   useEffect(function(){
     if(!window.HDStore)return;
@@ -2490,19 +2370,6 @@ function App(){
       });
     });
   },[]);
-
-  /* Commit edits from the Edit Data tab: everything recomputes off `raw`. */
-  function applyEditedRows(newRows){
-    setRaw(newRows);setW([]);setCf(null);setAf(null);setSf(null);setGf(null);setPf([]);setSvmF([]);setItF([]);setSearch("");setModal(null);
-    if(window.HDStore)window.HDStore.saveRows(newRows);
-  }
-  /* Throw away edits and reload the originally uploaded file. */
-  function revertToUpload(){
-    if(!blobRef.current)return;
-    if(window.HDStore)window.HDStore.clearRows();
-    setLoading(true);
-    px(blobRef.current).then(function(rows){setRaw(rows);setLoading(false);if(window.HDStore)window.HDStore.saveRows(rows);});
-  }
 
   /* SLA, Priority, and modal openers — defined after flt (below) */
 
@@ -2634,10 +2501,19 @@ function App(){
   /* SLA — from the SLA Tracker. open = open tickets in view; range = all tickets in the date range (for "% met"). */
   var slaData=useMemo(function(){
     var L=window.HDSlaLink;
-    var open=L?L.summarize(flt):null, range=L?L.summarize(allFiltered):null;
-    var all=[],res=[];
-    allFiltered.forEach(function(t){var s=checkSLA(t);if(s.anyBreach){var x=Object.assign({},t,{_sla:s});all.push(x);res.push(x);}});
-    return{all:all,fr:[],res:res,open:open,range:range,total:allFiltered.length};
+    /* Only the OPEN tickets are needed to draw the page. The "% met" range summary and the list of breached tickets
+       cover every ticket in the date range (can be 25,000) and are only used when a report / modal is opened, so they
+       are computed on first use instead of on every SLA refresh. */
+    var open=L?L.summarize(flt):null;
+    var _range,_rangeDone=false,_all=null,_res=null;
+    function buildBreached(){
+      if(_all)return; _all=[];_res=[];
+      allFiltered.forEach(function(t){var s=checkSLA(t);if(s.anyBreach){var x=Object.assign({},t,{_sla:s});_all.push(x);_res.push(x);}});
+    }
+    return{fr:[],open:open,total:allFiltered.length,
+      get range(){if(!_rangeDone){_range=L?L.summarize(allFiltered):null;_rangeDone=true;}return _range;},
+      get all(){buildBreached();return _all;},
+      get res(){buildBreached();return _res;}};
   },[allFiltered,flt,slaVer]);
 
   /* Calculate SLA automatically: whenever the open tickets or the SLA data change, fetch status history in
@@ -2850,7 +2726,7 @@ function App(){
         </button>
 
         <nav style={{display:"flex",background:"var(--bg)",borderRadius:10,padding:3,gap:2,border:"1px solid var(--border)",flexShrink:0}}>
-          {[["followup","📌 Follow-ups",op.length],["gaps","⚠️ Gaps",gd.t.length],["data","✏️ Edit",raw?raw.length:0]].map(function(x){var id=x[0],lb=x[1],cnt=x[2];return(
+          {[["followup","📌 Follow-ups",op.length],["gaps","⚠️ Gaps",gd.t.length]].map(function(x){var id=x[0],lb=x[1],cnt=x[2];return(
             <button key={id} onClick={function(){setTab(id);clr();}} style={{background:tab===id?"var(--blue)":"transparent",color:tab===id?"#fff":"var(--t3)",border:"none",padding:"7px 12px",borderRadius:8,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
               {lb} <span style={{background:tab===id?"rgba(255,255,255,.2)":"rgba(0,0,0,.06)",padding:"1px 6px",borderRadius:10,fontSize:10,fontWeight:800}}>{cnt}</span>
             </button>
@@ -2861,7 +2737,7 @@ function App(){
       </header>
 
       {/* ─── Date Range Filter Bar ─── */}
-      {tab!=="data"&&<div style={{background:"#FFFFFF",borderBottom:"1px solid var(--border)",padding:"7px 24px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",position:"sticky",top:50,zIndex:99}}>
+      {<div style={{background:"#FFFFFF",borderBottom:"1px solid var(--border)",padding:"7px 24px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",position:"sticky",top:50,zIndex:99}}>
         <span style={{fontSize:11,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginRight:4}}>📅 Date Range</span>
 
         {/* Preset buttons */}
@@ -2900,7 +2776,7 @@ function App(){
         )}
       </div>}
 
-      <main style={{padding:"12px 24px 30px",maxWidth:tab==="data"?"none":1800,margin:"0 auto"}}>
+      <main style={{padding:"12px 24px 30px",maxWidth:1800,margin:"0 auto"}}>
 
       {/* ═══ FOLLOW-UPS ═══ */}
       {tab==="followup"&&(<>
@@ -3223,11 +3099,6 @@ function App(){
           </div>
         </div>
       </>)}
-
-      {/* ═══ EDIT DATA ═══ */}
-      {tab==="data"&&(
-        <DataEditor rows={raw} fileName={fn} onApply={applyEditedRows} onRevert={revertToUpload}/>
-      )}
 
       <div style={{marginTop:36,textAlign:"center",color:"var(--t4)",fontSize:11,lineHeight:2}}>
         <span style={{color:"var(--t3)",fontWeight:600}}>{fn}</span> · {raw?.length?.toLocaleString()} total
