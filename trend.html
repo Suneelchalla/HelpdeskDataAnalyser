@@ -948,7 +948,6 @@ function renderShell(){
         tabBtn("wow","🗓️","Week on Week","")+
         tabBtn("pivots","🧮","Pivots","")+
         tabBtn("exc","⚠️","Exceptions",exCount)+
-        tabBtn("data","✏️","Edit Data",RAW_ROWS.length)+
       '</nav>'+
       '<div class="hactions">'+
         '<div id="gs-wrap" style="position:relative">'+
@@ -1112,7 +1111,6 @@ function renderMain(){
   else if(S.tab==="pending") main.innerHTML=viewPending();
   else if(S.tab==="wow") main.innerHTML=viewWoW();
   else if(S.tab==="pivots") main.innerHTML=viewPivots();
-  else if(S.tab==="data"){ main.innerHTML=viewData(); bindData(); return; }
   else if(S.tab==="night"){ main.innerHTML=viewNight(); bindMain(); bindNight(); animateMain(); return; }
   else main.innerHTML=viewExc();
   bindMain();
@@ -3258,152 +3256,6 @@ function bindMain(){
 }
 
 /* ═══════════════════════════════ UPLOAD FLOW ═══════════════════════════════ */
-/* ═══════════════════════════════ VIEW: EDIT DATA ═══════════════════════════════
-   Spreadsheet-style editor over the raw rows: per-column filters, global search,
-   click-to-sort, pagination, add/delete row. "Apply & Recalculate" writes edits
-   back to the shared store and re-normalizes, so every tab (and the Follow-up
-   Tracker) recomputes — without re-uploading the Excel. */
-var ED_PAGE=50;
-function edFmt(v){ if(v===null||v===undefined) return ""; if(v instanceof Date) return isNaN(v)?"":v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0"); return String(v); }
-function edInit(){
-  ED.seq=0;
-  ED.work=RAW_ROWS.map(function(r){ var o={__id:ED.seq++}; for(var k in r){ if(Object.prototype.hasOwnProperty.call(r,k)) o[k]=r[k]; } return o; });
-  ED._init=true;
-}
-function edCols(){
-  var seen={}, out=[];
-  ED.work.forEach(function(r){ for(var k in r){ if(k!=="__id" && Object.prototype.hasOwnProperty.call(r,k) && !seen[k]){ seen[k]=1; out.push(k); } } });
-  return out;
-}
-function edCmp(a,b,col,dir){
-  var av=a[col],bv=b[col];
-  if(av instanceof Date && bv instanceof Date) return dir==="asc"?av-bv:bv-av;
-  var as=edFmt(av),bs=edFmt(bv), an=parseFloat(as),bn=parseFloat(bs);
-  if(!isNaN(an)&&!isNaN(bn)&&as.trim()!==""&&bs.trim()!=="") return dir==="asc"?an-bn:bn-an;
-  return dir==="asc"?as.localeCompare(bs):bs.localeCompare(as);
-}
-function edIsBlank(v){ var s=edFmt(v).trim().toLowerCase(); return s===""||s==="nan"; }
-function edView(cols){
-  var l=ED.work;
-  var active=Object.keys(ED.filters).filter(function(k){return ED.filters[k];});
-  if(active.length) l=l.filter(function(r){ return active.every(function(k){ return edFmt(r[k]).toLowerCase().indexOf(ED.filters[k].toLowerCase())>-1; }); });
-  var blanks=Object.keys(ED.blankFilters||{}).filter(function(k){return ED.blankFilters[k];});
-  if(blanks.length) l=l.filter(function(r){ return blanks.every(function(k){ return edIsBlank(r[k]); }); });
-  if(ED.search){ var q=ED.search.toLowerCase(); l=l.filter(function(r){ return cols.some(function(k){ return edFmt(r[k]).toLowerCase().indexOf(q)>-1; }); }); }
-  if(ED.sortCol) l=l.slice().sort(function(a,b){ return edCmp(a,b,ED.sortCol,ED.sortDir); });
-  return l;
-}
-function viewData(){
-  if(!ED._init) edInit();
-  var cols=edCols();
-  var view=edView(cols);
-  var pageCount=Math.max(1,Math.ceil(view.length/ED_PAGE));
-  if(ED.page>pageCount-1) ED.page=pageCount-1; if(ED.page<0) ED.page=0;
-  var pageRows=view.slice(ED.page*ED_PAGE, ED.page*ED_PAGE+ED_PAGE);
-  var hasFilter=Object.keys(ED.filters).some(function(k){return ED.filters[k];})||ED.search||Object.keys(ED.blankFilters||{}).some(function(k){return ED.blankFilters[k];});
-
-  var h='<div style="padding:16px 22px 40px">';
-  // toolbar
-  h+='<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 18px;margin-bottom:9px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
-       '<div style="width:42px;height:42px;border-radius:10px;background:var(--hd-bg);border:1px solid var(--hd-soft);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✏️</div>'+
-       '<div style="min-width:0">'+
-         '<div style="font-family:var(--disp);font-weight:700;font-size:15px;color:var(--ink)">Edit Data <span id="ed-dirty" style="color:var(--amber);font-size:11px;font-weight:700;margin-left:6px;'+(ED.dirty?'':'display:none')+'">● unsaved edits</span></div>'+
-         '<div style="font-size:12px;color:var(--ink2);margin-top:2px">'+ED.work.length.toLocaleString()+' rows · '+cols.length+' columns · correct any field, then Recalculate. Edits are shared with the Follow-up Tracker too.</div>'+
-       '</div>'+
-       '<div style="flex:1"></div>'+
-       '<input id="ed-search" type="text" value="'+esc(ED.search)+'" placeholder="🔍 Search all columns…" style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--ink);background:var(--card);font-family:var(--sans);min-width:200px"/>'+
-       '<button id="ed-add" class="ghost">＋ Row</button>'+
-       '<button id="ed-revert" class="ghost">↺ Revert to upload</button>'+
-       '<button id="ed-apply" style="background:'+(ED.dirty?'var(--hd)':'var(--line)')+';border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:12px;font-weight:800;cursor:'+(ED.dirty?'pointer':'default')+'">⟳ Apply &amp; Recalculate</button>'+
-     '</div>';
-  if(hasFilter) h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:9px 16px;background:var(--hd-bg);border-radius:8px;border:1px solid var(--hd-soft)">'+
-       '<span style="color:var(--hd);font-size:12px;font-weight:600">Showing '+view.length.toLocaleString()+' of '+ED.work.length.toLocaleString()+' rows</span>'+
-       '<button id="ed-clear" class="ghost" style="margin-left:auto">✕ Clear filters</button></div>';
-  // table
-  h+='<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden">';
-  h+='<div style="overflow:auto;max-height:62vh"><table style="border-collapse:collapse;font-size:12px;min-width:100%">';
-  var hdr='padding:8px 10px;text-align:left;font-size:10px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.4px;border-bottom:2px solid var(--line2);background:var(--paper);position:sticky;top:0;z-index:3;white-space:nowrap;cursor:pointer;user-select:none';
-  h+='<thead><tr>';
-  h+='<th style="'+hdr+';left:0;z-index:4;min-width:34px;text-align:center;cursor:default">#</th>';
-  cols.forEach(function(c){ var ar=ED.sortCol===c?(ED.sortDir==="asc"?" ↑":" ↓"):""; h+='<th class="ed-sort" data-col="'+esc(c)+'" style="'+hdr+'" title="Click to sort">'+esc(c)+'<span style="color:var(--hd);font-size:9px">'+ar+'</span></th>'; });
-  h+='</tr><tr>';
-  h+='<th style="position:sticky;top:31px;left:0;z-index:4;background:var(--paper);border-bottom:1px solid var(--line)"></th>';
-  cols.forEach(function(c){
-    var bon=!!(ED.blankFilters&&ED.blankFilters[c]);
-    h+='<th style="position:sticky;top:31px;z-index:3;background:var(--paper);border-bottom:1px solid var(--line);padding:4px 6px">'+
-         '<div style="display:flex;align-items:center;gap:4px">'+
-           '<input class="ed-filter" data-col="'+esc(c)+'" value="'+esc(ED.filters[c]||"")+'" placeholder="'+(bon?'blanks only':'filter\u2026')+'" '+(bon?'disabled ':'')+'style="flex:1;min-width:64px;border:1px solid var(--line2);border-radius:5px;padding:3px 6px;font-size:11px;color:var(--ink2);background:'+(bon?'var(--paper)':'var(--card)')+';font-family:var(--sans)"/>'+
-           '<button class="ed-blank" data-col="'+esc(c)+'" title="'+(bon?'Showing only blank '+esc(c)+' \u2014 click to clear':'Show only rows where '+esc(c)+' is blank')+'" style="flex-shrink:0;border:1px solid '+(bon?'var(--hd)':'var(--line2)')+';background:'+(bon?'var(--hd)':'var(--card)')+';color:'+(bon?'#fff':'var(--muted)')+';border-radius:5px;padding:3px 7px;font-size:11px;font-weight:700;cursor:pointer;line-height:1.3">\u2205</button>'+
-         '</div>'+
-       '</th>';
-  });
-  h+='</tr></thead><tbody>';
-  if(!pageRows.length) h+='<tr><td colspan="'+(cols.length+1)+'" style="padding:24px;text-align:center;color:var(--faint);font-size:12px">No rows match the current filters.</td></tr>';
-  pageRows.forEach(function(r){
-    h+='<tr style="border-bottom:1px solid var(--line)">';
-    h+='<td style="position:sticky;left:0;z-index:1;background:var(--card);padding:2px 4px;text-align:center"><button class="ed-del" data-id="'+r.__id+'" title="Delete row" style="background:transparent;border:none;color:var(--faint);font-size:13px;cursor:pointer;padding:2px">🗑</button></td>';
-    cols.forEach(function(c){ h+='<td style="padding:0;border-right:1px solid var(--paper)"><input class="ed-cell" data-id="'+r.__id+'" data-col="'+esc(c)+'" value="'+esc(edFmt(r[c]))+'" style="width:100%;min-width:110px;border:1px solid transparent;border-radius:6px;padding:5px 7px;font-size:12px;color:var(--ink);background:transparent;font-family:var(--sans)"/></td>'; });
-    h+='</tr>';
-  });
-  h+='</tbody></table></div>';
-  // pager
-  h+='<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--line);background:var(--paper)">'+
-       '<span style="font-size:11px;color:var(--ink2)">Rows '+(view.length?ED.page*ED_PAGE+1:0)+'–'+Math.min(ED.page*ED_PAGE+ED_PAGE,view.length)+' of '+view.length.toLocaleString()+'</span>'+
-       '<div style="flex:1"></div>'+
-       '<button class="ghost ed-pg" data-pg="first" '+(ED.page===0?'disabled':'')+'>« First</button>'+
-       '<button class="ghost ed-pg" data-pg="prev" '+(ED.page===0?'disabled':'')+'>‹ Prev</button>'+
-       '<span style="font-size:11px;color:var(--ink2);font-weight:700">Page '+(ED.page+1)+' / '+pageCount+'</span>'+
-       '<button class="ghost ed-pg" data-pg="next" '+(ED.page>=pageCount-1?'disabled':'')+'>Next ›</button>'+
-       '<button class="ghost ed-pg" data-pg="last" '+(ED.page>=pageCount-1?'disabled':'')+'>Last »</button>'+
-     '</div>';
-  h+='</div></div>';
-  return h;
-}
-function reData(){ var m=el("main"); if(!m)return; m.innerHTML=viewData(); bindData(); }
-function edRestoreFocus(){
-  if(!ED._focus) return;
-  var sel = ED._focus.type==="search" ? "#ed-search" : '.ed-filter[data-col="'+(window.CSS&&CSS.escape?CSS.escape(ED._focus.col):ED._focus.col)+'"]';
-  var node=document.querySelector(sel);
-  if(node){ node.focus(); try{ var v=node.value; node.setSelectionRange(v.length,v.length); }catch(e){} }
-  ED._focus=null;
-}
-function bindData(){
-  var main=el("main"); if(!main) return;
-  // cell edits — update in place, no re-render (keeps focus/caret)
-  main.querySelectorAll(".ed-cell").forEach(function(inp){
-    inp.oninput=function(){
-      var id=+inp.dataset.id, col=inp.dataset.col;
-      for(var i=0;i<ED.work.length;i++){ if(ED.work[i].__id===id){ ED.work[i][col]=inp.value; break; } }
-      if(!ED.dirty){ ED.dirty=true; var d=el("ed-dirty"); if(d) d.style.display=""; var a=el("ed-apply"); if(a){ a.style.background="var(--hd)"; a.style.cursor="pointer"; } }
-    };
-  });
-  main.querySelectorAll(".ed-del").forEach(function(b){ b.onclick=function(){ var id=+b.dataset.id; ED.work=ED.work.filter(function(r){return r.__id!==id;}); ED.dirty=true; reData(); }; });
-  main.querySelectorAll(".ed-sort").forEach(function(th){ th.onclick=function(){ var c=th.dataset.col; if(ED.sortCol===c){ ED.sortDir=ED.sortDir==="asc"?"desc":"asc"; } else { ED.sortCol=c; ED.sortDir="asc"; } reData(); }; });
-  main.querySelectorAll(".ed-filter").forEach(function(inp){ inp.oninput=function(){ var c=inp.dataset.col; if(inp.value) ED.filters[c]=inp.value; else delete ED.filters[c]; ED.page=0; ED._focus={type:"filter",col:c}; reData(); edRestoreFocus(); }; });
-  main.querySelectorAll(".ed-blank").forEach(function(b){ b.onclick=function(){ var c=b.dataset.col; if(!ED.blankFilters) ED.blankFilters={}; if(ED.blankFilters[c]){ delete ED.blankFilters[c]; } else { ED.blankFilters[c]=true; delete ED.filters[c]; } ED.page=0; reData(); }; });
-  var s=el("ed-search"); if(s) s.oninput=function(){ ED.search=s.value; ED.page=0; ED._focus={type:"search"}; reData(); edRestoreFocus(); };
-  main.querySelectorAll(".ed-pg").forEach(function(b){ b.onclick=function(){ var p=b.dataset.pg; var cols=edCols(); var pc=Math.max(1,Math.ceil(edView(cols).length/ED_PAGE)); if(p==="first")ED.page=0; else if(p==="prev")ED.page=Math.max(0,ED.page-1); else if(p==="next")ED.page=Math.min(pc-1,ED.page+1); else ED.page=pc-1; reData(); }; });
-  var add=el("ed-add"); if(add) add.onclick=function(){ var cols=edCols(); var blank={__id:ED.seq++}; cols.forEach(function(c){blank[c]="";}); ED.work.unshift(blank); ED.dirty=true; ED.page=0; reData(); };
-  var cl=el("ed-clear"); if(cl) cl.onclick=function(){ ED.filters={}; ED.blankFilters={}; ED.search=""; ED.page=0; reData(); };
-  var rv=el("ed-revert"); if(rv) rv.onclick=function(){
-    if(!BLOB) return;
-    if(!confirm("Discard all in-app edits and reload the originally uploaded file?")) return;
-    if(window.HDStore) HDStore.clearRows();
-    readFile(BLOB).then(function(rows){ rebuildFromRows(rows); if(window.HDStore) HDStore.saveRows(rows); ED._init=false; ED.filters={}; ED.blankFilters={}; ED.search=""; ED.sortCol=null; ED.page=0; ED.dirty=false; reData(); });
-  };
-  var ap=el("ed-apply"); if(ap) ap.onclick=function(){
-    if(!ED.dirty) return;
-    var cols=edCols();
-    var clean=ED.work.map(function(r){ var o={}; cols.forEach(function(c){ o[c]=r[c]; }); return o; });
-    rebuildFromRows(clean);
-    if(window.HDStore) HDStore.saveRows(clean);
-    ED.dirty=false;
-    // re-init working copy from the applied rows and refresh tab (counts recompute on visit)
-    ED._init=false;
-    render();
-  };
-}
-
 function handleUpload(e){
   var file=e.target.files&&e.target.files[0]; if(!file) return;
   FILENAME=file.name;
