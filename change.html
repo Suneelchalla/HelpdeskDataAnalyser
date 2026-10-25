@@ -1028,7 +1028,7 @@ function render(){
     '<div class="divider"></div>'+
     '<div class="tabs" id="tabs">'+
       tabBtn("overview","Overview")+tabBtn("pipeline","Pipeline")+tabBtn("trend","Trends")+
-      tabBtn("pivots","Pivots")+tabBtn("charge","Chargeable")+tabBtn("tickets","Tickets",FILTERED.length)+tabBtn("movement","Movement")+tabBtn("edit","Edit Data")+
+      tabBtn("pivots","Pivots")+tabBtn("charge","Chargeable")+tabBtn("tickets","Tickets",FILTERED.length)+tabBtn("movement","Movement")+
     '</div><div class="hspace"></div>'+
     '<div class="hactions"><button class="ghost" id="resetBtn">↺ Reset filters</button></div>'+
   '</div>'+
@@ -1075,8 +1075,7 @@ function render(){
   else if(S.tab==="pivots") h+=renderPivots();
   else if(S.tab==="charge") h+=renderCharge();
   else if(S.tab==="tickets") h+=renderTickets();
-  else if(S.tab==="edit") h+=renderEdit();
-  else if(S.tab==="movement") h+=renderMovement();
+    else if(S.tab==="movement") h+=renderMovement();
 
   h+='<div class="footer"><b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' change tickets loaded · '+FILTERED.length.toLocaleString()+' in scope · HD Change Tracker</div></main>';
   el("app").innerHTML=h;
@@ -1499,51 +1498,6 @@ function renderTickets(){
 }
 function sizeBadge(s){ if(!s)return '<span class="badge unsized">—</span>'; return '<span class="badge '+(SIZE_CLASS[s]||"unsized")+'">'+esc(s)+'</span>'; }
 function ownerBadge(o){ if(o==="client")return '<span class="badge client">Client</span>'; if(o==="closed")return '<span class="badge closed">Closed</span>'; return '<span class="badge svm">SVM</span>'; }
-
-/* ── EDIT ── */
-var EDIT_COLS=[
-  {k:"Status",opt:null},{k:"Priority",opt:PRIO_ORDER},{k:"T-Shirt Sizing",opt:["","Minor","Medium","Major"]},
-  {k:"SVM In Charge",list:true},{k:"Current Worker",opt:null},{k:"Next Action",opt:["","SVM","CLIENT"]},{k:"Project",opt:null}
-];
-function getRaw(t,col){ if(!t._raw)return""; var km={};Object.keys(t._raw).forEach(function(k){km[k.trim().toLowerCase()]=k;}); var kk=km[col.trim().toLowerCase()]; return kk!==undefined?t._raw[kk]:""; }
-function setRaw(t,col,val){ if(!t._raw)return; var km={};Object.keys(t._raw).forEach(function(k){km[k.trim().toLowerCase()]=k;}); var kk=km[col.trim().toLowerCase()]; if(kk!==undefined)t._raw[kk]=val; else t._raw[col]=val; }
-function renderEdit(){
-  var F=sortTickets(FILTERED,S.editCol,S.editDir), svms=distinctSorted("svm");
-  function eth(k,l,w){return '<th data-esort="'+k+'" style="min-width:'+w+'">'+l+'<span class="arr">'+(S.editCol===k?(S.editDir==="asc"?" ▲":" ▼"):"")+'</span></th>';}
-  var h='<div class="edit-note">Correct values inline, then press <b>Apply &amp; recalculate</b>. Edits are saved on this device using the original Excel column names, so the Follow-up, Trend, Weekly and Release trackers stay in sync and non-change tickets are left untouched. <b>Revert to upload</b> discards all in-app edits.</div>'+
-    '<div class="card up d1" style="margin-bottom:0"><div style="display:flex;align-items:center;gap:10px;padding:14px 16px 4px"><span class="sec-title">Editing '+F.length.toLocaleString()+' change tickets</span><span class="hspace"></span><span class="sec-sub">'+(F.length>400?"first 400 shown — filter to reach the rest":"filter above to focus")+'</span>'+sortSelect("eSort",S.editCol,S.editDir)+'</div>'+
-    '<div class="tbl-wrap" style="border-top:0;border-radius:0 0 var(--r2) var(--r2)"><table class="etbl"><thead><tr>'+eth("key","Key","88px")+eth("summary","Summary","240px")+eth("created","Created","86px")+
-    EDIT_COLS.map(function(c){return '<th style="min-width:128px">'+esc(c.k)+'</th>';}).join('')+'</tr></thead><tbody>';
-  F.slice(0,400).forEach(function(t){
-    h+='<tr data-key="'+esc(t.key)+'"><td class="mono">'+esc(t.key)+'</td><td class="trunc" style="max-width:240px" title="'+esc(t.summary)+'">'+esc(t.summary)+'</td><td class="mono" style="font-size:11px">'+fmtD(t.created)+'</td>';
-    EDIT_COLS.forEach(function(c){var cur=String(getRaw(t,c.k)||"");
-      if(c.list){h+='<td><input list="svmOpts" data-col="'+esc(c.k)+'" value="'+esc(cur)+'"></td>';}
-      else if(c.opt){var o=c.opt.slice();if(o.indexOf(cur)<0)o.push(cur);h+='<td><select data-col="'+esc(c.k)+'">'+o.map(function(x){return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>';}).join('')+'</select></td>';}
-      else{h+='<td><input data-col="'+esc(c.k)+'" value="'+esc(cur)+'"></td>';}
-    });
-    h+='</tr>';
-  });
-  h+='</tbody></table></div></div>'+
-    '<datalist id="svmOpts">'+svms.map(function(s){return '<option value="'+esc(s)+'">';}).join('')+'</datalist>'+
-    '<div class="editbar"><button class="btn-primary" id="applyEdit" style="padding:10px 22px;font-size:12.5px">✓ Apply &amp; recalculate</button><button class="ghost" id="revertEdit">↺ Revert to upload</button><span id="editStatus" class="sec-sub"></span></div>';
-  return h;
-}
-function applyEdits(){
-  document.querySelectorAll(".etbl tbody tr.dirty").forEach(function(tr){
-    var t=RAW.find(function(x){return x.key===tr.dataset.key;}); if(!t)return;
-    tr.querySelectorAll("[data-col]").forEach(function(inp){setRaw(t,inp.dataset.col,inp.value);});
-  });
-  RAW=normalize(ALLROWS);
-  if(window.HDStore)HDStore.saveRows(ALLROWS);
-  render();
-  var es=el("editStatus"); if(es)es.textContent="Saved ✓ recalculated";
-}
-function revertUpload(){
-  if(!window.confirm("Discard ALL in-app edits (across every dashboard) and reload the original upload?"))return;
-  if(window.HDStore&&HDStore.clearRows)HDStore.clearRows();
-  if(BLOB){readFile(BLOB).then(function(rows){RAW=normalize(rows);if(window.HDStore)HDStore.saveRows(rows);render();});}
-  else render();
-}
 
 /* ── MODAL / DRILL ── */
 var MCOLS=[{k:"key",l:"Key"},{k:"summary",l:"Summary"},{k:"stage",l:"Stage"},{k:"status",l:"Status"},{k:"owner",l:"Owner"},{k:"project",l:"Project"},
@@ -2069,17 +2023,10 @@ function bindAll(){
   // sort
   document.querySelectorAll("[data-sort]").forEach(function(th){th.onclick=function(){var x=nextSort(S.sortCol,S.sortDir,th.dataset.sort);S.sortCol=x.c;S.sortDir=x.d;S.page=0;render();};});
   var ts=el("tSort");if(ts)ts.onchange=function(){var p=ts.value.split(":");S.sortCol=p[0];S.sortDir=p[1];S.page=0;render();};
-  function editOk(){var d=document.querySelectorAll(".etbl tr.dirty").length;return !d||window.confirm(d+" row"+(d!==1?"s have":" has")+" unsaved edits. Re-sorting discards them. Continue?");}
-  document.querySelectorAll("[data-esort]").forEach(function(th){th.onclick=function(){if(!editOk())return;var x=nextSort(S.editCol,S.editDir,th.dataset.esort);S.editCol=x.c;S.editDir=x.d;render();};});
-  var es=el("eSort");if(es)es.onchange=function(){if(!editOk()){render();return;}var p=es.value.split(":");S.editCol=p[0];S.editDir=p[1];render();};
   // paging
   document.querySelectorAll("[data-pg]").forEach(function(b){b.onclick=function(){var pages=Math.max(1,Math.ceil(FILTERED.length/PAGE_SIZE));if(b.dataset.pg==="first")S.page=0;else if(b.dataset.pg==="prev")S.page=Math.max(0,S.page-1);else if(b.dataset.pg==="next")S.page=Math.min(pages-1,S.page+1);else S.page=pages-1;render();};});
   // csv
   var cb=el("csvBtn");if(cb)cb.onclick=exportCSV;
-  // edit
-  var ap=el("applyEdit");if(ap)ap.onclick=applyEdits;
-  var rv=el("revertEdit");if(rv)rv.onclick=revertUpload;
-  document.querySelectorAll(".etbl [data-col]").forEach(function(inp){inp.onchange=function(){this.closest("tr").classList.add("dirty");};});
   // modal
   el("modalClose").onclick=closeModal;
   el("modalOv").onclick=function(e){if(e.target===el("modalOv"))closeModal();};
