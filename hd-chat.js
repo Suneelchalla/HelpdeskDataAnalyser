@@ -867,6 +867,119 @@
       return { type: "ticketDetail", focus: plan.slaFocus ? "sla" : "details", items: out.map(ticketItem), missing: missing, chips: [] };
     };
 
+
+    /* ═════════ similar tickets — the Similar Ticket Finder's method ═════════
+       Same tokenising, rare-word weighting (IDF), structural signals (screen / menu / root cause / component / label / release / Jira link),
+       strength tiers and "best known fix" rule, built once on first use. */
+    var SIMSTOP = {}; ("the a an is was are were be been being have has had do does did will would could should shall may might can and or but not no nor of in on at to for from by with as into about up out if then so that this it its i we they he she my our your their you me us him her them what which who whom when where how why all each every both few more most other some such only than too very just also now here there after before during while because since until once again further already always never sometimes often usually please hi hello dear sir madam kindly thank thanks regards issue ticket request need required able unable getting error problem updated trying tried below above mentioned attached via etc re fw fwd").split(" ").forEach(function (w) { SIMSTOP[w] = 1; });
+    function sTok(text) {
+      if (!text) return [];
+      return String(text).toLowerCase().replace(/[\/\\|,;:!?()[\]{}"'`~@#$%^&*+=<>]/g, " ").replace(/\b[a-z]+-\d+\b/g, " ").replace(/\b\w*\d\w*\b/g, " ")
+        .split(/[\s\-_.]+/).filter(function (w) { return w.length > 1 && !SIMSTOP[w]; });
+    }
+    function sBig(tokens) { var bg = []; for (var i = 0; i < tokens.length - 1; i++) bg.push(tokens[i] + " " + tokens[i + 1]); return bg; }
+    function sJac(a, b) { if (!a.length || !b.length) return 0; var sA = new Set(a), sB = new Set(b), n = 0; sA.forEach(function (x) { if (sB.has(x)) n++; }); return n / (sA.size + sB.size - n); }
+    function sSub(tokA, tokB) {
+      if (!tokA.length || !tokB.length) return 0; var bonus = 0, sB = new Set(tokB);
+      tokA.forEach(function (a) { if (a.length < 4) return; sB.forEach(function (b) { if (b.length < 4) return; if (a !== b && (a.indexOf(b) > -1 || b.indexOf(a) > -1)) bonus += 0.15; }); });
+      return Math.min(1, bonus);
+    }
+    var IX = null;
+    function buildSim() {
+      var km = {}; if (T[0]) Object.keys(T[0].raw).forEach(function (k) { km[k.trim().toLowerCase()] = k; });
+      function col(row, name) { var k = km[name]; return k !== undefined ? String(row[k] == null ? "" : row[k]).trim() : ""; }
+      function dstr(v) { return v instanceof Date ? (isNaN(v) ? "" : v.toISOString()) : String(v == null ? "" : v).trim(); }
+      var ix = { tickets: [], byKey: {}, byScreen: {}, byMenu: {}, byRC: {}, byComp: {}, byLabel: {}, byRelease: {}, byProject: {}, byToken: {}, docFreq: {}, idf: {}, changes: [] };
+      T.forEach(function (rt, i) {
+        var row = rt.raw, u = {
+          raw: row, idx: i, key: col(row, "key"), summary: col(row, "summary"), status: col(row, "status"), priority: col(row, "priority"), project: col(row, "project"), issueType: col(row, "issue type"),
+          components: col(row, "components"), created: rt.created, resolved: rt.resolved, resolution: col(row, "resolution"), screenName: col(row, "screen name"), menuHead: col(row, "menu head"),
+          rootCause: col(row, "root cause"), typeOfFix: col(row, "type of fix"), analysis: col(row, "analysis"), solutionSummary: col(row, "solution summary"), description: col(row, "description"),
+          labels: col(row, "labels"), linkedIssues: col(row, "linked issues"), deliveredDate: dstr(row[km["delivered date"]]), releaseNumber: col(row, "release number"),
+          releaseDataFix: col(row, "release number (data fix)"), parentRelease: col(row, "parent release no")
+        };
+        u.tokens = sTok(u.summary); u.bgs = sBig(u.tokens); u.descTokens = sTok(String(u.description).slice(0, 900)).slice(0, 100);
+        u.labelList = u.labels ? u.labels.split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean) : [];
+        u.isResolved = !!(u.resolved || u.resolution || /closed|resolved|completed|delivered/i.test(u.status)); u.hasSolution = !!(u.rootCause || u.typeOfFix || u.analysis || u.solutionSummary);
+        u.isChange = /change/i.test(u.issueType); u.linkedKeys = u.linkedIssues ? u.linkedIssues.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
+        ix.tickets.push(u); if (u.key) ix.byKey[u.key] = i; if (u.isChange) ix.changes.push(i);
+        function inv(map, value) { if (!value) return; var k = value.toLowerCase(); (map[k] = map[k] || []).push(i); }
+        inv(ix.byScreen, u.screenName); inv(ix.byMenu, u.menuHead); inv(ix.byRC, u.rootCause); inv(ix.byProject, u.project);
+        u.components.split(/[;,]/).forEach(function (c) { inv(ix.byComp, c.trim()); }); u.labelList.forEach(function (l) { inv(ix.byLabel, l); });
+        var seen = {}; u.tokens.forEach(function (tok) { if (!seen[tok]) { seen[tok] = 1; ix.docFreq[tok] = (ix.docFreq[tok] || 0) + 1; } (ix.byToken[tok] = ix.byToken[tok] || []).push(i); });
+        u.releaseKeys = [u.releaseNumber, u.releaseDataFix, u.parentRelease].filter(Boolean).map(function (r) { return r.toLowerCase().trim(); }).filter(Boolean);
+        u.releaseKeys.forEach(function (rk) { (ix.byRelease[rk] = ix.byRelease[rk] || []).push(i); });
+      });
+      var N = ix.tickets.length || 1; Object.keys(ix.docFreq).forEach(function (tok) { ix.idf[tok] = Math.log(N / ix.docFreq[tok]); });
+      IX = ix;
+    }
+    function sPair(a, b) {
+      if (a.key && a.key === b.key) return null;
+      var reasons = [], struct = 0, text = 0, bonus = 0;
+      if (a.screenName && b.screenName && a.screenName.toLowerCase() === b.screenName.toLowerCase()) { struct += 22; reasons.push({ c: "r-scr", t: "Screen: " + a.screenName }); }
+      if (a.menuHead && b.menuHead && a.menuHead.toLowerCase() === b.menuHead.toLowerCase()) { struct += 18; reasons.push({ c: "r-menu", t: "Menu: " + a.menuHead }); }
+      if (a.rootCause && b.rootCause && a.rootCause.toLowerCase() === b.rootCause.toLowerCase()) { struct += 12; reasons.push({ c: "r-rc", t: "Cause: " + a.rootCause }); }
+      var cA = a.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean), cB = b.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+      if (cA.length && cB.length) { var ci = cA.filter(function (c) { return cB.indexOf(c) > -1; }).length; if (ci) { struct += Math.min(8, ci * 4); reasons.push({ c: "r-comp", t: "Component" }); } }
+      if (a.labelList && b.labelList) { var li = a.labelList.filter(function (l) { return b.labelList.indexOf(l) > -1; }).length; if (li) { struct += Math.min(6, li * 3); reasons.push({ c: "r-lbl", t: "Label" }); } }
+      if (a.releaseKeys && b.releaseKeys && a.releaseKeys.length && b.releaseKeys.length) { var sr = a.releaseKeys.filter(function (r) { return b.releaseKeys.indexOf(r) > -1; }); if (sr.length) { struct += 25; reasons.push({ c: "r-lnk", t: "Release: " + sr[0] }); } }
+      var sA = new Set(a.tokens), sB = new Set(b.tokens), matchedIdf = 0; sA.forEach(function (tok) { var w = IX.idf[tok] || 0; if (sB.has(tok)) matchedIdf += w; });
+      text += Math.min(32, matchedIdf * 3.5); text += sJac(a.bgs, b.bgs) * 14; text += sSub(a.tokens, b.tokens) * 6;
+      if (a.descTokens.length && b.tokens.length) { var dA = new Set(a.descTokens), mdi = 0; dA.forEach(function (tok) { if (sB.has(tok)) mdi += (IX.idf[tok] || 0); }); text += Math.min(8, mdi * 2); }
+      if (b.descTokens.length && a.tokens.length) { var dB = new Set(b.descTokens), mdi2 = 0; dB.forEach(function (tok) { if (sA.has(tok)) mdi2 += (IX.idf[tok] || 0); }); text += Math.min(8, mdi2 * 2); }
+      if (text >= 8) reasons.push({ c: "r-txt", t: "Text similarity" });
+      if (a.linkedKeys.indexOf(b.key) > -1 || b.linkedKeys.indexOf(a.key) > -1) { bonus += 15; reasons.push({ c: "r-lnk", t: "Jira linked" }); }
+      if (b.isResolved && b.hasSolution) bonus += 6; else if (b.isResolved) bonus += 3;
+      if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) { struct += 4; bonus += 2; }
+      var score = Math.min(100, Math.round(struct + text + bonus));
+      if (struct === 0 && bonus < 15 && score < 28) return null;
+      return { score: score, rs: reasons, tier: score >= 65 ? "s" : score >= 40 ? "l" : "a" };
+    }
+    function sFind(ticket, topN, minScore) {
+      topN = topN || 8; minScore = minScore || 15; var cand = new Set();
+      function addFrom(map, value) { if (!value) return; var k = value.toLowerCase(); if (map[k]) map[k].forEach(function (i) { cand.add(i); }); }
+      addFrom(IX.byScreen, ticket.screenName); addFrom(IX.byMenu, ticket.menuHead); addFrom(IX.byRC, ticket.rootCause); ticket.labelList.forEach(function (l) { addFrom(IX.byLabel, l); });
+      ticket.linkedKeys.forEach(function (k) { if (IX.byKey[k] != null) cand.add(IX.byKey[k]); }); if (ticket.releaseKeys) ticket.releaseKeys.forEach(function (rk) { addFrom(IX.byRelease, rk); });
+      if (ticket.project) { var pl = IX.byProject[ticket.project.toLowerCase()] || []; pl.slice(-200).forEach(function (i) { cand.add(i); }); }
+      ticket.tokens.slice().sort(function (a, b) { return (IX.docFreq[a] || 9999) - (IX.docFreq[b] || 9999); }).slice(0, 15).forEach(function (tok) { if (IX.byToken[tok]) IX.byToken[tok].forEach(function (i) { cand.add(i); }); });
+      var res = []; cand.forEach(function (i) { var m = sPair(ticket, IX.tickets[i]); if (m && m.score >= minScore) res.push({ t: IX.tickets[i], s: m.score, rs: m.rs, tier: m.tier }); });
+      res.sort(function (a, b) { if (b.s !== a.s) return b.s - a.s; if (b.t.hasSolution !== a.t.hasSolution) return b.t.hasSolution ? 1 : -1; return 0; });
+      return res.slice(0, topN);
+    }
+    function sChanges(ticket, topN) {
+      topN = topN || 6; if (!IX.changes.length) return []; var res = [], tc = ticket.created != null ? new Date(ticket.created) : null;
+      IX.changes.forEach(function (ci) {
+        var ch = IX.tickets[ci], m = sPair(ticket, ch); if (!m) return;
+        if (tc) { var cd = ch.deliveredDate ? new Date(ch.deliveredDate) : ch.resolved ? new Date(ch.resolved) : ch.created ? new Date(ch.created) : null;
+          if (cd && !isNaN(cd)) { var dd = Math.abs((tc - cd) / 86400000); if (dd <= 30) { m.score += Math.round(8 * (1 - dd / 30)); m.rs.push({ c: "r-time", t: "Within " + Math.round(dd) + "d" }); } } }
+        m.score = Math.min(100, m.score); m.tier = m.score >= 65 ? "s" : m.score >= 40 ? "l" : "a";
+        if (m.score >= 12) res.push({ t: ch, s: m.score, rs: m.rs, tier: m.tier });
+      });
+      res.sort(function (a, b) { return b.s - a.s; }); return res.slice(0, topN);
+    }
+    var SIMC = {};
+    function clipTxt(s, n) { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1).trim() + "…" : s; }
+    function simPack(m, full) {
+      var u = m.t;
+      return { raw: u.raw, key: u.key, url: base + u.key, summary: u.summary, status: u.status, project: u.project, type: u.issueType, isChange: u.isChange, date: fmtD(u.resolved || u.created), score: m.s, tier: m.tier, reasons: m.rs.slice(0, 4),
+        rootCause: u.rootCause, typeOfFix: u.typeOfFix, sol: u.solutionSummary ? "Solution: " + clipTxt(u.solutionSummary, 220) : u.analysis ? "Analysis: " + clipTxt(u.analysis, 220) : "",
+        solutionFull: full ? clipTxt(u.solutionSummary, 600) : "", analysisFull: full ? clipTxt(u.analysis, 500) : "", resolvedOn: u.resolved ? fmtD(u.resolved) : "" };
+    }
+    /* → { sim, changes, best, own, agree, sig } for one ticket key (null when the ticket is unknown) */
+    function similarFor(key) {
+      if (!IX) buildSim(); var i = IX.byKey[key]; if (i == null) return null; if (SIMC[key]) return SIMC[key];
+      var u = IX.tickets[i], all = sFind(u, 12, 15), sim = all.filter(function (m) { return !m.t.isChange; }), cm = {};
+      all.filter(function (m) { return m.t.isChange; }).concat(u.isChange ? [] : sChanges(u, 6)).forEach(function (m) { if (!cm[m.t.key] || cm[m.t.key].s < m.s) cm[m.t.key] = m; });
+      var changes = Object.keys(cm).map(function (k) { return cm[k]; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 6), best = null;
+      sim.forEach(function (m) { if (!best && m.s >= 40 && (m.t.solutionSummary || m.t.analysis)) best = m; });
+      var withSol = sim.filter(function (m) { return m.t.rootCause || m.t.typeOfFix; }), agree = null;
+      if (withSol.length >= 2) { agree = { n: withSol.length, of: sim.length, rows: [] };
+        [["Cause", "rootCause"], ["Fix", "typeOfFix"]].forEach(function (f) { var c = {}; withSol.forEach(function (m) { var v = m.t[f[1]]; if (v) c[v] = (c[v] || 0) + 1; }); var ks = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).slice(0, 3); if (ks.length) agree.rows.push([f[0], ks.map(function (k) { return [k, c[k]]; })]); }); }
+      var own = u.hasSolution && (u.solutionSummary || u.analysis) ? { rootCause: u.rootCause, typeOfFix: u.typeOfFix, solution: clipTxt(u.solutionSummary, 600), analysis: clipTxt(u.analysis, 500), resolvedOn: u.resolved ? fmtD(u.resolved) : "" } : null;
+      return (SIMC[key] = { sim: sim.map(function (m) { return simPack(m); }), changes: changes.map(function (m) { return simPack(m); }), best: best ? simPack(best, true) : null, own: own, agree: agree,
+        sig: best ? "fix" : sim.length && sim[0].s >= 35 ? "sim" : "new", isChange: u.isChange });
+    }
+
     /* ── fallback ── */
     function fallback(plan, text) {
       var u = describe(plan).slice(2), sug = [];
@@ -909,7 +1022,7 @@
       if (c) list.splice(6, 0, "Tell me about " + c.value);
       return list.slice(0, 7);
     }
-    return { ticketInfo: function (key) { var t = byKey[String(key || "").toLowerCase()]; return t ? ticketItem(t) : null; }, ask: ask, run: run, parse: parse, suggest: suggest, starters: starters, applyPatch: applyPatch,
+    return { similar: similarFor, ticketInfo: function (key) { var t = byKey[String(key || "").toLowerCase()]; return t ? ticketItem(t) : null; }, ask: ask, run: run, parse: parse, suggest: suggest, starters: starters, applyPatch: applyPatch,
       stats: { tickets: T.length, open: T.filter(function (t) { return !t.closed && t.support; }).length, clients: E.project.length, people: E.person.length } };
   }
   var api = { createEngine: createEngine, applyPatch: applyPatch, _util: { extractRange: extractRange, nz: nz } };
@@ -927,7 +1040,7 @@
   var Eng = window.HDChatEngine;
   if (!Eng) return;
 
-  var S = { modal: null, engine: null, rows: null, loading: null, loadedAt: 0, stale: false, prev: null, answers: [], hist: [], hpos: 0, open: false, wide: false, misses: [] };
+  var S = { sim: {}, modal: null, engine: null, rows: null, loading: null, loadedAt: 0, stale: false, prev: null, answers: [], hist: [], hpos: 0, open: false, wide: false, misses: [] };
   try { S.misses = JSON.parse(localStorage.getItem("hd-chat-misses") || "[]") || []; } catch (e) { S.misses = []; }
   function saveMisses() { try { localStorage.setItem("hd-chat-misses", JSON.stringify(S.misses.slice(-200))); } catch (e) {} }
 
@@ -1044,6 +1157,15 @@ a.key{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-siz
 .send{width:36px;height:36px;border-radius:11px;border:none;background:linear-gradient(135deg,#2563EB,#4F46E5);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}.send:disabled{opacity:.45;cursor:default}\
 .note{font-size:10.5px;color:#94A3B8;text-align:center;margin-top:7px}\
 .urg{margin-top:10px;border:1px solid #E5EAF1;border-radius:10px;padding:8px 12px;background:#FAFBFF}.urg h5{margin:0 0 4px;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#64748B}.ur{display:flex;gap:8px;align-items:center;padding:5px 4px;cursor:pointer;flex-wrap:wrap;border-radius:7px}.ur:hover{background:#EEF2FF}.ur b{font-size:12px;min-width:104px}.ur .key{color:#2563EB}\
+.sech{display:flex;align-items:baseline;gap:8px;margin:16px 0 4px}.sech h3{margin:0;font-size:13px;font-weight:800}.sech span{font-size:11px;color:#94A3B8}\
+.sm{display:flex;gap:10px;padding:9px 8px;margin:0 -8px;border-radius:10px;cursor:pointer;border-bottom:1px solid #F1F5F9}.sm:hover{background:#F5F7FF}.sm.hid{display:none}.sm .b2{min-width:0;flex:1}\
+.rg{flex-shrink:0;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800;border:3px solid #CBD5E1;color:#475569;background:#fff}.rg.s{border-color:#10B981;color:#047857}.rg.l{border-color:#06B6D4;color:#0E7490}\
+.tier{font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px}.tier.s{background:#DCFCE7;color:#047857}.tier.l{background:#CFFAFE;color:#0E7490}.tier.a{background:#F1F5F9;color:#64748B}\
+.rtag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:99px;background:#F1F5F9;color:#475569;white-space:nowrap}.rtag.r-scr{background:#E0E7FF;color:#3730A3}.rtag.r-menu{background:#FCE7F3;color:#9D174D}.rtag.r-rc{background:#FEF3C7;color:#B45309}.rtag.r-lnk{background:#DCFCE7;color:#047857}.rtag.r-txt{background:#E0F2FE;color:#0369A1}.rtag.r-comp,.rtag.r-lbl,.rtag.r-time{background:#F1F5F9}\
+.stag{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px;white-space:nowrap}.stag.rc{background:#FEF3C7;color:#B45309}.stag.fx{background:#DCFCE7;color:#047857}\
+.fixc{border:1px solid #A7F3D0;background:#F0FDF9;border-radius:14px;padding:12px 14px;margin:8px 0}.fixc.lk{border-color:#BAE6FD;background:#F0F9FF}.fixc.none{border-color:#E5EAF1;background:#F8FAFC;color:#475569;font-size:12.5px}\
+.fixc .fb{font-size:12.5px;line-height:1.55;color:#334155;margin-top:8px}.fixc .fb b{display:block;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#64748B;margin:6px 0 2px}\
+.agr{display:flex;align-items:center;gap:8px;font-size:12px;margin:3px 0}.agr .n{flex:0 0 46px;color:#64748B;font-weight:700}.agr .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\
 .tr{cursor:pointer;border-radius:10px;padding:9px 8px;margin:0 -8px;transition:background .12s}.tr:hover{background:#F5F7FF}.tr .key{color:#2563EB}\
 .ov{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:26px 14px;overflow:auto;z-index:10}.ov.open{display:flex;animation:fade .15s ease}@keyframes fade{from{opacity:0}to{opacity:1}}\
 .mod{background:#fff;border-radius:20px;width:min(920px,100%);box-shadow:0 30px 80px -10px rgba(15,23,42,.5);margin:auto 0;animation:pop .22s cubic-bezier(.22,1,.36,1);color:#0F172A}\
@@ -1149,7 +1271,7 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
           return '<div class="card" style="margin-bottom:8px"><h4>Ticket</h4><div class="t1" style="margin-top:2px"><span class="key" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:15px">' + esc(t.key) + "</span>" + (t.sla ? '<span class="sla s-' + tone(t.sla) + '">' + esc(t.sla.label) + "</span>" : "") + "</div>" +
             '<div class="say" style="margin-top:4px">' + esc(t.summary) + "</div>" + (a.focus === "sla" ? '<div style="margin-top:10px">' + slaBlock + "</div>" : slaBlock) + '<div class="kv">' + t.fields.map(function (f) { return "<div><span>" + esc(f[0]) + "</span>" + esc(f[1]) + "</div>"; }).join("") + "</div>" +
             (t.linked.length ? '<div class="chips"><span class="lab">Linked</span>' + t.linked.map(function (l) { return '<a class="tag" style="text-decoration:none" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.key) + "</a>"; }).join("") + "</div>" : "") +
-            '<div class="fl"><button class="btn pri" data-act="openk" data-a="' + id + '" data-i="' + i + '">Full SLA breakdown</button><a class="btn" href="' + esc(t.url) + '" target="_blank" rel="noopener">Open in Jira ↗</a></div></div>';
+            '<div class="fl"><button class="btn pri" data-act="openk" data-a="' + id + '" data-i="' + i + '">Full SLA breakdown</button><a class="btn" href="' + esc(t.url) + '" target="_blank" rel="noopener">Open in Jira ↗</a></div><div class="sim-slot" data-key="' + esc(t.key) + '"><div class="hint" style="margin-top:12px">Looking for similar tickets…</div></div></div>';
         }).join("") + (a.missing && a.missing.length ? '<div class="card"><div class="say">Not found in the data: ' + a.missing.map(esc).join(", ") + "</div></div>" : ""); break;
       case "help":
         h = '<div class="card ex"><h4>What you can ask</h4><div class="say" style="margin-top:4px">Counts, lists, rankings, SLA, trends and comparisons — in your own words. Click any example:</div>' +
@@ -1164,10 +1286,50 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
   }
   function showAnswer(a) {
     var id = S.answers.push(a) - 1, d = addRow("b", render(a, id));
+    if (a.type === "ticketDetail") fillSim(d);
     /* a tall answer starts at its top, so you read it from the first line instead of landing at its end */
     setTimeout(function () { if (d.offsetHeight > msgs.clientHeight * 0.75) msgs.scrollTop = Math.max(0, d.offsetTop - 12); }, 60);
     if (a.type === "text" && a.miss && a.question) { S.misses.push({ q: a.question, t: new Date().toISOString().slice(0, 16).replace("T", " ") }); saveMisses(); var mc = $("mc"); if (mc) mc.textContent = S.misses.length; }
     return d;
+  }
+
+  /* ───────── similar tickets (the Similar Ticket Finder's result, shown inside the chat) ───────── */
+  var TIERN = { s: "Sure shot", l: "Likely", a: "Possible" };
+  function tierPill(t) { return '<span class="tier ' + t + '">' + TIERN[t] + "</span>"; }
+  function rtags(rs) { return (rs || []).map(function (r) { return '<span class="rtag ' + esc(r.c) + '">' + esc(r.t) + "</span>"; }).join(""); }
+  function smRow(m, k, g, i, hidden) {
+    return '<div class="sm' + (hidden ? " hid" : "") + '" data-act="opens" data-k="' + esc(k) + '" data-g="' + g + '" data-i="' + i + '" title="Click for this ticket’s details and SLA"><div class="rg ' + m.tier + '">' + m.score + '</div><div class="b2"><div class="t1"><a class="key" href="' + esc(m.url) + '" target="_blank" rel="noopener">' + esc(m.key) + "</a>" +
+      '<span class="pill">' + esc(m.status) + "</span>" + (m.isChange ? '<span class="pill" style="background:#EDE9FE;color:#6D28D9">Change</span>' : "") + tierPill(m.tier) + '</div><div class="t2">' + esc(m.summary) + '</div><div class="t3">' + esc([m.date, m.project].filter(Boolean).join(" · ")) + "</div>" +
+      (m.sol ? '<div class="t2" style="font-size:12px;color:#475569;margin-top:3px"><b>' + esc(m.sol.split(":")[0]) + ":</b>" + esc(m.sol.slice(m.sol.indexOf(":") + 1)) + "</div>" : "") +
+      '<div class="chips" style="margin-top:6px">' + (m.rootCause ? '<span class="stag rc">' + esc(m.rootCause) + "</span>" : "") + (m.typeOfFix ? '<span class="stag fx">' + esc(m.typeOfFix) + "</span>" : "") + rtags(m.reasons) + "</div></div></div>";
+  }
+  function simHtml(res, key) {
+    if (!res) return '<div class="hint">No similar-ticket data for this ticket.</div>';
+    var h = "", SHOW = 5;
+    if (res.own) h += '<div class="fixc"><b style="font-size:13px">How this ticket was resolved</b><div class="ks">' + (res.own.resolvedOn ? "Resolved " + esc(res.own.resolvedOn) : "Recorded on this ticket") + '</div><div class="chips" style="margin-top:6px">' + (res.own.rootCause ? '<span class="stag rc">Cause: ' + esc(res.own.rootCause) + "</span>" : "") + (res.own.typeOfFix ? '<span class="stag fx">Fix: ' + esc(res.own.typeOfFix) + "</span>" : "") + "</div>" +
+      '<div class="fb">' + (res.own.solution ? "<b>Solution</b>" + esc(res.own.solution) : "") + (res.own.analysis ? "<b>Analysis</b>" + esc(res.own.analysis) : "") + "</div></div>";
+    else if (res.best) {
+      var b = res.best;
+      h += '<div class="fixc' + (b.tier === "s" ? "" : " lk") + '"><div style="display:flex;gap:10px;align-items:center"><div class="rg ' + b.tier + '">' + b.score + '</div><div><b style="font-size:13px">Best known fix</b><div class="ks">From <a class="key" href="' + esc(b.url) + '" target="_blank" rel="noopener">' + esc(b.key) + "</a>" + (b.resolvedOn ? ", resolved " + esc(b.resolvedOn) : ", " + esc(b.status)) + (b.project ? " for " + esc(b.project) : "") + "</div></div></div>" +
+        '<div class="t2" style="margin-top:8px">' + esc(b.summary) + '</div><div class="chips" style="margin-top:6px">' + tierPill(b.tier) + (b.rootCause ? '<span class="stag rc">Cause: ' + esc(b.rootCause) + "</span>" : "") + (b.typeOfFix ? '<span class="stag fx">Fix: ' + esc(b.typeOfFix) + "</span>" : "") + rtags(b.reasons.slice(0, 3)) + "</div>" +
+        '<div class="fb">' + (b.solutionFull ? "<b>Solution</b>" + esc(b.solutionFull) : "") + (b.analysisFull ? "<b>Analysis</b>" + esc(b.analysisFull) : "") + '</div><div class="fl" style="border:none;padding-top:8px;margin-top:6px"><button class="btn pri" data-act="openb" data-k="' + esc(key) + '">Open that ticket</button><button class="btn" data-act="copysol" data-k="' + esc(key) + '">Copy solution</button></div></div>';
+    } else h += '<div class="fixc none"><b>No documented fix yet</b><div style="margin-top:3px">' + (res.sim.length ? "None of the " + res.sim.length + " similar tickets has a recorded solution." : "Nothing similar in the loaded data — this looks new.") + "</div></div>";
+    if (res.agree && res.agree.rows.length) h += '<div class="sech"><h3>What similar tickets agree on</h3><span>' + res.agree.n + " of " + res.agree.of + " have a recorded cause or fix</span></div>" + res.agree.rows.map(function (r) {
+      return r[1].map(function (x, j) { return '<div class="agr"><span class="n">' + (j === 0 ? esc(r[0]) : "") + '</span><span class="v" title="' + esc(x[0]) + '">' + esc(x[0]) + '</span><b>' + x[1] + "</b></div>"; }).join(""); }).join("");
+    h += '<div class="sech"><h3>Similar tickets</h3><span>' + res.sim.length + " found · click one for details and SLA</span></div>";
+    h += res.sim.length ? res.sim.map(function (m, i) { return smRow(m, key, "sim", i, i >= SHOW); }).join("") + (res.sim.length > SHOW ? '<div class="fl" style="border:none;padding-top:6px"><button class="btn" data-act="simmore">Show ' + (res.sim.length - SHOW) + " more</button></div>" : "") : '<div class="hint">No similar tickets above the match threshold.</div>';
+    if (res.changes && res.changes.length) h += '<div class="sech"><h3>Related change tickets</h3><span>' + res.changes.length + " found — changes that touch the same area</span></div>" + res.changes.map(function (m, i) { return smRow(m, key, "chg", i, i >= 3); }).join("") + (res.changes.length > 3 ? '<div class="fl" style="border:none;padding-top:6px"><button class="btn" data-act="simmore">Show ' + (res.changes.length - 3) + " more</button></div>" : "");
+    return h;
+  }
+  function fillSim(scope) {
+    var slots = scope.querySelectorAll(".sim-slot"); if (!slots.length) return;
+    setTimeout(function () {
+      Array.prototype.forEach.call(slots, function (slot) {
+        if (slot.getAttribute("data-done")) return; var k = slot.getAttribute("data-key"), res = null;
+        try { res = S.engine ? S.engine.similar(k) : null; } catch (er) {}
+        S.sim[k] = res; slot.setAttribute("data-done", "1"); slot.innerHTML = simHtml(res, k);
+      });
+    }, 30);
   }
 
   /* ───────── ticket pop-up: SLA breakdown + ticket details (same numbers as the SLA Tracker) ───────── */
@@ -1256,10 +1418,11 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
     var meta = [raw.Project, raw["Issue Type"], raw.Priority || "No priority", "status " + (raw.Status || "?"), "worker " + (raw["Current Worker"] || "?"), "SVM " + (raw["SVM In Charge"] || "?"), created ? "created " + created : ""].filter(Boolean).map(esc).join(" · ");
     ov.innerHTML = '<div class="mod" role="dialog" aria-label="Ticket details"><div class="mh"><div class="l"><div class="t1"><a class="key" style="font-size:15px" href="' + esc(url) + '" target="_blank" rel="noopener" title="Open in Jira">' + esc(raw.Key) + " ↗</a>" + badge + '</div><div class="mt">' + esc(raw.Summary) + '</div><div class="mm">' + meta + "</div></div>" +
       '<button class="ib" data-act="mclose" title="Close" style="border:1px solid #E2E8F0">✕</button></div>' +
-      '<div class="tabs"><button data-act="mtab" data-t="sla" class="' + (m.tab === "sla" ? "on" : "") + '">SLA</button><button data-act="mtab" data-t="details" class="' + (m.tab === "details" ? "on" : "") + '">Ticket details</button></div>' +
-      '<div class="mb">' + (m.tab === "sla" ? slaHtml(raw, false) : detailsHtml(raw)) + "</div></div>";
+      '<div class="tabs"><button data-act="mtab" data-t="sla" class="' + (m.tab === "sla" ? "on" : "") + '">SLA</button><button data-act="mtab" data-t="details" class="' + (m.tab === "details" ? "on" : "") + '">Ticket details</button><button data-act="mtab" data-t="similar" class="' + (m.tab === "similar" ? "on" : "") + '">Similar tickets</button></div>' +
+      '<div class="mb">' + (m.tab === "sla" ? slaHtml(raw, false) : m.tab === "similar" ? '<div class="sim-slot" data-key="' + esc(raw.Key) + '"><div class="hint">Looking for similar tickets…</div></div>' : detailsHtml(raw)) + "</div></div>";
+    if (m.tab === "similar") fillSim(ov);
   }
-  function openTicket(raw, tab) { if (!raw) return; S.modal = { raw: raw, tab: tab === "details" || !window.HDSlaLink ? "details" : "sla" }; renderModal(); ov.className = "ov open"; ov.scrollTop = 0; }
+  function openTicket(raw, tab) { if (!raw) return; S.modal = { raw: raw, tab: tab === "similar" ? "similar" : tab === "details" || !window.HDSlaLink ? "details" : "sla" }; renderModal(); ov.className = "ov open"; ov.scrollTop = 0; }
   function closeModal() { S.modal = null; ov.className = "ov"; ov.innerHTML = ""; }
 
   /* ───────── CSV ───────── */
@@ -1334,6 +1497,7 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
     root.addEventListener("click", function (e) {
       var t = e.target; if (!(t instanceof Element)) return;
       if (t.id === "ov") { closeModal(); return; }
+      var lk = t.closest("a[href]"); if (lk && /^https?:/.test(lk.getAttribute("href") || "")) return;          // a Jira link opens Jira; everything else on the row opens the pop-up
       if (menu.className.indexOf("open") > -1 && !t.closest("#menu") && t.id !== "more") menu.className = "menu";
       if (!t.closest(".ac") && t.id !== "inp") closeAc();
       var m = t.closest("[data-m]"); if (m) { menu.className = "menu"; var k = m.getAttribute("data-m");
@@ -1345,6 +1509,12 @@ a.btn{text-decoration:none;display:inline-block;color:#1E293B}a.btn:hover{color:
       if (act === "ask") ask(el.getAttribute("data-q")); else if (act === "follow") followUp(id, i); else if (act === "drill") drill(id, i);
       else if (act === "csv") { var a = S.answers[id]; if (a && a.csv) downloadCsv(a.csv); }
       else if (act === "open") { var ao = S.answers[id], it = ao && ao.items && ao.items[i]; if (it) openTicket(it.raw, ao.slaContext ? "sla" : "details"); }
+      else if (act === "opens") { var rs = S.sim[el.getAttribute("data-k")], im = rs && (el.getAttribute("data-g") === "chg" ? rs.changes : rs.sim)[i]; if (im) openTicket(im.raw, "details"); }
+      else if (act === "openb") { var rb = S.sim[el.getAttribute("data-k")]; if (rb && rb.best) openTicket(rb.best.raw, "details"); }
+      else if (act === "simmore") { var box2 = el.parentNode.parentNode; Array.prototype.forEach.call(box2.querySelectorAll(".sm.hid"), function (x) { x.className = "sm"; }); el.parentNode.remove(); }
+      else if (act === "copysol") {
+        var rc = S.sim[el.getAttribute("data-k")], bb = rc && rc.best; if (bb) { var txt = (bb.solutionFull ? "Solution: " + bb.solutionFull + "\n" : "") + (bb.analysisFull ? "Analysis: " + bb.analysisFull : ""); try { navigator.clipboard.writeText(txt); el.textContent = "Copied ✓"; } catch (er) { el.textContent = "Copy failed"; } setTimeout(function () { el.textContent = "Copy solution"; }, 1600); }
+      }
       else if (act === "openu") { var au = S.answers[id], uu = au && au.urgent && au.urgent[i]; if (uu) openTicket(uu.raw, "sla"); }
       else if (act === "openk") { var ak = S.answers[id], ik = ak && ak.items && ak.items[i]; if (ik) openTicket(ik.raw, "sla"); }
       else if (act === "mclose") closeModal();
