@@ -243,7 +243,13 @@
     if (s.ongoingCycle) { var o = s.ongoingCycle; if (o.breached && o.elapsedTime) return "-" + (o.elapsedTime.friendly || ""); if (o.remainingTime) return o.remainingTime.friendly || ""; }
     return ""; }
 
+  /* Excel allows at most 32,767 characters in one cell, and XLSX.write throws on anything longer
+     ("Text length must not exceed 32767 characters"). A few tickets have huge descriptions / analysis
+     (pasted logs, stack traces), so long text is cut here, with a note, before the workbook is written. */
+  var CELL_MAX = 32767, CUT_NOTE = "\n\n[…truncated — full text is in Jira]";
+  function capCell(v) { return (typeof v === "string" && v.length > CELL_MAX) ? v.slice(0, CELL_MAX - CUT_NOTE.length) + CUT_NOTE : v; }
   function toBlob(rows) {
+    rows = rows.map(function (r) { var o = {}; for (var k in r) o[k] = capCell(r[k]); return o; });
     var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Jira Issues");
     return new Blob([XLSX.write(wb, { bookType: "xlsx", type: "array" })],
