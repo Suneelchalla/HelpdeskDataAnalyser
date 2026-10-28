@@ -260,22 +260,11 @@ const AS=["<1w","1-30d","31-60d","61-90d","90+d"];
 const abk=d=>d<=7?0:d<=30?1:d<=60?2:d<=90?3:4;
 function ds(v){if(!v)return 999;const d=v instanceof Date?v:new Date(v);return isNaN(d)?999:Math.max(0,Math.floor((Date.now()-d)/864e5))}
 /* Two different "ages":
-     ageC(t) — real age: days since the ticket was CREATED.
-     idle(t) — days since the ticket last CHANGED STATUS, read from its Jira status history (the SLA Tracker cache).
-   Jira's "Updated" moves on every comment and field edit — including the reminders this page posts — so a ticket
-   reminded today looked 0 days old even if it had not moved for months. idle() falls back to Updated only when a
-   ticket has no status history yet. Cached per SLA-data version. */
+     ageC(t)  real age: days since the ticket was CREATED.
+     idle(t)  days since the ticket was last UPDATED in Jira (the "Updated" column; Created if Updated is empty). */
 function ageC(t){return ds(t&&t.Created);}
-var _idleC={v:-1,m:new WeakMap()};
-function idle(t){
-  if(!t)return 999; var L=window.HDSlaLink, v=L&&L.version?L.version():0;
-  if(_idleC.v!==v)_idleC={v:v,m:new WeakMap()};
-  var c=_idleC.m.get(t); if(c!==undefined)return c;
-  var ms=L&&L.lastMove?L.lastMove(t):null;
-  c=ms!=null?Math.max(0,Math.floor((Date.now()-ms)/864e5)):ds(t.Updated||t.Created);   /* fallback: Jira "Updated" — must NOT call idle() */
-  _idleC.m.set(t,c); return c;
-}
-function idleSrc(t){var L=window.HDSlaLink;return L&&L.lastMove&&L.lastMove(t)!=null?"since its last status change":"since its last update in Jira (no status history yet)";}
+function idle(t){ if(!t)return 999; return ds(t.Updated||t.Created); }
+function idleSrc(t){return "since its last update in Jira";}
 function dTxt(n){return n>=999?"—":n+"d";}
 function fd(v){if(!v)return"—";const d=v instanceof Date?v:new Date(v);return isNaN(d)?"—":d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"})}
 function fm(v){if(!v)return"";const d=v instanceof Date?v:new Date(v);return isNaN(d)?"":d.toLocaleDateString("en-US",{month:"short",year:"2-digit"})}
@@ -714,7 +703,7 @@ function exportFullCSV(tickets,filename){
   tickets.forEach(function(t){Object.keys(t).forEach(function(k){if(k!=="_sla"&&k!=="_raw"&&!colSet[k]){colSet[k]=1;colOrder.push(k);}});});
   /* Append computed columns at the end */
   colOrder.push("__Category__","__Age_Days__","__Idle_Days__","__SLA__");
-  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days since Created (computed)":c==="__Idle_Days__"?"Days since last status change (computed)":c==="__SLA__"?"SLA (same as SLA Tracker)":c);}).join(",")];
+  var lines=[colOrder.map(function(c){return escCSV(c==="__Category__"?"Category (computed)":c==="__Age_Days__"?"Age Days since Created (computed)":c==="__Idle_Days__"?"Days since Updated (computed)":c==="__SLA__"?"SLA (same as SLA Tracker)":c);}).join(",")];
   tickets.forEach(function(t){
     lines.push(colOrder.map(function(c){
       if(c==="__Category__")return escCSV(CL[classify(t.Status)]||"");
@@ -739,7 +728,7 @@ function ticketRow(t){
     "Project":t.Project||"","Components":t.Components||"","Root Cause":t["Root Cause"]||"",
     "Type of Fix":t["Type of Fix"]||"","Created":t.Created?fd(t.Created):"","Updated":t.Updated?fd(t.Updated):"",
     "Resolved":t.Resolved?fd(t.Resolved):"","Age Created (days)":crAge===999?"":crAge,
-    "No status change (days)":upAge===999?"":upAge,"SLA":slaText(t),
+    "Days since Updated":upAge===999?"":upAge,"SLA":slaText(t),
     "Linked Issues":t["Linked Issues"]||"","Linked Status":t["Linked Ticket status"]||"",
     "Next Action":nextStep(t.Status,c)};
 }
@@ -807,7 +796,7 @@ function _trow(t,alt,reason){
   var r=[_v(t.Key,si),_v(t["Issue Type"]||"",si),_v((t.Summary||"").substring(0,100),sw),_v(t.Status,si),_v(t.Priority,si),_v(t["SVM In Charge"]||"",si),_v(t["Current Worker"]||"",si),_v(t.Project||"",si),_v(t.Created?fd(t.Created):"",si),_v(t.Updated?fd(t.Updated):"",si),_v(ca===999?0:ca,sr),_v(ua===999?0:ua,sr),_v(slaText(t),si),_v(t["Linked Issues"]||"",si)];
   r.push(reason!==undefined?_v(reason,sw):_v(nextStep(t.Status,classify(t.Status)),si));return r;}
 function _thdr(hid,lid,extra){hid=hid||"th";lid=lid||"tl";
-  return[_v("Key",lid),_v("Type",hid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("No status change (days)",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
+  return[_v("Key",lid),_v("Type",hid),_v("Summary",lid),_v("Status",hid),_v("Priority",hid),_v("SVM In Charge",lid),_v("Current Worker",lid),_v("Project",lid),_v("Created",hid),_v("Updated",hid),_v("Age (Created)",hid),_v("Days since Updated",hid),_v("SLA",hid),_v("Linked Issues",lid),_v(extra||"Next Action",lid)];}
 var _DW=[15,16,52,22,14,20,20,26,12,12,13,13,24,16,30];
 
 /* ═══ 1. ENGINEERING REPORT ═══ */
@@ -831,7 +820,7 @@ function generateEnggReport(p){
   s1.push([_v("Total with Engineering","b"),_v(N,"lk"),_v("All tickets with dev/engineering")]);
   s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"a"),_v(fires.length,"lk"),_v(fires.length?"URGENT - see Fires tab":"None","a")]);
   s1.push([_v("Danger Zone (90+ days)",danger.length?"wa":"a"),_v(danger.length,"lk"),_v("See Danger Zone tab","a")]);
-  s1.push([_v("Avg Age Created / No status change","n"),_v(avgCA+"d / "+avgUA+"d","nr"),""]);
+  s1.push([_v("Avg Age Created / Updated","n"),_v(avgCA+"d / "+avgUA+"d","nr"),""]);
   s1.push([_v("SLA Breaches","a"),_v(slaBr,"ar"),_v("Same calculation as the SLA Tracker","a")]);s1.push(["","",""]);
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
   ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
@@ -852,10 +841,10 @@ function generateEnggReport(p){
     tix.filter(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";return sv===name;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t,i){s3.push(_trow(t,i%2));});});
   XLSX.utils.book_append_sheet(wb,_mkSheet(s3,_DW),"InCharge Details");
   /* Fires */
-  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sf.push(_trow(t,false,t.Priority+" | Created "+ca+"d ago | No status change "+ua+"d"+(ua>30?" | NO MOVEMENT 30+d":"")));});}else{sf.push([_v("No fires currently","ok")])}
+  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sf.push(_trow(t,false,t.Priority+" | Created "+ca+"d ago | Not updated "+ua+"d"+(ua>30?" | NO MOVEMENT 30+d":"")));});}else{sf.push([_v("No fires currently","ok")])}
   XLSX.utils.book_append_sheet(wb,_mkSheet(sf,_DW),"Fires");
   /* Danger */
-  var sd=[];if(danger.length){sd.push(_thdr("oth","otl","Why Danger Zone"));danger.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,"Created "+ca+"d ago | No status change "+ua+"d | "+t.Priority+(ua>60?" | STAGNANT 60+d":"")));});}else{sd.push([_v("No danger zone tickets","ok")])}
+  var sd=[];if(danger.length){sd.push(_thdr("oth","otl","Why Danger Zone"));danger.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,"Created "+ca+"d ago | Not updated "+ua+"d | "+t.Priority+(ua>60?" | STAGNANT 60+d":"")));});}else{sd.push([_v("No danger zone tickets","ok")])}
   XLSX.utils.book_append_sheet(wb,_mkSheet(sd,_DW),"Danger Zone");
   /* All */
   var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return idle(b)-idle(a);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
@@ -893,10 +882,10 @@ function generateDailyReport(p){
   /* Detail sheets */
   function dsh(name,arr){var s=[];s.push(_thdr());arr.sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t,i){s.push(_trow(t,i%2));});XLSX.utils.book_append_sheet(wb,_mkSheet(s,_DW),name);}
   dsh("HD Action",st.hd.slice());dsh("Client Followup",st.cl.slice());dsh("Engineering",st.eng.slice());
-  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sf.push(_trow(t,false,t.Priority+" | "+ca+"d old | No status change "+ua+"d"));});}else sf.push([_v("None","ok")]);
+  var sf=[];if(fires.length){sf.push(_thdr("rth","rtl","Why Fire"));fires.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sf.push(_trow(t,false,t.Priority+" | "+ca+"d old | Not updated "+ua+"d"));});}else sf.push([_v("None","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(sf,_DW),"Fires");
   var dg=flt.filter(function(t){return idle(t)>=90;}).sort(function(a,b){return idle(b)-idle(a);});
-  var sd=[];if(dg.length){sd.push(_thdr("oth","otl","Why Danger"));dg.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,ca+"d old | No status change "+ua+"d"));});}else sd.push([_v("None","ok")]);
+  var sd=[];if(dg.length){sd.push(_thdr("oth","otl","Why Danger"));dg.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,ca+"d old | Not updated "+ua+"d"));});}else sd.push([_v("None","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(sd,_DW),"Danger Zone");
   dsh("All Open",flt.slice());
   _xlDl(wb,"HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xlsx");
@@ -918,7 +907,7 @@ function generateClientReport(p){
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
   ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,12,40]),"Summary");
-  var su=[];su.push(_thdr("rth","rtl","Action Needed"));urgent.forEach(function(t,i){su.push(_trow(t,i%2,"Please respond - "+t.Priority+", "+idle(t)+"d since last status change"));});
+  var su=[];su.push(_thdr("rth","rtl","Action Needed"));urgent.forEach(function(t,i){su.push(_trow(t,i%2,"Please respond - "+t.Priority+", "+idle(t)+"d since last update"));});
   if(!urgent.length)su.push([_v("No urgent tickets","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(su,_DW),"Urgent");
   var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return idle(b)-idle(a);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
@@ -979,7 +968,19 @@ function buildSingleTicketMailDraft(t){
   return{subject:subject,body:body};
 }
 /* ═══ Jira Internal Note — Reminder System ═══ */
-function _buildReminder(t,mode){
+/* Sign-off name for reminders, remembered in this browser (default "SVM Help Desk"). */
+var _SIGN_KEY="hd-reminder-sign";
+function _getSign(){try{var v=localStorage.getItem(_SIGN_KEY);return v&&v.trim()?v:"SVM Help Desk";}catch(e){return "SVM Help Desk";}}
+function _setSign(v){try{if(v&&v.trim()&&v.trim()!=="SVM Help Desk")localStorage.setItem(_SIGN_KEY,v.trim());else localStorage.removeItem(_SIGN_KEY);}catch(e){}}
+/* Plain text → Jira ADF: blank line = new paragraph, single line break = hard break. */
+function _textToAdf(text){
+  var paras=String(text||"").replace(/\r\n/g,"\n").split(/\n\s*\n/).map(function(p){return p.replace(/^\n+|\n+$/g,"");}).filter(function(p){return p.trim();});
+  return{type:"doc",version:1,content:paras.map(function(p){
+    var c=[];p.split("\n").forEach(function(line,i){if(i)c.push({type:"hardBreak"});if(line)c.push({type:"text",text:line});});
+    return{type:"paragraph",content:c};
+  })};
+}
+function _buildReminder(t,mode,signName){
   mode=mode||"internal";
   var ca=ds(t.Created),ua=idle(t);
   /* Smart name: skip system/generic accounts, prefer real person */
@@ -1000,7 +1001,7 @@ function _buildReminder(t,mode){
   var ask=isClient
     ?"We request you to kindly provide your response/confirmation at the earliest so we can proceed further."
     :"Kindly provide an update on the progress at the earliest.";
-  var sign="Regards,\nSVM Help Desk";
+  var sign="Regards,\n"+((signName&&signName.trim())||_getSign());
 
   var text=greeting+"\n\n"+body1+"\n\n"+body2+"\n"+body3+"\n\n"+ask+"\n\n"+sign;
 
@@ -1090,10 +1091,13 @@ function ReminderModal({ticket,mode,onClose}){
   const[loading,setLoading]=useState(true);
   const[status,setStatus]=useState("idle");
   const[errMsg,setErrMsg]=useState("");
+  const[sign,setSign]=useState(_getSign());
+  const[draft,setDraft]=useState("");
+  const[edited,setEdited]=useState(false);
 
   /* Fetch linked ticket assignee on open */
   useEffect(function(){
-    setLoading(true);setStatus("idle");setErrMsg("");setLinkedName("");
+    setLoading(true);setStatus("idle");setErrMsg("");setLinkedName("");setEdited(false);
     _fetchLinkedAssignee(ticket).then(function(name){setLinkedName(name);setLoading(false);}).catch(function(){setLoading(false);});
   },[ticket]);
 
@@ -1101,12 +1105,28 @@ function ReminderModal({ticket,mode,onClose}){
   var rem=useMemo(function(){
     var t2=Object.assign({},ticket);
     if(linkedName){t2["_linkedAssignee"]=linkedName;}
-    return _buildReminder(t2,mode);
-  },[ticket,mode,linkedName]);
+    return _buildReminder(t2,mode,sign);
+  },[ticket,mode,linkedName,sign]);
+
+  /* The editable message follows the default (e.g. when the linked assignee arrives) until the user types in it. */
+  useEffect(function(){if(!edited)setDraft(rem.text);},[rem.text,edited]);
+
+  function changeSign(v){
+    setSign(v);
+    var old="Regards,\n"+rem.text.split("Regards,\n").pop();
+    if(edited&&draft.indexOf(old)>-1)setDraft(draft.replace(old,"Regards,\n"+(v||"SVM Help Desk")));
+  }
+  function saveSign(){_setSign(sign);}
+  function resetDraft(){setEdited(false);setDraft(rem.text);}
 
   var isClient=rem.isClient;
-  function doPost(){setStatus("sending");_postJiraNote(ticket.Key,rem.adf,!isClient).then(function(){setStatus("sent");}).catch(function(e){setErrMsg(e.message||"Failed");setStatus("error");});}
-  function doCopy(){navigator.clipboard.writeText(rem.text).catch(function(){var ta=document.createElement("textarea");ta.value=rem.text;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);});}
+  var msg=edited?draft:rem.text;
+  function doPost(){
+    if(!msg.trim()){setErrMsg("The message is empty.");setStatus("error");return;}
+    saveSign();setStatus("sending");
+    _postJiraNote(ticket.Key,edited?_textToAdf(msg):rem.adf,!isClient).then(function(){setStatus("sent");}).catch(function(e){setErrMsg(e.message||"Failed");setStatus("error");});
+  }
+  function doCopy(){saveSign();navigator.clipboard.writeText(msg).catch(function(){var ta=document.createElement("textarea");ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);});}
   var jiraUrl=J+ticket.Key;
   var postLabel=isClient?"📨 Reply to Customer":"📨 Post Internal Note";
   var postingLabel=isClient?"⏳ Sending reply...":"⏳ Posting note...";
@@ -1127,9 +1147,19 @@ function ReminderModal({ticket,mode,onClose}){
           <button onClick={onClose} style={{width:32,height:32,borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"var(--t2)"}}>✕</button>
         </div>
         <div style={{flex:1,minHeight:0,overflow:"auto",padding:"14px 20px"}}>
-          <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Message Preview ({typeLabel}){loading&&" — fetching linked ticket info..."}</div>
+          <div style={{fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".5px",marginBottom:6}}>Message ({typeLabel}){loading&&" — fetching linked ticket info..."}</div>
           {linkedName&&<div style={{marginBottom:8,padding:"6px 12px",background:"var(--violet-bg)",border:"1px solid var(--violet-border)",borderRadius:8,fontSize:11,color:"var(--violet)",fontWeight:600}}>📎 Linked ticket assignee found: <b>{linkedName}</b></div>}
-          <pre style={{padding:"14px 16px",background:"#F8FAFC",border:"1px solid var(--border)",borderRadius:10,fontSize:12,lineHeight:1.65,color:"var(--t1)",fontFamily:"'JetBrains Mono',monospace",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{rem.text}</pre>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+            <label htmlFor="rm-sign" style={{fontSize:11,fontWeight:700,color:"var(--t2)"}}>Sign as</label>
+            <input id="rm-sign" value={sign} disabled={status==="sent"} onChange={function(e){changeSign(e.target.value);}} onBlur={saveSign} placeholder="SVM Help Desk"
+              style={{flex:"1 1 200px",maxWidth:280,padding:"6px 10px",border:"1px solid var(--border)",borderRadius:8,fontSize:12,fontFamily:"inherit",color:"var(--t1)"}}/>
+            <span style={{fontSize:10.5,color:"var(--t3)"}}>Remembered for next time</span>
+            {edited&&status!=="sent"&&<button onClick={resetDraft} style={{marginLeft:"auto",padding:"5px 10px",borderRadius:7,border:"1px solid var(--border)",background:"var(--bg)",fontSize:11,fontWeight:700,color:"var(--t2)"}}>↺ Reset to default</button>}
+          </div>
+          <textarea value={msg} disabled={status==="sent"||status==="sending"} onChange={function(e){setDraft(e.target.value);setEdited(true);}} spellCheck={true}
+            aria-label="Reminder message"
+            style={{width:"100%",minHeight:300,boxSizing:"border-box",resize:"vertical",padding:"14px 16px",background:"#F8FAFC",border:"1px solid var(--border)",borderRadius:10,fontSize:12,lineHeight:1.65,color:"var(--t1)",fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+          <div style={{fontSize:10.5,color:"var(--t3)",marginTop:4}}>{edited?"Edited — your text will be posted as written.":"Click in the message to edit it before posting."}</div>
           {status==="sent"&&(<div style={{marginTop:12,padding:"12px 16px",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:10,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>✅</span><div><div style={{fontWeight:700,color:"#059669",fontSize:13}}>Reminder posted!</div><div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>{successLabel}.</div></div></div>)}
           {status==="error"&&(<div style={{marginTop:12,padding:"12px 16px",background:"var(--rose-bg)",border:"1px solid var(--rose-border)",borderRadius:10}}><div style={{fontWeight:700,color:"var(--rose)",fontSize:13}}>Could not post to Jira</div><div style={{fontSize:11,color:"var(--t2)",marginTop:2}}>{errMsg}</div><div style={{fontSize:11,color:"var(--t2)",marginTop:4}}>Use "Copy Message" and paste it manually in Jira.</div></div>)}
         </div>
@@ -1222,7 +1252,7 @@ function TicketModal({data,onClose}){
 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
               <CreatedTh view={slaView} setView={setSlaView} style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}/>
               <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Days since the ticket was created">Age</th>
-              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",whiteSpace:"nowrap"}} title="Days since the last status change (from Jira history). Comments and reminders don't reset it.">In status</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",whiteSpace:"nowrap"}} title="Days since the ticket was last updated in Jira (Updated column).">Updated</th>
             </tr></thead>
             <tbody>
               {tix.slice(0,500).map(function(t,i){
@@ -1244,7 +1274,7 @@ function TicketModal({data,onClose}){
                   </td>
                   <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
                   <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}} title={"Created "+dTxt(a)+" ago"}>{dTxt(a)}</td>
-                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"No status change for "+dTxt(ia)+" — counted "+idleSrc(t)+". Comments and reminders don't reset this."}>{dTxt(ia)}</td>
+                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"Not updated for "+dTxt(ia)+" — counted "+idleSrc(t)+"."}>{dTxt(ia)}</td>
                 </tr>);
               })}
             </tbody>
@@ -1444,7 +1474,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 <th style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Linked</th>
             <CreatedTh view={slaView} setView={setSlaView} style={{padding:"7px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}/>
             <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}} title="Days since the ticket was created">Age</th>
-              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",whiteSpace:"nowrap"}} title="Days since the last status change (from Jira history). Comments and reminders don't reset it.">In status</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)",whiteSpace:"nowrap"}} title="Days since the ticket was last updated in Jira (Updated column).">Updated</th>
             {(data.showReport||data.showClientReport)&&onRemind&&<th style={{padding:"7px 10px",textAlign:"center",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".6px",borderBottom:"2px solid var(--border)"}}>Remind</th>}
           </tr></thead>
           <tbody>
@@ -1466,7 +1496,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                 </td>
                 <td style={{padding:"6px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
                 <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}} title={"Created "+dTxt(a)+" ago"}>{dTxt(a)}</td>
-                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"No status change for "+dTxt(ia)+" — counted "+idleSrc(t)+". Comments and reminders don't reset this."}>{dTxt(ia)}</td>
+                <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"Not updated for "+dTxt(ia)+" — counted "+idleSrc(t)+"."}>{dTxt(ia)}</td>
                 {(data.showReport||data.showClientReport)&&onRemind&&<td style={{padding:"6px 8px",textAlign:"center"}}>
                   <button onClick={function(e){e.stopPropagation();onRemind(t,data.showReport?"internal":"public");}} title={"Send reminder for "+t.Key} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+(data.showReport?"var(--violet-border)":"var(--amber-border)"),background:data.showReport?"var(--violet-bg)":"var(--amber-bg)",color:data.showReport?"var(--violet)":"var(--amber)",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>🔔 Remind</button>
                 </td>}
@@ -1510,7 +1540,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
 
         {/* Tabs */}
         <div style={{display:"flex",gap:4,padding:"12px 24px 0",borderBottom:"1px solid var(--border)",background:"var(--bg)"}}>
-          {[["all","📋 All Tickets",viewTix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (In status)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
+          {[["all","📋 All Tickets",viewTix.length],["ageing","⏰ Ageing (Created)",null],["ageingU","📅 Ageing (Updated)",null],["svm","👤 SVM In Charge",svmEntries.length]].concat(data.showReport?[["enggA","🔧 Engg Assignee",enggMap?Object.keys(enggPivot).length:null]]:[]).map(function(tb){
             var id=tb[0],label=tb[1],cnt=tb[2];var active=activeTab===id;
             return(<button key={id} onClick={function(){onTabChange(id);setAgeFilter(null);setSvmFilter(null);}} style={{
               padding:"10px 18px",borderRadius:"10px 10px 0 0",fontSize:12,fontWeight:700,border:"1px solid "+(active?"var(--border)":"transparent"),borderBottom:active?"1px solid #fff":"1px solid var(--border)",
@@ -1614,7 +1644,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   var pct=viewTix.length?bucket.length/viewTix.length*100:0;
                   if(bucket.length===0)return null;
                   var isActive=ageFilter===i;
-                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets (by days since last status change) — click to filter"} style={{
+                  return(<div key={i} onClick={function(){setAgeFilter(ageFilter===i?null:i);}} title={ageLabels[i]+": "+bucket.length+" tickets (by days since last updated) — click to filter"} style={{
                     width:pct+"%",background:ageColors[i],display:"flex",alignItems:"center",justifyContent:"center",
                     fontSize:12,fontWeight:800,color:"#fff",minWidth:bucket.length>0?34:0,transition:"all .3s",
                     cursor:"pointer",opacity:ageFilter!==null&&!isActive?0.4:1,
@@ -1642,7 +1672,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
               {ageFilter!==null&&(
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"9px 16px",background:ageColors[ageFilter]+"14",borderRadius:10,border:"1px solid "+ageColors[ageFilter]+"44"}}>
                   <div style={{width:12,height:12,borderRadius:3,background:ageColors[ageFilter]}}/>
-                  <span style={{fontSize:13,fontWeight:800,color:ageColors[ageFilter]}}>{ageLabels[ageFilter]} (by days since last status change)</span>
+                  <span style={{fontSize:13,fontWeight:800,color:ageColors[ageFilter]}}>{ageLabels[ageFilter]} (by days since last updated)</span>
                   <span style={{fontSize:12,color:"var(--t2)",fontWeight:600}}>— {ageBucketsU[ageFilter].length} ticket{ageBucketsU[ageFilter].length!==1?"s":""}</span>
                   <div style={{flex:1}}/>
                   <button onClick={function(){setAgeFilter(null);}} style={{background:ageColors[ageFilter],color:"#fff",border:"none",padding:"5px 14px",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Show all</button>
@@ -1663,7 +1693,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                     <div style={{width:14,height:14,borderRadius:4,background:ageColors[i]}}/>
                     <span style={{fontSize:14,fontWeight:800,color:ageColors[i]}}>{ageLabels[i]}</span>
-                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""} (by days since last status change)</span>
+                    <span style={{fontSize:12,color:"var(--t3)",fontWeight:600}}>— {bucket.length} ticket{bucket.length!==1?"s":""} (by days since last updated)</span>
                   </div>
                   {renderTable(sorted)}
                 </div>);
@@ -1993,7 +2023,7 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
     .sort(function(a,b){ return prioRank(a.Priority)-prioRank(b.Priority) || idle(b)-idle(a); }).slice(0,10);
   var sugTabs = [
     {id:"fire",icon:"🔥",label:"Fires",list:fires,color:"#E11D48",desc:"Critical/SS tickets stale > 14 days"},
-    {id:"danger",icon:"🔴",label:"Danger Zone",list:danger,color:"#EA580C",desc:"No status change for 90+ days"},
+    {id:"danger",icon:"🔴",label:"Danger Zone",list:danger,color:"#EA580C",desc:"Not updated for 90+ days"},
     {id:"recent",icon:"🕐",label:"Recently Updated",list:recent,color:"#059669",desc:"Updated in the last 3 days"},
     {id:"hd",icon:"🎯",label:"HD Action",list:hdAction,color:"#0891B2",desc:"Tickets needing your action"}
   ];
@@ -2073,7 +2103,7 @@ function GlobalSearchModal({open, onClose, tickets, onRemind, onMailDraft}){
   function exportCSVResults(){
     var src = hasQuery ? results : activeSug.list;
     if(!src.length) return;
-    var rows = [["Key","Summary","Status","Category","Priority","Project","SVM In Charge","Current Worker","Created","Updated","Age (Created)","No status change (days)","Linked Issues","Linked Status","Root Cause","Type of Fix","Components","Issue Type","Comment Count","Last Comment","Next Action","Jira URL"]];
+    var rows = [["Key","Summary","Status","Category","Priority","Project","SVM In Charge","Current Worker","Created","Updated","Age (Created)","Days since Updated","Linked Issues","Linked Status","Root Cause","Type of Fix","Components","Issue Type","Comment Count","Last Comment","Next Action","Jira URL"]];
     src.forEach(function(t){
       var ca=ds(t.Created),ua=idle(t),c=classify(t.Status);
       rows.push([t.Key||"",t.Summary||"",t.Status||"",CL[c]||c,t.Priority||"",t.Project||"",t["SVM In Charge"]||"",t["Current Worker"]||"",t.Created?fd(t.Created):"",t.Updated?fd(t.Updated):"",ca===999?"":ca,ua===999?"":ua,t["Linked Issues"]||"",t["Linked Ticket status"]||"",t["Root Cause"]||"",t["Type of Fix"]||"",t.Components||"",t["Issue Type"]||"",t["Comment Count"]||"",t["Last Comment"]?fd(t["Last Comment"]):"",nextStep(t.Status,c),J+(t.Key||"")]);
@@ -2850,8 +2880,8 @@ function App(){
           var fireIcon=<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c1 3 4 5 4 9a4 4 0 0 1-8 0c0-1.5.6-2.6 1.5-3.5C9.5 9.5 11 8 12 2z"/><path d="M12 22a6 6 0 0 0 6-6c0-2-1-3.5-2-4.5"/></svg>;
           var chatIcon=<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M12 8v4l2.5 1.5"/></svg>;
           return(<div className="alert-grid">
-            {fires.length>0&&tile("a-rose",fireIcon,fires.length,"Fires — high priority & ageing","Show Stopper / Critical with no status change for 14+ days. Tackle these first.",all.length?fires.length/all.length*100:0,fires.length+" of "+all.length+" open tickets",function(){setModal({title:"Fires — high priority & ageing",icon:"🔥",color:"#E11D48",tickets:fires});})}
-            {stale.length>0&&tile("a-amber",chatIcon,stale.length,"Client follow-ups going stale","Waiting on the client with no status change for 14+ days. Worth a nudge.",st.cl.length?stale.length/st.cl.length*100:0,stale.length+" of "+st.cl.length+" client tickets ("+(st.cl.length?Math.round(stale.length/st.cl.length*100):0)+"%)",function(){setModal({title:"Stale client follow-ups (over 14 days)",icon:"💬",color:"#D97706",tickets:stale});})}
+            {fires.length>0&&tile("a-rose",fireIcon,fires.length,"Fires — high priority & ageing","Show Stopper / Critical not updated for 14+ days. Tackle these first.",all.length?fires.length/all.length*100:0,fires.length+" of "+all.length+" open tickets",function(){setModal({title:"Fires — high priority & ageing",icon:"🔥",color:"#E11D48",tickets:fires});})}
+            {stale.length>0&&tile("a-amber",chatIcon,stale.length,"Client follow-ups going stale","Waiting on the client not updated for 14+ days. Worth a nudge.",st.cl.length?stale.length/st.cl.length*100:0,stale.length+" of "+st.cl.length+" client tickets ("+(st.cl.length?Math.round(stale.length/st.cl.length*100):0)+"%)",function(){setModal({title:"Stale client follow-ups (over 14 days)",icon:"💬",color:"#D97706",tickets:stale});})}
           </div>);
         })()}
 
@@ -2867,7 +2897,7 @@ function App(){
             onClick={function(){openHoldModal();}}/>
           <KPI icon="🧾" label="Invoice Pending" value={st.inv.length} color="#0891B2" bgColor="#ECFEFF" sub="Yet to raise"
             onClick={function(){openInvoiceModal();}}/>
-          <KPI icon="🔴" label="Danger 90+" value={st.dng} color="var(--rose)" bgColor="var(--rose-bg)" sub="No status change 90+ days"
+          <KPI icon="🔴" label="Danger 90+" value={st.dng} color="var(--rose)" bgColor="var(--rose-bg)" sub="Not updated 90+ days"
             onClick={function(){openDangerModal();}}/>
           <KPI icon="📂" label="Open (total)" value={st.n.toLocaleString()} color="var(--blue)" bgColor="var(--blue-bg)" sub="All not-closed"
             onClick={function(){openAllModal();}}/>
@@ -2998,7 +3028,7 @@ function App(){
                 <th style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"var(--t3)",textTransform:"uppercase",letterSpacing:".7px",borderBottom:"2px solid var(--border)",background:"var(--bg)",position:"sticky",top:0,zIndex:2,textAlign:"left"}}>Linked</th>
                 <TH col="created">Created</TH>
                 <TH col="age" align="right">Age</TH>
-                <TH col="idle" align="right">In status</TH>
+                <TH col="idle" align="right">Updated</TH>
               </tr></thead>
               <tbody>{disp.slice(0,300).map((t,i)=>{
                 const a=ageC(t),ia=idle(t);const bk=abk(a);const c=classify(t.Status);const cs=CS[c];
@@ -3017,7 +3047,7 @@ function App(){
                   </td>
                   <td style={{padding:"7px 10px",color:"var(--t3)",fontSize:11,whiteSpace:"nowrap"}}>{fd(t.Created)}</td>
                   <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:AC[bk],fontFamily:"var(--mono)",fontSize:12}}>{a}d</td>
-                  <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"No status change for "+dTxt(ia)+" — counted "+idleSrc(t)+". Comments and reminders don't reset this."}>{dTxt(ia)}</td>
+                  <td style={{padding:"7px 10px",textAlign:"right",fontWeight:700,color:ia>30?"var(--rose)":ia>14?"var(--amber)":"var(--t3)",fontFamily:"var(--mono)",fontSize:12}} title={"Not updated for "+dTxt(ia)+" — counted "+idleSrc(t)+"."}>{dTxt(ia)}</td>
                 </tr>);
               })}</tbody>
             </table>
