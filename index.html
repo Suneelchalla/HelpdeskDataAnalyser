@@ -707,7 +707,9 @@ body.canrefresh #tabRefresh{display:flex}
 
 <!-- ══════ Jira Live Fetch wiring ══════ -->
 <script>
-var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-01" AND created <= "2026-12-31" AND project IN (ALXSVM, BLWS, CSD, ESLGEN, ECCL, FMSC, GWFC, IBEX, HSL, LSC, MILAHA, LSCSAIL, SSL, SWIPHX, TSHG, TKC, TASLI, UGL, VCL, WLS, WLSV, UAFL, NPDL, GSS)';
+/* JQL saved before Change tickets were fetched: add Change to its issue-type list (only that exact old list). */
+function withChange(j){ return String(j||"").replace(/issuetype\s+IN\s*\(\s*Incident\s*,\s*"Service Request"\s*\)/i, 'issuetype IN (Incident, "Service Request", Change)'); }
+var QUERY = 'issuetype IN (Incident, "Service Request", Change) AND created >= "2025-01-01" AND created <= "2026-12-31" AND project IN (ALXSVM, BLWS, CSD, ESLGEN, ECCL, FMSC, GWFC, IBEX, HSL, LSC, MILAHA, LSCSAIL, SSL, SWIPHX, TSHG, TKC, TASLI, UGL, VCL, WLS, WLSV, UAFL, NPDL, GSS)';
 (function(){
   if(!window.HDJira||!window.HDStore) return;
   var HJ=window.HDJira, HS=window.HDStore;
@@ -732,7 +734,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   function openSetup(){
     var cfg=HJ.loadConfig();
     el("jsHost").value = cfg.jiraHost || "svmhelpdesk.atlassian.net";
-    el("jsJql").value  = cfg.jql || QUERY;
+    el("jsJql").value  = cfg.jql ? withChange(cfg.jql) : QUERY;
     el("jsResult").className="js-result"; el("jsResult").textContent="";
     if(cfg._fields && cfg._fields.length){ _fields=cfg._fields; fillSelects(cfg._fields, cfg.fieldMap||{}); }
     el("jsOv").classList.add("open");
@@ -835,6 +837,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
     if(!HJ.isBridgeAvailable()){ openSetup(); return; }
     _busy=true; emit({phase:"start", full:!!opts.full});
     var cfg=HJ.loadConfig();
+    if(cfg.jql){ var mj=withChange(cfg.jql); if(mj!==cfg.jql){ cfg.jql=mj; HJ.saveConfig(cfg); } }
     var jql=cfg.jql||QUERY;
     var wasLoaded = !el("loaded").classList.contains("hidden");
 
@@ -857,6 +860,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
       el("fetching").classList.add("hidden");
       if(window.HDTabs) HDTabs.markStale(); showLoaded(info.fileName, info);
       emit({phase:"done", info:info});
+      if(info.warning && window.hdConfirm) hdConfirm({icon:"ℹ️", title:"Fetched, with one note", body:info.warning, ok:"OK", noCancel:true});
     }).catch(function(err){
       _busy=false; emit({phase:"error", message:err.message});
       el("fetching").classList.add("hidden");
@@ -1079,9 +1083,9 @@ function hdConfirm(o){
     var prevFocus=document.activeElement, ov=document.createElement("div");
     ov.className="hdcf-ov"; ov.setAttribute("role","alertdialog"); ov.setAttribute("aria-modal","true"); ov.setAttribute("aria-labelledby","hdcfT");
     ov.innerHTML='<div class="hdcf"><h3 id="hdcfT">'+(o.icon||"⚠️")+' '+o.title+'</h3><div class="b">'+(o.body||"")+'</div>'+
-      '<div class="a"><button type="button" class="no">Cancel</button><button type="button" class="ok'+(o.okTone==="danger"?" danger":"")+'">'+(o.ok||"Continue")+'</button></div></div>';
+      '<div class="a">'+(o.noCancel?'':'<button type="button" class="no">Cancel</button>')+'<button type="button" class="ok'+(o.okTone==="danger"?" danger":"")+'">'+(o.ok||"Continue")+'</button></div></div>';
     document.body.appendChild(ov);
-    var no=ov.querySelector(".no"), ok=ov.querySelector(".ok");
+    var no=ov.querySelector(".no")||ov.querySelector(".ok"), ok=ov.querySelector(".ok");
     function done(v){ document.removeEventListener("keydown",key,true); ov.remove(); try{ if(prevFocus&&prevFocus.focus) prevFocus.focus(); }catch(e){} res(v); }
     function key(e){
       if(e.key==="Escape"){ e.preventDefault(); done(false); }
@@ -1219,7 +1223,9 @@ if(HS){
   }
   function scanData(rows){
     var get=colGetter(rows), st={};
-    rows.forEach(function(row){ var s=String(get(row,"status")||"").trim(); if(s) st[s]=(st[s]||0)+1; });
+    /* statuses of Change tickets are left out: the HD / Engineering / Client split only drives the Incident &
+       Service Request dashboards, so change-only statuses would just show up as "needs review" noise */
+    rows.forEach(function(row){ if(/change/i.test(String(get(row,"issue type")||""))) return; var s=String(get(row,"status")||"").trim(); if(s) st[s]=(st[s]||0)+1; });
     var statuses=Object.keys(st).map(function(k){return {name:k,count:st[k]};}).sort(function(a,b){return b.count-a.count;});
     return {
       statuses: statuses,
