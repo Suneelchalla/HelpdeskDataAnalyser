@@ -59,6 +59,10 @@
       clientReference: [/client\s*reference/i, /client\s*ref\b/i],
       analysis: [/^\s*analysis\s*$/i],
       solutionSummary: [/solution\s*summary/i, /^\s*solution\s*$/i],
+      /* Root Cause tab: the written cause, the cause category and how it was fixed */
+      reasonText: [/reason\s*for\s*occ?urr?ence\s*[-\u2013:]?\s*text/i, /reason\s*for\s*occ?urr?ence.*(desc|detail|text)/i],
+      reasonOccurrence: [/^\s*reason\s*for\s*occ?urr?ence\s*$/i],
+      resolutionDetails: [/^\s*resolution\s*details?\s*$/i, /resolution\s*details?/i, /^\s*fix\s*details?\s*$/i],
       /* FPA Details (change tickets) */
       chargeable: [/^\s*chargeable\s*$/i, /^\s*charge\s*type\s*$/i, /chargeab/i],
       fpaManDays: [/^\s*fpa\s*man.?days\s*$/i, /fpa\s*man.?days(?!\s*split)/i],
@@ -157,6 +161,9 @@
       row["Client Reference"] = txt(f[fm.clientReference]);
       row["Analysis"] = rich(f[fm.analysis]);
       row["Solution Summary"] = rich(f[fm.solutionSummary]);
+      row["Reason for Occurrence - Text"] = rich(f[fm.reasonText]);
+      row["Reason for Occurrence"] = anyVal(f[fm.reasonOccurrence]);
+      row["Resolution Details"] = rich(f[fm.resolutionDetails]);
       row["Chargeable"] = anyVal(f[fm.chargeable]);
       row["FPA Man-days"] = num(f[fm.fpaManDays]);
       row["Approved Man-days"] = num(f[fm.approvedManDays]);
@@ -284,7 +291,7 @@
      re-reads everything when wanted. (Forcing a full fetch made every Refresh restart a long full download until one
      finally completed.) */
   var TEXT_VER = 2;
-  var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType"];
+  var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType", "reasonText", "reasonOccurrence", "resolutionDetails"];
   /* Every custom field the fetch knows. Any of them that is unmapped ("" or missing) is auto-detected again.
      Before, only NEW_KEYS were checked, so a mapping that got blanked (e.g. Settings saved before "Test connection &
      discover fields" had filled the dropdowns) stayed blank for good — Root Cause came back empty for every ticket
@@ -317,8 +324,8 @@
   function fetchWith(cfg, jql, onProgress, opts) {
     var host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent","comment"];
-    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary","chargeable","fpaManDays","approvedManDays","fpaPreparedBy","fpaApprovedBy","impactModule","manpowerType"]
-      .forEach(function (k) { if (fm[k]) fields.push(fm[k]); });
+    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary","chargeable","fpaManDays","approvedManDays","fpaPreparedBy","fpaApprovedBy","impactModule","manpowerType","reasonText","reasonOccurrence","resolutionDetails"]
+      .forEach(function (k) { if (fm[k] && fields.indexOf(fm[k]) < 0) fields.push(fm[k]); });
 
     var loadCache = (window.HDStore && window.HDStore.loadFetchCache) ? window.HDStore.loadFetchCache() : Promise.resolve(null);
     var prevTextVer = 1;
