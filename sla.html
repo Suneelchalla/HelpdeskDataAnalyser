@@ -1694,6 +1694,7 @@ function rpFileName() {
   return ("SLA Report - " + f + " - " + rpD(r.from) + " to " + rpD(Math.min(r.to, Date.now()))).replace(/[\\\/:*?"<>|]/g, "-");
 }
 function printReport() {
+  if (window.HDPrint) { HDPrint(rpFileName()); return; }
   var old = document.title; document.title = rpFileName();
   var back = function () { document.title = old; window.removeEventListener("afterprint", back); }; window.addEventListener("afterprint", back);
   window.print();
