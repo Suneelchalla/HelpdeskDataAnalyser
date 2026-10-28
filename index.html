@@ -781,26 +781,30 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
 
   /* ── save ── */
   el("jsSave").onclick=function(){
+    /* A dropdown that was never filled (fields not discovered yet) only holds "not mapped" — keep the saved
+       mapping for it instead of overwriting it with "" (that is how Root Cause got lost). */
+    var _prevFm=HJ.loadConfig().fieldMap||{};
+    function fv(id,k){ var sel=el(id); return (sel.options.length<=1 && !sel.value) ? (_prevFm[k]||"") : sel.value; }
     HJ.saveConfig({
       jiraHost: el("jsHost").value.trim() || "svmhelpdesk.atlassian.net",
       jql: el("jsJql").value.trim() || QUERY,
       fieldMap:{
-        svmInCharge: el("jsFldSvm").value, currentWorker: el("jsFldCw").value,
-        nextAction: el("jsFldNa").value, timeToFirstResponse: el("jsFldFr").value,
-        timeToResolution: el("jsFldRes").value,
-        rootCause: el("jsFldRc").value, typeOfFix: el("jsFldTof").value,
-        screenName: el("jsFldSn").value, menuHead: el("jsFldMh").value,
-        releaseNumber: el("jsFldRel").value, releaseDataFix: el("jsFldRelDf").value,
-        parentRelease: el("jsFldPrn").value,
-        tshirtSizing: el("jsFldTsz").value, severity: el("jsFldSev").value,
-        assignedDate: el("jsFldAsd").value, deliveredDate: el("jsFldDvd").value,
-        clientReference: el("jsFldCrf").value, analysis: el("jsFldAna").value,
-        solutionSummary: el("jsFldSol").value,
-        chargeable: el("jsFldChg").value, fpaManDays: el("jsFldFmd").value, approvedManDays: el("jsFldAmd").value,
-        fpaPreparedBy: el("jsFldFpb").value, fpaApprovedBy: el("jsFldFab").value,
-        impactModule: el("jsFldImp").value, manpowerType: el("jsFldMpt").value
+        svmInCharge: fv("jsFldSvm","svmInCharge"), currentWorker: fv("jsFldCw","currentWorker"),
+        nextAction: fv("jsFldNa","nextAction"), timeToFirstResponse: fv("jsFldFr","timeToFirstResponse"),
+        timeToResolution: fv("jsFldRes","timeToResolution"),
+        rootCause: fv("jsFldRc","rootCause"), typeOfFix: fv("jsFldTof","typeOfFix"),
+        screenName: fv("jsFldSn","screenName"), menuHead: fv("jsFldMh","menuHead"),
+        releaseNumber: fv("jsFldRel","releaseNumber"), releaseDataFix: fv("jsFldRelDf","releaseDataFix"),
+        parentRelease: fv("jsFldPrn","parentRelease"),
+        tshirtSizing: fv("jsFldTsz","tshirtSizing"), severity: fv("jsFldSev","severity"),
+        assignedDate: fv("jsFldAsd","assignedDate"), deliveredDate: fv("jsFldDvd","deliveredDate"),
+        clientReference: fv("jsFldCrf","clientReference"), analysis: fv("jsFldAna","analysis"),
+        solutionSummary: fv("jsFldSol","solutionSummary"),
+        chargeable: fv("jsFldChg","chargeable"), fpaManDays: fv("jsFldFmd","fpaManDays"), approvedManDays: fv("jsFldAmd","approvedManDays"),
+        fpaPreparedBy: fv("jsFldFpb","fpaPreparedBy"), fpaApprovedBy: fv("jsFldFab","fpaApprovedBy"),
+        impactModule: fv("jsFldImp","impactModule"), manpowerType: fv("jsFldMpt","manpowerType")
       },
-      _fields: _fields||[]
+      _fields: (_fields&&_fields.length)?_fields:(HJ.loadConfig()._fields||[])
     });
     closeSetup();
   };
