@@ -1607,6 +1607,11 @@ function viewTrend(){
       out+='<div class="card pad"><div class="empty">Root Cause is empty for all '+baseN+' tickets in this data.</div>'+
         '<div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.8;text-align:center">'+
           'The Jira <b>Root Cause</b> field was not read in the last fetch, so Clarification tickets cannot be found.<br>'+
+          (function(){ try{ var c=JSON.parse(localStorage.getItem("hd-jira-cfg")||"{}"), ids=String((c.fieldMap||{}).rootCause||"").split(",").filter(Boolean), nm={};
+            (c._fields||[]).forEach(function(f){ nm[f.id]=f.name; });
+            return ids.length ? 'Root Cause is currently mapped to: <b>'+ids.map(function(id){ return esc((nm[id]||"?")+" ("+id+")"); }).join(", ")+'</b>.<br>'
+                              : '<b>Root Cause is not mapped</b> in Jira settings.<br>';
+          }catch(e){ return ""; } })()+
           'In the launcher open <b>Jira settings</b> → <b>Test connection &amp; discover fields</b>, check that <b>Root Cause</b> is mapped, <b>Save</b>, then <b>Refresh data</b>.'+
         '</div></div>';
       return out;
