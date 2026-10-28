@@ -348,7 +348,20 @@
 
   function fetchAll(jql, onProgress, opts) {
     opts = opts || {};
-    return ensureFieldMap(loadCfg()).then(function (cfg) { return fetchWith(cfg, jql, onProgress, opts); });
+    return ensureFieldMap(loadCfg()).then(function (cfg) {
+      return fetchWith(cfg, jql, onProgress, opts).catch(function (err) {
+        /* Jira rejects the whole query when an issue type in it does not exist on this site (e.g. it is called
+           "Change Request" here, not "Change"). Don't lose the fetch over that: retry without Change and say so. */
+        var msg = String((err && err.message) || err), noChg = String(jql).replace(/\s*,\s*"?Change"?(?=\s*\))/i, "");
+        if (noChg !== jql && /change/i.test(msg) && /(does not exist|not exist|invalid|not valid|400)/i.test(msg)) {
+          return fetchWith(cfg, noChg, onProgress, opts).then(function (r) {
+            r.warning = "Change tickets were not fetched: Jira has no issue type called \u201cChange\u201d. Edit the JQL in Jira settings to use your change issue type\u2019s name.";
+            return r;
+          });
+        }
+        throw err;
+      });
+    });
   }
   function fetchWith(cfg, jql, onProgress, opts) {
     var host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
