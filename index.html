@@ -745,15 +745,29 @@ var QUERY = 'issuetype IN (Incident, "Service Request", Change) AND created >= "
   el("jsOv").addEventListener("click",function(e){ if(e.target===el("jsOv")) closeSetup(); });
   el("jiraSetupBtn2").onclick=openSetup;
 
+  /* Each mapping dropdown first holds only its current choice; the full field list (often 1,000+ fields) is built the
+     first time it is opened. Filling all ~30 dropdowns with every field up front froze the page for up to a minute. */
+  var _optHTML=null, _optFor=null;
+  function optionsHTML(fields){
+    if(_optFor===fields && _optHTML) return _optHTML;
+    var e=function(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); };
+    _optHTML='<option value="">— not mapped —</option>'+fields.map(function(f){ return '<option value="'+e(f.id)+'">'+e(f.name)+' ('+e(f.id)+')</option>'; }).join("");
+    _optFor=fields; return _optHTML;
+  }
+  function fullList(sel, fields){
+    if(sel._full===fields) return;
+    var v=sel.value; sel.innerHTML=optionsHTML(fields); sel.value=v; sel._full=fields;
+  }
   function fillSelects(fields, fm){
+    var byId={}; fields.forEach(function(f){ byId[f.id]=f; });
+    var e=function(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); };
     var ids={svmInCharge:"jsFldSvm",currentWorker:"jsFldCw",nextAction:"jsFldNa",timeToFirstResponse:"jsFldFr",timeToResolution:"jsFldRes",rootCause:"jsFldRc",typeOfFix:"jsFldTof",screenName:"jsFldSn",menuHead:"jsFldMh",releaseNumber:"jsFldRel",releaseDataFix:"jsFldRelDf",parentRelease:"jsFldPrn",tshirtSizing:"jsFldTsz",severity:"jsFldSev",assignedDate:"jsFldAsd",deliveredDate:"jsFldDvd",clientReference:"jsFldCrf",analysis:"jsFldAna",solutionSummary:"jsFldSol",reasonText:"jsFldRot",reasonOccurrence:"jsFldRos",resolutionDetails:"jsFldRsd",chargeable:"jsFldChg",fpaManDays:"jsFldFmd",approvedManDays:"jsFldAmd",fpaPreparedBy:"jsFldFpb",fpaApprovedBy:"jsFldFab",impactModule:"jsFldImp",manpowerType:"jsFldMpt"};
     Object.keys(ids).forEach(function(k){
-      var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
-      fields.forEach(function(f){
-        var o=document.createElement("option"); o.value=f.id; o.textContent=f.name+" ("+f.id+")";
-        if(String(fm[k]||"").split(",")[0]===f.id) o.selected=true;
-        sel.appendChild(o);
-      });
+      var sel=el(ids[k]), cur=String(fm[k]||"").split(",")[0], f=byId[cur];
+      sel.innerHTML='<option value="">— not mapped —</option>'+(f?'<option value="'+e(f.id)+'" selected>'+e(f.name)+' ('+e(f.id)+')</option>':'');
+      sel._full=null; sel._fields=fields;
+      if(!sel._lazy){ sel._lazy=true; var open=function(){ if(this._fields) fullList(this, this._fields); };
+        sel.addEventListener("mousedown",open); sel.addEventListener("focus",open); sel.addEventListener("keydown",open); }
     });
     el("jsFieldTitle").innerHTML='🗂 Custom Field Mapping <span style="font-weight:400;color:var(--teal);font-size:11px">('+fields.length+' custom fields found)</span>';
   }
@@ -765,12 +779,26 @@ var QUERY = 'issuetype IN (Incident, "Service Request", Change) AND created >= "
     }
     var btn=el("jsTest"), res=el("jsResult");
     var cfg={ jiraHost: el("jsHost").value.trim() };
-    btn.disabled=true; btn.textContent="Testing…"; res.className="js-result"; res.textContent="";
+    btn.disabled=true; res.className="js-result"; res.textContent="";
+    cfg.timeoutMs=25000;
+    var t0=Date.now(), phase="Connecting to Jira", okText="";
+    function busyNote(){
+      var H=window.HDSlaHistory, h=H&&H.lock&&H.lock.holder&&H.lock.holder();
+      if(h) return " — "+(h.label||"another tab")+" is fetching SLA history through the extension, so Jira requests are queued behind it";
+      if(window.HDRefresh&&HDRefresh.busy()) return " — a data refresh is using the extension";
+      return "";
+    }
+    function tick(){ var s=Math.round((Date.now()-t0)/1000); btn.textContent=phase+"… "+s+"s";
+      if(s>=5){ res.className="js-result"+(okText?" ok":""); res.textContent=(okText?okText+"  ·  ":"")+"Waiting for Jira ("+s+"s)"+busyNote(); } }
+    var timer=setInterval(tick,500); tick();
+    function stop(){ clearInterval(timer); btn.disabled=false; btn.textContent="Test connection & discover fields"; }
     HJ.testConnection(cfg).then(function(user){
-      res.className="js-result ok"; res.textContent="✓ Connected as "+user.displayName;
-      btn.textContent="Discovering fields…";
+      okText="✓ Connected as "+user.displayName+" ("+((Date.now()-t0)/1000).toFixed(1)+"s)";
+      res.className="js-result ok"; res.textContent=okText;
+      phase="Discovering fields"; cfg.timeoutMs=40000;
       return HJ.discoverFields(cfg);
     }).then(function(fields){
+      clearInterval(timer); res.className="js-result ok"; res.textContent=okText+"  ·  "+fields.length+" custom fields read";
       _fields=fields;
       var fm=HJ.autoDetect(fields), all=HJ.autoDetectAll?HJ.autoDetectAll(fields):{}, existing=HJ.loadConfig().fieldMap||{};
       Object.keys(fm).forEach(function(k){
@@ -782,10 +810,12 @@ var QUERY = 'issuetype IN (Incident, "Service Request", Change) AND created >= "
       fillSelects(fields, existing);
       var n=Object.keys(fm).length;
       if(n) el("jsResult").textContent+=" · Auto-detected "+n+" field"+(n>1?"s":"");
-      btn.disabled=false; btn.textContent="Test connection & discover fields";
+      stop();
     }).catch(function(err){
-      res.className="js-result fail"; res.textContent="✕ "+err.message;
-      btn.disabled=false; btn.textContent="Test connection & discover fields";
+      var m=String(err&&err.message||err);
+      if(m==="TIMEOUT") m="Jira did not answer within "+Math.round(cfg.timeoutMs/1000)+"s"+(busyNote()||" — check that you are logged in to Jira in this browser and the HD Jira Bridge extension is enabled")+". Try again in a moment.";
+      res.className="js-result fail"; res.textContent=(okText?okText+"  ·  ":"")+"✕ "+m;
+      stop();
     });
   };
 
@@ -796,7 +826,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request", Change) AND created >= "
     var _prevFm=HJ.loadConfig().fieldMap||{};
     function fv(id,k){
       var sel=el(id), prev=String(_prevFm[k]||"");
-      if(sel.options.length<=1 && !sel.value) return prev;                     // dropdown never filled → keep what was saved
+      if(!sel.value && !sel._full) return prev;                               // dropdown never filled/opened → keep what was saved
       var ids=prev.split(",").filter(Boolean);
       if(sel.value && ids.indexOf(sel.value)>-1) return [sel.value].concat(ids.filter(function(x){return x!==sel.value;})).join(",");   // keep same-named copies, chosen one first
       return sel.value;
