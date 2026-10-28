@@ -7,6 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F2233'/%3E%3Ccircle cx='15' cy='14' r='6' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M19.5 18.5L24 23' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js"></script>
+<script src="hd-search.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -333,7 +334,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
       <div class="cx-search" id="searchWrap">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input id="searchInput" type="text" autocomplete="off" spellcheck="false" aria-label="Search tickets"
-               placeholder="Paste a ticket subject, an error message, a procedure name or a ticket key">
+               placeholder="Describe the problem in your own words, or paste an error, a subject, a code or a ticket key">
         <kbd title="Press / to search">/</kbd>
         <button class="clr" id="searchClear" aria-label="Clear search">✕</button>
       </div>
@@ -378,7 +379,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   var OBJ_RX = /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]{2,}\b/g, OBJ_URL_RX = /https?:\/\/[^\s<>"')]+/g, OBJIX = null;
   function objsOf(t) {
     if (t._objs) return t._objs;
-    var txt = [t.analysis, t.solutionSummary, t.description].join("\n").replace(OBJ_URL_RX, " "), seen = {}, out = [];
+    var txt = [t.reasonText, t.resolutionDetails, t.analysis, t.solutionSummary, t.description].join("\n").replace(OBJ_URL_RX, " "), seen = {}, out = [];
     (txt.match(OBJ_RX) || []).forEach(function (o) { var k = o.toLowerCase(); if (!seen[k] && !/_+$/.test(o)) { seen[k] = 1; out.push(o); } });
     t._objs = out; t._objSet = seen; return out;
   }
@@ -445,7 +446,8 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     _km = {};
     if (rows[0]) {
       Object.keys(rows[0]).forEach(function (k) {
-        _km[k.trim().toLowerCase()] = k;
+        var n = k.trim().toLowerCase(), m = n.match(/^custom field \((.+)\)$/);
+        _km[n] = k; if (m && _km[m[1]] === undefined) _km[m[1]] = k;
       });
     }
   }
@@ -456,568 +458,223 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     return k !== undefined ? String(row[k] || "").trim() : "";
   }
 
-  /* ══════════════════════ Text Processing ══════════════════════ */
+  /* ══════════════════════ Search engine ══════════════════════
+     Ranking lives in hd-search.js (BM25F over summary, description, the Root Cause tab — reason for
+     occurrence and resolution details —, solution summary, analysis, and screen/menu/component words,
+     with stemming, typo tolerance, phrases and a feedback pass). This block turns its 0–1 text scores into
+     the percentages shown here and adds what only this page knows: same screen / menu / release, Jira
+     links, ticket keys, code objects, and whether a ticket has a recorded fix. */
+  var ENG = null;
 
-  var STOPS = new Set(
-    ("the a an is was are were be been being have has had do does did " +
-     "will would could should shall may might can and or but not no nor " +
-     "of in on at to for from by with as into about up out if then so " +
-     "that this it its i we they he she my our your their you me us him " +
-     "her them what which who whom when where how why all each every " +
-     "both few more most other some such only than too very just also " +
-     "now here there after before during while because since until once " +
-     "again further already always never sometimes often usually please " +
-     "hi hello dear sir madam kindly thank thanks regards issue ticket " +
-     "request need required able unable getting error problem updated " +
-     "trying tried below above mentioned attached via etc re fw fwd")
-      .split(" ")
-  );
-
-  function tokenize(text) {
-    if (!text) return [];
-    return String(text).toLowerCase()
-      .replace(/[\/\\|,;:!?()[\]{}"'`~@#$%^&*+=<>]/g, " ")
-      .replace(/\b[a-z]+-\d+\b/g, " ")        // strip Jira keys like vcl-3508
-      .replace(/\b\w*\d\w*\b/g, " ")           // strip ANY word containing digits (reference IDs, codes, txn numbers)
-      .split(/[\s\-_.]+/)
-      .filter(function (w) {
-        return w.length > 1 && !STOPS.has(w);
-      });
+  /* the written fix of a ticket, in the order people read it */
+  function solParts(t) {
+    return [
+      { k: "c", l: "Reason for occurrence", v: [t.reasonText, t.reasonOcc && t.reasonText.toLowerCase().indexOf(t.reasonOcc.toLowerCase()) < 0 ? "(" + t.reasonOcc + ")" : ""].filter(Boolean).join(" ") },
+      { k: "r", l: "Resolution", v: t.resolutionDetails },
+      { k: "s", l: "Solution", v: t.solutionSummary },
+      { k: "a", l: "Analysis", v: t.analysis }
+    ].filter(function (p) { return p.v && String(p.v).trim(); });
   }
-
-  function bigrams(tokens) {
-    var bg = [];
-    for (var i = 0; i < tokens.length - 1; i++) {
-      bg.push(tokens[i] + " " + tokens[i + 1]);
-    }
-    return bg;
-  }
-
-  function jaccard(a, b) {
-    if (!a.length || !b.length) return 0;
-    var sA = new Set(a), sB = new Set(b), n = 0;
-    sA.forEach(function (t) { if (sB.has(t)) n++; });
-    return n / (sA.size + sB.size - n);
-  }
-
-  function subBonus(tokA, tokB) {
-    if (!tokA.length || !tokB.length) return 0;
-    var bonus = 0;
-    var sB = new Set(tokB);
-    tokA.forEach(function (a) {
-      if (a.length < 4) return;
-      sB.forEach(function (b) {
-        if (b.length < 4) return;
-        if (a !== b && (a.indexOf(b) > -1 || b.indexOf(a) > -1)) bonus += 0.15;
-      });
-    });
-    return Math.min(1, bonus);
+  function hasFix(t) { return !!(t && (t.resolutionDetails || t.solutionSummary || t.analysis || t.reasonText)); }
+  function fixText(t) {
+    return [t.key + " — " + t.summary].concat(solParts(t).map(function (p) { return p.l + ":\n" + p.v; })).join("\n\n");
   }
 
   /* ══════════════════════ Index Builder ══════════════════════ */
-
   function buildIndex(rows) {
-    var ix = {
-      tickets: [],
-      byKey: {},        // key → index
-      byScreen: {},     // screen name (lower) → [indices]
-      byMenu: {},       // menu head (lower) → [indices]
-      byRC: {},         // root cause (lower) → [indices]
-      byComp: {},       // component (lower) → [indices]
-      byLabel: {},      // label (lower) → [indices]
-      byRelease: {},    // release number → [indices]
-      byProject: {},    // project (lower) → [indices]
-      byToken: {},      // token → [indices]
-      docFreq: {},      // token → count of tickets containing it
-      idf: {},          // token → IDF weight (computed after all tickets indexed)
-      changes: [],      // indices of change tickets
-      incidents: [],    // indices of incident tickets
-      srs: []           // indices of service request tickets
-    };
-
+    var ix = { tickets: [], byKey: {}, byScreen: {}, byMenu: {}, byRC: {}, byComp: {}, byLabel: {}, byRelease: {}, byProject: {},
+               changes: [], incidents: [], srs: [], prefixes: {} };
     rows.forEach(function (row, i) {
       var t = {
-        _row: row,
-        idx: i,
-        key: col(row, "key"),
-        summary: col(row, "summary"),
-        status: col(row, "status"),
-        priority: col(row, "priority"),
-        project: col(row, "project"),
-        issueType: col(row, "issue type"),
-        components: col(row, "components"),
-        created: col(row, "created"),
-        resolved: col(row, "resolved"),
-        updated: col(row, "updated"),
-        resolution: col(row, "resolution"),
-        screenName: col(row, "screen name"),
-        menuHead: col(row, "menu head"),
-        rootCause: col(row, "root cause"),
-        typeOfFix: col(row, "type of fix"),
-        analysis: col(row, "analysis"),
-        solutionSummary: col(row, "solution summary"),
-        description: col(row, "description"),
-        labels: col(row, "labels"),
-        svmInCharge: col(row, "svm in charge"),
-        currentWorker: col(row, "current worker"),
-        severity: col(row, "severity"),
-        linkedIssues: col(row, "linked issues"),
-        linkDetails: col(row, "link details"),
-        deliveredDate: col(row, "delivered date"),
-        releaseNumber: col(row, "release number"),
-        releaseDataFix: col(row, "release number (data fix)"),
-        parentRelease: col(row, "parent release no"),
-        tokens: [],
-        bgs: [],
-        descTokens: []
+        _row: row, idx: i,
+        key: col(row, "key"), summary: col(row, "summary"), status: col(row, "status"), priority: col(row, "priority"),
+        project: col(row, "project"), issueType: col(row, "issue type"), components: col(row, "components"),
+        created: col(row, "created"), resolved: col(row, "resolved"), updated: col(row, "updated"), resolution: col(row, "resolution"),
+        screenName: col(row, "screen name"), menuHead: col(row, "menu head"), rootCause: col(row, "root cause"), typeOfFix: col(row, "type of fix"),
+        analysis: col(row, "analysis"), solutionSummary: col(row, "solution summary"), description: col(row, "description"),
+        /* Root Cause tab */
+        reasonText: col(row, "reason for occurrence - text") || col(row, "reason for occurrence – text") || col(row, "reason for occurrence text"),
+        reasonOcc: col(row, "reason for occurrence"),
+        resolutionDetails: col(row, "resolution details"),
+        labels: col(row, "labels"), svmInCharge: col(row, "svm in charge"), currentWorker: col(row, "current worker"), severity: col(row, "severity"),
+        linkedIssues: col(row, "linked issues"), linkDetails: col(row, "link details"), deliveredDate: col(row, "delivered date"),
+        releaseNumber: col(row, "release number"), releaseDataFix: col(row, "release number (data fix)"), parentRelease: col(row, "parent release no")
       };
+      t.labelList = t.labels ? t.labels.split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean) : [];
+      t.isResolved = !!(t.resolved || t.resolution || /closed|resolved|completed|delivered/i.test(t.status));
+      t.hasSolution = !!(t.rootCause || t.typeOfFix || hasFix(t));
+      t.isChange = /change/i.test(t.issueType); t.isIncident = /incident/i.test(t.issueType); t.isSR = /service request/i.test(t.issueType);
+      t.linkedKeys = t.linkedIssues ? t.linkedIssues.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
+      t.compList = t.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+      var rel = [t.releaseNumber, t.releaseDataFix, t.parentRelease].filter(Boolean);
+      t.releaseKeys = rel.map(function (r) { return r.toLowerCase().trim(); }).filter(Boolean);
 
-      // Tokenize summary and description
-      t.tokens = tokenize(t.summary);
-      t.bgs = bigrams(t.tokens);
-      t.descTokens = tokenize(t.description).slice(0, 100);
-
-      // Parse labels
-      t.labelList = t.labels
-        ? t.labels.split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean)
-        : [];
-
-      // Classify ticket state
-      t.isResolved = !!(t.resolved || t.resolution ||
-        /closed|resolved|completed|delivered/i.test(t.status));
-      t.hasSolution = !!(t.rootCause || t.typeOfFix || t.analysis || t.solutionSummary);
-
-      // Classify issue type
-      t.isChange = /change/i.test(t.issueType);
-      t.isIncident = /incident/i.test(t.issueType);
-      t.isSR = /service request/i.test(t.issueType);
-
-      // Parse linked issue keys
-      t.linkedKeys = t.linkedIssues
-        ? t.linkedIssues.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean)
-        : [];
-
-      // Store in index
       ix.tickets.push(t);
-      if (t.key) ix.byKey[t.key] = i;
-      if (t.isChange) ix.changes.push(i);
-      if (t.isIncident) ix.incidents.push(i);
-      if (t.isSR) ix.srs.push(i);
-
-      // Build inverted indexes for fast candidate lookup
-      function addToInvertedIndex(map, value) {
-        if (!value) return;
-        var k = value.toLowerCase();
-        if (!map[k]) map[k] = [];
-        map[k].push(i);
-      }
-
-      addToInvertedIndex(ix.byScreen, t.screenName);
-      addToInvertedIndex(ix.byMenu, t.menuHead);
-      addToInvertedIndex(ix.byRC, t.rootCause);
-      addToInvertedIndex(ix.byProject, t.project);
-
-      t.components.split(/[;,]/).forEach(function (c) {
-        addToInvertedIndex(ix.byComp, c.trim());
-      });
-
-      t.labelList.forEach(function (l) {
-        addToInvertedIndex(ix.byLabel, l);
-      });
-
-      // Token inverted index + document frequency
-      var seenTokens = {};
-      t.tokens.forEach(function (tok) {
-        if (!seenTokens[tok]) {
-          seenTokens[tok] = 1;
-          ix.docFreq[tok] = (ix.docFreq[tok] || 0) + 1;
-        }
-        if (!ix.byToken[tok]) ix.byToken[tok] = [];
-        ix.byToken[tok].push(i);
-      });
-
-      // Release number inverted indexes
-      var releases = [t.releaseNumber, t.releaseDataFix, t.parentRelease].filter(Boolean);
-      t.releaseKeys = releases.map(function (r) { return r.toLowerCase().trim(); }).filter(Boolean);
-      t.releaseKeys.forEach(function (rk) {
-        if (!ix.byRelease[rk]) ix.byRelease[rk] = [];
-        ix.byRelease[rk].push(i);
-      });
+      if (t.key) { ix.byKey[t.key] = i; var px = t.key.split("-")[0]; if (px) ix.prefixes[px.toUpperCase()] = 1; }
+      if (t.isChange) ix.changes.push(i); if (t.isIncident) ix.incidents.push(i); if (t.isSR) ix.srs.push(i);
+      function put(map, v) { if (!v) return; var k = v.toLowerCase(); (map[k] = map[k] || []).push(i); }
+      put(ix.byScreen, t.screenName); put(ix.byMenu, t.menuHead); put(ix.byRC, t.rootCause); put(ix.byProject, t.project);
+      t.compList.forEach(function (c) { put(ix.byComp, c); });
+      t.labelList.forEach(function (l) { put(ix.byLabel, l); });
+      t.releaseKeys.forEach(function (rk) { (ix.byRelease[rk] = ix.byRelease[rk] || []).push(i); });
     });
-
-    // Compute IDF weights: log(N / df) — rare words get high weight
-    var N = ix.tickets.length || 1;
-    Object.keys(ix.docFreq).forEach(function (tok) {
-      ix.idf[tok] = Math.log(N / ix.docFreq[tok]);
-    });
-
+    ix.tickets.forEach(function (t) { t.tokens = HDSearch.tokenize(t.summary, ix.prefixes); });     // summary words (highlighting)
     return ix;
   }
-
-  /* ══════════════════════ Similarity Scoring ══════════════════════
-     Returns { score, rs (reasons), tier } or null if same ticket. */
-
-  function scorePair(a, b) {
-    if (a.key && a.key === b.key) return null;
-
-    var reasons = [];
-    var struct = 0;
-    var text = 0;
-    var bonus = 0;
-
-    // ── Structural matching (high confidence) ──
-    if (a.screenName && b.screenName &&
-        a.screenName.toLowerCase() === b.screenName.toLowerCase()) {
-      struct += 22;
-      reasons.push({ c: "r-scr", t: "Screen: " + a.screenName });
-    }
-
-    if (a.menuHead && b.menuHead &&
-        a.menuHead.toLowerCase() === b.menuHead.toLowerCase()) {
-      struct += 18;
-      reasons.push({ c: "r-menu", t: "Menu: " + a.menuHead });
-    }
-
-    if (a.rootCause && b.rootCause &&
-        a.rootCause.toLowerCase() === b.rootCause.toLowerCase()) {
-      struct += 12;
-      reasons.push({ c: "r-rc", t: "Cause: " + a.rootCause });
-    }
-
-    // Component overlap
-    var compA = a.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
-    var compB = b.components.toLowerCase().split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
-    if (compA.length && compB.length) {
-      var compIntersect = compA.filter(function (c) { return compB.indexOf(c) > -1; }).length;
-      if (compIntersect) {
-        struct += Math.min(8, compIntersect * 4);
-        reasons.push({ c: "r-comp", t: "Component" });
-      }
-    }
-
-    // Label overlap
-    if (a.labelList && b.labelList) {
-      var labelIntersect = a.labelList.filter(function (l) { return b.labelList.indexOf(l) > -1; }).length;
-      if (labelIntersect) {
-        struct += Math.min(6, labelIntersect * 3);
-        reasons.push({ c: "r-lbl", t: "Label" });
-      }
-    }
-
-    // ── Release number matching (very high confidence) ──
-    if (a.releaseKeys && b.releaseKeys && a.releaseKeys.length && b.releaseKeys.length) {
-      var sharedRel = a.releaseKeys.filter(function (r) { return b.releaseKeys.indexOf(r) > -1; });
-      if (sharedRel.length) {
-        struct += 25;
-        reasons.push({ c: "r-lnk", t: "Release: " + sharedRel[0] });
-      }
-    }
-
-    // ── Text matching (BM25-like cumulative IDF — rare words count more,
-    //    and the score is NOT diluted by unmatched unique reference tokens) ──
-    var sA = new Set(a.tokens), sB = new Set(b.tokens);
-    var matchedIdf = 0;
-    sA.forEach(function (tok) {
-      var w = IX.idf[tok] || 0;
-      if (sB.has(tok)) matchedIdf += w;
+  /* what the engine indexes per ticket */
+  function engineDocs(ix) {
+    return ix.tickets.map(function (t) {
+      return {
+        s: t.summary,
+        m: [t.screenName, t.menuHead, t.components, t.labels, t.rootCause, t.typeOfFix].filter(Boolean).join(" · "),
+        c: [t.reasonText, t.reasonOcc].filter(Boolean).join("\n"),
+        r: [t.resolutionDetails, t.solutionSummary, t.analysis].filter(Boolean).join("\n"),
+        d: t.description
+      };
     });
-    // Saturate at 32 — matching tokens worth ~9 IDF total gives full score.
-    // This means two moderately rare shared words = near-max text score.
-    text += Math.min(32, matchedIdf * 3.5);
+  }
 
-    // Bigram overlap (still useful for phrase matching)
-    var bgJac = jaccard(a.bgs, b.bgs);
-    text += bgJac * 14;
+  /* where the words matched → reason tags */
+  var WHERE = { s: ["r-txt", "Summary"], d: ["r-txt", "Description"], c: ["r-rc", "Reason for occurrence"], r: ["r-comp", "Resolution / analysis"], m: ["r-scr", "Screen / component words"] };
+  function whereTags(i, words) {
+    if (!words || !words.length) return [];
+    var w = HDSearch.explain(ENG, i, words).where, out = [];
+    ["s", "c", "r", "d", "m"].forEach(function (f) { if (w[f].length) out.push({ c: WHERE[f][0], t: WHERE[f][1] + " (" + w[f].length + ")" }); });
+    return out;
+  }
 
-    // Substring bonus for partial word matches
-    text += subBonus(a.tokens, b.tokens) * 6;
+  /* ── structural agreement between two tickets ── */
+  function structPair(a, b) {
+    var st = 0, rs = [], linked = false;
+    if (a.screenName && b.screenName && a.screenName.toLowerCase() === b.screenName.toLowerCase()) { st += 14; rs.push({ c: "r-scr", t: "Screen: " + a.screenName }); }
+    if (a.menuHead && b.menuHead && a.menuHead.toLowerCase() === b.menuHead.toLowerCase()) { st += 10; rs.push({ c: "r-menu", t: "Menu: " + a.menuHead }); }
+    if (a.rootCause && b.rootCause && a.rootCause.toLowerCase() === b.rootCause.toLowerCase()) { st += 6; rs.push({ c: "r-rc", t: "Cause: " + a.rootCause }); }
+    var ci = a.compList.filter(function (c) { return b.compList.indexOf(c) > -1; }).length;
+    if (ci) { st += Math.min(6, ci * 3); rs.push({ c: "r-comp", t: "Component" }); }
+    var li = a.labelList.filter(function (l) { return b.labelList.indexOf(l) > -1; }).length;
+    if (li) { st += Math.min(4, li * 2); rs.push({ c: "r-lbl", t: "Label" }); }
+    var sr = a.releaseKeys.filter(function (r) { return b.releaseKeys.indexOf(r) > -1; });
+    if (sr.length) { st += 20; rs.push({ c: "r-lnk", t: "Release: " + sr[0] }); }
+    if (a.linkedKeys.indexOf(b.key) > -1 || b.linkedKeys.indexOf(a.key) > -1) { linked = true; rs.push({ c: "r-lnk", t: "Jira linked" }); }
+    var refd = (ENG.refsOf[a.idx] || []).indexOf(b.key) > -1 || (ENG.refsOf[b.idx] || []).indexOf(a.key) > -1;
+    if (refd && !linked) { linked = true; rs.push({ c: "r-lnk", t: "Mentioned in text" }); }
+    if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) st += 3;
+    return { st: st, rs: rs, linked: linked };
+  }
+  function tierOf(s) { return s >= 65 ? "s" : s >= 40 ? "l" : "a"; }
 
-    // Cross-match: description ↔ summary (meaningful — descriptions often
-    // contain the actual problem detail that summaries abbreviate)
-    if (a.descTokens.length && b.tokens.length) {
-      var dA = new Set(a.descTokens), mdi = 0;
-      dA.forEach(function (tok) { if (sB.has(tok)) mdi += (IX.idf[tok] || 0); });
-      text += Math.min(8, mdi * 2);
-    }
-    if (b.descTokens.length && a.tokens.length) {
-      var dB = new Set(b.descTokens), mdi2 = 0;
-      dB.forEach(function (tok) { if (sA.has(tok)) mdi2 += (IX.idf[tok] || 0); });
-      text += Math.min(8, mdi2 * 2);
-    }
-
-    if (text >= 8) {
-      reasons.push({ c: "r-txt", t: "Text similarity" });
-    }
-
-    // ── Bonus: explicit Jira link ──
-    if (a.linkedKeys.indexOf(b.key) > -1 || b.linkedKeys.indexOf(a.key) > -1) {
-      bonus += 15;
-      reasons.push({ c: "r-lnk", t: "Jira linked" });
-    }
-
-    // Bonus: resolved with solution
-    if (b.isResolved && b.hasSolution) bonus += 6;
-    else if (b.isResolved) bonus += 3;
-
-    // Same project gets a small structural credit (not just a bonus)
-    // so that project-mates aren't killed by the text-only gate.
-    if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) {
-      struct += 4;
-      bonus += 2;
-    }
-
-    var score = Math.min(100, Math.round(struct + text + bonus));
-
-    // ── Text-only gate: if NO structural fields matched, require a reasonable
-    //    score to suppress noise. Lowered from 40→28 to let genuine text
-    //    matches through (e.g. "THD Mismatch" tickets with reference IDs). ──
-    if (struct === 0 && bonus < 15 && score < 28) {
-      return null;  // suppress weak text-only matches entirely
-    }
-
-    var tier = score >= 65 ? "s" : score >= 40 ? "l" : "a";
-
-    return { score: score, rs: reasons, tier: tier };
+  /* one candidate for "similar to ticket" → result row (null = not similar enough) */
+  function rateSimilar(ticket, cand, r) {
+    if (cand.idx === ticket.idx || (cand.key && cand.key === ticket.key)) return null;
+    var sp = structPair(ticket, cand), textPts = r ? 72 * Math.pow(r.text, 0.75) : 0,   /* lifts real partial matches (0.4 → 36) while noise stays low (0.13 → 16) */
+         phr = r ? Math.min(10, r.phrase.s * 5 + r.phrase.o * 2) : 0;
+    var bonus = (sp.linked ? 15 : 0) + (cand.isResolved && hasFix(cand) ? 4 : cand.isResolved ? 2 : 0);
+    var score = Math.min(100, Math.round(textPts + phr + sp.st + bonus));
+    if (sp.st === 0 && !sp.linked && score < 28) return null;               // weak word-only overlap = noise
+    var rs = sp.rs.slice();
+    if (r && textPts >= 10) rs = rs.concat(whereTags(cand.idx, r.words).slice(0, 3));
+    return { t: cand, s: score, rs: rs, tier: tierOf(score), ref: ticket, words: r ? r.words : [],
+             parts: { text: textPts + phr, title: 0, struct: sp.st + (sp.linked ? 15 : 0), solution: bonus - (sp.linked ? 15 : 0) } };
   }
 
   /* ══════════════════════ Find Similar Tickets ══════════════════════ */
-
   function findSimilar(ticket, topN, minScore) {
-    topN = topN || 8;
-    minScore = minScore || 15;
-    var candidates = new Set();
-
-    // Gather candidates from inverted indexes (not a full scan)
-    function addCandidatesFrom(map, value) {
-      if (!value) return;
-      var k = value.toLowerCase();
-      if (map[k]) map[k].forEach(function (i) { candidates.add(i); });
-    }
-
-    addCandidatesFrom(IX.byScreen, ticket.screenName);
-    addCandidatesFrom(IX.byMenu, ticket.menuHead);
-    addCandidatesFrom(IX.byRC, ticket.rootCause);
-
-    ticket.labelList.forEach(function (l) {
-      addCandidatesFrom(IX.byLabel, l);
+    topN = topN || 8; minScore = minScore || 15;
+    var byI = {}, out = HDSearch.similar(ENG, ticket.idx, { topN: 80 });
+    out.results.forEach(function (r) { byI[r.i] = r; });
+    /* structural candidates the words may miss: links, same release, same screen / menu (newest first) */
+    var extra = {};
+    ticket.linkedKeys.concat(ENG.refsOf[ticket.idx] || []).forEach(function (k) { if (IX.byKey[k] != null) extra[IX.byKey[k]] = 1; });
+    (ENG.byRef[ticket.key] || []).forEach(function (i) { extra[i] = 1; });
+    ticket.releaseKeys.forEach(function (rk) { (IX.byRelease[rk] || []).forEach(function (i) { extra[i] = 1; }); });
+    if (ticket.screenName) (IX.byScreen[ticket.screenName.toLowerCase()] || []).slice(-150).forEach(function (i) { extra[i] = 1; });
+    if (ticket.menuHead) (IX.byMenu[ticket.menuHead.toLowerCase()] || []).slice(-80).forEach(function (i) { extra[i] = 1; });
+    var res = [];
+    Object.keys(byI).concat(Object.keys(extra).filter(function (i) { return !byI[i]; })).forEach(function (i) {
+      var m = rateSimilar(ticket, IX.tickets[+i], byI[i]);
+      if (m && m.s >= minScore) res.push(m);
     });
-
-    // Explicit Jira links
-    ticket.linkedKeys.forEach(function (key) {
-      if (IX.byKey[key] != null) candidates.add(IX.byKey[key]);
-    });
-
-    // Same release number (very strong signal)
-    if (ticket.releaseKeys) {
-      ticket.releaseKeys.forEach(function (rk) {
-        addCandidatesFrom(IX.byRelease, rk);
-      });
-    }
-
-    // Same project — limited sample to keep it fast (newest 200 from the project)
-    if (ticket.project) {
-      var projList = IX.byProject[ticket.project.toLowerCase()] || [];
-      projList.slice(-200).forEach(function (i) { candidates.add(i); });
-    }
-
-    // Token-based candidates (rarest tokens first for precision)
-    var rareTokens = ticket.tokens.slice().sort(function (a, b) {
-      return (IX.docFreq[a] || 9999) - (IX.docFreq[b] || 9999);
-    });
-    rareTokens.slice(0, 15).forEach(function (tok) {
-      if (IX.byToken[tok]) {
-        IX.byToken[tok].forEach(function (i) { candidates.add(i); });
-      }
-    });
-
-    // Score each candidate
-    var results = [];
-    candidates.forEach(function (i) {
-      var match = scorePair(ticket, IX.tickets[i]);
-      if (match && match.score >= minScore) {
-        results.push({ t: IX.tickets[i], s: match.score, rs: match.rs, tier: match.tier, ref: ticket });
-      }
-    });
-
-    // Sort: score desc, then prefer resolved-with-solution
-    results.sort(function (a, b) {
-      if (b.s !== a.s) return b.s - a.s;
-      if (b.t.hasSolution !== a.t.hasSolution) return b.t.hasSolution ? 1 : -1;
-      return 0;
-    });
-
-    return results.slice(0, topN);
+    res.sort(function (a, b) { return b.s - a.s || (hasFix(b.t) ? 1 : 0) - (hasFix(a.t) ? 1 : 0); });
+    return res.slice(0, topN);
   }
 
   /* ══════════════════════ Find Related Changes (for an incident) ══════════════════════ */
-
   function findRelChanges(ticket, topN) {
     topN = topN || 6;
     if (!IX.changes.length) return [];
-
-    var results = [];
-    var ticketCreated = ticket.created ? new Date(ticket.created) : null;
-
-    IX.changes.forEach(function (ci) {
-      var change = IX.tickets[ci];
-      var match = scorePair(ticket, change);
-      if (!match) return;
-
-      // Temporal proximity bonus: change delivered/created within 30 days
-      if (ticketCreated) {
-        var changeDate = change.deliveredDate ? new Date(change.deliveredDate)
-          : change.resolved ? new Date(change.resolved)
-          : change.created ? new Date(change.created) : null;
-
-        if (changeDate && !isNaN(changeDate)) {
-          var daysDiff = Math.abs((ticketCreated - changeDate) / 86400000);
-          if (daysDiff <= 30) {
-            match.score += Math.round(8 * (1 - daysDiff / 30));
-            match.rs.push({ c: "r-time", t: "Within " + Math.round(daysDiff) + "d" });
-          }
-        }
+    var out = HDSearch.similar(ENG, ticket.idx, { topN: 40, pool: 400, filter: function (i) { return IX.tickets[i].isChange; } });
+    var tc = ticket.created ? new Date(ticket.created) : null, res = [];
+    out.results.forEach(function (r) {
+      var change = IX.tickets[r.i], m = rateSimilar(ticket, change, r); if (!m) return;
+      if (tc) {
+        var cd = change.deliveredDate ? new Date(change.deliveredDate) : change.resolved ? new Date(change.resolved) : change.created ? new Date(change.created) : null;
+        if (cd && !isNaN(cd)) { var dd = Math.abs((tc - cd) / 864e5); if (dd <= 30) { m.s = Math.min(100, m.s + Math.round(8 * (1 - dd / 30))); m.rs.push({ c: "r-time", t: "Within " + Math.round(dd) + "d" }); } }
       }
-
-      match.score = Math.min(100, match.score);
-      match.tier = match.score >= 65 ? "s" : match.score >= 40 ? "l" : "a";
-
-      if (match.score >= 12) {
-        results.push({ t: change, s: match.score, rs: match.rs, tier: match.tier, ref: ticket });
-      }
+      m.tier = tierOf(m.s);
+      if (m.s >= 12) res.push(m);
     });
-
-    results.sort(function (a, b) { return b.s - a.s; });
-    return results.slice(0, topN);
+    res.sort(function (a, b) { return b.s - a.s; });
+    return res.slice(0, topN);
   }
 
-  /* ══════════════════════ Search ══════════════════════ */
-
-  /* Global search now uses the same multi-signal approach as findSimilar:
-     it treats the query as a mini-ticket, gathers candidates from EVERY index
-     (screen / menu / root cause / component / label / release / project / key /
-     rare tokens), and scores structural-field matches against the query plus
-     text, phrase, exact-title and ticket-key boosts. The old noise bonuses
-     (flat credit just for having a screen name / being resolved) are gone. */
+  /* ══════════════════════ Search ══════════════════════
+     Free text, an error message, a pasted subject, a code object, a ticket key, or "a quoted phrase". */
   function searchText(query, topN) {
     topN = topN || 30;
-    var qLowerRaw = String(query || "").toLowerCase().trim();
-    var tokens = tokenize(query);
-    var bgs = bigrams(tokens);
-    var qSet = new Set(tokens);
-    if (!tokens.length && qLowerRaw.length < 2) return [];
-
-    /* Does a structural field value relate to the query? Strong = the whole
-       value appears in the query; otherwise require enough token overlap so a
-       single common word can't trigger a false structural match. */
-    function fieldHit(val) {
-      if (!val) return false;
-      var v = String(val).toLowerCase().trim();
-      if (!v) return false;
-      if (qLowerRaw && qLowerRaw.indexOf(v) > -1) return true;
-      var vt = tokenize(v);
-      if (!vt.length) return false;
-      var overlap = 0;
-      for (var k = 0; k < vt.length; k++) if (qSet.has(vt[k])) overlap++;
-      if (vt.length === 1) return overlap >= 1;
-      return overlap >= 2 || overlap === vt.length;
+    var q = String(query || "").trim(); if (q.length < 2) return [];
+    var out = HDSearch.query(ENG, q, { topN: 160 }), qLow = q.toLowerCase();
+    var qSet = {}; out.terms.forEach(function (w) { qSet[w] = 1; });
+    function fieldHit(val) {                         // a screen / menu / cause value the query really names
+      if (!val) return false; var v = String(val).toLowerCase().trim(); if (!v) return false;
+      if (v.length > 2 && qLow.indexOf(v) > -1) return true;
+      var vt = HDSearch.tokenize(v, IX.prefixes); if (!vt.length) return false;
+      var hit = vt.filter(function (x) { return qSet[x]; }).length;
+      return vt.length === 1 ? hit === 1 : (hit >= 2 || hit === vt.length);
     }
-
-    /* ── Candidate gathering (recall) — mirror findSimilar, don't rely on the
-       token index alone. ── */
-    var candidates = new Set();
-    tokens.forEach(function (tok) {
-      if (IX.byToken[tok]) IX.byToken[tok].forEach(function (i) { candidates.add(i); });
+    var byI = {}; out.results.forEach(function (r) { byI[r.i] = r; });
+    var cand = {}; Object.keys(byI).forEach(function (i) { cand[i] = 1; });
+    /* ticket keys typed in the query: that ticket, plus every ticket linked to it or mentioning it */
+    var keys = out.refs.filter(function (k) { return IX.byKey[k] != null; });
+    keys.forEach(function (k) {
+      cand[IX.byKey[k]] = 1;
+      (ENG.byRef[k] || []).forEach(function (i) { cand[i] = 1; });
+      IX.tickets[IX.byKey[k]].linkedKeys.forEach(function (lk) { if (IX.byKey[lk] != null) cand[IX.byKey[lk]] = 1; });
     });
-    function gatherField(map) {
-      Object.keys(map).forEach(function (val) {
-        if (fieldHit(val)) map[val].forEach(function (i) { candidates.add(i); });
-      });
-    }
-    gatherField(IX.byScreen);
-    gatherField(IX.byMenu);
-    gatherField(IX.byRC);
-    gatherField(IX.byComp);
-    gatherField(IX.byLabel);
-    gatherField(IX.byProject);
-    Object.keys(IX.byRelease).forEach(function (rk) {
-      if (qSet.has(rk) || (qLowerRaw && qLowerRaw.indexOf(rk) > -1)) IX.byRelease[rk].forEach(function (i) { candidates.add(i); });
-    });
-    /* Code / database object named in the query (e.g. pasting usp_createBIFORSPLIT) */
-    var qObjs = (String(query || "").match(OBJ_RX) || []).map(function (o) { return o.toLowerCase(); });
-    if (qObjs.length) { var oix = objIndex(); qObjs.forEach(function (o) { if (oix[o]) oix[o].list.forEach(function (i) { candidates.add(i); }); }); }
-    /* Pasted / referenced ticket key */
-    Object.keys(IX.byKey).forEach(function (key) {
-      if (qLowerRaw && qLowerRaw.indexOf(key.toLowerCase()) > -1) candidates.add(IX.byKey[key]);
-    });
+    /* code / database objects named in the query (e.g. usp_createBIFORSPLIT) */
+    var qObjs = (q.match(OBJ_RX) || []).map(function (o) { return o.toLowerCase(); }), oix = qObjs.length ? objIndex() : null;
+    if (oix) qObjs.forEach(function (o) { if (oix[o]) oix[o].list.forEach(function (i) { cand[i] = 1; }); });
+    Object.keys(IX.byRelease).forEach(function (rk) { if (rk.length > 2 && qLow.indexOf(rk) > -1) IX.byRelease[rk].forEach(function (i) { cand[i] = 1; }); });
 
     var results = [];
-    candidates.forEach(function (i) {
-      var cand = IX.tickets[i];
-      var reasons = [];
-      var struct = 0, text = 0, bonus = 0;
-      var sC = new Set(cand.tokens);
-
-      /* Text: cumulative IDF of matched query tokens (rare words weigh more). */
-      var matchIdf = 0, matched = 0, words = [];
-      qSet.forEach(function (tok) { if (sC.has(tok)) { matchIdf += (IX.idf[tok] || 0); matched++; words.push(tok); } });
-      text += Math.min(40, matchIdf * 4);
-      /* Coverage: reward matching MORE of the query. */
-      if (qSet.size) text += (matched / qSet.size) * 12;
-      /* Phrase + partial-word signals. */
-      text += jaccard(bgs, cand.bgs) * 16;
-      text += subBonus(tokens, cand.tokens) * 6;
-      /* Query ↔ description cross-match. */
-      if (cand.descTokens.length) {
-        var dC = new Set(cand.descTokens), mdi = 0;
-        qSet.forEach(function (tok) { if (dC.has(tok)) { mdi += (IX.idf[tok] || 0); if (words.indexOf(tok) < 0) words.push(tok); } });
-        text += Math.min(8, mdi * 2);
+    Object.keys(cand).forEach(function (si) {
+      var i = +si, t = IX.tickets[i], r = byI[i], rs = [];
+      var textPts = r ? 70 * r.text * (0.55 + 0.45 * r.cover) : 0;
+      var phr = r ? Math.min(12, r.phrase.s * 6 + r.phrase.o * 3) + (r.quoted ? 10 : 0) : 0;
+      var title = 0, struct = 0;
+      if (r && r.exactTitle === 2) { title += 30; rs.push({ c: "r-exact", t: "Exact title" }); }
+      else if (r && r.exactTitle === 1) { title += 15; rs.push({ c: "r-exact", t: "Title match" }); }
+      if (keys.indexOf(t.key) > -1) { title += 90; rs.push({ c: "r-lnk", t: "Ticket " + t.key }); }
+      else {
+        var hitK = keys.filter(function (k) { return (ENG.refsOf[i] || []).indexOf(k) > -1 || t.linkedKeys.indexOf(k) > -1; });
+        if (hitK.length) { title += 28; rs.push({ c: "r-lnk", t: "Linked to " + hitK[0] }); }
       }
-      if (text >= 8) reasons.push({ c: "r-txt", t: "Text match" });
-
-      /* Exact / near-exact title (pasting a subject). */
-      var candSum = (cand.summary || "").toLowerCase();
-      if (qLowerRaw.length >= 6 && candSum) {
-        if (candSum === qLowerRaw) { bonus += 35; reasons.push({ c: "r-exact", t: "Exact title" }); }
-        else if (candSum.indexOf(qLowerRaw) > -1 || qLowerRaw.indexOf(candSum) > -1) { bonus += 18; reasons.push({ c: "r-exact", t: "Title match" }); }
-      }
-      /* Direct ticket-key reference. */
-      if (cand.key && qLowerRaw && qLowerRaw.indexOf(cand.key.toLowerCase()) > -1) {
-        bonus += 40; reasons.push({ c: "r-lnk", t: cand.key });
-      }
-
-      /* Structural matches AGAINST THE QUERY (only when they truly relate). */
-      if (fieldHit(cand.screenName)) { struct += 16; reasons.push({ c: "r-scr", t: "Screen: " + cand.screenName }); }
-      if (fieldHit(cand.menuHead))  { struct += 12; reasons.push({ c: "r-menu", t: "Menu: " + cand.menuHead }); }
-      if (fieldHit(cand.rootCause)) { struct += 8;  reasons.push({ c: "r-rc", t: "Cause: " + cand.rootCause }); }
-      if (cand.components && cand.components.toLowerCase().split(/[;,]/).some(function (c) { return fieldHit(c.trim()); })) { struct += 6; reasons.push({ c: "r-comp", t: "Component" }); }
-      if (cand.labelList && cand.labelList.some(function (l) { return fieldHit(l); })) { struct += 5; reasons.push({ c: "r-lbl", t: "Label" }); }
-      if (fieldHit(cand.project)) { struct += 4; reasons.push({ c: "r-proj", t: cand.project }); }
-      if (qObjs.length) { objsOf(cand); var hitObj = qObjs.filter(function (o) { return cand._objSet[o]; }); if (hitObj.length) { struct += 40 + 6 * (hitObj.length - 1); reasons.push({ c: "r-scr", t: "Mentions " + objIndex()[hitObj[0]].name + (hitObj.length > 1 ? " +" + (hitObj.length - 1) : "") }); } }
-      if (cand.releaseKeys && cand.releaseKeys.some(function (rk) { return qSet.has(rk) || (qLowerRaw && qLowerRaw.indexOf(rk) > -1); })) { struct += 10; reasons.push({ c: "r-lnk", t: "Release" }); }
-
-      /* Prefer a documented solution — but only as a gated tiebreaker on top of
-         a genuine match, never as free credit. */
-      var base = struct + text + bonus, titleBonus = bonus, solBonus = 0;
-      if (base >= 12) {
-        if (cand.isResolved && cand.hasSolution) { bonus += 6; solBonus = 6; reasons.push({ c: "r-comp", t: "Has solution" }); }
-        else if (cand.isResolved) { bonus += 3; solBonus = 3; }
-      }
-
-      var score = Math.min(100, Math.round(struct + text + bonus));
-      var tier = score >= 65 ? "s" : score >= 40 ? "l" : "a";
-
-      /* Gate: require a real signal (meaningful text, any structural match, or a
-         strong bonus). Suppresses weak token-only noise. */
-      if (score >= 12 && (text >= 6 || struct > 0 || bonus >= 15)) {
-        results.push({ t: cand, s: score, rs: reasons, tier: tier, words: words, parts: { text: text, title: titleBonus, struct: struct, solution: solBonus } });
+      if (fieldHit(t.screenName)) { struct += 8; rs.push({ c: "r-scr", t: "Screen: " + t.screenName }); }
+      if (fieldHit(t.menuHead)) { struct += 6; rs.push({ c: "r-menu", t: "Menu: " + t.menuHead }); }
+      if (fieldHit(t.rootCause)) { struct += 4; rs.push({ c: "r-rc", t: "Cause: " + t.rootCause }); }
+      if (t.compList.some(fieldHit)) { struct += 3; rs.push({ c: "r-comp", t: "Component" }); }
+      if (t.labelList.some(fieldHit)) { struct += 3; rs.push({ c: "r-lbl", t: "Label" }); }
+      if (fieldHit(t.project)) { struct += 3; rs.push({ c: "r-proj", t: t.project }); }
+      if (qObjs.length) { objsOf(t); var ho = qObjs.filter(function (o) { return t._objSet[o]; }); if (ho.length) { struct += 40 + 6 * (ho.length - 1); rs.push({ c: "r-scr", t: "Mentions " + oix[ho[0]].name + (ho.length > 1 ? " +" + (ho.length - 1) : "") }); } }
+      if (t.releaseKeys.some(function (rk) { return rk.length > 2 && qLow.indexOf(rk) > -1; })) { struct += 10; rs.push({ c: "r-lnk", t: "Release" }); }
+      if (r && textPts >= 6) rs = whereTags(i, r.words).slice(0, 3).concat(rs);
+      var base = textPts + phr + title + struct, sol = 0;
+      if (base >= 12) { if (t.isResolved && hasFix(t)) { sol = 5; rs.push({ c: "r-comp", t: "Has a fix" }); } else if (t.isResolved) sol = 2; }
+      var score = Math.min(100, Math.round(base + sol));
+      if (score >= 15 && (textPts >= 8 || struct > 0 || title >= 15)) {
+        results.push({ t: t, s: score, rs: rs, tier: tierOf(score), words: r ? r.words : [], parts: { text: textPts + phr, title: title, struct: struct, solution: sol }, rank: r ? r.rank : 0 });
       }
     });
-
-    results.sort(function (a, b) {
-      if (b.s !== a.s) return b.s - a.s;
-      if (b.t.hasSolution !== a.t.hasSolution) return b.t.hasSolution ? 1 : -1;
-      return 0;
-    });
+    results.sort(function (a, b) { return b.s - a.s || b.rank - a.rank || (hasFix(b.t) ? 1 : 0) - (hasFix(a.t) ? 1 : 0); });
     return results.slice(0, topN);
   }
 
@@ -1141,6 +798,9 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
         "Menu Head": t.menuHead,
         "Root Cause": t.rootCause,
         "Type of Fix": t.typeOfFix,
+        "Reason for Occurrence - Text": t.reasonText,
+        "Reason for Occurrence": t.reasonOcc,
+        "Resolution Details": t.resolutionDetails,
         "Analysis": t.analysis,
         "Solution Summary": t.solutionSummary,
         "SVM In Charge": t.svmInCharge,
@@ -1178,7 +838,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
 
   var KEY_RE = /\b[A-Z][A-Z0-9]{1,11}-\d{1,7}\b/g, URL_RE = /https?:\/\/[^\s<>"')]+/g, OBJ_RE = /\b[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]{2,}\b/g, AT_RE = /@[A-Z][\w.]*(?: [A-Z][\w.]*)?/g;
   function stfRefs(t) {
-    var text = [t.analysis, t.solutionSummary, t.description].join("\n"), keys = {}, urls = {}, objs = {}, ppl = {};
+    var text = [t.reasonText, t.resolutionDetails, t.analysis, t.solutionSummary, t.description].join("\n"), keys = {}, urls = {}, objs = {}, ppl = {};
     (text.match(URL_RE) || []).forEach(function (u) { u = u.replace(/[.,;:]+$/, ""); urls[u] = 1; var k = u.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/); if (k) keys[k[1]] = 1; });
     (text.replace(URL_RE, " ").match(KEY_RE) || []).forEach(function (k) { if (k !== t.key) keys[k] = 1; });
     objsOf(t).forEach(function (o) { objs[o] = 1; });
@@ -1207,7 +867,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     var m = STF[idx] || { t: t, s: null, rs: [], tier: null }, words = stfWords(m), refs = stfRefs(t);
     var meta = [["Client", t.project], ["Priority", t.priority], ["Severity", t.severity], ["Created", fmtD(t.created)], ["Resolved", fmtD(t.resolved)], ["Updated", fmtD(t.updated)],
       ["SVM in charge", t.svmInCharge], ["Current worker", t.currentWorker], ["Screen", t.screenName], ["Menu", t.menuHead], ["Components", t.components], ["Labels", t.labels],
-      ["Root cause", t.rootCause], ["Type of fix", t.typeOfFix], ["Release", t.releaseNumber], ["Release (data fix)", t.releaseDataFix], ["Parent release", t.parentRelease], ["Delivered", t.deliveredDate ? fmtD(t.deliveredDate) : ""]]
+      ["Root cause", t.rootCause], ["Reason for occurrence", t.reasonOcc], ["Type of fix", t.typeOfFix], ["Release", t.releaseNumber], ["Release (data fix)", t.releaseDataFix], ["Parent release", t.parentRelease], ["Delivered", t.deliveredDate ? fmtD(t.deliveredDate) : ""]]
       .filter(function (x) { return x[1] && x[1] !== "—"; })
       .map(function (x) { return '<div class="stf-m"><span>' + esc(x[0]) + "</span><b>" + esc(x[1]) + "</b></div>"; }).join("");
     function sec(title, body, id) { return body ? '<div class="stf-sec"' + (id ? ' id="' + id + '"' : "") + '><div class="stf-h">' + title + "</div>" + body + "</div>" : ""; }
@@ -1221,7 +881,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
         '<div class="stf-sub">' + (m.ref ? "Similarity to <b>" + esc(m.ref.key) + "</b> — " + esc(m.ref.summary) : "Match to your search <b>“" + esc(_lastSearchQuery) + "”</b>") + "</div></div></div>";
       if (p) {
         var tot = Math.max(1, p.text + p.title + p.struct + p.solution);
-        why += '<div class="stf-parts">' + [["Words in the summary / description", p.text, "#0891B2"], ["Title / ticket-key match", p.title, "#B45309"], ["Same screen, menu, cause, component…", p.struct, "#7C3AED"], ["Resolved with a documented solution", p.solution, "#059669"]]
+        why += '<div class="stf-parts">' + [["Words in the summary, description, cause & resolution", p.text, "#0891B2"], ["Title / ticket-key match", p.title, "#B45309"], ["Same screen, menu, cause, component…", p.struct, "#7C3AED"], ["Resolved with a documented solution", p.solution, "#059669"]]
           .filter(function (x) { return x[1] > 0; }).map(function (x) { return '<div class="stf-part"><i style="width:' + Math.max(3, x[1] / tot * 100) + "%;background:" + x[2] + '"></i><span>' + x[0] + "</span><b>+" + Math.round(x[1]) + "</b></div>"; }).join("") + "</div>";
       }
       if (words.length) why += '<div class="stf-sub" style="margin-top:8px">Words in common: ' + words.slice(0, 25).map(function (w) { return '<mark>' + esc(w) + "</mark>"; }).join(" ") + "</div>";
@@ -1232,7 +892,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     var refHtml = "";
     if (refs.keys.length) refHtml += '<div class="stf-rl"><span>Tickets referred to</span><div>' + refs.keys.map(function (k) {
       var i = IX.byKey[k], o = i != null ? IX.tickets[i] : null;
-      return '<div class="stf-ref"><a class="stf-k" data-stfkey="' + k + '" href="https://svmhelpdesk.atlassian.net/browse/' + k + '" target="_blank" rel="noreferrer">' + k + "</a> " + (o ? sPill(o.status, o.isChange) + " <span>" + clip(o.summary, 110) + "</span>" + (o.analysis || o.solutionSummary ? ' <em>has analysis</em>' : "") : '<span class="stf-sub">not in the loaded data</span>') + "</div>";
+      return '<div class="stf-ref"><a class="stf-k" data-stfkey="' + k + '" href="https://svmhelpdesk.atlassian.net/browse/' + k + '" target="_blank" rel="noreferrer">' + k + "</a> " + (o ? sPill(o.status, o.isChange) + " <span>" + clip(o.summary, 110) + "</span>" + (hasFix(o) ? ' <em>has a recorded fix</em>' : "") : '<span class="stf-sub">not in the loaded data</span>') + "</div>";
     }).join("") + "</div></div>";
     if (refs.objs.length) {
       var oix = objIndex();
@@ -1256,15 +916,17 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     var html = '<div class="stf-ov" id="stfOv" role="dialog" aria-modal="true" aria-label="Ticket ' + esc(t.key) + '"><div class="stf-box">' +
       '<div class="stf-top"><div style="min-width:0"><div class="sim-k"><a href="https://svmhelpdesk.atlassian.net/browse/' + esc(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + " ↗</a> " + sPill(t.status, t.isChange) + " " + tPill(t) + "</div>" +
       '<div class="stf-title">' + esc(t.summary) + "</div></div>" +
-      '<div class="stf-act">' + (t.analysis ? '<button class="stf-b" id="stfCopy">Copy analysis</button>' : "") + '<button class="stf-x" id="stfX" aria-label="Close">✕</button></div></div>' +
+      '<div class="stf-act">' + (hasFix(t) ? '<button class="stf-b" id="stfCopy">Copy fix</button>' : "") + '<button class="stf-x" id="stfX" aria-label="Close">✕</button></div></div>' +
       '<div class="stf-body">' +
         (meta ? '<div class="stf-meta">' + meta + "</div>" : "") +
-        sec("Analysis", txt(t.analysis), "stfAna") +
+        sec("Reason for occurrence", txt(t.reasonText)) +
+        sec("Resolution details", txt(t.resolutionDetails)) +
         sec("Solution summary", txt(t.solutionSummary)) +
+        sec("Analysis", txt(t.analysis), "stfAna") +
         sec("What the analysis is based on", refHtml) +
         sec("Why this ticket matched", why) +
         sec("Description", txt(t.description, "stf-desc")) +
-        (!t.analysis && !t.solutionSummary ? '<div class="stf-sub" style="margin-top:6px">No analysis or solution recorded for this ticket yet.</div>' : "") +
+        (!hasFix(t) ? '<div class="stf-sub" style="margin-top:6px">No cause, resolution or analysis recorded for this ticket yet.</div>' : "") +
       "</div></div></div>";
     stfClose();
     var w = document.createElement("div"); w.innerHTML = html; document.body.appendChild(w.firstChild);
@@ -1277,7 +939,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
       if (a && IX.byKey[a.getAttribute("data-stfkey")] != null && !(e.ctrlKey || e.metaKey)) { e.preventDefault(); stfOpen(IX.byKey[a.getAttribute("data-stfkey")]); }
     });
     el("stfX").onclick = stfClose;
-    var cp = el("stfCopy"); if (cp) cp.onclick = function () { try { navigator.clipboard.writeText(t.analysis).then(function () { cp.textContent = "✓ Copied"; }); } catch (e) {} };
+    var cp = el("stfCopy"); if (cp) cp.onclick = function () { try { navigator.clipboard.writeText(fixText(t)).then(function () { cp.textContent = "✓ Copied"; }); } catch (e) {} };
     el("stfX").focus();
   }
   function stfObjList(key, selfIdx) {
@@ -1291,7 +953,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     });
     var rx = new RegExp(e.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
     function snip(x) {
-      var src = [x.analysis, x.solutionSummary, x.description].filter(Boolean).join("\n"), m = rx.exec(src); if (!m) return "";
+      var src = [x.resolutionDetails, x.reasonText, x.analysis, x.solutionSummary, x.description].filter(Boolean).join("\n"), m = rx.exec(src); if (!m) return "";
       var a = Math.max(0, m.index - 90), b = Math.min(src.length, m.index + m[0].length + 110);
       return (a ? "…" : "") + esc(src.slice(a, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(src.slice(m.index + m[0].length, b)) + (b < src.length ? "…" : "");
     }
@@ -1349,7 +1011,8 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     all.filter(function (m) { return m.t.isChange; }).concat(t.isChange ? [] : findRelChanges(t, 6)).forEach(function (m) { if (!cm[m.t.key] || cm[m.t.key].s < m.s) cm[m.t.key] = m; });
     var changes = Object.keys(cm).map(function (k) { return cm[k]; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 6);
     var best = null;
-    sim.forEach(function (m) { if (!best && m.s >= 40 && (m.t.solutionSummary || m.t.analysis)) best = m; });
+    sim.forEach(function (m) { if (!best && m.s >= 40 && hasFix(m.t) && m.t.isResolved) best = m; });
+    if (!best) sim.forEach(function (m) { if (!best && m.s >= 40 && hasFix(m.t)) best = m; });
     var sig = best ? "fix" : sim.length && sim[0].s >= 35 ? "sim" : "new";
     return (SIM[t.idx] = { sim: sim, changes: changes, best: best, sig: sig, top: sim.length ? sim[0].s : 0 });
   }
@@ -1473,14 +1136,14 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
       (SEARCH.length ? '<button class="rchip" id="srExport">Export to Excel</button>' : '') + '</div>';
     if (!SEARCH.length) {
       el("railList").innerHTML = '<div class="r-empty"><b>No matches</b>Try fewer or different words — an error message, a screen name, a procedure name or a ticket key all work.</div>';
-      paneEmpty("No matches for “" + F.q + "”", "The search looks at summaries, descriptions, analyses, solutions, screens and code objects. Try other words.");
+      paneEmpty("No matches for “" + F.q + "”", "The search reads summaries, descriptions, the Root Cause tab (reason for occurrence, resolution details), analyses, screens and code objects. Try other words — spelling mistakes are fine.");
       return;
     }
     el("railList").innerHTML = SEARCH.map(function (m, i) {
       var t = m.t;
       return '<div class="ri" data-ri="' + t.idx + '" data-si="' + i + '" role="option">' +
         '<div class="ri-k"><i class="pd" style="background:' + (t.isResolved ? "var(--fix)" : PRI_C[priKey(t.priority)]) + '"></i>' + esc(t.key) + '<span class="ty">' + esc(t.isResolved ? "Resolved " + fmtD(t.resolved) : t.status) + '</span></div>' +
-        '<div class="ri-r">' + ring(m.s, "sm") + (t.hasSolution && (t.solutionSummary || t.analysis) ? '<span class="sig fix" title="Has a documented solution">● Fix</span>' : '') + '</div>' +
+        '<div class="ri-r">' + ring(m.s, "sm") + (hasFix(t) ? '<span class="sig fix" title="Has a recorded cause / resolution">● Fix</span>' : '') + '</div>' +
         '<div class="ri-s">' + esc(t.summary) + '</div>' +
         '<div class="ri-m">' + esc([t.project, t.screenName || t.menuHead].filter(Boolean).join(" — ")) + '</div>' +
       '</div>';
@@ -1569,7 +1232,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     if (!t) return "";
     if (!own) stfReg(m);
     var cls = own ? "" : m.tier === "s" ? "" : " likely";
-    var body = (t.solutionSummary ? '<span class="lb">Solution</span>' + clip(t.solutionSummary, 700) : '') + (t.analysis ? '<span class="lb">Analysis</span>' + clip(t.analysis, own ? 900 : 450) : '');
+    var body = solParts(t).map(function (p) { return '<span class="lb">' + p.l + '</span>' + clip(p.v, p.k === "a" ? (own ? 900 : 450) : 700); }).join("");
     return '<div class="fixcard' + cls + '"><div class="fx-top">' + (own ? '' : ring(m.s, "lg")) +
       '<div><div class="fx-t">' + (own ? "How this ticket was resolved" : "Best known fix") + '</div>' +
       '<div class="fx-sub">' + (own ? (t.resolved ? "Resolved " + esc(fmtD(t.resolved)) : "Recorded on this ticket") :
@@ -1577,7 +1240,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
       (own ? '' : '<div class="mr-s" style="margin:10px 0 0">' + esc(t.summary) + '</div>') +
       '<div class="fx-tags">' + (own ? '' : tierB(m.tier)) + (t.rootCause ? '<span class="stag rc">Cause: ' + esc(t.rootCause) + '</span>' : '') + (t.typeOfFix ? '<span class="stag fx">Fix: ' + esc(t.typeOfFix) + '</span>' : '') + (own ? '' : rTags(m.rs, 4)) + '</div>' +
       '<div class="fx-body">' + body + '</div>' +
-      '<div class="fx-act"><button class="btn pri" data-open="' + t.idx + '"' + (own ? '' : ' data-openm="1"') + '>Read the full analysis</button>' + (t.solutionSummary || t.analysis ? '<button class="btn" data-copysol="' + t.idx + '">Copy solution</button>' : '') + '</div></div>';
+      '<div class="fx-act"><button class="btn pri" data-open="' + t.idx + '"' + (own ? '' : ' data-openm="1"') + '>Read the full analysis</button>' + (hasFix(t) ? '<button class="btn" data-copysol="' + t.idx + '">Copy solution</button>' : '') + '</div></div>';
   }
   function agreeHTML(sim) {
     var withSol = sim.filter(function (m) { return m.t.rootCause || m.t.typeOfFix; });
@@ -1591,7 +1254,8 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
       '<div class="agree">' + box("Root cause", "rootCause", "#D59A1F") + box("Type of fix", "typeOfFix", "var(--fix)") + '</div></div>';
   }
   function matchRow(m) {
-    var t = m.t, sol = t.solutionSummary ? '<b>Solution:</b> ' + clip(t.solutionSummary, 240) : t.analysis ? '<b>Analysis:</b> ' + clip(t.analysis, 240) : '';
+    var t = m.t, sp = solParts(t), fx = sp.filter(function (p) { return p.k === "r" || p.k === "s"; })[0] || sp[0], cz = sp.filter(function (p) { return p.k === "c"; })[0];
+    var sol = fx ? '<b>' + fx.l + ':</b> ' + clip(fx.v, 240) + (cz && cz !== fx ? '<br><b>Cause:</b> ' + clip(cz.v, 160) : '') : '';
     return '<div class="mr' + (t.isChange ? " chg" : "") + '" data-stf="' + stfReg(m) + '" title="Open full details">' + ring(m.s) +
       '<div style="min-width:0"><div class="mr-k"><a href="' + JIRA_URL + esc(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a>' + sPill(t.status, t.isChange) +
         '<span class="d">' + esc(fmtD(t.resolved || t.created)) + (t.project ? ' · ' + esc(t.project) : '') + '</span></div>' +
@@ -1608,7 +1272,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   }
   var PANE_TOK = 0;
   function paneTicket(t, match) {
-    var tok = ++PANE_TOK, own = t.hasSolution && (t.solutionSummary || t.analysis);
+    var tok = ++PANE_TOK, own = hasFix(t);
     var head = '<div class="pw">' + ticketHead(t);
     if (match) head += '<div class="sec"><div class="sec-h"><h3>Why it matched your search</h3></div><div style="display:flex;gap:14px;align-items:center">' + ring(match.s, "lg") + '<div>' + tierB(match.tier) + '<div class="mr-rs" style="margin-top:6px">' + rTags(match.rs, 8) + '</div></div></div></div>';
     if (own) head += '<div class="sec">' + fixCard({ t: t }, true) + '</div>';
@@ -1641,7 +1305,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
       return '<div class="ag"><h4>' + title + '</h4>' + k.map(function (v) { return '<div class="agr"><span title="' + esc(v) + '">' + esc(v) + '</span><span class="bar"><i style="width:' + (obj[v] / obj[k[0]] * 100) + '%;background:' + color + '"></i></span><b>' + obj[v] + '</b></div>'; }).join("") + '</div>';
     }
     var open = tix.filter(function (t) { return !t.isResolved; }).sort(function (a, b) { return PRI_N[priKey(a.priority)] - PRI_N[priKey(b.priority)] || ts(b.created) - ts(a.created); });
-    var solved = tix.filter(function (t) { return t.isResolved && (t.solutionSummary || t.analysis); }).sort(function (a, b) { return ts(b.resolved || b.created) - ts(a.resolved || a.created); });
+    var solved = tix.filter(function (t) { return t.isResolved && hasFix(t); }).sort(function (a, b) { return ts(b.resolved || b.created) - ts(a.resolved || a.created); });
     function tl(t) { return '<div class="tl" data-stf="' + plainStf(t) + '"><span class="k">' + esc(t.key) + '</span><span class="s" title="' + esc(t.summary) + '">' + esc(t.summary) + '</span><span class="x">' + (t.isResolved ? (t.typeOfFix ? '<span class="stag fx">' + esc(t.typeOfFix) + '</span>' : '') : prioHTML(t.priority)) + '<span class="mr-k"><span class="d">' + age(t.isResolved ? t.resolved : t.created) + '</span></span></span></div>'; }
     var last = c.recentDate ? fmtD(c.recentDate) : "—";
     el("pane").innerHTML = '<div class="pw"><div class="th-k"><span class="pill pill-oth">Hotspot</span>' + (c.changes ? '<span class="pill pill-chg">' + c.changes + ' change' + (c.changes > 1 ? 's' : '') + '</span>' : '') + '</div>' +
@@ -1706,7 +1370,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     if ((b = e.target.closest("[data-open]"))) { var t = IX.tickets[+b.dataset.open]; if (b.dataset.openm && STF[t.idx]) stfOpen(t.idx); else stfOpen(plainStf(t)); return; }
     if ((b = e.target.closest("[data-q]"))) { searchFor(b.dataset.q); return; }
     if ((b = e.target.closest("[data-desc]"))) { var d = el("pDesc"); if (d) { var o = d.classList.toggle("open"); b.textContent = o ? "Show less" : "Show the full description"; } return; }
-    if ((b = e.target.closest("[data-copysol]"))) { var x = IX.tickets[+b.dataset.copysol], txt = [x.solutionSummary, x.analysis].filter(Boolean).join("\n\n"); copyText(txt, b, "Copied"); return; }
+    if ((b = e.target.closest("[data-copysol]"))) { var x = IX.tickets[+b.dataset.copysol], txt = fixText(x); copyText(txt, b, "Copied"); return; }
     if ((b = e.target.closest("[data-copykey]"))) { copyText(b.dataset.copykey, b, "Copied"); }
   });
   function copyText(txt, btn, done) { var l = btn.textContent; try { navigator.clipboard.writeText(txt).then(function () { btn.textContent = "✓ " + done; setTimeout(function () { btn.textContent = l; }, 1600); }); } catch (e) {} }
@@ -1720,6 +1384,14 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   function boot(rows) {
     initCols(rows);
     IX = buildIndex(rows); OBJIX = null; CL = null; SIM = {};
+    var li = document.querySelector("#landing .landing-inner");
+    if (!window.HDSearch) { if (li) li.innerHTML = '<h1>Similar Ticket Finder</h1><p><b>hd-search.js</b> did not load. Upload it to the same folder as this page, then reload.</p>'; return Promise.resolve(); }
+    if (li) li.innerHTML = '<h1>Similar Ticket Finder</h1><p id="ixProg">Reading ' + num(IX.tickets.length) + ' tickets — summaries, descriptions, root cause and resolution details…</p>' +
+      '<div class="meter" style="width:260px;height:6px;margin:0 auto;background:var(--line2);border-radius:9px;overflow:hidden"><i id="ixBar" style="display:block;height:100%;width:0;background:var(--cy)"></i></div>';
+    return HDSearch.buildAsync(engineDocs(IX), { keyPrefixes: IX.prefixes }, function (p) { var b = el("ixBar"); if (b) b.style.width = Math.round(p * 100) + "%"; })
+      .then(function (E) { ENG = E; boot2(); });
+  }
+  function boot2() {
     var projects = {}; IX.tickets.forEach(function (t) { if (t.project) projects[t.project] = (projects[t.project] || 0) + 1; });
     var gc = el("gClient");
     gc.innerHTML = '<option value="">All clients</option>' + Object.keys(projects).sort(function (a, b) { return projects[b] - projects[a]; })
