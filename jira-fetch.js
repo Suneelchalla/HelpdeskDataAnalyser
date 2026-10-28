@@ -194,7 +194,14 @@
     });
   }
   function person(v) { if (!v) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.map(function (x) { return x.displayName || x.name || ""; }).join(", "); return v.displayName || v.name || v.value || ""; }
-  function choice(v) { if (!v) return ""; if (typeof v === "string") return v; return v.value || v.name || ""; }
+  /* single select, multi-select (array) and cascading select ("Parent - Child") all read as text */
+  function choice(v) {
+    if (!v) return ""; if (typeof v === "string") return v;
+    if (Array.isArray(v)) return v.map(choice).filter(Boolean).join("; ");
+    var s = v.value || v.name || "";
+    if (v.child) { var c = choice(v.child); if (c) s = s ? s + " - " + c : c; }
+    return s;
+  }
   function txt(v) { if (v == null) return ""; if (typeof v === "object") return v.value || v.name || v.displayName || (Array.isArray(v) ? v.map(function (x) { return x.value || x.name || x; }).join(", ") : ""); return String(v); }
   /* Jira rich text (ADF) → readable plain text. Keeps what the old version dropped: line breaks, list bullets,
      links (as "text (url)"), @mentions, ticket smart-links / cards (their URL, so referenced tickets survive),
@@ -278,14 +285,27 @@
      finally completed.) */
   var TEXT_VER = 2;
   var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType"];
+  /* Every custom field the fetch knows. Any of them that is unmapped ("" or missing) is auto-detected again.
+     Before, only NEW_KEYS were checked, so a mapping that got blanked (e.g. Settings saved before "Test connection &
+     discover fields" had filled the dropdowns) stayed blank for good — Root Cause came back empty for every ticket
+     and the Trend Tracker's Clarification view showed nothing. Detection only fills blanks, never overwrites a
+     mapping someone chose, and uses the saved field list when there is one (no extra Jira call). */
+  var ALL_KEYS = ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"].concat(NEW_KEYS);
+  var _discoveredThisSession = false;
   function ensureFieldMap(cfg) {
-    var fm = cfg.fieldMap || {}, need = NEW_KEYS.filter(function (k) { return !(k in fm); });
+    var fm = cfg.fieldMap || {}, need = ALL_KEYS.filter(function (k) { return !fm[k]; });
     if (!need.length) return Promise.resolve(cfg);
-    var src = cfg._fields && cfg._fields.length ? Promise.resolve(cfg._fields) : discoverFields(cfg).catch(function () { return []; });
+    function fills(list) { var auto = autoDetect(list || []); return need.some(function (k) { return auto[k]; }); }
+    var src;
+    if (cfg._fields && cfg._fields.length && fills(cfg._fields)) src = Promise.resolve(cfg._fields);          // saved list is enough
+    else if (!_discoveredThisSession) src = discoverFields(cfg).then(function (l) { _discoveredThisSession = true; return l; },
+                                                                     function () { _discoveredThisSession = true; return null; });
+    else return Promise.resolve(cfg);                                                                       // already looked this session
     return src.then(function (list) {
-      var auto = autoDetect(list || []);
-      need.forEach(function (k) { fm[k] = auto[k] || ""; });           // "" = looked for, not found (not searched again)
-      cfg.fieldMap = fm; if (list && list.length && !(cfg._fields && cfg._fields.length)) cfg._fields = list;
+      if (!list || !list.length) return cfg;
+      var auto = autoDetect(list);
+      need.forEach(function (k) { if (auto[k]) fm[k] = auto[k]; else if (!(k in fm)) fm[k] = ""; });
+      cfg.fieldMap = fm; cfg._fields = list;
       saveCfg(cfg); return cfg;
     });
   }
