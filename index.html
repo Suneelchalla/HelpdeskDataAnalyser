@@ -869,7 +869,13 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
   el("jiraFetchBtn").onclick=function(){ runFetch({}); };
   window.HDRefresh={ run:function(){ runFetch({refresh:true}); }, busy:function(){ return _busy; } };
   var _rb=el("refreshBtn"); if(_rb) _rb.onclick=function(){ runFetch({refresh:true}); };
-  var _fb=el("fullBtn"); if(_fb) _fb.onclick=function(){ runFetch({full:true, refresh:true}); };
+  var _fb=el("fullBtn"); if(_fb) _fb.onclick=function(){
+    if(_busy) return;
+    hdConfirm({ icon:"🔄", title:"Re-download everything from Jira?", ok:"Start full fetch",
+      body:"A full fetch pulls the <b>entire ticket history</b> again instead of only what changed since the last refresh. With many tickets this can take several minutes."+
+        "<ul><li>Use it when data looks wrong or a field mapping was changed.</li><li>For a normal update, <b>Refresh</b> is enough and much faster.</li><li>Dashboards keep the current data until the fetch finishes.</li></ul>"
+    }).then(function(yes){ if(yes) runFetch({full:true, refresh:true}); });
+  };
   el("fetchCancel").onclick=function(){
     el("fetching").classList.add("hidden");
     if(window.__restoreLoaded){ window.__restoreLoaded(true); } else { el("empty").classList.remove("hidden"); }
@@ -1052,10 +1058,61 @@ function handleFile(file){
 }
 
 /* wiring */
+
+/* ── Confirm dialog (used before actions that discard or re-download data) ──
+   hdConfirm({title, body (HTML), ok, okTone:"danger"|"primary"}) → Promise<boolean>. Esc / Cancel / click outside = no. */
+function hdConfirm(o){
+  return new Promise(function(res){
+    if(!document.getElementById("hdcf-style")){
+      var st=document.createElement("style"); st.id="hdcf-style";
+      st.textContent=".hdcf-ov{position:fixed;inset:0;z-index:2147483100;background:rgba(15,23,42,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:hdcfIn .15s ease-out}"+
+        ".hdcf{background:#fff;color:#111827;border-radius:14px;width:min(440px,100%);box-shadow:0 24px 60px rgba(0,0,0,.25);padding:22px 22px 18px;font-family:inherit}"+
+        ".hdcf h3{margin:0 0 8px;font-size:16px;font-weight:800;display:flex;gap:9px;align-items:center}"+
+        ".hdcf .b{font-size:13px;line-height:1.6;color:#4b5563}.hdcf .b ul{margin:8px 0 0;padding-left:18px}.hdcf .b li{margin:3px 0}"+
+        ".hdcf .a{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}"+
+        ".hdcf button{padding:9px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid #d1d5db;background:#f9fafb;color:#374151}"+
+        ".hdcf button.ok{border:none;color:#fff;background:#0f766e}.hdcf button.ok.danger{background:#dc2626}"+
+        ".hdcf button:focus-visible{outline:2px solid #2563eb;outline-offset:2px}"+
+        "@keyframes hdcfIn{from{opacity:0}to{opacity:1}}";
+      document.head.appendChild(st);
+    }
+    var prevFocus=document.activeElement, ov=document.createElement("div");
+    ov.className="hdcf-ov"; ov.setAttribute("role","alertdialog"); ov.setAttribute("aria-modal","true"); ov.setAttribute("aria-labelledby","hdcfT");
+    ov.innerHTML='<div class="hdcf"><h3 id="hdcfT">'+(o.icon||"⚠️")+' '+o.title+'</h3><div class="b">'+(o.body||"")+'</div>'+
+      '<div class="a"><button type="button" class="no">Cancel</button><button type="button" class="ok'+(o.okTone==="danger"?" danger":"")+'">'+(o.ok||"Continue")+'</button></div></div>';
+    document.body.appendChild(ov);
+    var no=ov.querySelector(".no"), ok=ov.querySelector(".ok");
+    function done(v){ document.removeEventListener("keydown",key,true); ov.remove(); try{ if(prevFocus&&prevFocus.focus) prevFocus.focus(); }catch(e){} res(v); }
+    function key(e){
+      if(e.key==="Escape"){ e.preventDefault(); done(false); }
+      else if(e.key==="Tab"){ e.preventDefault(); (document.activeElement===ok?no:ok).focus(); }
+    }
+    no.onclick=function(){ done(false); }; ok.onclick=function(){ done(true); };
+    ov.addEventListener("click",function(e){ if(e.target===ov) done(false); });
+    document.addEventListener("keydown",key,true);
+    no.focus();                                   // safe default: Enter on open = Cancel
+  });
+}
+function hdLoadedText(){
+  var n=(document.getElementById("fcount")||{}).textContent||"", f=(document.getElementById("fname")||{}).textContent||"";
+  return (n?"<b>"+n+"</b> tickets":"the loaded data")+(f?" from <b>"+f.replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];})+"</b>":"");
+}
 el("chooseBtn").onclick=function(){ el("fileinput").click(); };
 el("dz").onclick=function(){ el("fileinput").click(); };
 el("fileinput").onchange=function(e){ handleFile(e.target.files&&e.target.files[0]); e.target.value=""; };
-el("changeBtn").onclick=function(){ if(window.HDTabs)HDTabs.markStale(); if(HS){HS.clearRows();if(HS.clearFetchCache)HS.clearFetchCache();HS.clearFile().then(showEmpty);}else{showEmpty();} };
+el("changeBtn").onclick=function(){
+  if(window.HDRefresh&&HDRefresh.busy()){ hdConfirm({icon:"⏳",title:"A Jira fetch is running",body:"Wait for it to finish (or cancel it) before changing the file.",ok:"OK"}); return; }
+  hdConfirm({ title:"Change the data file?", okTone:"danger", ok:"Yes, remove it",
+    body:"This removes "+hdLoadedText()+" from this browser so you can load a different file or fetch from Jira again."+
+      "<ul><li>Corrections made in any dashboard’s <b>Edit Data</b> tab are discarded.</li>"+
+      "<li>The next Jira fetch downloads the full history again (slower once).</li>"+
+      "<li>Open dashboard tabs will need to reload.</li></ul>"+
+      "SLA history, Master Data and settings are kept."
+  }).then(function(yes){
+    if(!yes) return;
+    if(window.HDTabs)HDTabs.markStale(); if(HS){HS.clearRows();if(HS.clearFetchCache)HS.clearFetchCache();HS.clearFile().then(showEmpty);}else{showEmpty();}
+  });
+};
 
 var dz=el("dz");
 ["dragenter","dragover"].forEach(function(ev){ dz.addEventListener(ev,function(e){e.preventDefault();dz.classList.add("over");}); });
