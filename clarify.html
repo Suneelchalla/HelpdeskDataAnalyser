@@ -405,7 +405,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   var F = {
     tab: "queue",
     gClient: "",        // global client/project filter
-    gType: [],          // global request type multi-select
+    gType: [],          // global request type multi-select (set to Incident + Service Request on load; Changes are opt-in)
     gSort: "relevance", // search result sort
     qf: "active",
     qt: "all",
@@ -1397,12 +1397,15 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     gc.innerHTML = '<option value="">All clients</option>' + Object.keys(projects).sort(function (a, b) { return projects[b] - projects[a]; })
       .map(function (p) { return '<option value="' + esc(p) + '">' + esc(p) + ' (' + num(projects[p]) + ')</option>'; }).join("");
     var types = {}; IX.tickets.forEach(function (t) { if (t.issueType) types[t.issueType] = 1; });
+    /* lists show Incidents + Service Requests by default; Change tickets are still used for "Related changes" */
+    function defTypes() { return Object.keys(types).filter(function (n) { return /^(incident|service request)$/i.test(n.trim()); }); }
+    F.gType = Object.keys(types).some(function (n) { return /change/i.test(n); }) ? defTypes() : [];
     var gTypeId = mselCreate("gType", "All types", Object.keys(types).sort(), F.gType, function (sel) { F.gType = sel; }, function () { globalFilterChanged(); });
     el("gTypeMselSlot").innerHTML = mselHTML(gTypeId); mselBind();
     gc.onchange = function () { F.gClient = gc.value; globalFilterChanged(); };
     el("gReset").onclick = function () {
-      F.gClient = ""; F.gType = []; F.gSort = "relevance"; F.qt = "all"; F.qpri = ""; F.known = false; F.qsort = "newest"; gc.value = "";
-      var inst = _mselInstances[gTypeId]; if (inst) { inst.sel = []; mselUpdateBtn(gTypeId); }
+      F.gClient = ""; F.gType = Object.keys(types).some(function (n) { return /change/i.test(n); }) ? defTypes() : []; F.gSort = "relevance"; F.qt = "all"; F.qpri = ""; F.known = false; F.qsort = "newest"; gc.value = "";
+      var inst = _mselInstances[gTypeId]; if (inst) { inst.sel = F.gType.slice(); mselUpdateBtn(gTypeId); }
       globalFilterChanged();
     };
     el("landing").classList.add("hidden"); el("app").classList.remove("hidden");
