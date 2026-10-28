@@ -1124,9 +1124,8 @@ function bind(){
     if(S.status) parts.push(slug(S.status));
     if(S.issueType.length) parts.push(S.issueType.map(slug).join("-"));
     parts.push(new Date().toISOString().slice(0,10));
-    document.title=parts.join("_");
-    window.print();
-    setTimeout(function(){ document.title=orig; }, 1000);
+    if(window.HDPrint) HDPrint(parts.join("_"));
+    else { document.title=parts.join("_"); window.print(); setTimeout(function(){ document.title=orig; }, 1000); }
   };
   el("backbtn").onclick=function(){ window.location.href="index.html"; };
   document.querySelectorAll(".rtab").forEach(function(b){ b.onclick=function(){ P.view=b.getAttribute("data-view"); setHash(); render(); window.scrollTo(0,0); }; });
@@ -1740,7 +1739,7 @@ function bindPerf(view,pc){
   var ap=el("paddpeer"); if(ap) ap.onchange=function(){ if(ap.value){ P.cmp[view].push(ap.value); render(); } };
   document.querySelectorAll("[data-unpeer]").forEach(function(b){ b.onclick=function(){ var n=b.getAttribute("data-unpeer"); P.cmp[view]=P.cmp[view].filter(function(x){return x!==n;}); render(); }; });
   var bp=el("pbestpeer"); if(bp) bp.onclick=function(){ var k=KPI[view].filter(function(x){return x.b>0;})[0], s=pc.st[k.id]; if(s&&s.best&&s.best.m.name!==P.person[view]) P.cmp[view].push(s.best.m.name); else { var o=pc.team.filter(function(x){return x.name!==P.person[view];})[0]; if(o) P.cmp[view].push(o.name); } render(); };
-  var pr=el("printbtn2"); if(pr) pr.onclick=function(){ var o=document.title; document.title=["Report",view==="hd"?"HD-worker":"SVM-in-charge",(P.person[view]||"team").replace(/[^\w]+/g,"-"),new Date().toISOString().slice(0,10)].join("_"); window.print(); setTimeout(function(){document.title=o;},1000); };
+  var pr=el("printbtn2"); if(pr) pr.onclick=function(){ if(window.HDPrint){ HDPrint(["Report",view==="hd"?"HD-worker":"SVM-in-charge",(P.person[view]||"team").replace(/[^\w]+/g,"-"),new Date().toISOString().slice(0,10)].join("_")); return; } var o=document.title; document.title=["Report",view==="hd"?"HD-worker":"SVM-in-charge",(P.person[view]||"team").replace(/[^\w]+/g,"-"),new Date().toISOString().slice(0,10)].join("_"); window.print(); setTimeout(function(){document.title=o;},1000); };
   var cs=el("pcsv"); if(cs) cs.onclick=function(){
     var ks=KPI[view], lines=[["Person","Group","Ranked"].concat(ks.map(function(k){return k.l;})).join(",")];
     pc.rows.forEach(function(m){ lines.push([m.name,m.group,pc.team.indexOf(m)>-1?"yes":"no"].concat(ks.map(function(k){ var v=k.g(m); return v==null||isNaN(v)?"":(k.f===fmtN?v:Math.round(v*10)/10); })).map(function(x){ x=String(x==null?"":x); return /[",\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x; }).join(",")); });
