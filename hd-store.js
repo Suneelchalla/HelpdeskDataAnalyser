@@ -461,3 +461,25 @@
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot); else boot();
   window.HDLock={ openAdmin:openAdmin, isLocked:isLocked };
 })();
+
+/* ══════════════════ HD Dashboards — print with a file name ══════════════════
+   Chrome names a saved PDF after the TOP page's title. When a dashboard runs as a tab inside the launcher
+   (an iframe), setting only its own document.title is ignored and the PDF is called "Reports · HD Dashboards".
+   HDPrint(name) sets the name on this page AND on the launcher, prints, then puts both titles back. */
+(function () {
+  function clean(s) { return String(s || "").replace(/[\\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 150) || "Report"; }
+  window.HDPrint = function (name) {
+    name = clean(name);
+    var docs = [document];
+    try { if (window.top && window.top !== window && window.top.document) docs.push(window.top.document); } catch (e) {}   // other origin: own page only
+    var old = docs.map(function (d) { return d.title; }), restored = false;
+    function restore() {
+      if (restored) return; restored = true;
+      docs.forEach(function (d, i) { try { d.title = old[i]; } catch (e) {} });
+      window.removeEventListener("afterprint", restore);
+    }
+    docs.forEach(function (d) { try { d.title = name; } catch (e) {} });
+    window.addEventListener("afterprint", restore);
+    try { window.print(); } finally { setTimeout(restore, 1500); }   // print() blocks until the dialog closes
+  };
+})();
