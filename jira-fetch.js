@@ -16,13 +16,13 @@
   window.postMessage({ type: "HD_BRIDGE_PING" }, "*");
   setTimeout(function(){ window.postMessage({ type: "HD_BRIDGE_PING" }, "*"); }, 500);
 
-  function bridgeCall(host, path, method, body) {
+  function bridgeCall(host, path, method, body, timeoutMs) {
     if (!_bridgeReady) return Promise.reject(new Error("EXTENSION_NOT_FOUND"));
     return new Promise(function (resolve, reject) {
       var id = ++_seq;
       _pending[id] = { resolve: resolve, reject: reject };
       window.postMessage({ type: "HD_BRIDGE_CALL", id: id, host: host, path: path, method: method || "GET", body: body || null }, "*");
-      setTimeout(function () { if (_pending[id]) { delete _pending[id]; reject(new Error("Request timed out.")); } }, 60000);
+      setTimeout(function () { if (_pending[id]) { delete _pending[id]; reject(new Error(timeoutMs ? "TIMEOUT" : "Request timed out.")); } }, timeoutMs || 60000);
     });
   }
 
@@ -31,10 +31,10 @@
   function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} }
 
   function testConnection(cfg) {
-    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/3/myself");
+    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/3/myself", "GET", null, cfg.timeoutMs);
   }
   function discoverFields(cfg) {
-    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/3/field")
+    return bridgeCall(cfg.jiraHost || "svmhelpdesk.atlassian.net", "/rest/api/3/field", "GET", null, cfg.timeoutMs)
       .then(function (fields) {
         return fields.filter(function (f) { return f.custom; })
           .sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); });
