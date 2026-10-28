@@ -83,6 +83,19 @@
     return map;
   }
 
+  /* Jira often has several custom fields with the SAME name (company-managed + team-managed projects, old copies).
+     Mapping only the first one silently gives empty values for every ticket that uses another copy — that is how
+     Root Cause came back blank for all tickets. This returns, per key, every field matching its best pattern. */
+  function autoDetectAll(customFields) {
+    var single = autoDetect(customFields), out = {};
+    Object.keys(single).forEach(function (key) {
+      var first = null; customFields.forEach(function (f) { if (f.id === single[key]) first = f; });
+      var name = String(first && first.name || "").trim().toLowerCase();
+      out[key] = customFields.filter(function (f) { return String(f.name || "").trim().toLowerCase() === name; }).map(function (f) { return f.id; });
+    });
+    return out;
+  }
+
   /* ══════ Paginated search (v3 GET with cursor pagination) ══════ */
   /* A background Jira tab can be reloaded/slept mid-request ("Frame with ID 0 was removed").
      Reads are safe to repeat, so retry the SAME page instead of failing the whole fetch. */
@@ -140,37 +153,37 @@
       row["Resolved"] = f.resolutiondate || "";
       row["Updated"] = f.updated || "";
       row["Resolution"] = f.resolution ? f.resolution.name : "";
-      row["SVM In Charge"] = person(f[fm.svmInCharge]);
-      row["Current Worker"] = person(f[fm.currentWorker]);
-      row["Next Action"] = choice(f[fm.nextAction]);
-      row["Time to first response"] = sla(f[fm.timeToFirstResponse]);
-      row["Time to resolution"] = sla(f[fm.timeToResolution]);
-      row["Root Cause"] = choice(f[fm.rootCause]);
-      row["Type of Fix"] = choice(f[fm.typeOfFix]);
-      row["Screen Name"] = choice(f[fm.screenName]);
-      row["Menu Head"] = choice(f[fm.menuHead]);
-      row["Release Number"] = txt(f[fm.releaseNumber]);
-      row["Release Number (Data Fix)"] = txt(f[fm.releaseDataFix]);
-      row["Parent Release No"] = txt(f[fm.parentRelease]);
+      row["SVM In Charge"] = person(pf(f, fm.svmInCharge));
+      row["Current Worker"] = person(pf(f, fm.currentWorker));
+      row["Next Action"] = choice(pf(f, fm.nextAction));
+      row["Time to first response"] = sla(pf(f, fm.timeToFirstResponse));
+      row["Time to resolution"] = sla(pf(f, fm.timeToResolution));
+      row["Root Cause"] = choice(pf(f, fm.rootCause));
+      row["Type of Fix"] = choice(pf(f, fm.typeOfFix));
+      row["Screen Name"] = choice(pf(f, fm.screenName));
+      row["Menu Head"] = choice(pf(f, fm.menuHead));
+      row["Release Number"] = txt(pf(f, fm.releaseNumber));
+      row["Release Number (Data Fix)"] = txt(pf(f, fm.releaseDataFix));
+      row["Parent Release No"] = txt(pf(f, fm.parentRelease));
       row["Assignee"] = person(f.assignee);
       row["Reporter"] = person(f.reporter);
-      row["T-Shirt Sizing"] = choice(f[fm.tshirtSizing]);
-      row["Severity"] = choice(f[fm.severity]);
-      row["Assigned Date"] = txt(f[fm.assignedDate]);
-      row["Delivered Date"] = txt(f[fm.deliveredDate]);
-      row["Client Reference"] = txt(f[fm.clientReference]);
-      row["Analysis"] = rich(f[fm.analysis]);
-      row["Solution Summary"] = rich(f[fm.solutionSummary]);
-      row["Reason for Occurrence - Text"] = rich(f[fm.reasonText]);
-      row["Reason for Occurrence"] = anyVal(f[fm.reasonOccurrence]);
-      row["Resolution Details"] = rich(f[fm.resolutionDetails]);
-      row["Chargeable"] = anyVal(f[fm.chargeable]);
-      row["FPA Man-days"] = num(f[fm.fpaManDays]);
-      row["Approved Man-days"] = num(f[fm.approvedManDays]);
-      row["SVM FPA Prepared By"] = person(f[fm.fpaPreparedBy]);
-      row["SVM FPA Approved By"] = person(f[fm.fpaApprovedBy]);
-      row["Impact Module"] = anyVal(f[fm.impactModule]);
-      row["Manpower Type"] = anyVal(f[fm.manpowerType]);
+      row["T-Shirt Sizing"] = choice(pf(f, fm.tshirtSizing));
+      row["Severity"] = choice(pf(f, fm.severity));
+      row["Assigned Date"] = txt(pf(f, fm.assignedDate));
+      row["Delivered Date"] = txt(pf(f, fm.deliveredDate));
+      row["Client Reference"] = txt(pf(f, fm.clientReference));
+      row["Analysis"] = rich(pf(f, fm.analysis));
+      row["Solution Summary"] = rich(pf(f, fm.solutionSummary));
+      row["Reason for Occurrence - Text"] = rich(pf(f, fm.reasonText));
+      row["Reason for Occurrence"] = anyVal(pf(f, fm.reasonOccurrence));
+      row["Resolution Details"] = rich(pf(f, fm.resolutionDetails));
+      row["Chargeable"] = anyVal(pf(f, fm.chargeable));
+      row["FPA Man-days"] = num(pf(f, fm.fpaManDays));
+      row["Approved Man-days"] = num(pf(f, fm.approvedManDays));
+      row["SVM FPA Prepared By"] = person(pf(f, fm.fpaPreparedBy));
+      row["SVM FPA Approved By"] = person(pf(f, fm.fpaApprovedBy));
+      row["Impact Module"] = anyVal(pf(f, fm.impactModule));
+      row["Manpower Type"] = anyVal(pf(f, fm.manpowerType));
       row["Labels"] = (f.labels || []).join("; ");
       row["Description"] = rich(f.description);
       row["Environment"] = txt(f.environment);
@@ -199,6 +212,12 @@
       } else { row["Linked Issues"] = ""; row["Linked Ticket status"] = ""; row["Link Details"] = ""; }
       return row;
     });
+  }
+  function pf(f, spec) {
+    if (!spec) return undefined;
+    var ids = String(spec).split(","), v;
+    for (var i = 0; i < ids.length; i++) { v = f[ids[i].trim()]; if (v != null && v !== "" && !(Array.isArray(v) && !v.length)) return v; }
+    return v;
   }
   function person(v) { if (!v) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.map(function (x) { return x.displayName || x.name || ""; }).join(", "); return v.displayName || v.name || v.value || ""; }
   /* single select, multi-select (array) and cascading select ("Parent - Child") all read as text */
@@ -299,19 +318,29 @@
      mapping someone chose, and uses the saved field list when there is one (no extra Jira call). */
   var ALL_KEYS = ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary"].concat(NEW_KEYS);
   var _discoveredThisSession = false;
+  var FM_VER = 2;                              // 2 = duplicate-named fields have been merged into the mapping
   function ensureFieldMap(cfg) {
-    var fm = cfg.fieldMap || {}, need = ALL_KEYS.filter(function (k) { return !fm[k]; });
-    if (!need.length) return Promise.resolve(cfg);
+    var fm = cfg.fieldMap || {}, need = ALL_KEYS.filter(function (k) { return !fm[k]; }), upgrade = cfg._fmVer !== FM_VER;
+    if (!need.length && !upgrade) return Promise.resolve(cfg);
     function fills(list) { var auto = autoDetect(list || []); return need.some(function (k) { return auto[k]; }); }
-    var src;
-    if (cfg._fields && cfg._fields.length && fills(cfg._fields)) src = Promise.resolve(cfg._fields);          // saved list is enough
-    else if (!_discoveredThisSession) src = discoverFields(cfg).then(function (l) { _discoveredThisSession = true; return l; },
-                                                                     function () { _discoveredThisSession = true; return null; });
-    else return Promise.resolve(cfg);                                                                       // already looked this session
+    var src, fresh = false;
+    if (!upgrade && cfg._fields && cfg._fields.length && fills(cfg._fields)) src = Promise.resolve(cfg._fields);   // saved list is enough
+    else if (!_discoveredThisSession) { fresh = true; src = discoverFields(cfg).then(function (l) { _discoveredThisSession = true; return l; },
+                                                                                   function () { _discoveredThisSession = true; return null; }); }
+    else return Promise.resolve(cfg);                                                                                 // already looked this session
     return src.then(function (list) {
       if (!list || !list.length) return cfg;
       var auto = autoDetect(list);
       need.forEach(function (k) { if (auto[k]) fm[k] = auto[k]; else if (!(k in fm)) fm[k] = ""; });
+      if (fresh) {
+        var all = autoDetectAll(list), known = {}; list.forEach(function (f) { known[f.id] = 1; });
+        ALL_KEYS.forEach(function (k) {
+          var cur = String(fm[k] || "").split(",").map(function (x) { return x.trim(); }).filter(function (x) { return x && known[x]; });   // drop deleted fields
+          (all[k] || []).forEach(function (id) { if (cur.indexOf(id) < 0) cur.push(id); });
+          if (cur.length || fm[k]) fm[k] = cur.join(",");
+        });
+        cfg._fmVer = FM_VER;
+      }
       cfg.fieldMap = fm; cfg._fields = list;
       saveCfg(cfg); return cfg;
     });
@@ -325,7 +354,7 @@
     var host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent","comment"];
     ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary","chargeable","fpaManDays","approvedManDays","fpaPreparedBy","fpaApprovedBy","impactModule","manpowerType","reasonText","reasonOccurrence","resolutionDetails"]
-      .forEach(function (k) { if (fm[k] && fields.indexOf(fm[k]) < 0) fields.push(fm[k]); });
+      .forEach(function (k) { String(fm[k] || "").split(",").forEach(function (id) { id = id.trim(); if (id && fields.indexOf(id) < 0) fields.push(id); }); });
 
     var loadCache = (window.HDStore && window.HDStore.loadFetchCache) ? window.HDStore.loadFetchCache() : Promise.resolve(null);
     var prevTextVer = 1;
@@ -376,6 +405,6 @@
     loadConfig: loadCfg, saveConfig: saveCfg,
     isBridgeAvailable: function () { return _bridgeReady; },
     isConfigured: function () { return _bridgeReady; },
-    testConnection: testConnection, discoverFields: discoverFields, autoDetect: autoDetect, fetchAll: fetchAll
+    testConnection: testConnection, discoverFields: discoverFields, autoDetect: autoDetect, autoDetectAll: autoDetectAll, fetchAll: fetchAll
   };
 })();
