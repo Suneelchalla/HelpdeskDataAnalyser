@@ -749,7 +749,7 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
       var sel=el(ids[k]); sel.innerHTML='<option value="">— not mapped —</option>';
       fields.forEach(function(f){
         var o=document.createElement("option"); o.value=f.id; o.textContent=f.name+" ("+f.id+")";
-        if(fm[k]===f.id) o.selected=true;
+        if(String(fm[k]||"").split(",")[0]===f.id) o.selected=true;
         sel.appendChild(o);
       });
     });
@@ -770,8 +770,13 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
       return HJ.discoverFields(cfg);
     }).then(function(fields){
       _fields=fields;
-      var fm=HJ.autoDetect(fields), existing=HJ.loadConfig().fieldMap||{};
-      Object.keys(fm).forEach(function(k){ if(!existing[k]) existing[k]=fm[k]; });
+      var fm=HJ.autoDetect(fields), all=HJ.autoDetectAll?HJ.autoDetectAll(fields):{}, existing=HJ.loadConfig().fieldMap||{};
+      Object.keys(fm).forEach(function(k){
+        if(!existing[k]) existing[k]=fm[k];
+        var cur=String(existing[k]).split(",").filter(Boolean); (all[k]||[]).forEach(function(id){ if(cur.indexOf(id)<0) cur.push(id); }); existing[k]=cur.join(",");
+      });
+      var dup=Object.keys(all).filter(function(k){ return all[k].length>1; });
+      if(dup.length) el("jsResult").textContent+="  ·  "+dup.length+" field name"+(dup.length>1?"s":"")+" exist more than once in Jira (e.g. "+dup[0]+") — all copies will be read";
       fillSelects(fields, existing);
       var n=Object.keys(fm).length;
       if(n) el("jsResult").textContent+=" · Auto-detected "+n+" field"+(n>1?"s":"");
@@ -787,7 +792,13 @@ var QUERY = 'issuetype IN (Incident, "Service Request") AND created >= "2025-01-
     /* A dropdown that was never filled (fields not discovered yet) only holds "not mapped" — keep the saved
        mapping for it instead of overwriting it with "" (that is how Root Cause got lost). */
     var _prevFm=HJ.loadConfig().fieldMap||{};
-    function fv(id,k){ var sel=el(id); return (sel.options.length<=1 && !sel.value) ? (_prevFm[k]||"") : sel.value; }
+    function fv(id,k){
+      var sel=el(id), prev=String(_prevFm[k]||"");
+      if(sel.options.length<=1 && !sel.value) return prev;                     // dropdown never filled → keep what was saved
+      var ids=prev.split(",").filter(Boolean);
+      if(sel.value && ids.indexOf(sel.value)>-1) return [sel.value].concat(ids.filter(function(x){return x!==sel.value;})).join(",");   // keep same-named copies, chosen one first
+      return sel.value;
+    }
     HJ.saveConfig({
       jiraHost: el("jsHost").value.trim() || "svmhelpdesk.atlassian.net",
       jql: el("jsJql").value.trim() || QUERY,
