@@ -678,7 +678,7 @@ function filtered(){
     return true;
   });
 }
-function isClar(rc){ return String(rc).toLowerCase().indexOf("clarification")>-1; }
+function isClar(rc){ return /clarif/i.test(String(rc||"")); }   /* "Clarification", "Client Clarification", "Clarifications", "Clarifcation" */
 
 /* ── NEXT-ACTION (who acts next: SVM vs Client) ──
    The Jira "Next Action" column isn't reliably updated, so owner is decided by
@@ -1602,6 +1602,15 @@ function viewTrend(){
   if(!activeKeys.length){
     var baseN=base.length;
     var afterRcN=base.filter(function(t){ if(S.tRc==="__CLAR__") return isClar(t.rc); if(S.tRc==="__ALL__") return true; return t.rc===S.tRc; }).length;
+    var rcFilled=base.filter(function(t){ return !blank(t.rc); }).length;
+    if(baseN && !rcFilled){
+      out+='<div class="card pad"><div class="empty">Root Cause is empty for all '+baseN+' tickets in this data.</div>'+
+        '<div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.8;text-align:center">'+
+          'The Jira <b>Root Cause</b> field was not read in the last fetch, so Clarification tickets cannot be found.<br>'+
+          'In the launcher open <b>Jira settings</b> → <b>Test connection &amp; discover fields</b>, check that <b>Root Cause</b> is mapped, <b>Save</b>, then <b>Refresh data</b>.'+
+        '</div></div>';
+      return out;
+    }
     out+='<div class="card pad"><div class="empty">No tickets match this scope.</div>'+
       '<div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.8;text-align:center">'+
         '<b>'+baseN+'</b> tickets in date range'+
