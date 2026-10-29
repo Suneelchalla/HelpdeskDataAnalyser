@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Swire Hypercare</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230E2A47'/%3E%3Cpath d='M6 20h20l-3 5H9z' fill='%2357C5CF'/%3E%3Cpath d='M15 7v12M15 8l7 9h-7' stroke='%23fff' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="hd-store.js"></script>
+<script src="sla-engine.js"></script>
+<script src="sla-history.js"></script>
+<script src="sla-link.js"></script>
+<script src="hd-hypercare.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0E2A47;--navy2:#163A5F;--navy3:#24507C;--teal:#0E7C86;--teal-bg:#E6F4F5;--sea:#57C5CF;
+  --paper:#F4F7F9;--card:#FFFFFF;--ink:#0F1E2E;--ink2:#44546A;--muted:#6B7A8C;--faint:#9AA8B6;--line:#DFE6EC;--line2:#CBD5DF;
+  --ss:#C8102E;--ss-bg:#FDECEF;--cr:#C2680A;--cr-bg:#FEF3E6;--hi:#A16207;--hi-bg:#FEF9E7;--md:#2563EB;--md-bg:#EEF4FF;--lo:#64748B;--lo-bg:#F1F5F9;
+  --ok:#15803D;--ok-bg:#EAF7EF;--client:#B45309;
+  --disp:'Space Grotesk',system-ui,sans-serif;--sans:'Inter',system-ui,-apple-system,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:var(--teal)}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.hidden{display:none!important}
+.mono{font-family:var(--mono);font-size:.92em;font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+
+/* ── header: navy chrome + the 24-hour watch band ── */
+.hdr{background:var(--navy);color:#E6EEF6;padding:14px 22px 0}
+.hdr-top{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap}
+.brand h1{font-family:var(--disp);font-weight:700;font-size:1.55rem;letter-spacing:-.01em;color:#fff}
+.brand p{color:#A9BED3;font-size:.86rem;margin-top:2px}
+.hdr-side{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip-d{background:var(--navy2);border:1px solid var(--navy3);color:#D6E3EF;border-radius:999px;padding:5px 11px;font-size:.8rem}
+.chip-d b{color:#fff;font-weight:600}
+.hbtn{background:var(--navy2);border:1px solid var(--navy3);color:#fff;border-radius:8px;padding:6px 12px;font-size:.82rem;font-weight:600}
+.hbtn:hover{background:var(--navy3)}
+.watch{margin-top:14px;display:grid;grid-template-columns:minmax(260px,380px) 1fr;gap:18px;align-items:end;padding-bottom:14px}
+.watch-now .k{color:#A9BED3;font-size:.78rem}
+.watch-now .v{font-family:var(--disp);font-size:1.25rem;font-weight:600;color:#fff;margin-top:1px}
+.watch-now .s{font-size:.82rem;color:#C9D7E5;margin-top:4px;line-height:1.45}
+.band{position:relative;height:56px}
+.band-row{position:absolute;left:0;right:0;top:14px;height:26px;display:flex;border-radius:6px;overflow:hidden}
+.seg{height:100%;display:flex;align-items:center;padding:0 8px;font-size:.74rem;color:#fff;white-space:nowrap;overflow:hidden;border-right:1px solid rgba(255,255,255,.15)}
+.seg.night{background:#0A1F36;color:#9FC3E6}.seg.call{background:#7A4A12;color:#FCE3C2}.seg.day{background:var(--teal);color:#E3F7F8}.seg.weekend{background:#3B4E66;color:#DCE6F0}
+.seg.cur{box-shadow:inset 0 0 0 2px var(--sea)}
+.ticks{position:absolute;left:0;right:0;top:42px;height:12px;font-size:.68rem;color:#8EA7BF}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.nowmark{position:absolute;top:6px;height:40px;width:2px;background:var(--sea);border-radius:2px}
+.nowmark i{position:absolute;top:-6px;left:50%;transform:translateX(-50%);background:var(--sea);color:var(--navy);font-style:normal;font-size:.68rem;font-weight:700;padding:0 5px;border-radius:4px;white-space:nowrap}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -22px;padding:0 18px;background:var(--navy2)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:10px 13px;color:#B9CBDD;font-size:.86rem;font-weight:500;border-bottom:3px solid transparent;white-space:nowrap}
+.tab:hover{color:#fff}
+.tab[aria-selected="true"]{color:#fff;border-bottom-color:var(--sea);font-weight:600}
+.tab .n{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:rgba(255,255,255,.12);font-size:.74rem;text-align:center}
+.tab .n.hot{background:var(--ss);color:#fff}
+
+/* ── body ── */
+.wrap{max-width:1500px;margin:0 auto;padding:18px 22px 60px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.bar .lbl{font-size:.8rem;color:var(--muted);margin-right:2px}
+.pill{border:1px solid var(--line2);background:var(--card);border-radius:999px;padding:5px 11px;font-size:.8rem;color:var(--ink2)}
+.pill[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.inp{border:1px solid var(--line2);border-radius:8px;padding:6px 10px;font:inherit;font-size:.85rem;background:var(--card);color:var(--ink)}
+.btn{border:1px solid var(--line2);background:var(--card);border-radius:8px;padding:6px 12px;font-size:.82rem;font-weight:600;color:var(--ink2)}
+.btn:hover{border-color:var(--teal);color:var(--teal)}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.pri:hover{filter:brightness(1.07);color:#fff}
+h2{font-family:var(--disp);font-size:1.12rem;font-weight:600;margin:4px 0 4px}
+.sub{color:var(--muted);font-size:.84rem;line-height:1.5;margin-bottom:12px;max-width:80ch}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}.watch{grid-template-columns:1fr}}
+
+/* counters: a row of signals, each opens its list */
+.signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.sig{text-align:left;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:8px;padding:10px 12px}
+.sig:hover{border-color:var(--teal);border-left-color:inherit}
+.sig .v{font-family:var(--disp);font-size:1.5rem;font-weight:700;line-height:1.1}
+.sig .k{font-size:.8rem;color:var(--ink2);margin-top:2px}
+.sig .h{font-size:.74rem;color:var(--muted);margin-top:2px}
+.sig.ss{border-left-color:var(--ss)}.sig.ss .v{color:var(--ss)}
+.sig.cr{border-left-color:var(--cr)}.sig.cr .v{color:var(--cr)}
+.sig.teal{border-left-color:var(--teal)}
+.sig.zero .v{color:var(--faint)}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:.76rem;padding:8px 10px;border-bottom:1px solid var(--line);background:#FAFBFC;white-space:nowrap;position:sticky;top:0}
+th.sort{cursor:pointer}th.sort:hover{color:var(--ink)}
+td{padding:8px 10px;border-bottom:1px solid #EEF2F5;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#F7FAFB}
+tr.row{cursor:pointer}
+.key{font-family:var(--mono);font-size:.8rem;font-weight:600;color:var(--navy3);white-space:nowrap}
+.sum{min-width:200px;max-width:40ch;color:var(--ink)}
+.dim{color:var(--muted)}.small{font-size:.78rem}
+.pr{display:inline-block;border-radius:5px;padding:1px 7px;font-size:.74rem;font-weight:600;white-space:nowrap}
+.pr.showstopper{background:var(--ss);color:#fff}.pr.critical{background:var(--cr-bg);color:var(--cr)}.pr.high{background:var(--hi-bg);color:var(--hi)}
+.pr.medium{background:var(--md-bg);color:var(--md)}.pr.low{background:var(--lo-bg);color:var(--lo)}.pr.none{background:var(--lo-bg);color:var(--muted)}
+.st{display:inline-block;border-radius:5px;padding:1px 7px;font-size:.74rem;background:var(--lo-bg);color:var(--ink2);white-space:nowrap}
+.st.openbox{background:#EEF2FF;color:#4338CA}.st.client{background:#FEF3E6;color:var(--client)}.st.working{background:var(--teal-bg);color:var(--teal)}.st.closed{background:var(--ok-bg);color:var(--ok)}
+.clk{white-space:nowrap;font-variant-numeric:tabular-nums}
+.clk.bad{color:var(--ss);font-weight:600}.clk.warn{color:var(--cr);font-weight:600}.clk.good{color:var(--ok)}
+.who{white-space:nowrap}.who .r{color:var(--muted);font-size:.72rem;display:block}
+.tel{font-size:.76rem;white-space:nowrap}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.note{background:#F7FAFB;border:1px dashed var(--line2);border-radius:8px;padding:9px 12px;font-size:.8rem;color:var(--ink2);line-height:1.5;margin-bottom:12px}
+.warnbox{background:var(--cr-bg);border:1px solid #F5CF9F;color:#7A4A12;border-radius:8px;padding:9px 12px;font-size:.82rem;margin-bottom:12px;line-height:1.5}
+
+/* rule checks */
+.chk{display:grid;grid-template-columns:62px 1fr auto;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid #EEF2F5;cursor:pointer}
+.chk:last-child{border-bottom:none}
+.chk:hover{background:#F7FAFB}
+.chk .ref{font-family:var(--mono);font-size:.76rem;color:var(--navy3);font-weight:600}
+.chk .t{font-weight:600}
+.chk .w{font-size:.78rem;color:var(--muted);margin-top:2px}
+.chk .c{font-family:var(--disp);font-size:1.3rem;font-weight:700;min-width:48px;text-align:right}
+.chk .c.ok{color:var(--ok)}.chk .c.bad{color:var(--ss)}
+
+/* charts */
+.bars{display:flex;align-items:stretch;gap:2px;height:150px;padding-top:8px}
+.bars .b{flex:1;max-width:46px;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;min-width:3px;position:relative}
+.bars .b i{display:block;border-radius:2px 2px 0 0}
+.bars .b i.c{background:var(--navy3)}.bars .b i.x{background:var(--sea)}
+.axis{display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted);margin-top:4px}
+.legend{display:flex;gap:14px;font-size:.78rem;color:var(--ink2);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.hb{display:grid;grid-template-columns:minmax(90px,170px) 1fr 44px;gap:8px;align-items:center;font-size:.82rem;margin:5px 0}
+.hb .tr{background:#EEF2F5;border-radius:4px;height:12px;overflow:hidden}.hb .tr i{display:block;height:100%;background:var(--teal);border-radius:4px}
+.hb .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb.wide{grid-template-columns:minmax(150px,280px) 1fr 44px}
+.pct{font-family:var(--disp);font-weight:700}
+.exit li{list-style:none;padding:6px 0;border-bottom:1px solid #EEF2F5;display:flex;gap:10px;font-size:.84rem}
+.exit li:last-child{border-bottom:none}
+.exit .m{width:18px;text-align:center;font-weight:700}
+.exit .m.ok{color:var(--ok)}.exit .m.no{color:var(--ss)}.exit .m.na{color:var(--faint)}
+
+/* drawer */
+.ov{position:fixed;inset:0;background:rgba(14,42,71,.35);z-index:50;display:flex;justify-content:flex-end}
+.drawer{background:var(--card);width:min(640px,100%);height:100%;overflow-y:auto;padding:20px 22px 40px;box-shadow:-12px 0 40px rgba(14,42,71,.2)}
+.drawer h3{font-family:var(--disp);font-size:1.15rem;margin:6px 0 10px;line-height:1.35}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:.84rem;margin:10px 0 16px}
+.kv dt{color:var(--muted)}.kv dd{color:var(--ink)}
+.sec-h{font-weight:600;font-size:.86rem;margin:14px 0 6px;color:var(--navy)}
+.tl{border-left:2px solid var(--line);margin-left:6px;padding-left:12px}
+.tl div{font-size:.8rem;margin:5px 0;position:relative}
+.tl div:before{content:"";position:absolute;left:-17px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--line2)}
+.pre{white-space:pre-wrap;font-size:.82rem;line-height:1.5;color:var(--ink2);background:#F7FAFB;border-radius:8px;padding:10px 12px;max-height:240px;overflow:auto}
+.report{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 26px}
+.report h3{font-family:var(--disp);font-size:1.05rem;margin:16px 0 6px;color:var(--navy)}
+.report h3:first-child{margin-top:0}
+textarea.ho{width:100%;min-height:420px;font-family:var(--mono);font-size:.8rem;line-height:1.55;border:1px solid var(--line2);border-radius:10px;padding:14px;color:var(--ink)}
+.setrow{display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:center;margin:8px 0;font-size:.85rem}
+.landing{min-height:70vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:30px}
+.landing h2{font-size:1.4rem}
+.prog{height:4px;background:#E3EAF0;border-radius:4px;overflow:hidden;width:180px;display:inline-block;vertical-align:middle;margin-left:8px}
+.prog i{display:block;height:100%;background:var(--teal);width:0}
+
+@media print{
+  .hdr,.bar,.noprint{display:none!important}
+  body{background:#fff}.wrap{padding:0}
+  .report{border:none;padding:0}
+  .panel,.tw{break-inside:avoid}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-top">
+    <div class="brand">
+      <h1>Swire Shipping Hypercare</h1>
+      <p id="brandSub">Phoenix support, run to the Hypercare runbook</p>
+    </div>
+    <div class="hdr-side">
+      <span class="chip-d" id="phaseChip">Loading…</span>
+      <span class="chip-d" id="histChip" title="Status history drives first response and progress"></span>
+      <span class="chip-d" id="lrpsChip"></span>
+      <button class="hbtn" id="btnLrps" title="Read the assignee of every linked LRPS ticket from Jira">Refresh LRPS assignees</button>
+      <a class="hbtn" href="index.html" style="text-decoration:none">Launcher</a>
+    </div>
+  </div>
+  <div class="watch">
+    <div class="watch-now">
+      <div class="k" id="watchDay">Now</div>
+      <div class="v" id="watchWho">—</div>
+      <div class="s" id="watchSub"></div>
+    </div>
+    <div class="band" id="band" aria-label="Today's duty windows"></div>
+  </div>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+</header>
+
+<main class="wrap">
+  <div id="landing" class="landing"><div><h2>Loading Swire tickets…</h2><p class="sub" style="margin:8px auto 0">Load a Jira export or fetch from Jira on the launcher first.</p></div></div>
+  <div id="view" class="hidden"></div>
+</main>
+
+<script>
+(function () {
+"use strict";
+const HC = window.HDHypercare, HS = window.HDStore, L = window.HDSlaLink;
+const el = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = HC.fmtMin, MIN = 60000, DAY = 86400000;
+const CFG_KEY = "hd-swire-cfg", LRPS_KEY = "hd-swire-lrps";
+
+/* ── state ── */
+let CFG = loadCfg(), ROWS = [], T = [], E = [], NOW = Date.now(), TAB = "now", TYPES = null, ALLTYPES = [], LRPS = loadLrps();
+const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: "", sort: { k: "age", d: -1 }, openCheck: null, week: null, shift: "current" };
+
+function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
+function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); }
+function loadLrps() { try { return JSON.parse(localStorage.getItem(LRPS_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function saveLrps() { try { localStorage.setItem(LRPS_KEY, JSON.stringify(LRPS)); } catch (e) {} }
+function jiraHost() { try { const c = JSON.parse(localStorage.getItem("hd-jira-cfg") || "{}"); if (c.jiraHost) return c.jiraHost; } catch (e) {} return "svmhelpdesk.atlassian.net"; }
+const jiraUrl = (k) => "https://" + jiraHost() + "/browse/" + encodeURIComponent(k);
+
+/* ── formatting ── */
+function fdt(ms) { if (ms == null) return "—"; const d = new Date(ms + 330 * MIN); const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return String(d.getUTCDate()).padStart(2, "0") + " " + M[d.getUTCMonth()] + " " + String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0"); }
+function fday(ms) { if (ms == null) return "—"; const d = new Date(ms + 330 * MIN); const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return d.getUTCDate() + " " + M[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+function hhmm(min) { return String(Math.floor(min / 60) % 24).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0"); }
+const prChip = (t) => '<span class="pr ' + (t.sev || "none") + '">' + esc(t.priority || "—") + "</span>";
+const STAGE_TXT = { openbox: "Open box", working: "With us", client: "With Swire", closed: "Closed" };
+const stChip = (t, e) => '<span class="st ' + e.stage + '" title="' + esc(STAGE_TXT[e.stage]) + '">' + esc(t.status || "—") + "</span>";
+function ageOf(t) { return t.created != null ? (NOW - t.created) / MIN : null; }
+
+/* ── data ── */
+function pickSheet(wb) { return wb.SheetNames.find((s) => s.toLowerCase().indexOf("jira issues") > -1) || wb.SheetNames.find((s) => s.toLowerCase().indexOf("issue") > -1) || wb.SheetNames[1] || wb.SheetNames[0]; }
+function getRows() {
+  if (!HS) return Promise.resolve([]);
+  return HS.loadRows().then((ed) => {
+    if (ed && ed.length) return ed;
+    return HS.loadFile().then((rec) => {
+      if (!rec || !rec.blob) return [];
+      return new Promise((res) => { const r = new FileReader(); r.onload = (e) => { try { const wb = XLSX.read(e.target.result, { type: "array", cellDates: true }); res(XLSX.utils.sheet_to_json(wb.Sheets[pickSheet(wb)], { defval: "" })); } catch (x) { res([]); } }; r.readAsArrayBuffer(rec.blob); });
+    });
+  });
+}
+const CLS = { isTerminal: (s) => window.HDClass ? HDClass.isTerminal(s) : /^closed$/i.test(String(s || "")), owner: (s) => window.HDClass ? HDClass.owner(s) : null };
+
+function rebuild() {
+  NOW = Date.now();
+  const get = HC.getter(ROWS), pre = String(CFG.prefix || "SWIPHX").toUpperCase();
+  const all = [];
+  ROWS.forEach((row) => { const t = HC.normTicket(row, get); if (t.prefix === pre) { t.nextAction = String(get(row, "next action") || "").trim(); all.push(t); } });
+  ALLTYPES = Array.from(new Set(all.map((t) => t.type || "(blank)"))).sort();
+  if (!TYPES) TYPES = ALLTYPES.filter((x) => /^(incident|service request)$/i.test(x));
+  if (!TYPES.length) TYPES = ALLTYPES.slice();
+  T = all.filter((t) => TYPES.indexOf(t.type || "(blank)") > -1);
+  E = T.map((t) => {
+    let tr = null;
+    if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
+    const e = HC.evaluate(t, tr, NOW, CFG, CLS, window.HDSla ? HDSla.firstResponse : null);
+    e.po = HC.poFor(t, CFG);
+    return e;
+  });
+}
+
+/* ── the HD Jira Bridge (direct, or through the launcher when opened as a tab) ── */
+const BR = { ready: false, own: false, par: false, seq: 8000000, pend: {} };
+let PARENT = null; try { if (window.parent && window.parent !== window) PARENT = window.parent; } catch (e) {}
+window.addEventListener("message", (e) => {
+  const d = e.data; if (!d) return;
+  if (d.type === "HD_BRIDGE_READY") { if (e.source === window || !d.relay) BR.own = true; else if (PARENT && e.source === PARENT) BR.par = true; else return; BR.ready = true; return; }
+  if (d.type === "HD_RELAY_READY") { if (PARENT && e.source === PARENT) { BR.par = true; BR.ready = true; } return; }
+  if (d.type !== "HD_BRIDGE_RESULT" && !(d.type === "HD_RELAY_RESULT" && PARENT && e.source === PARENT)) return;
+  const p = BR.pend[d.id]; if (!p) return; delete BR.pend[d.id];
+  if (d.ok) p.res(d.data); else p.rej(new Error(d.error || "Bridge error"));
+});
+function ping() { if (BR.ready) return; window.postMessage({ type: "HD_BRIDGE_PING" }, "*"); if (PARENT) try { PARENT.postMessage({ type: "HD_RELAY_PING" }, location.origin); } catch (e) {} }
+[0, 300, 1000, 3000].forEach((ms) => setTimeout(ping, ms));
+function call(path) {
+  if (!BR.ready && !window._rmBridge) return Promise.reject(new Error("The HD Jira Bridge extension is not connected."));
+  return new Promise((res, rej) => {
+    const id = ++BR.seq; BR.pend[id] = { res, rej };
+    const msg = { type: "HD_BRIDGE_CALL", id, host: jiraHost(), path, method: "GET", body: null };
+    if (BR.own || window._rmBridge || !BR.par || !PARENT) window.postMessage(msg, "*"); else { msg.type = "HD_RELAY_CALL"; PARENT.postMessage(msg, location.origin); }
+    setTimeout(() => { if (BR.pend[id]) { delete BR.pend[id]; rej(new Error("Jira did not answer in time.")); } }, 60000);
+  });
+}
+
+/* ── LRPS assignees: read from Jira for the engineering tickets linked to open Swire tickets ── */
+let lrpsBusy = false;
+function lrpsKeys(onlyStale) {
+  const keys = new Set();
+  T.forEach((t, i) => { if (E[i].stage !== "closed") t.lrps.forEach((k) => keys.add(k)); });
+  return Array.from(keys).filter((k) => !onlyStale || !LRPS[k] || NOW - (LRPS[k].at || 0) > 30 * MIN);
+}
+function fetchLrps(force) {
+  if (lrpsBusy) return Promise.resolve();
+  const keys = lrpsKeys(!force); if (!keys.length) { paintChips(); return Promise.resolve(); }
+  lrpsBusy = true; paintChips("Reading " + keys.length + " LRPS tickets…");
+  const chunks = []; for (let i = 0; i < keys.length; i += 80) chunks.push(keys.slice(i, i + 80));
+  let done = 0;
+  const one = (ch) => {
+    const jql = "key in (" + ch.map((k) => '"' + k + '"').join(",") + ")";
+    return call("/rest/api/3/search/jql?jql=" + encodeURIComponent(jql) + "&fields=assignee,status,updated&maxResults=100").then((d) => {
+      const seen = {}, at = Date.now();
+      (d.issues || []).forEach((is) => { const f = is.fields || {}; seen[is.key] = 1;
+        LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", s: f.status ? f.status.name : "", at }; });
+      ch.forEach((k) => { if (!seen[k]) LRPS[k] = { a: "", s: "", at, gone: true }; });
+      done += ch.length; paintChips("Reading LRPS tickets " + done + " / " + keys.length + "…");
+    });
+  };
+  return chunks.reduce((p, ch) => p.then(() => one(ch)), Promise.resolve())
+    .then(() => { saveLrps(); lrpsBusy = false; paintChips(); render(); })
+    .catch((e) => { saveLrps(); lrpsBusy = false; paintChips("LRPS: " + e.message); render(); });
+}
+function lrpsCell(t) {
+  if (!t.lrps.length) return '<span class="dim">—</span>';
+  return t.lrps.map((k) => { const x = LRPS[k];
+    return '<span class="who"><a class="key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a> " +
+      (x ? (x.gone ? '<span class="dim small">not found</span>' : esc(x.a || "Unassigned")) : '<span class="dim small">not read yet</span>') + "</span>"; }).join("<br>");
+}
+const lrpsNames = (t) => t.lrps.map((k) => (LRPS[k] && LRPS[k].a) || "").filter(Boolean).join(", ");
+
+/* ── header: who is on duty, the 24-hour band ── */
+function paintDuty() {
+  const d = HC.duty(NOW, CFG), p = HC.ist(NOW), DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const nx = HC.nextDutyChange(NOW, CFG), nd = nx ? HC.duty(nx, CFG) : null;
+  el("watchDay").textContent = DN[p.dow] + ", " + hhmm(p.min) + " IST";
+  el("watchWho").textContent = d.owns + " owns new tickets";
+  el("watchSub").innerHTML = esc(d.logs) + " logs and tags.<br>Critical or Showstopper: " + esc(d.critical) + "." +
+    (nd ? '<br><span style="color:#8EA7BF">From ' + hhmm(HC.ist(nx).min) + ": " + esc(nd.owns) + "</span>" : "");
+  const segs = (p.dow === 0 || p.dow === 6)
+    ? [{ c: "weekend", a: 0, b: 1440, t: "General Support logs, PO owns all day" }]
+    : [{ c: "night", a: 0, b: 360, t: "Hypercare team" }, { c: "call", a: 360, b: 540, t: "PO, call for Critical" }, { c: "day", a: 540, b: 1260, t: "PO for the module" }, { c: "night", a: 1260, b: 1440, t: "Hypercare team" }];
+  const html = '<div class="band-row">' + segs.map((s) => '<div class="seg ' + s.c + (p.min >= s.a && p.min < s.b ? " cur" : "") + '" style="width:' + ((s.b - s.a) / 14.4) + '%" title="' + hhmm(s.a) + "–" + hhmm(s.b % 1440 || 1440) + " " + esc(s.t) + '">' + esc(s.t) + "</div>").join("") + "</div>" +
+    '<div class="ticks">' + [0, 360, 540, 1260, 1440].map((m) => '<span style="left:' + (m / 14.4) + '%">' + (m === 1440 ? "24:00" : hhmm(m)) + "</span>").join("") + "</div>" +
+    '<div class="nowmark" style="left:' + (p.min / 14.4) + '%"><i>' + hhmm(p.min) + "</i></div>";
+  el("band").innerHTML = html;
+}
+function paintChips(lrpsMsg) {
+  const ph = HC.phase(NOW, CFG);
+  el("phaseChip").innerHTML = ph.month ? "Month <b>" + ph.month + "</b> of 6, " + esc(ph.name) : "Counting starts " + esc(fday(HC.dateMs(CFG.start)));
+  const withH = E.filter((e) => e.hist).length, openN = E.filter((e) => e.stage !== "closed").length, openH = E.filter((e) => e.stage !== "closed" && e.hist).length;
+  const pr = L && L.progress ? L.progress() : null, other = L && L.otherFetching ? L.otherFetching() : null;
+  el("histChip").innerHTML = (L && L.isFetching && L.isFetching()) ? "Reading status history" + (pr && pr.total ? " <b>" + pr.done + "/" + pr.total + "</b>" : "…")
+    : other ? "Status history: " + esc(other) + " is reading it"
+    : "Status history for <b>" + openH + "</b> of " + openN + " open";
+  const ks = lrpsKeys(false), known = ks.filter((k) => LRPS[k]).length;
+  el("lrpsChip").innerHTML = lrpsMsg ? esc(lrpsMsg) : "LRPS assignees <b>" + known + "</b> of " + ks.length;
+  el("btnLrps").disabled = lrpsBusy;
+}
+
+/* ── tabs ── */
+const TABS = [["now", "Now"], ["openbox", "Open box"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Setup"]];
+function paintTabs(counts) {
+  el("tabs").innerHTML = TABS.map(([id, name]) => {
+    const c = counts[id];
+    return '<button class="tab" role="tab" data-tab="' + id + '" aria-selected="' + (TAB === id) + '">' + esc(name) + (c != null ? '<span class="n' + (c.hot ? " hot" : "") + '">' + c.n + "</span>" : "") + "</button>";
+  }).join("");
+}
+el("tabs").addEventListener("click", (e) => { const b = e.target.closest(".tab"); if (!b) return; TAB = b.dataset.tab; render(); window.scrollTo(0, 0); });
+
+/* ── shared ticket table ── */
+function frCell(t, e) {
+  const tg = e.target; if (!tg) return '<span class="dim">no target</span>';
+  if (e.frState === "met") return '<span class="clk good" title="Moved to the client ' + esc(fdt(e.fr.at)) + '">' + fmt(e.fr.min) + "</span>";
+  if (e.frState === "missed") return '<span class="clk bad" title="Target ' + fmt(tg.fr) + ", answered " + esc(fdt(e.fr.at)) + '">' + fmt(e.fr.min) + " late</span>";
+  if (e.frState === "breached") return '<span class="clk bad">overdue ' + fmt((NOW - e.frDueAt) / MIN) + "</span>";
+  if (e.frState === "waiting") { const left = (e.frDueAt - NOW) / MIN; return '<span class="clk ' + (left < tg.fr * 0.25 ? "warn" : "") + '">due in ' + fmt(left) + "</span>"; }
+  return '<span class="dim" title="Status history not read yet">—</span>';
+}
+function progCell(t, e) {
+  if (e.stage === "closed") return '<span class="dim">' + esc(fdt(e.closedAt)) + "</span>";
+  if (e.stage === "client") return '<span class="dim">with Swire</span>';
+  if (e.sinceMoveMin == null) return '<span class="dim">—</span>';
+  return '<span class="clk ' + (e.updateDue ? "warn" : "") + '" title="Last status change ' + esc(fdt(e.lastMove)) + (e.target ? ", update interval " + fmt(e.target.upd) : "") + '">' + fmt(e.sinceMoveMin) + "</span>";
+}
+function resCell(t, e) {
+  if (!e.target || e.oursMin == null) return '<span class="dim">—</span>';
+  const c = e.resState === "over" || e.resState === "missed" ? "bad" : e.resState === "risk" ? "warn" : e.resState === "met" ? "good" : "";
+  return '<span class="clk ' + c + '" title="Time on our side ' + fmt(e.oursMin) + " of the " + fmt(e.target.res) + ' benchmark (time with Swire not counted)">' + fmt(e.oursMin) + ' <span class="dim">/ ' + fmt(e.target.res) + "</span></span>";
+}
+function poCell(e) {
+  const p = e.po; if (!p || !p.po) return '<span class="dim">—</span>';
+  return '<span class="who">' + esc(p.po) + '<span class="r">' + esc(p.module || "") + (p.via === "svm" ? " (SVM In Charge)" : "") + "</span>" +
+    (p.phone ? '<a class="tel" href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '" onclick="event.stopPropagation()">' + esc(p.phone) + "</a>" : "") + "</span>";
+}
+const COLS = {
+  key:   { h: "Ticket", s: (t) => t.key, c: (t) => '<a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(t.key) + "</a>" },
+  pri:   { h: "Priority", s: (t) => HC.sevRank(t.sev), c: (t) => prChip(t) },
+  sum:   { h: "Summary", s: (t) => t.summary.toLowerCase(), c: (t) => '<div class="sum">' + esc(t.summary) + "</div>" + (t.meId ? '<span class="mono dim small">' + esc(t.meId) + "</span>" : '<span class="small" style="color:var(--ss)">no ME ID</span>') },
+  status:{ h: "Status", s: (t, e) => t.status, c: (t, e) => stChip(t, e) },
+  age:   { h: "Age", s: (t) => ageOf(t) || 0, c: (t) => '<span class="clk">' + fmt(ageOf(t)) + '</span><div class="dim small">' + esc(fdt(t.created)) + "</div>" },
+  fr:    { h: "First response", s: (t, e) => e.frState === "breached" ? -1e9 + (e.frDueAt || 0) : e.frState === "waiting" ? (e.frDueAt || 0) : 9e15, c: frCell },
+  prog:  { h: "Since last move", s: (t, e) => e.sinceMoveMin || 0, c: progCell },
+  res:   { h: "Our time / benchmark", s: (t, e) => e.resPct || 0, c: resCell },
+  po:    { h: "PO", s: (t, e) => (e.po && e.po.po) || "", c: (t, e) => poCell(e) },
+  svm:   { h: "SVM In Charge", s: (t) => t.svm, c: (t) => t.svm ? esc(t.svm) : '<span class="dim">—</span>' },
+  cw:    { h: "Current worker", s: (t) => t.cw, c: (t) => t.cw ? esc(t.cw) : '<span class="dim">—</span>' },
+  lrps:  { h: "LRPS assignee", s: (t) => lrpsNames(t), c: (t) => lrpsCell(t) },
+  next:  { h: "Next action", s: (t) => t.nextAction, c: (t) => t.nextAction ? '<span class="small">' + esc(t.nextAction) + "</span>" : '<span class="dim">—</span>' }
+};
+function table(idx, cols, opts) {
+  opts = opts || {};
+  if (!idx.length) return '<div class="tw"><div class="empty">' + esc(opts.empty || "Nothing here.") + "</div></div>";
+  const sk = opts.sortable === false ? null : UI.sort;
+  if (sk && COLS[sk.k] && cols.indexOf(sk.k) > -1) idx = idx.slice().sort((a, b) => { const x = COLS[sk.k].s(T[a], E[a]), y = COLS[sk.k].s(T[b], E[b]); return (x > y ? 1 : x < y ? -1 : 0) * sk.d; });
+  const lim = opts.limit || 400, more = idx.length - lim;
+  return '<div class="tw"><table><thead><tr>' + cols.map((c) => '<th class="' + (opts.sortable === false ? "" : "sort") + '" data-sort="' + c + '">' + esc(COLS[c].h) + (sk && sk.k === c ? (sk.d > 0 ? " ▲" : " ▼") : "") + "</th>").join("") + (opts.extra ? "<th>" + esc(opts.extra.h) + "</th>" : "") +
+    "</tr></thead><tbody>" + idx.slice(0, lim).map((i) => '<tr class="row" data-i="' + i + '">' + cols.map((c) => "<td>" + COLS[c].c(T[i], E[i]) + "</td>").join("") + (opts.extra ? "<td>" + opts.extra.c(i) + "</td>" : "") + "</tr>").join("") +
+    "</tbody></table>" + (more > 0 ? '<div class="empty small">' + more + " more not shown. Narrow the filters to see them.</div>" : "") + "</div>";
+}
+el("view").addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-sort]");
+  if (th) { const k = th.dataset.sort; UI.sort = { k, d: UI.sort.k === k ? -UI.sort.d : (k === "sum" || k === "key" || k === "po" || k === "svm" || k === "cw" ? 1 : -1) }; render(); return; }
+  const tr = e.target.closest("tr.row"); if (tr) { openTicket(+tr.dataset.i); return; }
+  const jump = e.target.closest("[data-jump]"); if (jump) { TAB = jump.dataset.jump; if (jump.dataset.check) UI.openCheck = jump.dataset.check; render(); window.scrollTo(0, 0); }
+});
+
+const openIdx = () => T.map((t, i) => i).filter((i) => E[i].stage !== "closed");
+
+/* ══ Now ══ */
+function viewNow() {
+  const open = openIdx(), box = open.filter((i) => E[i].stage === "openbox");
+  const ss = open.filter((i) => T[i].sev === "showstopper"), cr = open.filter((i) => T[i].sev === "critical");
+  const hcFrom = HC.dateMs(CFG.start) || 0, frOver = open.filter((i) => E[i].frState === "breached" && (T[i].created || 0) >= hcFrom), updDue = open.filter((i) => E[i].updateDue), withSwire = open.filter((i) => E[i].stage === "client");
+  const escN = HC.escalations(T, E, NOW, CFG).length;
+  const oldestBox = box.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
+  const sig = (cls, v, k, h, jump, check) => '<button class="sig ' + cls + (v ? "" : " zero") + '" data-jump="' + jump + '"' + (check ? ' data-check="' + check + '"' : "") + '><div class="v num">' + v + '</div><div class="k">' + esc(k) + '</div><div class="h">' + esc(h) + "</div></button>";
+  /* what needs someone now: Showstoppers, Criticals, overdue first responses, updates due */
+  const hot = Array.from(new Set(ss.concat(cr, frOver, updDue)));
+  hot.sort((a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev) || (T[a].created || 0) - (T[b].created || 0));
+  const d = HC.duty(NOW, CFG);
+  return '<div class="signals">' +
+    sig("ss", ss.length, "Showstoppers open", ss.length ? "phone the PO / Engineering head" : "none open", "queue") +
+    sig("cr", cr.length, "Critical open", "", "queue") +
+    sig("teal", box.length, "In the open box", box.length ? "oldest " + fmt(oldestBox) : "all triaged", "openbox") +
+    sig(frOver.length ? "ss" : "", frOver.length, "First response overdue", "new since " + fday(hcFrom).replace(/ \d{4}$/, ""), "rules", "fr") +
+    sig(updDue.length ? "cr" : "", updDue.length, "Update interval passed", "no status change", "rules", "upd") +
+    sig(escN ? "cr" : "", escN, "Escalations to raise", "Section 10.2", "esc") +
+    sig("", withSwire.length, "Waiting on Swire", "", "queue") +
+    sig("", open.length, "Open in total", "all backlog included", "queue") +
+    "</div>" +
+    "<h2>Needs attention now</h2><p class=\"sub\">Open Showstoppers and Criticals, and any ticket whose first response is overdue or whose update interval has passed. " +
+    (d.id === "night" ? "Tonight the Hypercare team owns these; a Showstopper means phoning the Engineering head." : "The PO for the module owns these; for a Critical or Showstopper call and inform the PO.") + "</p>" +
+    table(hot, ["key", "pri", "sum", "status", "fr", "prog", "res", "po", "svm", "cw", "lrps"], { empty: "Nothing needs attention right now." });
+}
+
+/* ══ Open box ══ */
+function viewOpenBox() {
+  const box = openIdx().filter((i) => E[i].stage === "openbox");
+  if (UI.sort.k !== "age" && UI.sort.k !== "pri") UI.sort = { k: "age", d: -1 };
+  return "<h2>Open box</h2><p class=\"sub\">Tickets in " + esc(CFG.openBox.join(", ")) + ". These are logged but not yet triaged: Step 4 asks for the owner in an internal note and the status set to Technical Analysis, straight after logging. Tickets created automatically are included.</p>" +
+    table(box, ["key", "pri", "sum", "status", "age", "fr", "po", "svm", "cw"], { empty: "The open box is empty. Every logged ticket has been triaged." });
+}
+
+/* ══ Escalations ══ */
+function viewEsc() {
+  const L2 = HC.escalations(T, E, NOW, CFG), contacts = CFG.contacts;
+  const phoneOf = (role) => contacts.filter((c) => role.indexOf(c.role) === 0).map((c) => esc(c.name) + ' <a class="tel" href="tel:' + esc(c.phone.replace(/\s+/g, "")) + '">' + esc(c.phone) + "</a>").join("<br>");
+  const byKey = {}; L2.forEach((x) => { byKey[x.i] = x; });
+  return "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2. Escalating moves the technical work, not the ownership: the owner keeps updating the user. “No progress” means no status change in Jira for that long while the ticket is with us.</p>" +
+    table(L2.map((x) => x.i), ["key", "pri", "sum", "status", "prog", "po", "svm"], { sortable: false, empty: "No escalation triggers are met right now.",
+      extra: { h: "Trigger and who to inform", c: (i) => { const x = byKey[i]; return "<b>" + esc(x.trigger) + "</b><div class=\"small\" style=\"margin-top:3px\">" + x.inform.map((r) => { const ph = phoneOf(r); return esc(r) + (ph ? '<div class="dim">' + ph + "</div>" : r.indexOf("PO") === 0 && E[i].po.phone ? '<div class="dim">' + esc(E[i].po.po) + ' <a class="tel" href="tel:' + esc(E[i].po.phone.replace(/\s+/g, "")) + '">' + esc(E[i].po.phone) + "</a></div>" : ""); }).join("<br>") + "</div>"; } } });
+}
+
+/* ══ Rule checks ══ */
+function viewRules() {
+  const C = HC.checks(T, E, NOW, CFG), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
+  const sel = C.find((c) => c.id === UI.openCheck);
+  const mand = C.find((c) => c.id === "mandatory");
+  let h = "<h2>Rule checks</h2><p class=\"sub\">What the data shows against the runbook. Open tickets are checked for logging and triage rules; closed tickets for closure notes. Pick a check to see its tickets.</p>";
+  if (mand && mand.notCarried.length) h += '<div class="note">Not checked, because no Swire ticket has a value for them in this data: <b>' + esc(mand.notCarried.join(", ")) + "</b>. They are either not filled in Jira or not mapped in the launcher’s Jira settings (Refresh data after mapping).</div>";
+  h += '<div class="panel" style="padding:0">' + C.map((c) => '<div class="chk" data-check="' + c.id + '" role="button" tabindex="0" aria-expanded="' + (UI.openCheck === c.id) + '"><span class="ref">' + esc(c.ref) + '</span><div><div class="t">' + esc(c.title) + '</div><div class="w">' + esc(c.why) + " " + esc(c.who) + '.</div></div><span class="c ' + (c.keys.length ? "bad" : "ok") + '">' + (c.keys.length || "✓") + "</span></div>").join("") + "</div>";
+  if (sel) {
+    const idx = sel.keys.map((k) => idxOf[k]).filter((i) => i != null);
+    h += "<h2>" + esc(sel.title) + "</h2>" + table(idx, ["key", "pri", "sum", "status", "age", "po", "svm", "cw"], { empty: "No tickets.",
+      extra: sel.detail ? { h: "Detail", c: (i) => { const d = sel.detail[T[i].key]; if (!d) return ""; if (Array.isArray(d)) return '<span class="small">' + esc(d.join(", ")) + "</span>"; return '<span class="small">' + esc(d.me) + " also on " + d.with.map((k) => '<span class="key">' + esc(k) + "</span>").join(", ") + "</span>"; } } : null });
+  }
+  return h;
+}
+el("view").addEventListener("click", (e) => { const c = e.target.closest(".chk"); if (c) { UI.openCheck = UI.openCheck === c.dataset.check ? null : c.dataset.check; render(); } });
+el("view").addEventListener("keydown", (e) => { const c = e.target.closest(".chk"); if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); c.click(); } });
+
+/* ══ All open ══ */
+function viewQueue() {
+  let idx = openIdx();
+  const pos = Array.from(new Set(idx.map((i) => (E[i].po && E[i].po.po) || "(none)"))).sort();
+  if (UI.stage) idx = idx.filter((i) => E[i].stage === UI.stage);
+  if (UI.sev) idx = idx.filter((i) => T[i].sev === UI.sev);
+  if (UI.po) idx = idx.filter((i) => ((E[i].po && E[i].po.po) || "(none)") === UI.po);
+  if (UI.q) { const q = UI.q.toLowerCase(); idx = idx.filter((i) => { const t = T[i]; return (t.key + " " + t.summary + " " + t.meId + " " + t.svm + " " + t.cw + " " + t.components.join(" ") + " " + lrpsNames(t)).toLowerCase().indexOf(q) > -1; }); }
+  const buckets = [[0, 1, "under 1 day"], [1, 3, "1–3 days"], [3, 7, "3–7 days"], [7, 30, "7–30 days"], [30, 1e9, "over 30 days"]];
+  const ages = buckets.map((b) => idx.filter((i) => { const a = (ageOf(T[i]) || 0) / 1440; return a >= b[0] && a < b[1]; }).length);
+  const opt = (v, txt, cur) => '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(txt) + "</option>";
+  return "<h2>All open Swire tickets</h2><p class=\"sub\">The whole backlog, not only tickets created since Hypercare started.</p>" +
+    '<div class="bar"><input class="inp" id="qIn" placeholder="Search key, summary, ME ID, person, component" value="' + esc(UI.q) + '" style="min-width:300px">' +
+    '<select class="inp" id="qStage">' + opt("", "Any stage", UI.stage) + Object.keys(STAGE_TXT).filter((k) => k !== "closed").map((k) => opt(k, STAGE_TXT[k], UI.stage)).join("") + "</select>" +
+    '<select class="inp" id="qSev">' + opt("", "Any priority", UI.sev) + HC.SEVS.map((s) => opt(s.id, s.name, UI.sev)).join("") + "</select>" +
+    '<select class="inp" id="qPo">' + opt("", "Any PO", UI.po) + pos.map((p) => opt(p, p, UI.po)).join("") + "</select>" +
+    '<button class="btn" id="qCsv">Download CSV (' + idx.length + ")</button></div>" +
+    '<div class="bar"><span class="lbl">Age</span>' + buckets.map((b, k) => '<span class="pill">' + esc(b[2]) + " <b class=\"num\">" + ages[k] + "</b></span>").join("") + "</div>" +
+    table(idx, ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next"], { empty: "No open tickets match." });
+}
+function csv(idx) {
+  const head = ["Key", "Priority", "Summary", "ME ID", "Status", "Stage", "Created", "Age", "First response", "Since last move", "Our time", "Benchmark", "PO", "Module", "SVM In Charge", "Current Worker", "LRPS", "LRPS assignee", "Next action", "Components"];
+  const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+  const lines = [head.map(q).join(",")].concat(idx.map((i) => { const t = T[i], e = E[i];
+    return [t.key, t.priority, t.summary, t.meId, t.status, STAGE_TXT[e.stage], fdt(t.created), fmt(ageOf(t)), e.frState === "met" || e.frState === "missed" ? fmt(e.fr.min) + " (" + e.frState + ")" : e.frState || "",
+      fmt(e.sinceMoveMin), fmt(e.oursMin), e.target ? fmt(e.target.res) : "", e.po.po, e.po.module, t.svm, t.cw, t.lrps.join(" "), lrpsNames(t), t.nextAction, t.components.join("; ")].map(q).join(","); }));
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv" }));
+  a.download = "Swire-open-tickets-" + HC.dayKey(NOW) + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+/* ══ Analytics ══ */
+function rangeMs() {
+  const today = HC.istMidnight(NOW);
+  switch (UI.range) {
+    case "start": return { from: HC.dateMs(CFG.start), to: null, label: "since " + fday(HC.dateMs(CFG.start)) };
+    case "official": return { from: HC.dateMs(CFG.officialStart), to: null, label: "since " + fday(HC.dateMs(CFG.officialStart)) };
+    case "7": return { from: today - 6 * DAY, to: null, label: "last 7 days" };
+    case "30": return { from: today - 29 * DAY, to: null, label: "last 30 days" };
+    case "month": { const p = HC.ist(NOW); return { from: Date.UTC(p.y, p.mo, 1) - 330 * MIN, to: null, label: "this month" }; }
+    case "all": return { from: null, to: null, label: "all time" };
+    case "custom": { const f = HC.dateMs(UI.from), t = HC.dateMs(UI.to); return { from: f, to: t != null ? t + DAY : null, label: (UI.from || "…") + " to " + (UI.to || "…") }; }
+  }
+  return { from: null, to: null, label: "" };
+}
+function rangeBar() {
+  const R = [["start", "Since counting start (" + fday(HC.dateMs(CFG.start)) + ")"], ["official", "Since 1 Nov 2026"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"], ["all", "All time"], ["custom", "Custom"]];
+  return '<div class="bar"><span class="lbl">Period</span>' + R.map(([id, t]) => '<button class="pill" data-range="' + id + '" aria-pressed="' + (UI.range === id) + '">' + esc(t) + "</button>").join("") +
+    (UI.range === "custom" ? '<input type="date" class="inp" id="rFrom" value="' + esc(UI.from) + '"><span class="dim">to</span><input type="date" class="inp" id="rTo" value="' + esc(UI.to) + '">' : "") + "</div>";
+}
+function histNeed(rg) {
+  /* status history is fetched automatically for open tickets and the counting period; an older range may need it */
+  const need = T.filter((t, i) => !E[i].hist && t.created != null && (rg.from == null || t.created >= rg.from) && (rg.to == null || t.created < rg.to)).map((t) => t._row);
+  return need;
+}
+function viewAnalytics() {
+  const rg = rangeMs(), A = HC.analytics(T, E, rg.from, rg.to, NOW), need = histNeed(rg);
+  let h = rangeBar() + "<h2>Analytics, " + esc(rg.label) + "</h2><p class=\"sub\">Tickets created in the period (closures counted on the day they closed). Every day counts as a working day during Hypercare.</p>";
+  if (need.length) h += '<div class="warnbox">' + need.length + " tickets in this period have no status history yet, so their first response and resolution are not counted. <button class=\"btn\" id=\"btnHist\">Read their history from Jira</button></div>";
+  /* inflow vs closed per day */
+  const keys = Object.keys(A.days).sort(); let first = keys[0], last = keys[keys.length - 1];
+  if (rg.from != null) first = HC.dayKey(rg.from); if (!last || last < HC.dayKey(NOW)) last = HC.dayKey(Math.min(NOW, rg.to != null ? rg.to - 1 : NOW));
+  const seq = []; if (first) for (let d = HC.dateMs(first); d != null && HC.dayKey(d) <= last && seq.length < 400; d += DAY) seq.push(HC.dayKey(d));
+  const mx = Math.max(1, ...seq.map((k) => Math.max((A.days[k] || {}).c || 0, (A.days[k] || {}).x || 0)));
+  const chart = seq.length ? '<div class="bars">' + seq.map((k) => { const v = A.days[k] || { c: 0, x: 0 }; return '<div class="b" title="' + k + ": " + v.c + " created, " + v.x + ' closed"><div style="display:flex;gap:1px;align-items:flex-end;height:100%"><i class="c" style="flex:1;height:' + (v.c / mx * 100) + '%"></i><i class="x" style="flex:1;height:' + (v.x / mx * 100) + '%"></i></div></div>'; }).join("") + "</div>" +
+    '<div class="axis"><span>' + esc(fday(HC.dateMs(seq[0]))) + "</span><span>" + esc(fday(HC.dateMs(seq[seq.length - 1]))) + '</span></div><div class="legend"><span><i style="background:var(--navy3)"></i>Created ' + A.created.length + '</span><span><i style="background:var(--sea)"></i>Closed ' + A.closed.length + "</span></div>" : '<div class="empty">No tickets in this period.</div>';
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Inflow and closures per day</div>' + chart + "</div>";
+  /* service performance by priority */
+  const rows = HC.SEVS.map((s) => { const b = A.bySev[s.id], tg = CFG.targets[s.id];
+    const pf = (m, d) => d ? '<span class="pct">' + Math.round(m / d * 100) + "%</span> <span class=\"dim small\">" + m + "/" + d + "</span>" : '<span class="dim">—</span>';
+    return "<tr><td>" + prChip({ sev: s.id, priority: s.name }) + "</td><td class=\"num\">" + b.n + "</td><td>" + fmt(tg.fr) + "</td><td>" + pf(b.frMet, b.frDecided) + (b.frNoHist ? ' <span class="dim small">(' + b.frNoHist + " no history)</span>" : "") + "</td><td>" + (b.frCnt ? fmt(b.frSum / b.frCnt) : "—") + "</td><td>" + fmt(tg.res) + "</td><td>" + pf(b.resMet, b.resDecided) + "</td></tr>"; }).join("");
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Against the Section 10.1 targets</div><div class="tw"><table><thead><tr><th>Priority</th><th>Created</th><th>First response target</th><th>Met</th><th>Average first response</th><th>Resolution benchmark</th><th>Closed within benchmark</th></tr></thead><tbody>' + rows + "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">First response is the first move to a client-side status. The resolution benchmark is a guide, measured on our side only.</p></div>";
+  const hbars = (list, total) => list.length ? list.map((x) => '<div class="hb"><span class="lb" title="' + esc(x.k) + '">' + esc(x.k) + '</span><span class="tr"><i style="width:' + (x.n / Math.max(1, list[0].n) * 100) + '%"></i></span><span class="num">' + x.n + "</span></div>").join("") : '<div class="dim small">No data.</div>';
+  h += '<div class="grid3"><div class="panel"><div class="sec-h" style="margin-top:0">By component</div>' + hbars(A.comp) + '</div><div class="panel"><div class="sec-h" style="margin-top:0">By environment</div>' + hbars(A.env) + '<div class="sec-h">By request type</div>' + hbars(A.type) + '</div><div class="panel"><div class="sec-h" style="margin-top:0">Top business users</div>' + hbars(A.users) + "</div></div>";
+  /* Section 11 measures + exit criteria */
+  const C = HC.checks(T.filter((t, i) => A.created.indexOf(i) > -1), E.filter((e, i) => A.created.indexOf(i) > -1), NOW, CFG);
+  const mand = C.find((c) => c.id === "mandatory"), openInR = A.created.filter((i) => E[i].stage !== "closed").length;
+  const mandPct = openInR ? Math.round((openInR - mand.keys.length) / openInR * 100) : null;
+  const meas = [["ME ID recorded (target 100%)", A.meidPct], ["Open tickets with all mandatory fields", mandPct], ["Closed with closure notes", A.notesPct]];
+  h += '<div class="grid2"><div class="panel"><div class="sec-h" style="margin-top:0">Section 11 measures</div>' + meas.map(([k, v]) => '<div class="hb wide"><span class="lb">' + esc(k) + '</span><span class="tr"><i style="width:' + (v || 0) + '%;background:' + (v == null ? "var(--line2)" : v >= 95 ? "var(--ok)" : v >= 80 ? "var(--cr)" : "var(--ss)") + '"></i></span><span class="num">' + (v == null ? "—" : v + "%") + "</span></div>").join("") +
+    '<div class="hb wide"><span class="lb">Reopened tickets</span><span></span><span class="num">' + A.reopened + "</span></div></div>" + exitPanel() + "</div>";
+  return h;
+}
+function exitPanel() {
+  const open = openIdx(), ssOpen = open.filter((i) => T[i].sev === "showstopper").length;
+  const p = HC.ist(NOW), m0 = Date.UTC(p.y, p.mo, 1) - 330 * MIN, m1 = Date.UTC(p.y, p.mo - 1, 1) - 330 * MIN;
+  const inflow = (a, b) => T.filter((t) => t.created != null && t.created >= a && t.created < b).length;
+  const thisM = inflow(m0, NOW + 1), lastM = inflow(m1, m0);
+  const wk = (k) => T.filter((t) => t.sev === "critical" && t.created != null && t.created >= NOW - (k + 1) * 7 * DAY && t.created < NOW - k * 7 * DAY).length;
+  const crit = [wk(0), wk(1), wk(2), wk(3)], stable = Math.max(...crit) - Math.min(...crit) <= Math.max(2, Math.round(Math.max(...crit) * 0.25));
+  const item = (ok, txt, d) => '<li><span class="m ' + (ok == null ? "na" : ok ? "ok" : "no") + '">' + (ok == null ? "–" : ok ? "✓" : "✕") + "</span><span>" + esc(txt) + (d ? '<span class="dim small"> ' + esc(d) + "</span>" : "") + "</span></li>";
+  const ph = HC.phase(NOW, CFG);
+  return '<div class="panel"><div class="sec-h" style="margin-top:0">Exit criteria (Section 10.7), Month ' + (ph.month || "–") + " " + esc(ph.name) + '</div><ul class="exit">' +
+    item(ssOpen === 0, "No open Showstopper", ssOpen ? ssOpen + " open" : "") +
+    item(stable, "Critical volume stable for 4+ weeks", "last 4 weeks: " + crit.slice().reverse().join(", ")) +
+    item(lastM ? thisM < lastM : null, "Inflow falling month on month", "this month so far " + thisM + ", last month " + lastM) +
+    item(null, "Backlog within the agreed level", open.length + " open; level not agreed yet") +
+    item(null, "Known-issues log complete", "kept by the PO team") +
+    item(null, "BAU team trained and has shadowed Hypercare", "open item 2") +
+    item(null, "Swire sign-off", "") + "</ul></div>";
+}
+
+/* ══ Shift handover (Step 10) ══ */
+/* a shift for handover purposes: weekday night, weekday day (06:00–21:00, the 06:00–09:00 call window included), weekend day */
+function shiftOf(ms) { const d = HC.duty(ms, CFG); return d.id === "call" ? "day" : d.id === "weekend" ? "weekend-" + HC.dayKey(ms) : d.id; }
+function shiftStart(ms) {
+  const cur = shiftOf(ms); let t = Math.floor(ms / (15 * MIN)) * 15 * MIN;
+  for (let k = 0; k < 4 * 24 * 3; k++, t -= 15 * MIN) if (shiftOf(t - 1) !== cur) return t;
+  return t;
+}
+function shiftWindow(which) {
+  let start = shiftStart(NOW), end = NOW;
+  if (which === "last") { end = start; start = shiftStart(end - 1); }
+  const d = HC.duty(Math.max(start, end - MIN), CFG), label = d.id === "call" || d.id === "day" ? "Weekday day shift" : d.label;
+  return { start, end, duty: Object.assign({}, d, { label }) };
+}
+function handoverText(which) {
+  const w = shiftWindow(which), open = openIdx();
+  const line = (i) => { const t = T[i], e = E[i]; return "- " + t.key + " [" + (t.priority || "-") + "] " + t.summary + "\n    Status: " + t.status + "  |  PO: " + (e.po.po || "-") + "  |  SVM: " + (t.svm || "-") + "  |  Current worker: " + (t.cw || "-") + (t.lrps.length ? "  |  LRPS: " + t.lrps.map((k) => k + (LRPS[k] && LRPS[k].a ? " (" + LRPS[k].a + ")" : "")).join(", ") : "") +
+    "\n    Next action: " + (t.nextAction || "(add)"); };
+  const sc = open.filter((i) => T[i].sev === "showstopper" || T[i].sev === "critical").sort((a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev));
+  const waiting = open.filter((i) => E[i].stage === "client" && T[i].sev !== "showstopper" && T[i].sev !== "critical");
+  const escL = HC.escalations(T, E, NOW, CFG).filter((x) => T[x.i].sev !== "showstopper");
+  const newIn = T.map((t, i) => i).filter((i) => T[i].created >= w.start && T[i].created < w.end);
+  const closedIn = T.map((t, i) => i).filter((i) => E[i].stage === "closed" && E[i].closedAt >= w.start && E[i].closedAt < w.end);
+  const boxN = open.filter((i) => E[i].stage === "openbox").length;
+  const sec = (title, list, fn) => title + " (" + list.length + ")\n" + (list.length ? list.map(fn || line).join("\n") : "- none") + "\n";
+  return "SWIRE HYPERCARE SHIFT HANDOVER\n" + w.duty.label + ", " + fdt(w.start) + " to " + fdt(w.end) + " IST\nOwned by: " + w.duty.owns + "   Logged by: " + w.duty.logs + "\n\n" +
+    "Summary: " + newIn.length + " new, " + closedIn.length + " closed this shift. " + open.length + " open in total, " + boxN + " in the open box.\n\n" +
+    sec("1. SHOWSTOPPERS AND CRITICALS, WITH NEXT ACTION", sc) + "\n" +
+    sec("2. WAITING ON USERS (WITH SWIRE)", waiting.slice(0, 40)) + (waiting.length > 40 ? "  … and " + (waiting.length - 40) + " more\n" : "") + "\n" +
+    sec("3. ESCALATIONS IN PROGRESS", escL, (x) => "- " + T[x.i].key + " [" + T[x.i].priority + "] " + x.trigger + " -> inform " + x.inform.join(", ")) + "\n" +
+    "4. PROMISED TO SWIRE\n- (add anything committed to Swire this shift)\n\n" +
+    sec("New this shift", newIn, (i) => "- " + T[i].key + " [" + (T[i].priority || "-") + "] " + T[i].summary + "  (" + T[i].status + ")") + "\n" +
+    sec("Closed this shift", closedIn, (i) => "- " + T[i].key + " " + T[i].summary) + "\n" +
+    "Every open ticket must have a named Hypercare owner on the next shift (R8).";
+}
+function viewHandover() {
+  return '<div class="bar noprint"><span class="lbl">Shift</span><button class="pill" data-shift="current" aria-pressed="' + (UI.shift === "current") + '">This shift so far</button><button class="pill" data-shift="last" aria-pressed="' + (UI.shift === "last") + '">Last completed shift</button>' +
+    '<button class="btn pri" id="hoCopy">Copy for email</button><button class="btn" id="hoPrint">Print</button></div>' +
+    "<h2>Shift handover</h2><p class=\"sub\">Step 10: pass open work to the next shift. Edit the text before sending; next actions come from the Jira Next Action field.</p>" +
+    '<textarea class="ho" id="hoText" spellcheck="false" aria-label="Handover text">' + esc(handoverText(UI.shift)) + "</textarea>";
+}
+
+/* ══ Weekly report (to Swire, Section 9.1) ══ */
+function weekStart(ms) { const m = HC.istMidnight(ms), dow = HC.ist(m).dow; return m - ((dow + 6) % 7) * DAY; }
+function viewWeekly() {
+  if (UI.week == null) UI.week = weekStart(NOW);
+  const a = UI.week, b = a + 7 * DAY, A = HC.analytics(T, E, a, b, NOW);
+  const openEnd = T.map((t, i) => i).filter((i) => T[i].created != null && T[i].created < b && !(E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt < b));
+  const ssList = A.created.filter((i) => T[i].sev === "showstopper");
+  let fm = 0, fd = 0, rm = 0, rd = 0; HC.SEVS.forEach((s) => { const x = A.bySev[s.id]; fm += x.frMet; fd += x.frDecided; rm += x.resMet; rd += x.resDecided; });
+  const pct = (m, d) => d ? Math.round(m / d * 100) + "% (" + m + " of " + d + ")" : "no data";
+  const bySev = HC.SEVS.map((s) => "<tr><td>" + esc(s.name) + "</td><td class=\"num\">" + A.bySev[s.id].n + "</td><td class=\"num\">" + openEnd.filter((i) => T[i].sev === s.id).length + "</td><td>" + (A.bySev[s.id].frDecided ? Math.round(A.bySev[s.id].frMet / A.bySev[s.id].frDecided * 100) + "%" : "—") + "</td></tr>").join("");
+  const opts = []; for (let k = 0; k < 10; k++) { const w = weekStart(NOW) - k * 7 * DAY; opts.push('<option value="' + w + '"' + (w === a ? " selected" : "") + ">Week of " + esc(fday(w)) + "</option>"); }
+  return '<div class="bar noprint"><select class="inp" id="wkSel">' + opts.join("") + '</select><button class="btn pri" id="wkPrint">Print or save as PDF</button></div>' +
+    '<div class="report" id="wkReport"><h3>Swire Shipping, Phoenix Hypercare weekly report</h3><p class="sub">Week of ' + esc(fday(a)) + " to " + esc(fday(b - DAY)) + ". Hypercare month " + (HC.phase(b - 1, CFG).month || "–") + ".</p>" +
+    '<div class="signals">' + [["Tickets raised", A.created.length], ["Tickets closed", A.closed.length], ["Open at week end", openEnd.length], ["Showstoppers raised", ssList.length]].map(([k, v]) => '<div class="sig"><div class="v num">' + v + '</div><div class="k">' + esc(k) + "</div></div>").join("") + "</div>" +
+    "<h3>Service</h3><p>First response within target: <b>" + pct(fm, fd) + "</b>. Closed within the resolution benchmark: <b>" + pct(rm, rd) + "</b>. Reopened: <b>" + A.reopened + "</b>.</p>" +
+    '<h3>By priority</h3><div class="tw"><table><thead><tr><th>Priority</th><th>Raised</th><th>Open at week end</th><th>First response met</th></tr></thead><tbody>' + bySev + "</tbody></table></div>" +
+    "<h3>Showstoppers this week</h3>" + (ssList.length ? "<ul style=\"padding-left:18px\">" + ssList.map((i) => "<li><span class=\"key\">" + esc(T[i].key) + "</span> " + esc(T[i].summary) + " <span class=\"dim\">(" + esc(T[i].status) + ")</span></li>").join("") + "</ul>" : "<p>None.</p>") +
+    "<h3>Most affected areas</h3><p>" + (A.comp.slice(0, 6).map((x) => esc(x.k) + " " + x.n).join(", ") || "No data.") + "</p>" +
+    "<h3>Data quality</h3><p>ME ID recorded on " + (A.meidPct == null ? "—" : A.meidPct + "%") + " of tickets raised. Closure notes on " + (A.notesPct == null ? "—" : A.notesPct + "%") + " of tickets closed.</p>" +
+    '<p class="dim small" style="margin-top:14px">Targets are Solverminds internal working targets (Section 10.1), not contractual. Generated ' + esc(fdt(NOW)) + " IST.</p></div>";
+}
+
+/* ══ Setup ══ */
+function viewSetup() {
+  const t = CFG.targets;
+  const trow = (id) => { const s = HC.SEVS.find((x) => x.id === id); return "<tr><td>" + esc(s.name) + "</td>" + ["fr", "upd", "res"].map((k) => '<td><input class="inp" style="width:90px" data-tg="' + id + "." + k + '" value="' + t[id][k] + '"> <span class="dim small">min</span></td>').join("") + "</tr>"; };
+  return "<h2>Setup</h2><p class=\"sub\">Saved in this browser. Defaults come from the runbook (v1.0, 28 Oct 2026).</p>" +
+    '<div class="panel"><div class="setrow"><label for="sStart">Counting starts</label><div><input type="date" class="inp" id="sStart" value="' + esc(CFG.start) + '"> <span class="dim small">Month 1 of the Hypercare phases counts from here. The runbook’s effective date is ' + esc(fday(HC.dateMs(CFG.officialStart))) + ".</span></div></div>" +
+    '<div class="setrow"><label for="sBox">Open box statuses</label><input class="inp" id="sBox" value="' + esc(CFG.openBox.join(", ")) + '"></div>' +
+    '<div class="setrow"><label for="sTri">Triage within</label><div><input class="inp" id="sTri" style="width:90px" value="' + CFG.triageMin + '"> <span class="dim small">minutes in the open box before it is flagged</span></div></div>' +
+    '<div class="setrow"><label for="sPre">Jira key prefix</label><input class="inp" id="sPre" style="width:140px" value="' + esc(CFG.prefix) + '"></div>' +
+    '<div class="setrow"><span>Request types shown</span><div>' + ALLTYPES.map((x) => '<label style="margin-right:12px"><input type="checkbox" data-type="' + esc(x) + '"' + (TYPES.indexOf(x) > -1 ? " checked" : "") + "> " + esc(x) + "</label>").join("") + "</div></div></div>" +
+    '<div class="panel"><div class="sec-h" style="margin-top:0">Section 10.1 targets, round the clock</div><div class="tw"><table><thead><tr><th>Priority</th><th>First response</th><th>Analysis and ETR update</th><th>Resolution benchmark</th></tr></thead><tbody>' + HC.SEVS.map((s) => trow(s.id)).join("") + "</tbody></table></div></div>" +
+    '<div class="panel"><div class="sec-h" style="margin-top:0">Product Owners by module (Section 15.3)</div><p class="sub">A ticket with one component goes to that module’s PO. With several components, or a component not listed, the SVM In Charge is the PO. “Matches” lists the component names used in Jira, comma separated.</p><div class="tw"><table><thead><tr><th>Module</th><th>Product Owner</th><th>Phone</th><th>Matches components</th></tr></thead><tbody>' +
+    CFG.modules.map((m, k) => "<tr><td>" + esc(m.module) + '</td><td><input class="inp" data-mod="' + k + '.po" value="' + esc(m.po) + '"></td><td><input class="inp" data-mod="' + k + '.phone" value="' + esc(m.phone) + '"></td><td><input class="inp" style="width:100%" data-mod="' + k + '.match" value="' + esc(m.match.join(", ")) + '"></td></tr>').join("") + "</tbody></table></div>" +
+    '<p class="sub" style="margin-top:8px">Components on open Swire tickets that match no module: ' + esc(unmatched().join(", ") || "none") + ".</p></div>" +
+    '<div class="bar"><button class="btn pri" id="sSave">Save settings</button><button class="btn" id="sReset">Restore runbook defaults</button></div>';
+}
+function unmatched() { const s = new Set(); T.forEach((t, i) => { if (E[i].stage !== "closed") t.components.forEach((c) => { if (!HC.moduleOf(c, CFG)) s.add(c); }); }); return Array.from(s).sort(); }
+
+/* ══ ticket drawer ══ */
+function openTicket(i) {
+  const t = T[i], e = E[i]; let tr = null;
+  if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
+  const kv = (k, v) => "<dt>" + esc(k) + "</dt><dd>" + (v || '<span class="dim">—</span>') + "</dd>";
+  const ov = document.createElement("div"); ov.className = "ov";
+  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<button class="btn" style="margin-left:auto" id="dClose">Close</button></div>' +
+    "<h3>" + esc(t.summary) + "</h3>" +
+    '<dl class="kv">' + kv("ME ID", t.meId ? '<span class="mono">' + esc(t.meId) + "</span>" : '<span style="color:var(--ss)">missing</span>') + kv("Request type", esc(t.type)) + kv("Created", esc(fdt(t.created)) + ' <span class="dim">(' + fmt(ageOf(t)) + " ago)</span>") +
+    kv("Environment", esc(t.env)) + kv("Components", esc(t.components.join(", "))) + kv("Menu / screen", esc([t.menu, t.screen].filter(Boolean).join(" / "))) + kv("Business user", esc(t.businessUser)) +
+    kv("PO", poCell(e)) + kv("SVM In Charge", esc(t.svm)) + kv("Current worker", esc(t.cw)) + kv("LRPS", lrpsCell(t)) + kv("Next action", esc(t.nextAction)) + "</dl>" +
+    '<div class="sec-h">Clocks (Section 10.1)</div><dl class="kv">' + kv("First response", frCell(t, e) + (e.target ? ' <span class="dim small">target ' + fmt(e.target.fr) + "</span>" : "")) + kv("Since last move", progCell(t, e)) + kv("Our time", resCell(t, e)) + kv("Time with Swire", e.clientMin != null ? fmt(e.clientMin) : "") + kv("Reopened", e.reopens ? String(e.reopens) : "") + "</dl>" +
+    '<div class="sec-h">Status history</div>' + (tr ? '<div class="tl">' + (tr.length ? tr.map((x) => "<div><b>" + esc(x.to) + '</b> <span class="dim">from ' + esc(x.from) + ", " + esc(fdt(x.t)) + (x.by ? ", " + esc(x.by) : "") + "</span></div>").join("") : "<div>No status changes yet.</div>") + "</div>" : '<p class="dim small">Not read yet. It is read automatically for open tickets.</p>') +
+    (t.reasonText || t.resolutionDetails ? '<div class="sec-h">Closure notes</div>' + (t.reasonText ? '<div class="small dim">Reason for occurrence</div><div class="pre">' + esc(t.reasonText) + "</div>" : "") + (t.resolutionDetails ? '<div class="small dim" style="margin-top:8px">Resolution details</div><div class="pre">' + esc(t.resolutionDetails) + "</div>" : "") : "") +
+    (t.description ? '<div class="sec-h">Description</div><div class="pre">' + esc(t.description) + "</div>" : "") + "</aside>";
+  const prev = document.activeElement;
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
+  const key = (ev) => { if (ev.key === "Escape") close(); };
+  ov.addEventListener("click", (ev) => { if (ev.target === ov) close(); });
+  document.body.appendChild(ov); ov.querySelector("#dClose").onclick = close; ov.querySelector("#dClose").focus();
+  document.addEventListener("keydown", key);
+}
+
+/* ══ render ══ */
+function render() {
+  if (!ROWS.length) return;
+  rebuild(); paintDuty(); paintChips();
+  const open = openIdx(), C = HC.checks(T, E, NOW, CFG), escN = HC.escalations(T, E, NOW, CFG).length;
+  const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
+  paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
+  const V = { now: viewNow, openbox: viewOpenBox, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
+  const y = window.scrollY, f = document.activeElement && document.activeElement.id;
+  el("view").innerHTML = V(); window.scrollTo(0, y);
+  if (f && el(f)) { const x = el(f); x.focus(); if (x.setSelectionRange && typeof x.value === "string") x.setSelectionRange(x.value.length, x.value.length); }
+  wire();
+}
+function wire() {
+  const on = (id, ev, fn) => { const x = el(id); if (x) x.addEventListener(ev, fn); };
+  on("qIn", "input", (e) => { UI.q = e.target.value; clearTimeout(wire._t); wire._t = setTimeout(render, 220); });
+  on("qStage", "change", (e) => { UI.stage = e.target.value; render(); });
+  on("qSev", "change", (e) => { UI.sev = e.target.value; render(); });
+  on("qPo", "change", (e) => { UI.po = e.target.value; render(); });
+  on("qCsv", "click", () => { let idx = openIdx(); if (UI.stage) idx = idx.filter((i) => E[i].stage === UI.stage); if (UI.sev) idx = idx.filter((i) => T[i].sev === UI.sev); if (UI.po) idx = idx.filter((i) => ((E[i].po && E[i].po.po) || "(none)") === UI.po); csv(idx); });
+  document.querySelectorAll("[data-range]").forEach((b) => b.addEventListener("click", () => { UI.range = b.dataset.range; render(); }));
+  on("rFrom", "change", (e) => { UI.from = e.target.value; render(); }); on("rTo", "change", (e) => { UI.to = e.target.value; render(); });
+  on("btnHist", "click", (e) => { const rows = histNeed(rangeMs()); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
+  document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => { UI.shift = b.dataset.shift; render(); }));
+  on("hoCopy", "click", (e) => { const t = el("hoText").value; navigator.clipboard.writeText(t).then(() => { e.target.textContent = "Copied"; setTimeout(() => { e.target.textContent = "Copy for email"; }, 1500); }); });
+  on("hoPrint", "click", () => { const w = shiftWindow(UI.shift); const txt = el("hoText").value; const v = el("view"); const keep = v.innerHTML; v.innerHTML = '<div class="report"><pre style="white-space:pre-wrap;font-family:var(--mono);font-size:11px">' + esc(txt) + "</pre></div>"; const name = "Swire Hypercare handover " + HC.dayKey(w.start) + " " + w.duty.label; window.HDPrint ? HDPrint(name) : window.print(); setTimeout(render, 300); });
+  on("wkSel", "change", (e) => { UI.week = +e.target.value; render(); });
+  on("wkPrint", "click", () => { const name = "Swire Hypercare Weekly Report - week of " + HC.dayKey(UI.week); window.HDPrint ? HDPrint(name) : window.print(); });
+  on("sSave", "click", () => {
+    const c = JSON.parse(JSON.stringify(CFG));
+    c.start = el("sStart").value || c.start; c.openBox = el("sBox").value.split(",").map((s) => s.trim()).filter(Boolean);
+    c.triageMin = Math.max(1, parseInt(el("sTri").value, 10) || c.triageMin); c.prefix = el("sPre").value.trim().toUpperCase() || c.prefix;
+    document.querySelectorAll("[data-tg]").forEach((x) => { const [s, k] = x.dataset.tg.split("."); const v = parseFloat(x.value); if (v > 0) c.targets[s][k] = v; });
+    document.querySelectorAll("[data-mod]").forEach((x) => { const [k, f] = x.dataset.mod.split("."); c.modules[+k][f] = f === "match" ? x.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : x.value.trim(); });
+    TYPES = Array.from(document.querySelectorAll("[data-type]")).filter((x) => x.checked).map((x) => x.dataset.type);
+    saveCfg(c); el("sSave").textContent = "Saved"; setTimeout(render, 600);
+  });
+  on("sReset", "click", () => { if (confirm("Restore every setting to the runbook defaults?")) { try { localStorage.removeItem(CFG_KEY); } catch (e) {} CFG = HC.merge(null); TYPES = null; render(); } });
+}
+el("btnLrps").addEventListener("click", () => fetchLrps(true));
+
+/* ── boot ── */
+function autoHistory() {
+  /* status history: open tickets and everything since counting started (the rest on request in Analytics) */
+  if (!L || !L.autoFetch) return;
+  const from = HC.dateMs(CFG.start);
+  L.autoFetch(T.filter((t, i) => E[i].stage !== "closed" || (t.created != null && t.created >= from)).map((t) => t._row));
+}
+Promise.resolve(HS && HS.loadConfig ? HS.loadConfig().then((c) => { if (window.HDClass && c) HDClass.setOverrides(c.statusOverrides); }).catch(() => {}) : null)
+  .then(() => Promise.all([getRows(), L ? Promise.resolve(L.load()).catch(() => {}) : null]))
+  .then(([rows]) => {
+    ROWS = rows || [];
+    if (!ROWS.length) { el("landing").innerHTML = '<div><h2>No data loaded</h2><p class="sub" style="margin:8px auto 14px">Load a Jira export or fetch from Jira on the launcher, then come back here.</p><a class="btn pri" href="index.html" style="text-decoration:none">Open the launcher</a></div>'; return; }
+    rebuild();
+    if (!T.length) { el("landing").innerHTML = '<div><h2>No ' + esc(CFG.prefix) + ' tickets in this data</h2><p class="sub" style="margin:8px auto 0">The loaded data has no tickets whose key starts with ' + esc(CFG.prefix) + '. Check the Jira query on the launcher.</p></div>'; return; }
+    el("landing").classList.add("hidden"); el("view").classList.remove("hidden");
+    render();
+    if (L) { let pend = null; L.subscribe(() => { clearTimeout(pend); pend = setTimeout(render, 400); }); if (L.onProgress) L.onProgress(() => paintChips()); }
+    autoHistory();
+    setTimeout(() => { if (BR.ready || window._rmBridge) fetchLrps(false); }, 3500);
+    setInterval(() => { if (!document.hidden && !document.querySelector(".ov") && TAB !== "handover" && TAB !== "setup") render(); else paintDuty(); }, 60000);
+  })
+  .catch((e) => { el("landing").innerHTML = '<div><h2>Could not load the data</h2><p class="sub">' + esc(e.message || e) + "</p></div>"; });
+})();
+</script>
+</body>
+</html>
