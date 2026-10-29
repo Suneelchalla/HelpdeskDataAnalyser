@@ -36,6 +36,12 @@
     /* Section 10.2 — "no progress" = no status change for this long */
     escalate: { critical: 4 * 60, high: 2 * 24 * 60 },
     night: { from: "21:00", to: "06:00" }, callWindow: { from: "06:00", to: "09:00" },
+    /* team shifts for handover (IST). They overlap on purpose: a ticket created in an overlap is in both handovers. */
+    shifts: [
+      { id: "1st", name: "1st shift", from: "06:00", to: "15:00" },
+      { id: "2nd", name: "2nd shift", from: "12:30", to: "21:30" },
+      { id: "night", name: "Night shift", from: "21:00", to: "06:00" }
+    ],
     /* Section 15.3 — component (as written in Jira) → module. Several spellings per module. */
     modules: [
       { module: "NFR",     po: "Thennarasu",                 email: "thennarasu.sundharapandiyan@solverminds.com", phone: "+91 99520 85384", match: ["nfr"] },
@@ -336,6 +342,18 @@
              reopened: reopened };
   }
 
+  /* every shift that starts between fromMs and toMs → [{ id, name, from, to, start, end, day }] sorted by start.
+     A shift whose end is not after its start (Night 21:00–06:00) ends the next day. */
+  function shiftInstances(cfg, fromMs, toMs) {
+    var out = [], d0 = istMidnight(fromMs) - DAY;
+    for (var d = d0; d <= toMs; d += DAY) (cfg.shifts || DEFAULTS.shifts).forEach(function (s) {
+      var a = d + hm(s.from) * MIN, bm = hm(s.to), b = d + bm * MIN; if (bm <= hm(s.from)) b += DAY;
+      if (a >= fromMs - DAY && a <= toMs) out.push({ id: s.id, name: s.name, from: s.from, to: s.to, start: a, end: b, day: dayKey(d) });
+    });
+    out.sort(function (x, y) { return x.start - y.start; });
+    return out;
+  }
+
   /* Hypercare phase (Section 10.7) from the start date */
   function phase(now, cfg) {
     var s = dateMs(cfg.start); if (s == null || now < s) return { month: 0, name: "Not started" };
@@ -356,5 +374,5 @@
   return { DEFAULTS: DEFAULTS, SEVS: SEVS, MANDATORY: MANDATORY, merge: merge, parseTs: parseTs, ist: ist, istMidnight: istMidnight, dayKey: dayKey, dateMs: dateMs,
            duty: duty, nextDutyChange: nextDutyChange, sevOf: sevOf, sevName: sevName, sevRank: sevRank, getter: getter, normTicket: normTicket,
            moduleOf: moduleOf, poFor: poFor, stageOf: stageOf, evaluate: evaluate, checks: checks, escalations: escalations, analytics: analytics,
-           phase: phase, fmtMin: fmtMin };
+           phase: phase, fmtMin: fmtMin, shiftInstances: shiftInstances };
 });
