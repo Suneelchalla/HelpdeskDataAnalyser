@@ -188,13 +188,26 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal)
 .card.cl{--c:#0891B2;--cs:#ECFEFF;--cl:#A5F3FC;--g:rgba(8,145,178,.30)}
 .card.op{--c:#059669;--cs:#ECFDF5;--cl:#A7F3D0;--g:rgba(5,150,105,.28)}
 .card.sl{--c:#EA580C;--cs:#FFF3E8;--cl:#FDBA8C;--g:rgba(234,88,12,.30)}
-/* client workspace: one full-width strip under the module grid */
-.card.sw{--c:#0E2A47;--cs:#E8F1F8;--cl:#B9CDE0;--g:rgba(14,42,71,.26);grid-column:1/-1;flex-direction:row;align-items:center;gap:1rem;padding:.7rem 1.15rem;container-type:normal}
-.card.sw .top{flex:0 0 auto}.card.sw h2{flex:none;white-space:nowrap}
-.card.sw p{margin-top:0;min-height:0;-webkit-line-clamp:1;flex:1}
-.card.sw .feat{margin-top:0;padding-top:0}
-.card.sw .cli{font-family:var(--mono);font-size:.66rem;font-weight:600;color:var(--c);background:var(--cs);border:1px solid var(--cl);border-radius:.35rem;padding:.1rem .4rem;margin-left:.45rem;vertical-align:.15rem}
-@media (max-width:1000px), (max-height:540px){ .card.sw{flex-wrap:wrap}.card.sw p{-webkit-line-clamp:2;flex-basis:100%} }
+/* client workspace: one full-width strip under the module grid, with live numbers from the module */
+.card.sw{--c:#0E7C86;--cs:#E6F4F5;--cl:#9FD3D8;--g:rgba(14,124,134,.28);grid-column:1/-1;flex-direction:row;align-items:center;gap:1.2rem;padding:.65rem 1.15rem;container-type:normal;
+  background:linear-gradient(100deg,#fff 0%,#F3F9FA 45%,#EAF2F8 100%)}
+.cards:not(.locked) .card.sw{background:radial-gradient(22rem 8rem at 100% 100%,rgba(14,124,134,.12),transparent 70%),linear-gradient(100deg,#fff 0%,#F3F9FA 45%,#EAF2F8 100%)}
+.card.sw .top{flex:0 0 auto}
+.card.sw .sw-t{display:flex;flex-direction:column;gap:.1rem}
+.card.sw h2{flex:none;white-space:nowrap;font-size:1.15rem}
+.card.sw .sw-s{font-size:.74rem;color:var(--ink2);opacity:.8;white-space:nowrap}
+.card.sw .cli{font-family:var(--mono);font-size:.62rem;font-weight:600;color:#0E7C86;background:#fff;border:1px solid #9FD3D8;border-radius:.35rem;padding:.08rem .4rem;margin-left:.45rem;vertical-align:.15rem}
+.sw-m{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:0;min-width:0}
+.sw-k{display:flex;flex-direction:column;align-items:flex-start;padding:0 1.05rem;border-left:1px solid rgba(14,42,71,.1)}
+.sw-k:first-child{border-left:none}
+.sw-k b{font-family:var(--disp);font-size:1.25rem;font-weight:700;letter-spacing:-.03em;line-height:1.05;color:var(--kc,#0E2A47);font-variant-numeric:tabular-nums}
+.sw-k span{font-size:.68rem;color:var(--ink2);white-space:nowrap;margin-top:.1rem}
+.sw-bar{width:9rem;height:.5rem;border-radius:99px;overflow:hidden;display:flex;background:rgba(14,42,71,.08);margin-right:.9rem;flex-shrink:0}
+.sw-bar i{display:block;height:100%}
+.sw-hint{font-size:.78rem;color:var(--ink2);opacity:.75}
+.sw-asof{font-family:var(--mono);font-size:.62rem;color:var(--faint);margin-left:.9rem;white-space:nowrap}
+.cards.locked .sw-m{display:none}
+@media (max-width:1000px), (max-height:540px){ .card.sw{flex-wrap:wrap}.sw-m{flex-basis:100%;justify-content:flex-start;flex-wrap:wrap;gap:.5rem 0}.sw-bar{display:none}.sw-asof{display:none} }
 @keyframes cardin{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .4s,box-shadow .4s}
 /* a small illustration in the card's colour fills whatever height is free, and steps aside when there is none */
@@ -596,9 +609,9 @@ body.canrefresh #tabRefresh{display:flex}
         </a>
         <a class="card sw" id="cardSW" href="swire.html" style="--i:8" data-g="🛳️">
           <i class="spot"></i>
-          <div class="top"><div class="badge">🛳️<span class="kb" aria-hidden="true">9</span></div><h2>Swire Hypercare<span class="cli">SWIPHX</span></h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
-          <p>Everything for Swire Shipping during Hypercare: who is on duty, the open box, first response and escalations, rule checks, shift handover and the weekly report.</p>
-          <div class="feat"><span>On duty</span><span>Open box</span><span>Escalations</span><span>Handover</span></div>
+          <div class="top"><div class="badge">🛳️<span class="kb" aria-hidden="true">9</span></div><div class="sw-t"><h2>Swire Hypercare<span class="cli">SWIPHX</span></h2><span class="sw-s">Client workspace · Phoenix Hypercare runbook</span></div></div>
+          <div class="sw-m" id="swStats"><span class="sw-hint">Open the module once to see live numbers here</span></div>
+          <span class="go"><span class="gt">Open</span> <span class="ar">→</span></span>
           <div class="lock">◌ Waiting for source file</div>
         </a>
     </div>
@@ -1648,5 +1661,24 @@ if(HS){
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
 <script src="hd-chat.js"></script>
+<script>
+/* ── Swire strip: live numbers written by the Swire Hypercare module (swire.html) ── */
+(function(){
+  function paint(){
+    var box=document.getElementById("swStats"); if(!box) return;
+    var st=null; try{ st=JSON.parse(localStorage.getItem("hd-swire-stats")||"null"); }catch(e){}
+    if(!st||!st.open&&st.open!==0){ return; }
+    var tot=Math.max(1,st.open), seg=function(n,c){ return n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':""; };
+    var k=function(n,l,c){ return '<span class="sw-k" style="--kc:'+c+'"><b>'+Number(n||0).toLocaleString()+'</b><span>'+l+'</span></span>'; };
+    var t=new Date(st.at+330*60000), hm=("0"+t.getUTCHours()).slice(-2)+":"+("0"+t.getUTCMinutes()).slice(-2);
+    box.innerHTML='<span class="sw-bar" title="Open box, Help Desk, Engineering, waiting on Swire, delivered for billing">'+seg(st.hd,"#0E7C86")+seg(st.engg,"#24507C")+seg(st.client,"#D97706")+seg(st.billing,"#8B5CF6")+'</span>'+
+      k(st.open,"open","#0E2A47")+k(st.hd,"with Help Desk","#0E7C86")+k(st.engg,"with Engineering","#24507C")+k(st.client,"waiting on Swire","#D97706")+
+      k(st.cr+(st.ss||0),(st.ss?st.ss+" Showstopper, ":"")+"Critical open",(st.ss?"#C8102E":"#C2680A"))+'<span class="sw-asof">as of '+hm+'</span>';
+  }
+  paint();
+  window.addEventListener("storage",function(e){ if(e.key==="hd-swire-stats") paint(); });
+  setInterval(paint,60000);
+})();
+</script>
 </body>
 </html>
