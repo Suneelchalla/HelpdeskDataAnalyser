@@ -11,6 +11,7 @@
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
 <script src="hd-hypercare.js"></script>
+<script src="hd-search.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -364,6 +365,25 @@ table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;
 #printArea{display:none}
 @media print{body.printing-area > *:not(#printArea){display:none!important}body.printing-area #printArea{display:block}}
 
+.acts{display:inline-flex;gap:4px;white-space:nowrap}
+.sidesearch{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:10px;padding:7px 10px;font-size:12.5px;color:var(--muted);background:#fff;text-align:left}
+.sidesearch:hover{border-color:var(--rose);color:var(--maroon)}
+.simbox{width:min(1000px,100%)}
+.simq{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:12px;padding:4px 10px;margin-bottom:12px;color:var(--muted);background:#fff}
+.simq:focus-within{border-color:var(--rose);box-shadow:0 0 0 3px var(--teal-bg)}
+.simq .inp{border:none;flex:1;font-size:13.5px;padding:8px 4px;box-shadow:none;outline:none}
+.simfor{font-size:12.5px;color:var(--ink2);padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#FCF7F9;margin-bottom:12px}
+.sc{border:1px solid var(--line2);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff}
+.sc.best{border-color:#BFE6CD;background:linear-gradient(100deg,#F2FBF5,#fff 60%);box-shadow:0 8px 20px -16px rgba(31,138,76,.6)}
+.sc-h{display:flex;gap:12px;align-items:flex-start}
+.ring{flex-shrink:0;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid #D4C7CD;font-family:var(--disp);font-size:14px}
+.ring.r-s{border-color:#1F8A4C;color:#1F7A45}.ring.r-l{border-color:#C2680A;color:#B5520A}.ring.r-a{border-color:#B9A7B0;color:var(--muted)}
+.sc-t{flex:1;min-width:0}.sc-lab{font-size:11px;font-weight:700;color:#1F7A45;margin-bottom:2px}
+.sc-s{font-weight:600;margin-top:2px}
+.sc-r{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0 54px}.sc-r span{font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:1px 8px;color:var(--ink2);background:#FCF7F9}
+.sc-f{margin:8px 0 0 54px;font-size:12.5px;line-height:1.5;color:var(--ink2);border-top:1px solid var(--line3);padding-top:8px}
+.sc-f .lb{display:inline-block;font-size:11px;font-weight:700;color:var(--maroon);margin-right:6px}
+.sc-f > div{margin-bottom:4px}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -431,6 +451,7 @@ table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;
   <div class="brand"><svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#7A1F3D"/><path d="M6 20h20l-3 5H9z" fill="#F3C6D4"/><path d="M15 7v12M15 8l7 9h-7" stroke="#fff" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
     <div><div class="bt">Swire Hypercare</div><div class="bs"><span class="cl">SWIPHX</span> Phoenix runbook</div></div></div>
   <div class="duty" id="duty" aria-live="polite"></div>
+  <button type="button" class="sidesearch" data-simkey="" title="Search all tickets like the Similar Ticket Finder"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Find similar tickets</button>
   <nav class="tabs" role="tablist" id="tabs" aria-orientation="vertical"></nav>
   <div class="side-foot">
     <span id="phaseChip">Loading…</span>
@@ -766,7 +787,7 @@ function slaCell(t) {
 }
 const COLS = {
   type:  { h: "Type", s: (t) => t.type, c: (t) => typeChip(t) },
-  rem:   { h: "", s: () => 0, c: (t, e) => (e.stage === "openbox" || e.stage === "working") ? '<button type="button" class="lnk sm" data-rmone="' + esc(t.key) + '" title="Send a reminder on ' + esc(t.key) + '">Remind</button>' : "" },
+  rem:   { h: "", s: () => 0, c: (t, e) => '<span class="acts"><button type="button" class="lnk sm" data-simkey="' + esc(t.key) + '" title="Find similar tickets and known fixes">Similar</button>' + ((e.stage === "openbox" || e.stage === "working") ? '<button type="button" class="lnk sm" data-rmone="' + esc(t.key) + '" title="Send a reminder on ' + esc(t.key) + '">Remind</button>' : "") + "</span>" },
   sla:   { h: "SLA", s: (t) => { const x = slaOfT(t); return x ? (x.state === "breached" ? -1e9 - (x.overByMin || 0) : x.remainingMin != null ? x.remainingMin : 9e9) : 9e9; }, c: (t) => slaCell(t) },
   key:   { h: "Ticket", s: (t) => t.key, c: (t) => '<a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(t.key) + "</a>" },
   pri:   { h: "Priority", s: (t) => HC.sevRank(t.sev), c: (t) => prChip(t) },
@@ -864,7 +885,7 @@ function viewOpenBox() {
   const box = openIdx().filter((i) => E[i].stage === "openbox");
   if (UI.sort.k !== "age" && UI.sort.k !== "pri") UI.sort = { k: "age", d: -1 };
   return "<h2>Open box</h2><p class=\"sub\">Tickets in " + esc(CFG.openBox.join(", ")) + ". These are logged but not yet triaged: Step 4 asks for the owner in an internal note and the status set to Technical Analysis, straight after logging. Tickets created automatically are included.</p>" +
-    table(box, ["key", "pri", "sum", "status", "age", "fr", "po", "svm", "cw"], { empty: "The open box is empty. Every logged ticket has been triaged." });
+    table(box, ["key", "pri", "sum", "status", "age", "fr", "po", "svm", "cw", "rem"], { empty: "The open box is empty. Every logged ticket has been triaged." });
 }
 
 /* ══ Escalations ══ */
@@ -1386,7 +1407,7 @@ function openTicket(i) {
   if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
   const kv = (k, v) => "<dt>" + esc(k) + "</dt><dd>" + (v || '<span class="dim">—</span>') + "</dd>";
   const ov = document.createElement("div"); ov.className = "ov";
-  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<span style="margin-left:auto"></span>' + (canRemind(i) ? '<button class="btn pri" id="dRem">Send reminder</button>' : '<span class="dim small">' + (e.stage === "closed" ? "Closed" : "With Swire: reply from your own mailbox (R10)") + "</span>") + '<button class="btn" id="dClose">Close</button></div>' +
+  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<span style="margin-left:auto"></span><button class="btn" data-simkey="' + esc(t.key) + '">Find similar</button>' + (canRemind(i) ? '<button class="btn pri" id="dRem">Send reminder</button>' : '<span class="dim small">' + (e.stage === "closed" ? "Closed" : "With Swire: reply from your own mailbox (R10)") + "</span>") + '<button class="btn" id="dClose">Close</button></div>' +
     (rmLog()[t.key] ? '<p class="small dim" style="margin-top:6px">Last reminder posted ' + esc(fmt((Date.now() - rmLog()[t.key]) / MIN)) + " ago from this browser.</p>" : "") +
     "<h3>" + esc(t.summary) + "</h3>" +
     '<dl class="kv">' + kv("ME ID", t.meId ? '<span class="mono">' + esc(t.meId) + "</span>" : '<span style="color:var(--ss)">missing</span>') + kv("Request type", esc(t.type)) + kv("Created", esc(fdt(t.created)) + ' <span class="dim">(' + fmt(ageOf(t)) + " ago)</span>") +
@@ -1536,6 +1557,92 @@ function printEngg(list) {
   window.addEventListener("afterprint", done);
   window.HDPrint ? HDPrint("Swire-Hypercare-Engineering-followup_" + HC.dayKey(NOW)) : window.print(); setTimeout(done, 2000);
 }
+
+/* ══ Similar tickets: the Similar Ticket Finder's engine (hd-search.js) over ALL loaded tickets, every client ══ */
+let SIM = null, SIMP = null;
+function simBuild(onProgress) {
+  if (SIM) return Promise.resolve(SIM); if (SIMP) return SIMP;
+  if (!window.HDSearch) return Promise.reject(new Error("hd-search.js did not load. Upload it next to this page."));
+  const get = HC.getter(ROWS), docs = [], tix = [], byKey = {}, pre = {};
+  ROWS.forEach((row) => {
+    const t = HC.normTicket(row, get); if (!t.key) return;
+    t.project = String(get(row, "project") || "").trim(); t.analysis = String(get(row, "analysis") || "").trim(); t.typeOfFix = String(get(row, "type of fix") || "").trim();
+    t.isChange = /change/i.test(t.type); t.isResolved = !!t.resolved || CLS.isTerminal(t.status) || /resolved|completed|delivered/i.test(t.status);
+    t.fix = !!(t.resolutionDetails || t.solution || t.reasonText || t.analysis);
+    byKey[t.key] = tix.length; tix.push(t); pre[t.prefix] = 1;
+    docs.push({ s: t.summary, m: [t.screen, t.menu, t.components.join(" "), t.rootCause, t.typeOfFix, t.labels].filter(Boolean).join(" · "), c: [t.reasonText, t.reasonOcc].filter(Boolean).join("\n"), r: [t.resolutionDetails, t.solution, t.analysis].filter(Boolean).join("\n"), d: t.description });
+  });
+  SIMP = HDSearch.buildAsync(docs, { keyPrefixes: pre }, onProgress).then((eng) => { SIM = { eng, tix, byKey }; SIMP = null; return SIM; });
+  return SIMP;
+}
+function simScore(a, b, text, linked) {
+  let st = 0; const rs = [];
+  if (a.screen && b.screen && a.screen.toLowerCase() === b.screen.toLowerCase()) { st += 12; rs.push("Screen: " + a.screen); }
+  if (a.menu && b.menu && a.menu.toLowerCase() === b.menu.toLowerCase()) { st += 8; rs.push("Menu: " + a.menu); }
+  const ci = a.components.filter((c) => b.components.indexOf(c) > -1); if (ci.length) { st += Math.min(6, ci.length * 3); rs.push("Component: " + ci[0]); }
+  if (linked) { st += 15; rs.push("Jira linked"); }
+  if (a.prefix && a.prefix === b.prefix) st += 3;
+  const tp = 72 * Math.pow(text || 0, 0.75), bonus = b.isResolved && b.fix ? 4 : b.isResolved ? 2 : 0;
+  if (tp >= 10) rs.unshift("Same words" + (b.reasonText || b.resolutionDetails ? " (incl. cause / resolution)" : ""));
+  return { s: Math.min(100, Math.round(tp + st + bonus)), rs, st, linked };
+}
+function simFor(key) {
+  const i = SIM.byKey[key]; if (i == null) return null;
+  const a = SIM.tix[i], out = HDSearch.similar(SIM.eng, i, { topN: 60 }), res = [], chg = [];
+  const linkedTo = (b) => a.lrps.indexOf(b.key) > -1 || b.lrps.indexOf(a.key) > -1;
+  out.results.forEach((r) => { const b = SIM.tix[r.i]; if (b.key === a.key) return; const m = simScore(a, b, r.text, linkedTo(b)); if (m.st === 0 && !m.linked && m.s < 28) return; (b.isChange ? chg : res).push(Object.assign({ t: b }, m)); });
+  res.sort((x, y) => y.s - x.s || (y.t.fix ? 1 : 0) - (x.t.fix ? 1 : 0)); chg.sort((x, y) => y.s - x.s);
+  const best = res.find((m) => m.s >= 40 && m.t.isResolved && m.t.fix) || null;
+  return { a, sim: res.slice(0, 12), changes: chg.slice(0, 5), best };
+}
+function simSearch(q) {
+  const out = HDSearch.query(SIM.eng, q, { topN: 30 });
+  return out.results.map((r) => { const b = SIM.tix[r.i]; return { t: b, s: Math.min(100, Math.round(100 * Math.min(1, r.text * (0.55 + 0.45 * r.cover) * 0.8 + Math.min(0.12, (r.phrase.s * 0.06 + r.phrase.o * 0.03)) + (r.exactTitle ? 0.15 : 0) + (b.isResolved && b.fix ? 0.04 : 0)))), rs: [] }; })
+    .filter((m) => m.s >= 15).sort((x, y) => y.s - x.s);
+}
+function simCard(m, best) {
+  const t = m.t, tier = m.s >= 65 ? "s" : m.s >= 40 ? "l" : "a", inSw = T.findIndex((x) => x.key === t.key);
+  const fix = [t.reasonText ? ["Reason for occurrence", t.reasonText] : null, t.resolutionDetails ? ["Resolution", t.resolutionDetails] : null, t.solution ? ["Solution", t.solution] : null, !t.resolutionDetails && !t.solution && t.analysis ? ["Analysis", t.analysis] : null].filter(Boolean);
+  const clip = (x, n) => { x = String(x).replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+  return '<div class="sc' + (best ? " best" : "") + '"><div class="sc-h"><span class="ring r-' + tier + '"><b>' + m.s + '</b></span><div class="sc-t">' +
+    (best ? '<div class="sc-lab">Best known fix</div>' : "") + '<div><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a> " + (t.isChange ? '<span class="ty">Change</span> ' : "") + '<span class="dim small">' + esc([t.project, t.status, t.resolved ? "resolved " + fday(t.resolved) : ""].filter(Boolean).join(", ")) + "</span></div>" +
+    '<div class="sc-s">' + esc(t.summary) + "</div></div>" + (inSw > -1 ? '<button type="button" class="lnk sm" data-simopen="' + inSw + '">Details</button>' : "") + "</div>" +
+    (m.rs && m.rs.length ? '<div class="sc-r">' + m.rs.slice(0, 4).map((x) => "<span>" + esc(x) + "</span>").join("") + "</div>" : "") +
+    (fix.length ? '<div class="sc-f">' + fix.map(([l, v]) => '<div><span class="lb">' + esc(l) + "</span>" + esc(clip(v, best ? 700 : 260)) + "</div>").join("") + '<button type="button" class="lnk sm" data-simcopy="' + esc(t.key) + '">Copy fix</button></div>' : '<div class="sc-f dim small">No cause or resolution recorded.</div>') + "</div>";
+}
+function openSimilar(key) {
+  const ov = document.createElement("div"); ov.className = "ov lst";
+  ov.innerHTML = '<div class="lbox simbox" role="dialog" aria-modal="true" aria-label="Similar tickets"><div class="lhead"><h3>Similar tickets</h3><button type="button" class="btn" data-x="close">Close</button></div>' +
+    '<div class="simq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="inp" id="simQ" placeholder="Describe the problem, paste an error, a subject, a code or a ticket key" aria-label="Search all tickets"></div>' +
+    '<div id="simBody"><p class="dim small">Reading ' + ROWS.length.toLocaleString() + ' tickets… <span class="prog"><i id="simBar"></i></span></p></div></div>';
+  const close = () => { ov.remove(); document.removeEventListener("keydown", kh); };
+  const kh = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
+  document.body.appendChild(ov); document.addEventListener("keydown", kh);
+  const body = ov.querySelector("#simBody"), qi = ov.querySelector("#simQ");
+  const showFor = (k) => {
+    const r = simFor(k); if (!r) { body.innerHTML = '<p class="dim">This ticket is not in the loaded data.</p>'; return; }
+    qi.value = r.a.summary;
+    body.innerHTML = '<div class="simfor">For <a class="key" href="' + jiraUrl(r.a.key) + '" target="_blank" rel="noopener">' + esc(r.a.key) + "</a> " + esc(r.a.summary) + "</div>" +
+      (r.best ? simCard(r.best, true) : '<div class="note">No closed ticket with a recorded fix matches closely enough. The closest tickets are below.</div>') +
+      '<div class="grp">Similar tickets (' + r.sim.length + ")</div>" + (r.sim.length ? r.sim.filter((m) => m !== r.best).map((m) => simCard(m)).join("") : '<p class="dim small">No similar tickets found.</p>') +
+      (r.changes.length ? '<div class="grp">Related changes</div>' + r.changes.map((m) => simCard(m)).join("") : "");
+  };
+  const search = (q) => {
+    if (q.trim().length < 2) return; const k = q.trim().toUpperCase(); if (SIM.byKey[k] != null) return showFor(k);
+    const res = simSearch(q);
+    body.innerHTML = '<div class="simfor">Search results for “' + esc(q) + "” across " + SIM.tix.length.toLocaleString() + " tickets</div>" + (res.length ? res.map((m, n) => simCard(m, n === 0 && m.s >= 40 && m.t.fix && m.t.isResolved)).join("") : '<p class="dim">Nothing matches. Try other words; spelling mistakes are fine.</p>');
+  };
+  let tm = null; qi.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => SIM && search(qi.value), 300); });
+  qi.addEventListener("keydown", (e) => { if (e.key === "Enter" && SIM) { clearTimeout(tm); search(qi.value); } });
+  ov.addEventListener("click", (ev) => {
+    if (ev.target === ov || ev.target.closest('[data-x="close"]')) return close();
+    const o = ev.target.closest("[data-simopen]"); if (o) return openTicket(+o.dataset.simopen);
+    const c = ev.target.closest("[data-simcopy]"); if (c) { const t = SIM.tix[SIM.byKey[c.dataset.simcopy]]; const txt = [t.key + " " + t.summary, t.reasonText && "Reason for occurrence:\n" + t.reasonText, t.resolutionDetails && "Resolution:\n" + t.resolutionDetails, t.solution && "Solution:\n" + t.solution, t.analysis && "Analysis:\n" + t.analysis].filter(Boolean).join("\n\n"); navigator.clipboard.writeText(txt).then(() => { c.textContent = "Copied"; setTimeout(() => { c.textContent = "Copy fix"; }, 1500); }); }
+  });
+  simBuild((p) => { const bar = ov.querySelector("#simBar"); if (bar) bar.style.width = Math.round(p * 100) + "%"; }).then(() => { if (document.body.contains(ov)) { key ? showFor(key) : (body.innerHTML = '<p class="dim">Type to search all tickets.</p>'); qi.focus(); } },
+    (e) => { body.innerHTML = '<p style="color:var(--ss)">' + esc(e.message) + "</p>"; });
+}
+document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-simkey]"); if (!b) return; e.preventDefault(); e.stopPropagation(); openSimilar(b.dataset.simkey); }, true);
 
 /* ══ SLA: every ticket, with us and with Swire ══ */
 function viewSla() {
