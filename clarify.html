@@ -6,8 +6,8 @@
 <title>HD Similar Ticket Finder</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230F2233'/%3E%3Ccircle cx='15' cy='14' r='6' stroke='white' stroke-width='2' fill='none'/%3E%3Cpath d='M19.5 18.5L24 23' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="hd-store.js"></script>
-<script src="hd-search.js"></script>
+<script src="hd-store.js?v=20261030b"></script>
+<script src="hd-search.js?v=20261030b"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -445,10 +445,11 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   function initCols(rows) {
     _km = {};
     if (rows[0]) {
-      Object.keys(rows[0]).forEach(function (k) {
+      /* column names from many rows, not only the first: a row can lack a column another has */
+      rows.slice(0, 400).forEach(function (r) { Object.keys(r).forEach(function (k) {
         var n = k.trim().toLowerCase(), m = n.match(/^custom field \((.+)\)$/);
-        _km[n] = k; if (m && _km[m[1]] === undefined) _km[m[1]] = k;
-      });
+        if (_km[n] === undefined) _km[n] = k; if (m && _km[m[1]] === undefined) _km[m[1]] = k;
+      }); });
     }
   }
 
@@ -560,7 +561,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     if (a.linkedKeys.indexOf(b.key) > -1 || b.linkedKeys.indexOf(a.key) > -1) { linked = true; rs.push({ c: "r-lnk", t: "Jira linked" }); }
     var refd = (ENG.refsOf[a.idx] || []).indexOf(b.key) > -1 || (ENG.refsOf[b.idx] || []).indexOf(a.key) > -1;
     if (refd && !linked) { linked = true; rs.push({ c: "r-lnk", t: "Mentioned in text" }); }
-    if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) st += 3;
+    /* no same-client bonus: the best fix can come from any client */
     return { st: st, rs: rs, linked: linked };
   }
   function tierOf(s) { return s >= 65 ? "s" : s >= 40 ? "l" : "a"; }
