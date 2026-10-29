@@ -63,6 +63,10 @@
       reasonText: [/reason\s*for\s*occ?urr?ence\s*[-\u2013:]?\s*text/i, /reason\s*for\s*occ?urr?ence.*(desc|detail|text)/i],
       reasonOccurrence: [/^\s*reason\s*for\s*occ?urr?ence\s*$/i],
       resolutionDetails: [/^\s*resolution\s*details?\s*$/i, /resolution\s*details?/i, /^\s*fix\s*details?\s*$/i],
+      /* mandatory on Swire Hypercare tickets (runbook Section 3, Step 3) */
+      incidentImpact: [/^\s*incident\s*[-\u2013:]?\s*impact\s*$/i, /^\s*impact\s*$/i],
+      businessUser: [/^\s*business\s*user\s*$/i, /business\s*user/i],
+      organizations: [/^\s*organi[sz]ations?\s*$/i],
       /* FPA Details (change tickets) */
       chargeable: [/^\s*chargeable\s*$/i, /^\s*charge\s*type\s*$/i, /chargeab/i],
       fpaManDays: [/^\s*fpa\s*man.?days\s*$/i, /fpa\s*man.?days(?!\s*split)/i],
@@ -177,6 +181,9 @@
       row["Reason for Occurrence - Text"] = rich(pf(f, fm.reasonText));
       row["Reason for Occurrence"] = anyVal(pf(f, fm.reasonOccurrence));
       row["Resolution Details"] = rich(pf(f, fm.resolutionDetails));
+      row["Incident - Impact"] = anyVal(pf(f, fm.incidentImpact));
+      row["Business User"] = person(pf(f, fm.businessUser)) || anyVal(pf(f, fm.businessUser));
+      row["Organizations"] = anyVal(pf(f, fm.organizations));
       row["Chargeable"] = anyVal(pf(f, fm.chargeable));
       row["FPA Man-days"] = num(pf(f, fm.fpaManDays));
       row["Approved Man-days"] = num(pf(f, fm.approvedManDays));
@@ -310,7 +317,7 @@
      re-reads everything when wanted. (Forcing a full fetch made every Refresh restart a long full download until one
      finally completed.) */
   var TEXT_VER = 2;
-  var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType", "reasonText", "reasonOccurrence", "resolutionDetails"];
+  var NEW_KEYS = ["chargeable", "fpaManDays", "approvedManDays", "fpaPreparedBy", "fpaApprovedBy", "impactModule", "manpowerType", "reasonText", "reasonOccurrence", "resolutionDetails", "incidentImpact", "businessUser", "organizations"];
   /* Every custom field the fetch knows. Any of them that is unmapped ("" or missing) is auto-detected again.
      Before, only NEW_KEYS were checked, so a mapping that got blanked (e.g. Settings saved before "Test connection &
      discover fields" had filled the dropdowns) stayed blank for good — Root Cause came back empty for every ticket
@@ -366,7 +373,7 @@
   function fetchWith(cfg, jql, onProgress, opts) {
     var host = cfg.jiraHost || "svmhelpdesk.atlassian.net", fm = cfg.fieldMap || {};
     var fields = ["summary","status","priority","project","components","created","resolutiondate","updated","issuetype","resolution","issuelinks","assignee","reporter","labels","description","environment","fixVersions","parent","comment"];
-    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary","chargeable","fpaManDays","approvedManDays","fpaPreparedBy","fpaApprovedBy","impactModule","manpowerType","reasonText","reasonOccurrence","resolutionDetails"]
+    ["svmInCharge","currentWorker","nextAction","timeToFirstResponse","timeToResolution","rootCause","typeOfFix","screenName","menuHead","releaseNumber","releaseDataFix","parentRelease","tshirtSizing","severity","assignedDate","deliveredDate","clientReference","analysis","solutionSummary","chargeable","fpaManDays","approvedManDays","fpaPreparedBy","fpaApprovedBy","impactModule","manpowerType","reasonText","reasonOccurrence","resolutionDetails","incidentImpact","businessUser","organizations"]
       .forEach(function (k) { String(fm[k] || "").split(",").forEach(function (id) { id = id.trim(); if (id && fields.indexOf(id) < 0) fields.push(id); }); });
 
     var loadCache = (window.HDStore && window.HDStore.loadFetchCache) ? window.HDStore.loadFetchCache() : Promise.resolve(null);
