@@ -189,14 +189,14 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal)
 .card.op{--c:#059669;--cs:#ECFDF5;--cl:#A7F3D0;--g:rgba(5,150,105,.28)}
 .card.sl{--c:#EA580C;--cs:#FFF3E8;--cl:#FDBA8C;--g:rgba(234,88,12,.30)}
 /* client workspace: one full-width strip under the module grid, with live numbers from the module */
-.card.sw{--c:#0E7C86;--cs:#E6F4F5;--cl:#9FD3D8;--g:rgba(14,124,134,.28);grid-column:1/-1;flex-direction:row;align-items:center;gap:1.2rem;padding:.5rem 1.15rem;container-type:normal;
-  background:linear-gradient(100deg,#fff 0%,#F3F9FA 45%,#EAF2F8 100%)}
-.cards:not(.locked) .card.sw{background:radial-gradient(22rem 8rem at 100% 100%,rgba(14,124,134,.12),transparent 70%),linear-gradient(100deg,#fff 0%,#F3F9FA 45%,#EAF2F8 100%)}
+.card.sw{--c:#7A1F3D;--cs:#F8ECF0;--cl:#E8C3D0;--g:rgba(122,31,61,.26);grid-column:1/-1;flex-direction:row;align-items:center;gap:1.2rem;padding:.5rem 1.15rem;container-type:normal;
+  background:linear-gradient(100deg,#fff 0%,#FDF7F9 45%,#F8EAF0 100%)}
+.cards:not(.locked) .card.sw{background:radial-gradient(22rem 8rem at 100% 100%,rgba(163,58,94,.14),transparent 70%),linear-gradient(100deg,#fff 0%,#FDF7F9 45%,#F8EAF0 100%)}
 .card.sw .top{flex:0 0 auto}.card.sw .badge{width:2.25rem;height:2.25rem;font-size:1.1rem}
 .card.sw .sw-t{display:flex;flex-direction:column;gap:.1rem}
 .card.sw h2{flex:none;white-space:nowrap;font-size:1.15rem}
 .card.sw .sw-s{font-size:.74rem;color:var(--ink2);opacity:.8;white-space:nowrap}
-.card.sw .cli{font-family:var(--mono);font-size:.62rem;font-weight:600;color:#0E7C86;background:#fff;border:1px solid #9FD3D8;border-radius:.35rem;padding:.08rem .4rem;margin-left:.45rem;vertical-align:.15rem}
+.card.sw .cli{font-family:var(--mono);font-size:.62rem;font-weight:600;color:#7A1F3D;background:#fff;border:1px solid #E8C3D0;border-radius:.35rem;padding:.08rem .4rem;margin-left:.45rem;vertical-align:.15rem}
 .sw-m{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:0;min-width:0}
 .sw-k{display:flex;flex-direction:column;align-items:flex-start;padding:0 1.05rem;border-left:1px solid rgba(14,42,71,.1)}
 .sw-k:first-child{border-left:none}
@@ -1002,7 +1002,7 @@ function buildBackdrop(){
    A trunk drops from the source panel into a bus above the first row of cards; from there it runs down the centre
    gutter to a second bus above row two. Each card gets a coloured stub and a port dot. Everything lives in the
    gaps between cards, so it never sits under (or over) any text. */
-var WIRE_COLORS={cardFU:"#2563EB",cardTR:"#0F766E",cardWR:"#B45309",cardCH:"#7C3AED",cardRE:"#E11D48",cardCL:"#0891B2",cardOP:"#059669",cardSL:"#EA580C",cardSW:"#0E2A47"};
+var WIRE_COLORS={cardFU:"#2563EB",cardTR:"#0F766E",cardWR:"#B45309",cardCH:"#7C3AED",cardRE:"#E11D48",cardCL:"#0891B2",cardOP:"#059669",cardSL:"#EA580C",cardSW:"#7A1F3D"};
 function drawWires(){
   var stage=el("stage"),src=el("sourceNode"),svg=el("wires"),box=el("cards"),band=document.querySelector(".band");
   if(!stage||!src||!svg||!box||!band) return;
@@ -1677,8 +1677,8 @@ if(HS){
     var tot=Math.max(1,st.open), seg=function(n,c){ return n?'<i style="width:'+(n/tot*100)+'%;background:'+c+'"></i>':""; };
     var k=function(n,l,c){ return '<span class="sw-k" style="--kc:'+c+'"><b>'+Number(n||0).toLocaleString()+'</b><span>'+l+'</span></span>'; };
     var t=new Date(st.at+330*60000), hm=("0"+t.getUTCHours()).slice(-2)+":"+("0"+t.getUTCMinutes()).slice(-2);
-    box.innerHTML='<span class="sw-bar" title="Open box, Help Desk, Engineering, waiting on Swire, delivered for billing">'+seg(st.hd,"#0E7C86")+seg(st.engg,"#24507C")+seg(st.client,"#D97706")+seg(st.billing,"#8B5CF6")+'</span>'+
-      k(st.open,"open","#0E2A47")+k(st.hd,"with Help Desk","#0E7C86")+k(st.engg,"with Engineering","#24507C")+k(st.client,"waiting on Swire","#D97706")+
+    box.innerHTML='<span class="sw-bar" title="Open box, Help Desk, Engineering, waiting on Swire, delivered for billing">'+seg(st.hd,"#B5486F")+seg(st.engg,"#5C1730")+seg(st.client,"#D9A35B")+seg(st.billing,"#9A8AA3")+'</span>'+
+      k(st.open,"open","#5C1730")+k(st.hd,"with Help Desk","#A33A5E")+k(st.engg,"with Engineering","#5C1730")+k(st.client,"waiting on Swire","#B5651D")+
       k(st.cr+(st.ss||0),(st.ss?st.ss+" Showstopper, ":"")+"Critical open",(st.ss?"#C8102E":"#C2680A"))+'<span class="sw-asof">as of '+hm+'</span>';
   }
   paint();
