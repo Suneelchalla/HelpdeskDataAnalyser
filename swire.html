@@ -1566,7 +1566,8 @@ function simBuild(onProgress) {
   const get = HC.getter(ROWS), docs = [], tix = [], byKey = {}, pre = {};
   ROWS.forEach((row) => {
     const t = HC.normTicket(row, get); if (!t.key) return;
-    t.project = String(get(row, "project") || "").trim(); t.analysis = String(get(row, "analysis") || "").trim(); t.typeOfFix = String(get(row, "type of fix") || "").trim();
+    const real = (v) => { const x = String(v == null ? "" : v).trim(); return /^[\s\-–—_.:;,\/\\*#?]*$/.test(x) || /^(n\/?a|nil|none|null|na|tbd|tba|no|nothing|not applicable|not available|pending)$/i.test(x) ? "" : x; };
+    t.project = String(get(row, "project") || "").trim(); t.analysis = real(get(row, "analysis")); t.typeOfFix = real(get(row, "type of fix"));
     t.isChange = /change/i.test(t.type); t.isResolved = !!t.resolved || CLS.isTerminal(t.status) || /resolved|completed|delivered/i.test(t.status);
     t.fix = !!(t.resolutionDetails || t.solution || t.reasonText || t.analysis);
     byKey[t.key] = tix.length; tix.push(t); pre[t.prefix] = 1;
@@ -1583,7 +1584,7 @@ function simScore(a, b, text, linked) {
   if (linked) { st += 15; rs.push("Jira linked"); }
   if (a.prefix && a.prefix === b.prefix) st += 3;
   const tp = 72 * Math.pow(text || 0, 0.75), bonus = b.isResolved && b.fix ? 4 : b.isResolved ? 2 : 0;
-  if (tp >= 10) rs.unshift("Same words" + (b.reasonText || b.resolutionDetails ? " (incl. cause / resolution)" : ""));
+  if (tp >= 10) rs.unshift("Similar wording");
   return { s: Math.min(100, Math.round(tp + st + bonus)), rs, st, linked };
 }
 function simFor(key) {
