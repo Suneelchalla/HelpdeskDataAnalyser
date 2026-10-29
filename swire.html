@@ -6,12 +6,12 @@
 <title>Swire Hypercare</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237A1F3D'/%3E%3Cpath d='M6 20h20l-3 5H9z' fill='%23F3C6D4'/%3E%3Cpath d='M15 7v12M15 8l7 9h-7' stroke='%23fff' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="hd-store.js"></script>
-<script src="sla-engine.js"></script>
-<script src="sla-history.js"></script>
-<script src="sla-link.js"></script>
-<script src="hd-hypercare.js"></script>
-<script src="hd-search.js"></script>
+<script src="hd-store.js?v=20261030b"></script>
+<script src="sla-engine.js?v=20261030b"></script>
+<script src="sla-history.js?v=20261030b"></script>
+<script src="sla-link.js?v=20261030b"></script>
+<script src="hd-hypercare.js?v=20261030b"></script>
+<script src="hd-search.js?v=20261030b"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -361,7 +361,7 @@ table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;
 .elg button.on{border-color:var(--maroon);box-shadow:0 0 0 2px var(--blush2)}.elg i{width:9px;height:9px;border-radius:2px;display:inline-block}
 .eg tr.sel td{background:#FCF0F4}
 .ty{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.72rem;font-weight:600;white-space:nowrap;border:1px solid var(--line2);color:var(--ink2)}
-.ty.inc{color:#B4182D;background:#FDECEE;border-color:#F6C9CF}.ty.sr{color:#3B5BCC;background:#EEF3FF;border-color:#CCD8FA}
+.ty.inc{color:#B4182D;background:#FDECEE;border-color:#F6C9CF}.ty.sr{color:#3B5BCC;background:#EEF3FF;border-color:#CCD8FA}.ty.chg{color:#6D28D9;background:#F3EFFF;border-color:#DDD0FA}
 #printArea{display:none}
 @media print{body.printing-area > *:not(#printArea){display:none!important}body.printing-area #printArea{display:block}}
 
@@ -400,6 +400,7 @@ table.xl th{white-space:nowrap}
 .xl-vals span{flex:1;word-break:break-word}.xl-vals em{font-style:normal;color:var(--faint);font-size:11px}
 .xl-btns{display:flex;gap:6px;padding-top:8px;border-top:1px solid var(--line3)}
 @media print{.xl-f,.xl-foot,.xl-pop{display:none!important}}
+.simty{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-4px 0 12px}.simty:empty{display:none}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -1465,7 +1466,7 @@ function eSla(i) {
 }
 function lrpsWho(i) { const t = T[i]; if (!t.lrps.length) return "(no LRPS ticket)"; const n = t.lrps.map((k) => LRPS[k] && LRPS[k].a).filter(Boolean); return n.length ? n[0] : t.lrps.some((k) => LRPS[k]) ? "(LRPS unassigned)" : "(LRPS not read yet)"; }
 const AGEB = [[0, 7, "< 7 days", "#E7A3B9"], [7, 30, "7–30 days", "#C2680A"], [30, 60, "31–60 days", "#D7263D"], [60, 90, "61–90 days", "#A61B3A"], [90, 1e9, "90+ days", "#5C1730"]];
-const typeChip = (t) => /incident/i.test(t.type) ? '<span class="ty inc">Incident</span>' : /service/i.test(t.type) ? '<span class="ty sr">Service Req</span>' : '<span class="ty">' + esc(t.type || "—") + "</span>";
+const typeChip = (t) => /incident/i.test(t.type) ? '<span class="ty inc">Incident</span>' : /service/i.test(t.type) ? '<span class="ty sr">Service Req</span>' : /change/i.test(t.type) ? '<span class="ty chg">Change</span>' : '<span class="ty">' + esc(t.type || "—") + "</span>";
 function enggMail(list, who) {
   const TDm = TD, groups = {}; list.forEach((i) => { const k = lrpsWho(i); (groups[k] = groups[k] || []).push(i); });
   const names = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
@@ -1597,22 +1598,20 @@ function simScore(a, b, text, linked) {
   if (a.menu && b.menu && a.menu.toLowerCase() === b.menu.toLowerCase()) { st += 8; rs.push("Menu: " + a.menu); }
   const ci = a.components.filter((c) => b.components.indexOf(c) > -1); if (ci.length) { st += Math.min(6, ci.length * 3); rs.push("Component: " + ci[0]); }
   if (linked) { st += 15; rs.push("Jira linked"); }
-  if (a.prefix && a.prefix === b.prefix) st += 3;
   const tp = 72 * Math.pow(text || 0, 0.75), bonus = b.isResolved && b.fix ? 4 : b.isResolved ? 2 : 0;
   if (tp >= 10) rs.unshift("Similar wording");
   return { s: Math.min(100, Math.round(tp + st + bonus)), rs, st, linked };
 }
 function simFor(key) {
   const i = SIM.byKey[key]; if (i == null) return null;
-  const a = SIM.tix[i], out = HDSearch.similar(SIM.eng, i, { topN: 60 }), res = [], chg = [];
+  const a = SIM.tix[i], out = HDSearch.similar(SIM.eng, i, { topN: 120, pool: 400 }), res = [], chg = [];
   const linkedTo = (b) => a.lrps.indexOf(b.key) > -1 || b.lrps.indexOf(a.key) > -1;
   out.results.forEach((r) => { const b = SIM.tix[r.i]; if (b.key === a.key) return; const m = simScore(a, b, r.text, linkedTo(b)); if (m.st === 0 && !m.linked && m.s < 28) return; (b.isChange ? chg : res).push(Object.assign({ t: b }, m)); });
   res.sort((x, y) => y.s - x.s || (y.t.fix ? 1 : 0) - (x.t.fix ? 1 : 0)); chg.sort((x, y) => y.s - x.s);
-  const best = res.find((m) => m.s >= 40 && m.t.isResolved && m.t.fix) || null;
-  return { a, sim: res.slice(0, 12), changes: chg.slice(0, 5), best };
+  return { a, sim: res.slice(0, 40), changes: chg.slice(0, 10) };
 }
 function simSearch(q) {
-  const out = HDSearch.query(SIM.eng, q, { topN: 30 });
+  const out = HDSearch.query(SIM.eng, q, { topN: 60 });
   return out.results.map((r) => { const b = SIM.tix[r.i]; return { t: b, s: Math.min(100, Math.round(100 * Math.min(1, r.text * (0.55 + 0.45 * r.cover) * 0.8 + Math.min(0.12, (r.phrase.s * 0.06 + r.phrase.o * 0.03)) + (r.exactTitle ? 0.15 : 0) + (b.isResolved && b.fix ? 0.04 : 0)))), rs: [] }; })
     .filter((m) => m.s >= 15).sort((x, y) => y.s - x.s);
 }
@@ -1621,7 +1620,7 @@ function simCard(m, best) {
   const fix = [t.reasonText ? ["Reason for occurrence", t.reasonText] : null, t.resolutionDetails ? ["Resolution", t.resolutionDetails] : null, t.solution ? ["Solution", t.solution] : null, !t.resolutionDetails && !t.solution && t.analysis ? ["Analysis", t.analysis] : null].filter(Boolean);
   const clip = (x, n) => { x = String(x).replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
   return '<div class="sc' + (best ? " best" : "") + '"><div class="sc-h"><span class="ring r-' + tier + '"><b>' + m.s + '</b></span><div class="sc-t">' +
-    (best ? '<div class="sc-lab">Best known fix</div>' : "") + '<div><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a> " + (t.isChange ? '<span class="ty">Change</span> ' : "") + '<span class="dim small">' + esc([t.project, t.status, t.resolved ? "resolved " + fday(t.resolved) : ""].filter(Boolean).join(", ")) + "</span></div>" +
+    (best ? '<div class="sc-lab">Best known fix</div>' : "") + '<div><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a> " + typeChip(t) + ' <span class="dim small">' + esc([t.project, t.status, t.resolved ? "resolved " + fday(t.resolved) : ""].filter(Boolean).join(", ")) + "</span></div>" +
     '<div class="sc-s">' + esc(t.summary) + "</div></div>" + (inSw > -1 ? '<button type="button" class="lnk sm" data-simopen="' + inSw + '">Details</button>' : "") + "</div>" +
     (m.rs && m.rs.length ? '<div class="sc-r">' + m.rs.slice(0, 4).map((x) => "<span>" + esc(x) + "</span>").join("") + "</div>" : "") +
     (fix.length ? '<div class="sc-f">' + fix.map(([l, v]) => '<div><span class="lb">' + esc(l) + "</span>" + esc(clip(v, best ? 700 : 260)) + "</div>").join("") + '<button type="button" class="lnk sm" data-simcopy="' + esc(t.key) + '">Copy fix</button></div>' : '<div class="sc-f dim small">No cause or resolution recorded.</div>') + "</div>";
@@ -1630,28 +1629,41 @@ function openSimilar(key) {
   const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox simbox" role="dialog" aria-modal="true" aria-label="Similar tickets"><div class="lhead"><h3>Similar tickets</h3><button type="button" class="btn" data-x="close">Close</button></div>' +
     '<div class="simq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input class="inp" id="simQ" placeholder="Describe the problem, paste an error, a subject, a code or a ticket key" aria-label="Search all tickets"></div>' +
-    '<div id="simBody"><p class="dim small">Reading ' + ROWS.length.toLocaleString() + ' tickets… <span class="prog"><i id="simBar"></i></span></p></div></div>';
+    '<div class="simty" id="simTy"></div><div id="simBody"><p class="dim small">Reading ' + ROWS.length.toLocaleString() + ' tickets… <span class="prog"><i id="simBar"></i></span></p></div></div>';
   const close = () => { ov.remove(); document.removeEventListener("keydown", kh); };
   const kh = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
   document.body.appendChild(ov); document.addEventListener("keydown", kh);
-  const body = ov.querySelector("#simBody"), qi = ov.querySelector("#simQ");
+  const body = ov.querySelector("#simBody"), qi = ov.querySelector("#simQ"), tyBar = ov.querySelector("#simTy");
+  let TY = "all", CL = "all", last = null;
+  const pre = String(CFG.prefix || "SWIPHX").toUpperCase(), isSw = (t) => t.prefix === pre;
+  const kindOf = (t) => /incident/i.test(t.type) ? "inc" : /service/i.test(t.type) ? "sr" : /change/i.test(t.type) ? "chg" : "oth";
+  const keep = (m) => (TY === "all" || kindOf(m.t) === TY) && (CL === "all" || (CL === "sw") === isSw(m.t));
+  const paintTy = (lists) => { const all0 = [].concat(...lists), all = all0.filter((m) => CL === "all" || (CL === "sw") === isSw(m.t)), n = (k) => all.filter((m) => k === "all" || kindOf(m.t) === k).length;
+    const byT = all0.filter((m) => TY === "all" || kindOf(m.t) === TY), nc = (k) => byT.filter((m) => k === "all" || (k === "sw") === isSw(m.t)).length;
+    const clients = new Set(byT.filter((m) => !isSw(m.t)).map((m) => m.t.project || m.t.prefix)).size;
+    tyBar.innerHTML = '<span class="efl">Client</span>' + [["all", "All clients"], ["sw", "Swire"], ["oth", "Other clients" + (clients ? " (" + clients + ")" : "")]].map(([k, l]) => '<button type="button" class="ech' + (CL === k ? " on" : "") + (nc(k) ? "" : " zero") + '" data-cl="' + k + '">' + esc(l) + " <b>" + nc(k) + "</b></button>").join("") +
+      '<span class="efl" style="margin-left:10px">Type</span>' + [["all", "All"], ["inc", "Incidents"], ["sr", "Service requests"], ["chg", "Changes"]].map(([k, l]) => '<button type="button" class="ech' + (TY === k ? " on" : "") + (n(k) ? "" : " zero") + '" data-ty="' + k + '">' + l + " <b>" + n(k) + "</b></button>").join(""); };
   const showFor = (k) => {
     const r = simFor(k); if (!r) { body.innerHTML = '<p class="dim">This ticket is not in the loaded data.</p>'; return; }
-    qi.value = r.a.summary;
-    body.innerHTML = '<div class="simfor">For <a class="key" href="' + jiraUrl(r.a.key) + '" target="_blank" rel="noopener">' + esc(r.a.key) + "</a> " + esc(r.a.summary) + "</div>" +
-      (r.best ? simCard(r.best, true) : '<div class="note">No closed ticket with a recorded fix matches closely enough. The closest tickets are below.</div>') +
-      '<div class="grp">Similar tickets (' + r.sim.length + ")</div>" + (r.sim.length ? r.sim.filter((m) => m !== r.best).map((m) => simCard(m)).join("") : '<p class="dim small">No similar tickets found.</p>') +
-      (r.changes.length ? '<div class="grp">Related changes</div>' + r.changes.map((m) => simCard(m)).join("") : "");
+    last = () => showFor(k); qi.value = r.a.summary; paintTy([r.sim, r.changes]);
+    const sim = r.sim.filter(keep).slice(0, 15), chg = r.changes.filter(keep).slice(0, 6), best = sim.find((m) => m.s >= 40 && m.t.isResolved && m.t.fix) || null;
+    body.innerHTML = '<div class="simfor">For <a class="key" href="' + jiraUrl(r.a.key) + '" target="_blank" rel="noopener">' + esc(r.a.key) + "</a> " + esc(r.a.summary) + '<span class="dim small" style="float:right">searched ' + SIM.tix.length.toLocaleString() + " tickets, all clients</span></div>" +
+      (best ? simCard(best, true) : TY === "chg" ? "" : '<div class="note">No closed ticket with a recorded fix matches closely enough' + (TY !== "all" ? " for this type" : "") + ". The closest tickets are below.</div>") +
+      (TY !== "chg" ? '<div class="grp">Similar tickets (' + sim.length + ")</div>" + (sim.length ? sim.filter((m) => m !== best).map((m) => simCard(m)).join("") : '<p class="dim small">No similar tickets of this type.</p>') : "") +
+      (chg.length ? '<div class="grp">Related changes (' + chg.length + ")</div>" + chg.map((m) => simCard(m)).join("") : TY === "chg" ? '<p class="dim small">No related changes.</p>' : "");
   };
   const search = (q) => {
     if (q.trim().length < 2) return; const k = q.trim().toUpperCase(); if (SIM.byKey[k] != null) return showFor(k);
-    const res = simSearch(q);
+    last = () => search(q);
+    const all = simSearch(q); paintTy([all]); const res = all.filter(keep);
     body.innerHTML = '<div class="simfor">Search results for “' + esc(q) + "” across " + SIM.tix.length.toLocaleString() + " tickets</div>" + (res.length ? res.map((m, n) => simCard(m, n === 0 && m.s >= 40 && m.t.fix && m.t.isResolved)).join("") : '<p class="dim">Nothing matches. Try other words; spelling mistakes are fine.</p>');
   };
   let tm = null; qi.addEventListener("input", () => { clearTimeout(tm); tm = setTimeout(() => SIM && search(qi.value), 300); });
   qi.addEventListener("keydown", (e) => { if (e.key === "Enter" && SIM) { clearTimeout(tm); search(qi.value); } });
   ov.addEventListener("click", (ev) => {
     if (ev.target === ov || ev.target.closest('[data-x="close"]')) return close();
+    const ty = ev.target.closest("[data-ty]"); if (ty) { TY = ty.dataset.ty; if (last) last(); return; }
+    const clb = ev.target.closest("[data-cl]"); if (clb) { CL = clb.dataset.cl; if (last) last(); return; }
     const o = ev.target.closest("[data-simopen]"); if (o) return openTicket(+o.dataset.simopen);
     const c = ev.target.closest("[data-simcopy]"); if (c) { const t = SIM.tix[SIM.byKey[c.dataset.simcopy]]; const txt = [t.key + " " + t.summary, t.reasonText && "Reason for occurrence:\n" + t.reasonText, t.resolutionDetails && "Resolution:\n" + t.resolutionDetails, t.solution && "Solution:\n" + t.solution, t.analysis && "Analysis:\n" + t.analysis].filter(Boolean).join("\n\n"); navigator.clipboard.writeText(txt).then(() => { c.textContent = "Copied"; setTimeout(() => { c.textContent = "Copy fix"; }, 1500); }); }
   });
