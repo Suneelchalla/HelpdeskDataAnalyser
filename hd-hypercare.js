@@ -152,6 +152,8 @@
     return function (row, name) { var k = km[name]; if (k === undefined) { k = name; } var v = row[k]; return v == null ? "" : v; };
   }
   function txt(v) { if (v == null) return ""; if (v instanceof Date) return v.toISOString(); return String(v).trim(); }
+  /* "-", "N/A", "nil", "none", "TBD"… typed into a Jira field mean nothing was written */
+  function real(v) { var x = txt(v); return /^[\s\-–—_.:;,\/\\*#?]*$/.test(x) || /^(n\/?a|nil|none|null|na|tbd|tba|no|nothing|not applicable|not available|pending|-+\s*na)$/i.test(x) ? "" : x; }
   function list(v) { return txt(v).split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean); }
   function normTicket(row, get) {
     var g = function (n) { return txt(get(row, n)); };
@@ -164,7 +166,7 @@
       components: list(get(row, "components")), svm: g("svm in charge"), cw: g("current worker"), assignee: g("assignee"), reporter: g("reporter"),
       meId: g("client reference"), env: g("environment"), impact: g("incident - impact") || g("incident impact"), severity: g("incident - severity") || g("severity"),
       businessUser: g("business user"), orgs: g("organizations"), menu: g("menu head"), screen: g("screen name"), description: g("description"),
-      reasonText: g("reason for occurrence - text"), reasonOcc: g("reason for occurrence"), resolutionDetails: g("resolution details"), solution: g("solution summary"),
+      reasonText: real(get(row, "reason for occurrence - text")), reasonOcc: real(get(row, "reason for occurrence")), resolutionDetails: real(get(row, "resolution details")), solution: real(get(row, "solution summary")),
       rootCause: g("root cause"), labels: g("labels"), releaseNo: g("release number") || g("release number (data fix)"), lrps: lrps, lrpsStatus: lrpsStatus
     };
   }
