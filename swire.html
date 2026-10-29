@@ -238,7 +238,7 @@ tr.row{cursor:pointer}
 
 /* drawer */
 .ov{position:fixed;inset:0;background:rgba(60,14,30,.32);z-index:50;display:flex;justify-content:flex-end}
-.drawer{background:var(--card);width:min(640px,100%);height:100%;overflow-y:auto;padding:20px 22px 40px;box-shadow:-12px 0 40px rgba(60,14,30,.22)}
+.drawer{background:var(--card);width:min(1020px,100%);height:100%;overflow-y:auto;padding:20px 22px 40px;box-shadow:-12px 0 40px rgba(60,14,30,.22)}
 .drawer h3{font-family:var(--disp);font-size:1.15rem;margin:6px 0 10px;line-height:1.35}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:.84rem;margin:10px 0 16px}
 .kv dt{color:var(--muted)}.kv dd{color:var(--ink)}
@@ -311,6 +311,14 @@ tbody tr:hover td{background:#FCF3F6}
 .grid2.wk{grid-template-columns:repeat(auto-fit,minmax(560px,1fr))}
 .wk td,.wk th{white-space:nowrap}
 .tile.t-ok{--ac:#1F8A4C;--acbg:#EAF7EF}
+.kch{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:600;white-space:nowrap;color:color-mix(in srgb,var(--kc) 70%,#1a1a1a);background:color-mix(in srgb,var(--kc) 16%,#fff);border:1px solid color-mix(in srgb,var(--kc) 35%,#fff)}
+.slabox{border:1px solid var(--line2);border-radius:10px;padding:10px 12px;background:#FCF7F9;font-size:13px}
+.kbar{height:10px;border-radius:5px;background:#F1E4EA;overflow:hidden}.kbar i{display:block;height:100%;border-radius:5px}
+.klg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink2);margin-bottom:6px}.klg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.kstrip{display:flex;gap:2px;height:20px;margin-bottom:10px}.kstrip i{display:block;border-radius:4px;min-width:3px}
+table.steps{table-layout:auto}table.steps th,table.steps td{font-size:12px;padding:6px 7px}
+table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;min-width:120px}table.steps td.num{white-space:nowrap}table.steps tr.inst td{color:var(--faint)}table.steps tr.inst td b{font-weight:500}
+.nw{white-space:nowrap}.ncl{white-space:nowrap}
 .tiles.six{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 .sla{display:inline-block;border-radius:6px;padding:1px 7px;font-size:.74rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
 .sla.red{background:#FDECEE;color:#B4182D;border-color:#F6C9CF}.sla.orange{background:#FEF0E4;color:#B5520A;border-color:#F8D3B4}
@@ -1310,6 +1318,41 @@ function viewSetup() {
 function unmatched() { const s = new Set(); T.forEach((t, i) => { if (E[i].stage !== "closed") t.components.forEach((c) => { if (!HC.moduleOf(c, CFG)) s.add(c); }); }); return Array.from(s).sort(); }
 
 /* ══ ticket drawer ══ */
+/* ── SLA timeline for one ticket, built exactly like the SLA Tracker's ticket view (shared SLA link + engine) ── */
+const KN = { hd: "Help Desk", engg: "Engineering", client: "Client", closed: "Closed" };
+const KC = { hd: "#14B8A6", engg: "#6366F1", client: "#F0A838", closed: "#B8C2CF" };
+function kchip(k) { return '<span class="kch" style="--kc:' + (KC[k] || "#B8C2CF") + '">' + esc(KN[k] || k) + "</span>"; }
+function fw(ms) { if (ms == null) return "—"; const d = new Date(ms + 330 * MIN), M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return String(d.getUTCDate()).padStart(2, "0") + " " + M[d.getUTCMonth()] + " " + String(d.getUTCFullYear()).slice(2) + ", " + String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0"); }
+function whenTxt(sg) { const a = fw(sg.start), b = sg.open ? "now" : fw(sg.end); return a.slice(0, 9) === b.slice(0, 9) ? a + " → " + b.slice(11) : a + " → " + b; }
+function slaTimeline(t) {
+  if (!L || !L.ready()) return "";
+  const d = L.detail(t._row), r = d && d.r; if (!r) return '<div class="sec-h">SLA, status by status</div><p class="dim small">' + esc((d && d.info && d.info.tip) || "No SLA data for this ticket yet.") + "</p>";
+  const S = window.HDSla, cal = d.cal, fb = d.fmt, fc = d.fcal, x = d.info || {}, bi = d.bi || {};
+  const offTxt = (o) => { const a = []; if (o.weekend > 0.5) a.push(fc(o.weekend) + " weekend"); if (o.holiday > 0.5) a.push(fc(o.holiday) + " holiday"); if (o.night > 0.5) a.push(S && S.offHoursText ? S.offHoursText(o, cal, fc) : fc(o.night) + " outside working hours"); return a.map((y) => '<div class="ncl">' + esc(y) + "</div>").join(""); };
+  const breach = bi.state === "running" ? "Breaches <b>" + esc(fw(bi.breachAt)) + " IST</b> if still with us (" + esc(fb(bi.remainingMin)) + " of working time left)."
+    : bi.state === "paused" ? "Clock <b>paused</b> while the client has it, " + esc(fb(bi.remainingMin)) + " of working time left."
+    : bi.state === "breached" ? "<b>Breached " + esc(fw(bi.breachedAt)) + " IST</b>, now " + esc(fb(bi.overByMin)) + " over target."
+    : bi.state === "missed" ? "Closed after breaching on <b>" + esc(fw(bi.breachedAt)) + " IST</b>." : bi.state === "met" ? "Closed within the SLA target." : "";
+  let h = '<div class="sec-h">SLA</div><div class="slabox"><div><span class="sla ' + esc(x.tone || "grey") + '">' + esc(x.label || "") + "</span> " + breach + "</div>" +
+    '<div class="small dim" style="margin-top:4px">Working time used <b>' + esc(fb(r.elapsedMin)) + "</b> of " + esc(fb(r.targetMin)) + " (" + Math.round(r.pct) + "%)" + (r.pausedMin > 0 ? ", " + esc(fb(r.pausedMin)) + " paused with the client" : "") + ". Calendar: " + esc(d.calText || "") + ".</div>" +
+    (d.entry && d.entry.suspect ? '<div class="small" style="color:var(--cr);margin-top:4px">History unverified: Jira returned no status changes for this ticket.</div>' : "") +
+    (r.unmapped && r.unmapped.length ? '<div class="small" style="color:var(--cr);margin-top:4px">Not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</div>" : "") + "</div>";
+  /* who had this ticket */
+  const kinds = ["hd", "engg", "client", "closed"].filter((k) => r.byKind[k] && r.byKind[k].cal > 0.5), tot = Math.max(1, kinds.reduce((a, k) => a + r.byKind[k].cal, 0));
+  h += '<div class="sec-h">Who had this ticket</div><div class="tw"><table><thead><tr><th>Held by</th><th>Working time</th><th>Calendar time</th><th>Share</th><th>Clock</th></tr></thead><tbody>' +
+    kinds.map((k) => { const o = r.byKind[k], cnt = k === "hd" || k === "engg"; return "<tr><td>" + kchip(k) + '</td><td class="num">' + (k === "closed" ? "—" : esc(fb(o.biz))) + '</td><td class="num">' + esc(fc(o.cal)) + '</td><td style="min-width:120px"><div class="kbar"><i style="width:' + Math.max(1, o.cal / tot * 100) + "%;background:" + KC[k] + '"></i></div></td><td>' + (cnt ? "counted" : k === "client" ? "paused" : "stopped") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+  /* status by status */
+  const all = Math.max(1, r.segs.reduce((a, sg) => a + sg.calMin, 0));
+  h += '<div class="sec-h">Status by status (' + r.segs.length + " step" + (r.segs.length === 1 ? "" : "s") + ')</div><div class="klg">' + ["hd", "engg", "client", "closed"].map((k) => '<span><i style="background:' + KC[k] + '"></i>' + esc(k === "client" ? "Client (paused)" : KN[k]) + "</span>").join("") + "</div>" +
+    '<div class="kstrip">' + r.segs.map((sg) => '<i style="flex:' + Math.max(0.8, sg.calMin / all * 100) + " 1 0;background:" + KC[sg.kind] + '" title="' + esc(sg.status + ", " + KN[sg.kind] + ", " + fc(sg.calMin)) + '"></i>').join("") + "</div>" +
+    '<div class="tw"><table class="steps"><thead><tr><th>Status</th><th>Held by</th><th>When</th><th>Calendar</th><th>Working time</th><th>Not counted in this step</th><th>Clock</th><th>Counted so far</th></tr></thead><tbody>' +
+    r.segs.map((sg) => { const inst = !sg.open && sg.calMin < 1 && !(sg.counted && sg.bizMin >= 0.5), ob = d.off ? d.off(sg) : null;
+      const nc = sg.kind === "client" ? '<span class="dim">all of it, with the client</span>' : sg.kind === "closed" ? "—" : ((ob && offTxt(ob)) || '<span class="dim">nothing</span>');
+      return "<tr" + (inst ? ' class="inst" title="In this status for under a minute: passed straight through"' : "") + "><td><b>" + esc(sg.status) + "</b>" + (sg.mapped ? "" : ' <span class="sla amber">unmapped</span>') + "</td><td>" + kchip(sg.kind) + '</td><td class="nw">' + esc(whenTxt(sg)).replace(" → ", "<br>→ ") + '</td><td class="num">' + esc(fc(sg.calMin)) + '</td><td class="num">' + (sg.kind === "closed" ? "—" : esc(S ? S.fmtDur(sg.bizMin, "h") : fb(sg.bizMin))) + "</td><td>" + (inst ? '<span class="dim">—</span>' : nc) +
+        '</td><td class="nw">' + (inst ? '<span class="dim">passed through</span>' : sg.counted ? (sg.bizMin >= 0.5 ? "▶ counted" : '<span class="dim">▷ nothing counted</span>') : sg.kind === "client" ? "⏸ paused" : "■ stopped") + '</td><td class="num">' + esc(fb(sg.elapsedAfter)) + "</td></tr>"; }).join("") + "</tbody></table></div>";
+  return h;
+}
 function openTicket(i) {
   const t = T[i], e = E[i]; let tr = null;
   if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
@@ -1322,7 +1365,7 @@ function openTicket(i) {
     kv("Environment", esc(t.env)) + kv("Components", esc(t.components.join(", "))) + kv("Menu / screen", esc([t.menu, t.screen].filter(Boolean).join(" / "))) + kv("Business user", esc(t.businessUser)) +
     kv("PO", poCell(e)) + kv("SVM In Charge", esc(t.svm)) + kv("Current worker", esc(t.cw)) + kv("LRPS", lrpsCell(t)) + kv("Next action", esc(t.nextAction)) + "</dl>" +
     '<div class="sec-h">Clocks (Section 10.1)</div><dl class="kv">' + kv("First response", frCell(t, e) + (e.target ? ' <span class="dim small">target ' + fmt(e.target.fr) + "</span>" : "")) + kv("Since last move", progCell(t, e)) + kv("Our time", resCell(t, e)) + kv("Time with Swire", e.clientMin != null ? fmt(e.clientMin) : "") + kv("Reopened", e.reopens ? String(e.reopens) : "") + "</dl>" +
-    '<div class="sec-h">Status history</div>' + (tr ? '<div class="tl">' + (tr.length ? tr.map((x) => "<div><b>" + esc(x.to) + '</b> <span class="dim">from ' + esc(x.from) + ", " + esc(fdt(x.t)) + (x.by ? ", " + esc(x.by) : "") + "</span></div>").join("") : "<div>No status changes yet.</div>") + "</div>" : '<p class="dim small">Not read yet. It is read automatically for open tickets.</p>') +
+    slaTimeline(t) +
     (t.reasonText || t.resolutionDetails ? '<div class="sec-h">Closure notes</div>' + (t.reasonText ? '<div class="small dim">Reason for occurrence</div><div class="pre">' + esc(t.reasonText) + "</div>" : "") + (t.resolutionDetails ? '<div class="small dim" style="margin-top:8px">Resolution details</div><div class="pre">' + esc(t.resolutionDetails) + "</div>" : "") : "") +
     (t.description ? '<div class="sec-h">Description</div><div class="pre">' + esc(t.description) + "</div>" : "") + "</aside>";
   const prev = document.activeElement;
