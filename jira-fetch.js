@@ -331,6 +331,8 @@
     if (!need.length && !upgrade) return Promise.resolve(cfg);
     function fills(list) { var auto = autoDetect(list || []); return need.some(function (k) { return auto[k]; }); }
     var src, fresh = false;
+    /* fields that don't exist on this Jira stay unmapped; look for them again at most once a day, not on every page load */
+    if (!upgrade && cfg._fieldsAt && Date.now() - cfg._fieldsAt < 864e5 && !(cfg._fields && cfg._fields.length && fills(cfg._fields))) return Promise.resolve(cfg);
     if (!upgrade && cfg._fields && cfg._fields.length && fills(cfg._fields)) src = Promise.resolve(cfg._fields);   // saved list is enough
     else if (!_discoveredThisSession) { fresh = true; src = discoverFields(cfg).then(function (l) { _discoveredThisSession = true; return l; },
                                                                                    function () { _discoveredThisSession = true; return null; }); }
@@ -348,7 +350,7 @@
         });
         cfg._fmVer = FM_VER;
       }
-      cfg.fieldMap = fm; cfg._fields = list;
+      cfg.fieldMap = fm; cfg._fields = list; if (fresh) cfg._fieldsAt = Date.now();
       saveCfg(cfg); return cfg;
     });
   }
