@@ -288,7 +288,7 @@
     var hcStart = dateMs(cfg.start) || 0;
     push("fr", "10.1", "First response overdue", "Hypercare team / PO", "No move to the client yet and the first-response target has passed. Tickets created since counting started; older backlog shows its clock on the ticket.",
       T.filter(function (t, i) { return E[i].frState === "breached" && E[i].stage !== "closed" && (t.created || 0) >= hcStart; }).map(function (t) { return t.key; }));
-    push("upd", "10.1", "Update interval passed", "Hypercare team / PO", "No status change for longer than the Analysis and ETR update interval.",
+    push("upd", "10.1", "ETR update overdue", "Hypercare team / PO", "With us and no status change for longer than the Section 10.1 Analysis and ETR update interval (Showstopper 1h, Critical 2h, High 4h, Medium/Low 8h). Send the progress update with an ETR.",
       T.filter(function (t, i) { return E[i].updateDue; }).map(function (t) { return t.key; }));
     /* closure rules apply to tickets closed during Hypercare, not to the years before it */
     var hcFrom = dateMs(cfg.start) || 0, closedInHc = function (i) { return E[i].stage === "closed" && (E[i].closedAt || 0) >= hcFrom; };
