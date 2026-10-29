@@ -34,7 +34,7 @@
   var VOCAB = ("tickets ticket breached breach breaches breaching critical priority priorities medium high closed open client clients customer customers worker workers status statuses " +
     "month months week weeks year years today yesterday created compare comparison average median overview summary waiting awaiting engineering pending oldest newest latest urgent overdue " +
     "unassigned stale silent assigned weekly monthly versus incident incidents request requests service resolved delivered completed workload backlog trend trends breakdown severity " +
-    "engineer engineers people between since before after during quarter total count number show list display find performance percentage percent fires danger invoice " +
+    "engineer engineers people between since before after during quarter total count number show list display find performance percentage percent fires danger invoice business user users requester requesters raised reported issued receivables billing " +
     "january february march april june july august september october november december anything urgent important busiest busy overloaded handling working responsible escalated " +
     "average compliance incidents screens screen type types cause causes lowest highest least most fewest bottom between").split(/\s+/).filter(Boolean);
   var VOCABSET = {}; VOCAB.forEach(function (w) { VOCABSET[w] = 1; });
@@ -170,11 +170,12 @@
     ["fix", /\b(type of fix|fix type|types of fix|fixes)\b/, "type of fix"],
     ["screen", /\b(screens?|screen names?)\b/, "screen"],
     ["menu", /\b(menu heads?|menus?)\b/, "menu head"],
+    ["buser", /\b(business users?|requesters?|raised by|reported by)\b/, "business user"],
     ["type", /\b(issue types?|types?)\b/, "issue type"],
     ["age", /\b(age|ageing|aging|age bucket|age group|age band)s?\b/, "age"]
   ];
-  var DIMLBL = { project: "Client", worker: "Worker", svm: "SVM in charge", priority: "Priority", status: "Status", type: "Issue type", root: "Root cause", screen: "Screen", fix: "Type of fix", menu: "Menu head", age: "Age" };
-  var FKEY = { project: "client", worker: "worker", svm: "svm", priority: "priority", status: "status", type: "type", root: "root", screen: "screen", fix: "fix", menu: "menu" };
+  var DIMLBL = { project: "Client", worker: "Worker", svm: "SVM in charge", priority: "Priority", status: "Status", type: "Issue type", root: "Root cause", screen: "Screen", fix: "Type of fix", menu: "Menu head", buser: "Business user", age: "Age" };
+  var FKEY = { project: "client", worker: "worker", svm: "svm", priority: "priority", status: "status", type: "type", root: "root", screen: "screen", fix: "fix", menu: "menu", buser: "buser" };
   var AGE_B = [["< 7 days", 0, 7], ["7–30 days", 8, 30], ["31–60 days", 31, 60], ["61–90 days", 61, 90], ["90+ days", 91, 1e9]];
 
   var ANY = "(?:any |some |a |an )?";
@@ -235,7 +236,7 @@
     ];
   }
   function blankF() {
-    return { closed: null, status: [], owner: [], priority: [], client: [], worker: [], svm: [], type: [], root: [], screen: [], fix: [], menu: [], missing: [],
+    return { closed: null, status: [], owner: [], priority: [], client: [], worker: [], svm: [], type: [], root: [], screen: [], fix: [], menu: [], buser: [], missing: [],
       holder: [], ageMin: null, ageMax: null, idleMin: null, sla: null, text: null, range: null, dateField: "created", typeAll: false, allStatuses: false };
   }
   function clonePlan(p) { return JSON.parse(JSON.stringify(p)); }
@@ -263,12 +264,12 @@
       T.push({ raw: r, key: key, summary: clean(r.Summary), status: status, project: clean(r.Project), prefix: key.split("-")[0].toLowerCase(),
         priority: clean(r.Priority), type: clean(r["Issue Type"]), created: ts(r.Created), updated: ts(r.Updated), resolved: ts(r.Resolved),
         worker: clean(r["Current Worker"]), svmRaw: svmRaw, svm: svmRaw ? svmRaw.split(/\s*[,;]\s*/).filter(Boolean) : [],
-        root: clean(r["Root Cause"]), screen: clean(r["Screen Name"]), fix: clean(r["Type of Fix"]), menu: clean(r["Menu Head"]),
+        root: clean(r["Root Cause"]), screen: clean(r["Screen Name"]), fix: clean(r["Type of Fix"]), menu: clean(r["Menu Head"]), buser: clean(r["Business User"]),
         linked: clean(r["Linked Issues"]), closed: status === "Closed", support: isSupportType(r["Issue Type"]) });
     });
     var byKey = {}, STAT = {}; T.forEach(function (t) { byKey[t.key.toLowerCase()] = t; if (t.status) STAT[t.status] = 1; });
 
-    function ownerOf(t) { if (t._own) return t._own; return (t._own = t.status === "On-Hold" ? "hold" : t.status === "Invoice Yet to Raise" ? "inv" : classify3(t.status)); }
+    function ownerOf(t) { if (t._own) return t._own; return (t._own = t.status === "On-Hold" ? "hold" : /^invoice (yet to raise|issued)$/i.test(t.status) ? "inv" : classify3(t.status)); }
     function age(t) { return t.created == null ? null : Math.max(0, Math.floor((nowMs - t.created) / DAY)); }
     function idle(t) {
       if (t._idle !== undefined) return t._idle;
@@ -282,7 +283,7 @@
     function dateOf(t, field) { return field === "resolved" ? closeDate(t) : field === "updated" ? t.updated : t.created; }
 
     /* ── entity index (what names the question can mention) ── */
-    var E = { project: [], person: [], status: [], type: [], root: [], screen: [], fix: [], menu: [] };
+    var E = { project: [], person: [], status: [], type: [], root: [], screen: [], fix: [], menu: [], buser: [] };
     (function build() {
       function counts(fn) { var m = {}; T.forEach(function (t) { var v = fn(t); (Array.isArray(v) ? v : [v]).forEach(function (x) { if (x) m[x] = (m[x] || 0) + 1; }); }); return m; }
       // clients: full name, ticket-key prefix, and words that belong to only one client
@@ -304,7 +305,7 @@
         var terms = [nz(n).trim()]; Object.keys(first).forEach(function (f) { if (first[f] === n) terms.push(f); });
         E.person.push({ value: n, w: wc[n] || 0, s: sc[n] || 0, n: (wc[n] || 0) + (sc[n] || 0), terms: uniq(terms) });
       });
-      ["status", "type", "root", "screen", "fix", "menu"].forEach(function (d) {
+      ["status", "type", "root", "screen", "fix", "menu", "buser"].forEach(function (d) {
         var c = counts(function (t) { return t[d]; });
         Object.keys(c).forEach(function (v) {
           if (d === "status" && (v === "Open" || v === "Closed")) return;            // "open"/"closed" are handled as flags
@@ -318,7 +319,7 @@
     var ENT_TOK = {};
     (function () {
       function add(s) { nz(s).trim().split(" ").forEach(function (x) { if (x) ENT_TOK[x] = 1; }); }
-      [E.project, E.person, E.status, E.type, E.root, E.screen, E.fix, E.menu].forEach(function (list) { list.forEach(function (e) { add(e.value); e.terms.forEach(add); }); });
+      [E.project, E.person, E.status, E.type, E.root, E.screen, E.fix, E.menu, E.buser].forEach(function (list) { list.forEach(function (e) { add(e.value); e.terms.forEach(add); }); });
     })();
     function fixTypos(s, plan) {
       return s.replace(/[a-z]{4,}/g, function (wd) {
@@ -395,7 +396,7 @@
         if (f[field].indexOf(e.value) < 0) f[field].push(e.value); plan.recognised++; plan.personBoth = (e.w > 0 && e.s > 0);
       }
       mp.found.forEach(addPerson);
-      ["root", "screen", "fix", "menu"].forEach(function (d) {
+      ["root", "screen", "fix", "menu", "buser"].forEach(function (d) {
         var r = matchEntities(w, E[d], 3); w = r.w; r.found.forEach(function (e) { f[d].push(e.value); plan.recognised++; });
       });
       // names with typos ("milha", "vijai") — only when exactly one name is clearly the closest
@@ -409,6 +410,8 @@
       // owner side
       if (/ (awaiting|waiting (on|for)|pending (with|on|from)|with|on) (the )?(client|customer)s? | client side | client follow ?ups? | client followup | waiting client | client action /.test(w)) { f.owner.push("client"); w = w.replace(/ (awaiting|waiting on|waiting for|pending with|pending on|pending from|with|on) (the )?(client|customer)s? | client side | client follow ?ups? | client followup | waiting client | client action /g, " "); plan.recognised++; }
       if (/ (with|in|at) (the )?(engineering|engg|dev|development|developers?) | engg follow ?ups? | engineering follow ?ups? | escalated | with dev /.test(w)) { f.owner.push("engg"); w = w.replace(/ (with|in|at) (the )?(engineering|engg|dev|development|developers?) | engg follow ?ups? | engineering follow ?ups? | escalated | with dev /g, " "); plan.recognised++; }
+      /* delivered and with Receivables: Invoice Yet to Raise / Invoice Issued */
+      if (/ invoices? (pending|yet to raise|issued|raised) | pending invoices? | billing | with receivables | receivables | delivered for billing /.test(w) || /\binvoices? (pending|yet to raise|issued|raised)\b|\bpending invoices?\b/.test(lc)) { f.owner.push("inv"); plan.recognised++; w = w.replace(/ invoices? (pending|yet to raise|issued|raised) | pending invoices? | billing | with receivables | receivables | delivered for billing /g, " "); }
       if (/ hd action | needs? action | needs? hd action | action needed | help ?desk action | help ?desk side | our side | with us /.test(w)) { f.owner.push("hd"); w = w.replace(/ hd action | needs? action | needs? hd action | action needed | help ?desk action | help ?desk side | our side | with us /g, " "); plan.recognised++; }
 
       // special phrases
@@ -580,7 +583,7 @@
         if (f.worker.length && f.worker.indexOf(t.worker) < 0) return false;
         if (f.svm.length && !t.svm.some(function (s) { return f.svm.indexOf(s) > -1; })) return false;
         if (f.root.length && f.root.indexOf(t.root) < 0) return false; if (f.screen.length && f.screen.indexOf(t.screen) < 0) return false;
-        if (f.fix.length && f.fix.indexOf(t.fix) < 0) return false; if (f.menu.length && f.menu.indexOf(t.menu) < 0) return false;
+        if (f.fix.length && f.fix.indexOf(t.fix) < 0) return false; if (f.menu.length && f.menu.indexOf(t.menu) < 0) return false; if (f.buser && f.buser.length && f.buser.indexOf(t.buser) < 0) return false;
         if (f.owner.length && f.owner.indexOf(ownerOf(t)) < 0) return false;
         for (var i = 0; i < f.missing.length; i++) { var k = f.missing[i]; if (k === "priority" ? t.priority : k === "svm" ? t.svmRaw : k === "linked" ? t.linked : t[k]) return false; }
         if (f.range) { var d = dateOf(t, ef.dateField); if (d == null || d < f.range.from || d > f.range.to) return false; }
@@ -603,7 +606,7 @@
       if (f.priority.length) P(f.priority.join(" + "), { priority: [] }); if (f.client.length) P("client: " + f.client.join(", "), { client: [] });
       if (f.worker.length) P("worker: " + f.worker.join(", "), { worker: [] }); if (f.svm.length) P("SVM in charge: " + f.svm.join(", "), { svm: [] });
       if (f.status.length) P("status: " + f.status.join(", "), { status: [] }); if (f.owner.length) P({ client: "with client", engg: "with engineering", hd: "HD action", hold: "on hold", inv: "invoice pending" }[f.owner[0]] + (f.owner.length > 1 ? " +" : ""), { owner: [] });
-      ["root", "screen", "fix", "menu"].forEach(function (d) { if (f[d].length) { var r = {}; r[d] = []; P(DIMLBL[d].toLowerCase() + ": " + f[d].join(", "), r); } });
+      ["root", "screen", "fix", "menu", "buser"].forEach(function (d) { if (f[d] && f[d].length) { var r = {}; r[d] = []; P(DIMLBL[d].toLowerCase() + ": " + f[d].join(", "), r); } });
       f.missing.forEach(function (k) { P("no " + (k === "svm" ? "SVM in charge" : k === "linked" ? "linked issue" : k === "root" ? "root cause" : k), { missing: f.missing.filter(function (x) { return x !== k; }) }); });
       if (f.holder.length) P("with SVM (Help Desk / Engineering)", { holder: [] });
       if (f.sla) P({ breached: "SLA breached", atrisk: "SLA at risk", duesoon: "SLA due soon", ontrack: "SLA on track", paused: "SLA paused (with client)", nohist: "no SLA data", none: "no SLA target", met: "SLA met", missed: "SLA missed" }[f.sla], { sla: null });
@@ -674,7 +677,7 @@
         ["One ticket or one client", [(T[0] ? T[0].key : "MILAHA-1058"), "Tell me about " + c]] ], note: "Spelling mistakes are fine. After an answer, type what to change — “only critical”, “last month”, “for " + p + "”. Hinglish works too: “kitne open tickets hai”." };
     };
     B.count = function (plan) {
-      var list = select(plan), n = list.length, baseN = select(plan, { client: [], worker: [], svm: [], priority: [], status: [], owner: [], sla: null, idleMin: null, ageMin: null, ageMax: null, missing: [], root: [], screen: [], fix: [], menu: [], text: null, range: null }).length;
+      var list = select(plan), n = list.length, baseN = select(plan, { client: [], worker: [], svm: [], priority: [], status: [], owner: [], sla: null, idleMin: null, ageMin: null, ageMax: null, missing: [], buser: [], root: [], screen: [], fix: [], menu: [], text: null, range: null }).length;
       var rel = n === 0 ? relaxChips(plan) : null;
       var a = { type: "number", title: scopeLabel(plan).replace(/^./, function (c) { return c.toUpperCase(); }), value: n, unit: n === 1 ? "ticket" : "tickets", sub: n === 0 ? "Nothing matches all of those conditions together. Try loosening one:" : baseN && n !== baseN ? pct(n, baseN) + "% of " + fmtN(baseN) + " " + scopeLabel(plan) : "", chips: describe(plan), follow: rel || followChips(plan) };
       if (f_hasSla(plan) && !slaOk()) a.warn = "SLA data isn’t available on this page — open the Follow-up Tracker for SLA questions.";
@@ -884,9 +887,14 @@
       tokA.forEach(function (a) { if (a.length < 4) return; sB.forEach(function (b) { if (b.length < 4) return; if (a !== b && (a.indexOf(b) > -1 || b.indexOf(a) > -1)) bonus += 0.15; }); });
       return Math.min(1, bonus);
     }
-    var IX = null;
+    var IX = null, PAIRTXT = null;
+    function engText(ticket, filter) {
+      if (!IX.eng) return null;
+      var out = root.HDSearch.similar(IX.eng, ticket.idx, { topN: 60, pool: 300, filter: filter }), m = {}; out.results.forEach(function (r) { m[r.i] = r.text; }); return m;
+    }
     function buildSim() {
-      var km = {}; if (T[0]) Object.keys(T[0].raw).forEach(function (k) { km[k.trim().toLowerCase()] = k; });
+      /* column names from many rows (one row can lack a column another has); Jira's "Custom field (X)" headers too */
+      var km = {}; T.slice(0, 400).forEach(function (t) { Object.keys(t.raw).forEach(function (k) { var n = k.trim().toLowerCase(), m = n.match(/^custom field \((.+)\)$/); if (km[n] === undefined) km[n] = k; if (m && km[m[1]] === undefined) km[m[1]] = k; }); });
       function col(row, name) { var k = km[name]; return k !== undefined ? String(row[k] == null ? "" : row[k]).trim() : ""; }
       function dstr(v) { return v instanceof Date ? (isNaN(v) ? "" : v.toISOString()) : String(v == null ? "" : v).trim(); }
       var ix = { tickets: [], byKey: {}, byScreen: {}, byMenu: {}, byRC: {}, byComp: {}, byLabel: {}, byRelease: {}, byProject: {}, byToken: {}, docFreq: {}, idf: {}, changes: [] };
@@ -895,12 +903,13 @@
           raw: row, idx: i, key: col(row, "key"), summary: col(row, "summary"), status: col(row, "status"), priority: col(row, "priority"), project: col(row, "project"), issueType: col(row, "issue type"),
           components: col(row, "components"), created: rt.created, resolved: rt.resolved, resolution: col(row, "resolution"), screenName: col(row, "screen name"), menuHead: col(row, "menu head"),
           rootCause: col(row, "root cause"), typeOfFix: col(row, "type of fix"), analysis: col(row, "analysis"), solutionSummary: col(row, "solution summary"), description: col(row, "description"),
+          reasonText: col(row, "reason for occurrence - text"), reasonOcc: col(row, "reason for occurrence"), resolutionDetails: col(row, "resolution details"),
           labels: col(row, "labels"), linkedIssues: col(row, "linked issues"), deliveredDate: dstr(row[km["delivered date"]]), releaseNumber: col(row, "release number"),
           releaseDataFix: col(row, "release number (data fix)"), parentRelease: col(row, "parent release no")
         };
         u.tokens = sTok(u.summary); u.bgs = sBig(u.tokens); u.descTokens = sTok(String(u.description).slice(0, 900)).slice(0, 100);
         u.labelList = u.labels ? u.labels.split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean) : [];
-        u.isResolved = !!(u.resolved || u.resolution || /closed|resolved|completed|delivered/i.test(u.status)); u.hasSolution = !!(u.rootCause || u.typeOfFix || u.analysis || u.solutionSummary);
+        u.isResolved = !!(u.resolved || u.resolution || /closed|resolved|completed|delivered/i.test(u.status)); u.hasSolution = !!(u.rootCause || u.typeOfFix || u.analysis || u.solutionSummary || u.resolutionDetails || u.reasonText);
         u.isChange = /change/i.test(u.issueType); u.linkedKeys = u.linkedIssues ? u.linkedIssues.split(/[,;]/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
         ix.tickets.push(u); if (u.key) ix.byKey[u.key] = i; if (u.isChange) ix.changes.push(i);
         function inv(map, value) { if (!value) return; var k = value.toLowerCase(); (map[k] = map[k] || []).push(i); }
@@ -911,6 +920,13 @@
         u.releaseKeys.forEach(function (rk) { (ix.byRelease[rk] = ix.byRelease[rk] || []).push(i); });
       });
       var N = ix.tickets.length || 1; Object.keys(ix.docFreq).forEach(function (tok) { ix.idf[tok] = Math.log(N / ix.docFreq[tok]); });
+      /* the Similar Ticket Finder's engine (hd-search.js), when loaded: BM25F over summary, description, the Root Cause tab,
+         resolution and analysis. Without it the word-overlap scoring below is used. */
+      if (root.HDSearch) {
+        var pre = {}; ix.tickets.forEach(function (u) { var p0 = String(u.key || "").split("-")[0].toUpperCase(); if (p0) pre[p0] = 1; });
+        ix.eng = root.HDSearch.build(ix.tickets.map(function (u) { return { s: u.summary, m: [u.screenName, u.menuHead, u.components, u.labels, u.rootCause, u.typeOfFix].filter(Boolean).join(" · "),
+          c: [u.reasonText, u.reasonOcc].filter(Boolean).join("\n"), r: [u.resolutionDetails, u.solutionSummary, u.analysis].filter(Boolean).join("\n"), d: u.description }; }), { keyPrefixes: pre });
+      }
       IX = ix;
     }
     function sPair(a, b) {
@@ -924,12 +940,14 @@
       if (a.labelList && b.labelList) { var li = a.labelList.filter(function (l) { return b.labelList.indexOf(l) > -1; }).length; if (li) { struct += Math.min(6, li * 3); reasons.push({ c: "r-lbl", t: "Label" }); } }
       if (a.releaseKeys && b.releaseKeys && a.releaseKeys.length && b.releaseKeys.length) { var sr = a.releaseKeys.filter(function (r) { return b.releaseKeys.indexOf(r) > -1; }); if (sr.length) { struct += 25; reasons.push({ c: "r-lnk", t: "Release: " + sr[0] }); } }
       var sA = new Set(a.tokens), sB = new Set(b.tokens), matchedIdf = 0; sA.forEach(function (tok) { var w = IX.idf[tok] || 0; if (sB.has(tok)) matchedIdf += w; });
-      text += Math.min(32, matchedIdf * 3.5); text += sJac(a.bgs, b.bgs) * 14; text += sSub(a.tokens, b.tokens) * 6;
-      if (a.descTokens.length && b.tokens.length) { var dA = new Set(a.descTokens), mdi = 0; dA.forEach(function (tok) { if (sB.has(tok)) mdi += (IX.idf[tok] || 0); }); text += Math.min(8, mdi * 2); }
-      if (b.descTokens.length && a.tokens.length) { var dB = new Set(b.descTokens), mdi2 = 0; dB.forEach(function (tok) { if (sA.has(tok)) mdi2 += (IX.idf[tok] || 0); }); text += Math.min(8, mdi2 * 2); }
+      if (PAIRTXT && PAIRTXT[b.idx] != null) text = 64 * Math.pow(PAIRTXT[b.idx], 0.75);
+      else { text += Math.min(32, matchedIdf * 3.5); text += sJac(a.bgs, b.bgs) * 14; text += sSub(a.tokens, b.tokens) * 6; }
+      if (!PAIRTXT && a.descTokens.length && b.tokens.length) { var dA = new Set(a.descTokens), mdi = 0; dA.forEach(function (tok) { if (sB.has(tok)) mdi += (IX.idf[tok] || 0); }); text += Math.min(8, mdi * 2); }
+      if (!PAIRTXT && b.descTokens.length && a.tokens.length) { var dB = new Set(b.descTokens), mdi2 = 0; dB.forEach(function (tok) { if (sA.has(tok)) mdi2 += (IX.idf[tok] || 0); }); text += Math.min(8, mdi2 * 2); }
       if (text >= 8) reasons.push({ c: "r-txt", t: "Text similarity" });
       if (a.linkedKeys.indexOf(b.key) > -1 || b.linkedKeys.indexOf(a.key) > -1) { bonus += 15; reasons.push({ c: "r-lnk", t: "Jira linked" }); }
       if (b.isResolved && b.hasSolution) bonus += 6; else if (b.isResolved) bonus += 3;
+      if (a.reasonText && b.reasonText && PAIRTXT && PAIRTXT[b.idx] > 0.35) reasons.push({ c: "r-rc", t: "Same cause written" });
       if (a.project && b.project && a.project.toLowerCase() === b.project.toLowerCase()) { struct += 4; bonus += 2; }
       var score = Math.min(100, Math.round(struct + text + bonus));
       if (struct === 0 && bonus < 15 && score < 28) return null;
@@ -941,13 +959,16 @@
       addFrom(IX.byScreen, ticket.screenName); addFrom(IX.byMenu, ticket.menuHead); addFrom(IX.byRC, ticket.rootCause); ticket.labelList.forEach(function (l) { addFrom(IX.byLabel, l); });
       ticket.linkedKeys.forEach(function (k) { if (IX.byKey[k] != null) cand.add(IX.byKey[k]); }); if (ticket.releaseKeys) ticket.releaseKeys.forEach(function (rk) { addFrom(IX.byRelease, rk); });
       if (ticket.project) { var pl = IX.byProject[ticket.project.toLowerCase()] || []; pl.slice(-200).forEach(function (i) { cand.add(i); }); }
+      PAIRTXT = engText(ticket); if (PAIRTXT) Object.keys(PAIRTXT).forEach(function (i) { cand.add(+i); });
       ticket.tokens.slice().sort(function (a, b) { return (IX.docFreq[a] || 9999) - (IX.docFreq[b] || 9999); }).slice(0, 15).forEach(function (tok) { if (IX.byToken[tok]) IX.byToken[tok].forEach(function (i) { cand.add(i); }); });
-      var res = []; cand.forEach(function (i) { var m = sPair(ticket, IX.tickets[i]); if (m && m.score >= minScore) res.push({ t: IX.tickets[i], s: m.score, rs: m.rs, tier: m.tier }); });
+      var res = []; cand.forEach(function (i) { if (PAIRTXT && PAIRTXT[i] == null) PAIRTXT[i] = 0; var m = sPair(ticket, IX.tickets[i]); if (m && m.score >= minScore) res.push({ t: IX.tickets[i], s: m.score, rs: m.rs, tier: m.tier }); });
+      PAIRTXT = null;
       res.sort(function (a, b) { if (b.s !== a.s) return b.s - a.s; if (b.t.hasSolution !== a.t.hasSolution) return b.t.hasSolution ? 1 : -1; return 0; });
       return res.slice(0, topN);
     }
     function sChanges(ticket, topN) {
       topN = topN || 6; if (!IX.changes.length) return []; var res = [], tc = ticket.created != null ? new Date(ticket.created) : null;
+      PAIRTXT = engText(ticket, function (i) { return IX.tickets[i].isChange; }); if (PAIRTXT) IX.changes.forEach(function (ci) { if (PAIRTXT[ci] == null) PAIRTXT[ci] = 0; });
       IX.changes.forEach(function (ci) {
         var ch = IX.tickets[ci], m = sPair(ticket, ch); if (!m) return;
         if (tc) { var cd = ch.deliveredDate ? new Date(ch.deliveredDate) : ch.resolved ? new Date(ch.resolved) : ch.created ? new Date(ch.created) : null;
@@ -955,6 +976,7 @@
         m.score = Math.min(100, m.score); m.tier = m.score >= 65 ? "s" : m.score >= 40 ? "l" : "a";
         if (m.score >= 12) res.push({ t: ch, s: m.score, rs: m.rs, tier: m.tier });
       });
+      PAIRTXT = null;
       res.sort(function (a, b) { return b.s - a.s; }); return res.slice(0, topN);
     }
     var SIMC = {};
@@ -962,8 +984,9 @@
     function simPack(m, full) {
       var u = m.t;
       return { raw: u.raw, key: u.key, url: base + u.key, summary: u.summary, status: u.status, project: u.project, type: u.issueType, isChange: u.isChange, date: fmtD(u.resolved || u.created), score: m.s, tier: m.tier, reasons: m.rs.slice(0, 4),
-        rootCause: u.rootCause, typeOfFix: u.typeOfFix, sol: u.solutionSummary ? "Solution: " + clipTxt(u.solutionSummary, 220) : u.analysis ? "Analysis: " + clipTxt(u.analysis, 220) : "",
-        solutionFull: full ? clipTxt(u.solutionSummary, 600) : "", analysisFull: full ? clipTxt(u.analysis, 500) : "", resolvedOn: u.resolved ? fmtD(u.resolved) : "" };
+        rootCause: u.rootCause, typeOfFix: u.typeOfFix,
+        sol: u.resolutionDetails ? "Resolution: " + clipTxt(u.resolutionDetails, 220) : u.solutionSummary ? "Solution: " + clipTxt(u.solutionSummary, 220) : u.reasonText ? "Cause: " + clipTxt(u.reasonText, 220) : u.analysis ? "Analysis: " + clipTxt(u.analysis, 220) : "",
+        solutionFull: full ? clipTxt([u.resolutionDetails, u.solutionSummary].filter(Boolean).join("\n"), 600) : "", analysisFull: full ? clipTxt([u.reasonText ? "Reason for occurrence: " + u.reasonText : "", u.analysis].filter(Boolean).join("\n"), 500) : "", resolvedOn: u.resolved ? fmtD(u.resolved) : "" };
     }
     /* → { sim, changes, best, own, agree, sig } for one ticket key (null when the ticket is unknown) */
     function similarFor(key) {
