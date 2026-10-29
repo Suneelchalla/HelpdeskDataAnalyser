@@ -217,7 +217,7 @@ const CFG_KEY = "hd-swire-cfg", LRPS_KEY = "hd-swire-lrps";
 
 /* ── state ── */
 let CFG = loadCfg(), ROWS = [], T = [], E = [], NOW = Date.now(), TAB = "now", TYPES = null, ALLTYPES = [], LRPS = loadLrps();
-const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: "", sort: { k: "age", d: -1 }, openCheck: null, week: null, shift: "current" };
+const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: "", sort: { k: "age", d: -1 }, openCheck: null, week: null, shift: "" };
 
 function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
 function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); }
@@ -589,45 +589,146 @@ function exitPanel() {
 }
 
 /* ══ Shift handover (Step 10) ══ */
-/* a shift for handover purposes: weekday night, weekday day (06:00–21:00, the 06:00–09:00 call window included), weekend day */
-function shiftOf(ms) { const d = HC.duty(ms, CFG); return d.id === "call" ? "day" : d.id === "weekend" ? "weekend-" + HC.dayKey(ms) : d.id; }
-function shiftStart(ms) {
-  const cur = shiftOf(ms); let t = Math.floor(ms / (15 * MIN)) * 15 * MIN;
-  for (let k = 0; k < 4 * 24 * 3; k++, t -= 15 * MIN) if (shiftOf(t - 1) !== cur) return t;
-  return t;
+/* team shifts (Setup): 1st 06:00–15:00, 2nd 12:30–21:30, Night 21:00–06:00. They overlap, so a ticket created in an
+   overlap belongs to both shifts. UI.shift is "id|start" of the chosen shift; by default the shift running now
+   (in an overlap, the one that ends first, since it is the one handing over). */
+function recentShifts() {
+  return HC.shiftInstances(CFG, NOW - 2 * DAY, NOW).filter((x) => x.start <= NOW).slice(-6);
 }
-function shiftWindow(which) {
-  let start = shiftStart(NOW), end = NOW;
-  if (which === "last") { end = start; start = shiftStart(end - 1); }
-  const d = HC.duty(Math.max(start, end - MIN), CFG), label = d.id === "call" || d.id === "day" ? "Weekday day shift" : d.label;
-  return { start, end, duty: Object.assign({}, d, { label }) };
+function currentShiftKey() {
+  const live = recentShifts().filter((x) => x.end > NOW).sort((a, b) => a.end - b.end);
+  const x = live[0] || recentShifts().slice(-1)[0]; return x ? x.id + "|" + x.start : "";
 }
-function handoverText(which) {
-  const w = shiftWindow(which), open = openIdx();
-  const line = (i) => { const t = T[i], e = E[i]; return "- " + t.key + " [" + (t.priority || "-") + "] " + t.summary + "\n    Status: " + t.status + "  |  PO: " + (e.po.po || "-") + "  |  SVM: " + (t.svm || "-") + "  |  Current worker: " + (t.cw || "-") + (t.lrps.length ? "  |  LRPS: " + t.lrps.map((k) => k + (LRPS[k] && LRPS[k].a ? " (" + LRPS[k].a + ")" : "")).join(", ") : "") +
-    "\n    Next action: " + (t.nextAction || "(add)"); };
-  const sc = open.filter((i) => T[i].sev === "showstopper" || T[i].sev === "critical").sort((a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev));
-  const waiting = open.filter((i) => E[i].stage === "client" && T[i].sev !== "showstopper" && T[i].sev !== "critical");
-  const escL = HC.escalations(T, E, NOW, CFG).filter((x) => T[x.i].sev !== "showstopper");
-  const newIn = T.map((t, i) => i).filter((i) => T[i].created >= w.start && T[i].created < w.end);
-  const closedIn = T.map((t, i) => i).filter((i) => E[i].stage === "closed" && E[i].closedAt >= w.start && E[i].closedAt < w.end);
-  const boxN = open.filter((i) => E[i].stage === "openbox").length;
-  const sec = (title, list, fn) => title + " (" + list.length + ")\n" + (list.length ? list.map(fn || line).join("\n") : "- none") + "\n";
-  return "SWIRE HYPERCARE SHIFT HANDOVER\n" + w.duty.label + ", " + fdt(w.start) + " to " + fdt(w.end) + " IST\nOwned by: " + w.duty.owns + "   Logged by: " + w.duty.logs + "\n\n" +
-    "Summary: " + newIn.length + " new, " + closedIn.length + " closed this shift. " + open.length + " open in total, " + boxN + " in the open box.\n\n" +
-    sec("1. SHOWSTOPPERS AND CRITICALS, WITH NEXT ACTION", sc) + "\n" +
-    sec("2. WAITING ON USERS (WITH SWIRE)", waiting.slice(0, 40)) + (waiting.length > 40 ? "  … and " + (waiting.length - 40) + " more\n" : "") + "\n" +
-    sec("3. ESCALATIONS IN PROGRESS", escL, (x) => "- " + T[x.i].key + " [" + T[x.i].priority + "] " + x.trigger + " -> inform " + x.inform.join(", ")) + "\n" +
-    "4. PROMISED TO SWIRE\n- (add anything committed to Swire this shift)\n\n" +
-    sec("New this shift", newIn, (i) => "- " + T[i].key + " [" + (T[i].priority || "-") + "] " + T[i].summary + "  (" + T[i].status + ")") + "\n" +
-    sec("Closed this shift", closedIn, (i) => "- " + T[i].key + " " + T[i].summary) + "\n" +
-    "Every open ticket must have a named Hypercare owner on the next shift (R8).";
+function shiftWindow(key) {
+  const list = recentShifts(); let x = list.find((s) => s.id + "|" + s.start === key);
+  if (!x) { const ck = currentShiftKey(); x = list.find((s) => s.id + "|" + s.start === ck); }
+  if (!x) return { start: NOW - 9 * 3600e3, end: NOW, planEnd: NOW, label: "Shift", live: true, key: "" };
+  const live = x.end > NOW, d = HC.ist(x.start), M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return { start: x.start, end: Math.min(x.end, NOW), planEnd: x.end, live, key: x.id + "|" + x.start,
+    label: x.name + " (" + x.from + "–" + x.to + "), " + d.d + " " + M[d.mo] };
+}
+function overlapNote() {
+  const sh = CFG.shifts || [], parts = [];
+  for (let i = 0; i < sh.length; i++) { const a = sh[i], b = sh[(i + 1) % sh.length];
+    const toM = (t) => { const m = String(t).match(/(\d+):(\d+)/); return m ? +m[1] * 60 + +m[2] : 0; };
+    const aEnd = toM(a.to) <= toM(a.from) ? toM(a.to) + 1440 : toM(a.to), bStart = toM(b.from) < toM(a.from) ? toM(b.from) + 1440 : toM(b.from);
+    if (bStart < aEnd) parts.push(b.from + "–" + a.to + " (" + a.name + " and " + b.name + ")"); }
+  return parts.length ? "Tickets created in an overlap, " + parts.join(", ") + ", are in both handovers." : "";
+}
+/* ── handover content ──
+   created  : tickets created in the shift (those now with the client are only counted)
+   hd, engg : every open ticket on our side at the end of the shift, split Help Desk / Engineering (Master Data)
+   client   : open tickets with the client, counted only */
+function sideOf(i) {
+  const e = E[i]; if (e.stage === "closed") return "closed"; if (e.stage === "client") return "client";
+  if (e.stage === "openbox") return "hd";
+  const c = window.HDClass && HDClass.classify3 ? HDClass.classify3(T[i].status) : "hd";
+  return c === "engg" ? "engg" : c === "client" ? "client" : "hd";
+}
+const bySevAge = (a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev) || (T[a].created || 0) - (T[b].created || 0);
+function hoData(which) {
+  const w = shiftWindow(which), all = T.map((t, i) => i), open = openIdx();
+  const createdAll = all.filter((i) => T[i].created != null && T[i].created >= w.start && T[i].created < w.end);
+  const created = createdAll.filter((i) => sideOf(i) !== "client").sort(bySevAge);
+  const createdClient = createdAll.length - created.length;
+  const hd = open.filter((i) => sideOf(i) === "hd").sort(bySevAge), engg = open.filter((i) => sideOf(i) === "engg").sort(bySevAge);
+  const client = open.filter((i) => sideOf(i) === "client");
+  const closed = all.filter((i) => E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt >= w.start && E[i].closedAt < w.end);
+  const cnt = (list) => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = 0; }); list.forEach((i) => { if (T[i].sev) o[T[i].sev]++; }); return o; };
+  const escL = HC.escalations(T, E, NOW, CFG).filter((x) => sideOf(x.i) !== "client");
+  return { w, created, createdClient, hd, engg, client, closed, clientBySev: cnt(client), hdBySev: cnt(hd), enggBySev: cnt(engg), createdBySev: cnt(created), esc: escL };
+}
+const HO_KEY = "hd-swire-ho";
+function hoPeople() { try { return JSON.parse(localStorage.getItem(HO_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function hoSavePeople(o) { try { localStorage.setItem(HO_KEY, JSON.stringify(o)); } catch (e) {} }
+function hoSubject(d) { return "Swire Hypercare shift handover: " + d.w.label; }
+
+/* the columns every list in the mail carries */
+const HO_COLS = [
+  ["Ticket", (t) => t.key, (t) => '<a href="' + jiraUrl(t.key) + '" style="color:#24507C;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>"],
+  ["Priority", (t) => t.priority || "", (t) => { const c = { showstopper: "#C8102E", critical: "#C2680A", high: "#A16207", medium: "#2563EB", low: "#64748B" }[t.sev] || "#64748B"; return '<span style="color:' + c + ';font-weight:600;white-space:nowrap">' + esc(t.priority || "—") + "</span>"; }],
+  ["Summary", (t) => t.summary, (t) => esc(t.summary)],
+  ["ME ID", (t) => t.meId, (t) => t.meId ? '<span style="white-space:nowrap">' + esc(t.meId) + "</span>" : '<span style="color:#C8102E">missing</span>'],
+  ["Status", (t) => t.status, (t) => '<span style="white-space:nowrap">' + esc(t.status) + "</span>"],
+  ["Created", (t) => fdt(t.created), (t) => '<span style="white-space:nowrap">' + esc(fdt(t.created)) + "</span>"],
+  ["Age", (t) => fmt(ageOf(t)), (t) => '<span style="white-space:nowrap">' + esc(fmt(ageOf(t))) + "</span>"],
+  ["PO / module", (t, e) => [e.po.po, e.po.module].filter(Boolean).join(" / "), (t, e) => esc(e.po.po || "—") + (e.po.module ? '<br><span style="color:#6B7A8C">' + esc(e.po.module) + "</span>" : "")],
+  ["SVM In Charge", (t) => t.svm, (t) => esc(t.svm || "—")],
+  ["Current worker", (t) => t.cw, (t) => esc(t.cw || "—")],
+  ["LRPS / assignee", (t) => t.lrps.map((k) => k + (LRPS[k] && LRPS[k].a ? " " + LRPS[k].a : "")).join(", "), (t) => t.lrps.length ? t.lrps.map((k) => '<span style="white-space:nowrap">' + esc(k) + "</span>" + (LRPS[k] && LRPS[k].a ? "<br>" + esc(LRPS[k].a) : "")).join("<br>") : "—"],
+  ["First response", (t, e) => frPlain(e), (t, e) => { const v = frPlain(e), bad = /late|overdue/.test(v); return '<span style="white-space:nowrap' + (bad ? ";color:#C8102E;font-weight:600" : "") + '">' + esc(v) + "</span>"; }],
+  ["Next action", (t) => t.nextAction, (t) => esc(t.nextAction || "—")]
+];
+function frPlain(e) {
+  if (!e.target) return "—";
+  if (e.frState === "met") return fmt(e.fr.min);
+  if (e.frState === "missed") return fmt(e.fr.min) + " (late)";
+  if (e.frState === "breached") return "overdue " + fmt((NOW - e.frDueAt) / MIN);
+  if (e.frState === "waiting") return "due in " + fmt((e.frDueAt - NOW) / MIN);
+  return "—";
+}
+const TD = "padding:6px 8px;border:1px solid #DFE6EC;vertical-align:top;font-size:12px;";
+function mailTable(list, emptyTxt) {
+  if (!list.length) return '<p style="margin:4px 0 14px;color:#6B7A8C;font-size:13px">' + esc(emptyTxt) + "</p>";
+  return '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 16px;font-family:Segoe UI,Calibri,Arial,sans-serif">' +
+    "<tr>" + HO_COLS.map((c) => '<th style="' + TD + 'background:#0E2A47;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + esc(c[0]) + "</th>").join("") + "</tr>" +
+    list.map((i, k) => "<tr" + (k % 2 ? ' style="background:#F7FAFB"' : "") + ">" + HO_COLS.map((c) => '<td style="' + TD + '">' + c[2](T[i], E[i]) + "</td>").join("") + "</tr>").join("") + "</table>";
+}
+function sevLine(o) { return HC.SEVS.filter((s) => o[s.id]).map((s) => o[s.id] + " " + s.name).join(", ") || "none"; }
+function mailHTML(d, ppl) {
+  const H2 = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:15px;color:#0E2A47;margin:18px 0 4px"';
+  const P = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"';
+  const cell = (k, v, c) => '<td style="' + TD + 'font-size:13px">' + esc(k) + '</td><td style="' + TD + 'font-size:13px;font-weight:700;' + (c ? "color:" + c : "") + '">' + v + "</td>";
+  const note = (ppl.note || "").trim();
+  return '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif;color:#0F1E2E">' +
+    "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
+    "<p " + P + ">Handing over the Swire Phoenix Hypercare <b>" + esc(d.w.label) + "</b>" + (d.w.live ? ", position at " + esc(fdt(d.w.end)) + " IST" : "") + ".</p>" +
+    '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;width:auto">' +
+    "<tr>" + cell("Created this shift", d.created.length + d.createdClient, "") + cell("Closed this shift", d.closed.length, "#15803D") + "</tr>" +
+    "<tr>" + cell("Pending with SVM, Help Desk", d.hd.length, "#0E7C86") + cell("Pending with SVM, Engineering", d.engg.length, "#24507C") + "</tr>" +
+    "<tr>" + cell("With the client (not listed)", d.client.length, "#B45309") + cell("Escalations to raise", d.esc.length, d.esc.length ? "#C8102E" : "") + "</tr></table>" +
+    (note ? "<h3 " + H2 + ">Notes for the next shift</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
+    /* Showstopper / Critical / High escalations one by one; Medium and Low past benchmark as a count (weekly ageing review) */
+    (function () {
+      const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical" || x.sev === "high"), age = d.esc.length - hot.length;
+      if (!d.esc.length) return "";
+      return "<h3 " + H2 + ">Escalations to raise (Section 10.2)</h3>" + (hot.length ? "<ul style=\"margin:4px 0 8px;padding-left:18px;font-size:13px\">" + hot.map((x) => "<li><b>" + esc(T[x.i].key) + "</b> [" + esc(T[x.i].priority) + "] " + esc(x.trigger) + ": inform " + esc(x.inform.join(", ")) + "</li>").join("") + "</ul>" : "") +
+        (age ? "<p " + P + ">" + age + " Medium/Low tickets are past their resolution benchmark, for the PO at the weekly ageing review.</p>" : "");
+    })() +
+    "<h3 " + H2 + ">1. Created this shift (" + d.created.length + ")</h3><p " + P + ">" + esc(sevLine(d.createdBySev)) + (d.createdClient ? ". " + d.createdClient + " more already moved to the client, not listed" : "") + ".</p>" + mailTable(d.created, "No tickets were created this shift.") +
+    "<h3 " + H2 + ">2. Pending with SVM, Help Desk (" + d.hd.length + ")</h3><p " + P + ">" + esc(sevLine(d.hdBySev)) + ".</p>" + mailTable(d.hd, "Nothing pending with the Help Desk.") +
+    "<h3 " + H2 + ">3. Pending with SVM, Engineering (" + d.engg.length + ")</h3><p " + P + ">" + esc(sevLine(d.enggBySev)) + ".</p>" + mailTable(d.engg, "Nothing pending with Engineering.") +
+    "<h3 " + H2 + ">4. With the client (" + d.client.length + ")</h3><p " + P + ">" + esc(sevLine(d.clientBySev)) + ". Not listed: these are waiting on Swire.</p>" +
+    "<p " + P + ">Every open ticket must have a named owner on the next shift (R8). Please acknowledge on this thread.</p>" +
+    "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
+}
+function mailText(d, ppl) {
+  const row = (i) => "- " + HO_COLS.map((c) => c[0] + ": " + (c[1](T[i], E[i]) || "-")).join(" | ");
+  const sec = (title, list, line) => title + "\n" + (list.length ? list.map(row).join("\n") : "- none") + "\n";
+  const note = (ppl.note || "").trim();
+  return "Hi " + (ppl.to || "team") + ",\n\nHanding over the Swire Phoenix Hypercare " + d.w.label + (d.w.live ? ", position at " + fdt(d.w.end) + " IST" : "") + ".\n\n" +
+    "Created this shift: " + (d.created.length + d.createdClient) + "   Closed: " + d.closed.length + "\nPending with SVM: Help Desk " + d.hd.length + ", Engineering " + d.engg.length + "\nWith the client (not listed): " + d.client.length + "\n\n" +
+    (note ? "Notes for the next shift:\n" + note + "\n\n" : "") +
+    sec("1. CREATED THIS SHIFT (" + d.created.length + ")", d.created) + "\n" + sec("2. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("3. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" +
+    "4. WITH THE CLIENT: " + d.client.length + " (" + sevLine(d.clientBySev) + "), not listed.\n\nEvery open ticket must have a named owner on the next shift (R8).\n\nRegards,\n" + (ppl.from || "");
 }
 function viewHandover() {
-  return '<div class="bar noprint"><span class="lbl">Shift</span><button class="pill" data-shift="current" aria-pressed="' + (UI.shift === "current") + '">This shift so far</button><button class="pill" data-shift="last" aria-pressed="' + (UI.shift === "last") + '">Last completed shift</button>' +
-    '<button class="btn pri" id="hoCopy">Copy for email</button><button class="btn" id="hoPrint">Print</button></div>' +
-    "<h2>Shift handover</h2><p class=\"sub\">Step 10: pass open work to the next shift. Edit the text before sending; next actions come from the Jira Next Action field.</p>" +
-    '<textarea class="ho" id="hoText" spellcheck="false" aria-label="Handover text">' + esc(handoverText(UI.shift)) + "</textarea>";
+  if (!UI.shift || UI.shift === "current" || UI.shift === "last") UI.shift = currentShiftKey();
+  const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" });
+  const sig = (cls, v, k, h) => '<div class="sig ' + cls + (v ? "" : " zero") + '"><div class="v num">' + v + '</div><div class="k">' + esc(k) + '</div><div class="h">' + esc(h) + "</div></div>";
+  const cur = currentShiftKey();
+  const pills = recentShifts().map((x) => { const k = x.id + "|" + x.start, d0 = HC.ist(x.start), live = x.end > NOW;
+    return '<button class="pill" data-shift="' + esc(k) + '" aria-pressed="' + (d.w.key === k) + '">' + esc(x.name) + " " + d0.d + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d0.mo] + (live ? " (now)" : "") + "</button>"; }).join("");
+  return '<div class="bar noprint"><span class="lbl">Shift</span>' + pills +
+    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoEml">Download email draft</button><button class="btn" id="hoPrint">Print</button></div>' +
+    "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>" +
+    '<div class="signals noprint">' + sig("teal", d.created.length + d.createdClient, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : "")) + sig("", d.closed.length, "Closed this shift", "") +
+    sig("teal", d.hd.length, "Pending with Help Desk", sevLine(d.hdBySev)) + sig("", d.engg.length, "Pending with Engineering", sevLine(d.enggBySev)) +
+    sig("", d.client.length, "With the client", "counted only") + sig(d.esc.length ? "cr" : "", d.esc.length, "Escalations to raise", "") + "</div>" +
+    '<div class="panel noprint"><div class="grid2" style="gap:12px"><div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoFrom">Handed over by</label><input class="inp" id="hoFrom" value="' + esc(ppl.from || "") + '" placeholder="Your name"></div>' +
+    '<div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoTo">Handed over to</label><input class="inp" id="hoTo" value="' + esc(ppl.to || "") + '" placeholder="Next shift, e.g. Night Hypercare team"></div></div>' +
+    '<div class="setrow" style="grid-template-columns:130px 1fr;align-items:start"><label for="hoNote">Notes for the next shift</label><textarea class="inp" id="hoNote" rows="3" placeholder="Anything promised to Swire, calls in progress, things to watch">' + esc(UI.hoNote || "") + "</textarea></div></div>" +
+    '<div class="sec-h noprint">Email preview</div><div class="report" id="hoPreview" style="overflow-x:auto"><p class="dim small" style="margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + mailHTML(d, ppl) + "</div>";
 }
 
 /* ══ Weekly report (to Swire, Section 9.1) ══ */
@@ -660,6 +761,7 @@ function viewSetup() {
     '<div class="panel"><div class="setrow"><label for="sStart">Counting starts</label><div><input type="date" class="inp" id="sStart" value="' + esc(CFG.start) + '"> <span class="dim small">Month 1 of the Hypercare phases counts from here. The runbook’s effective date is ' + esc(fday(HC.dateMs(CFG.officialStart))) + ".</span></div></div>" +
     '<div class="setrow"><label for="sBox">Open box statuses</label><input class="inp" id="sBox" value="' + esc(CFG.openBox.join(", ")) + '"></div>' +
     '<div class="setrow"><label for="sTri">Triage within</label><div><input class="inp" id="sTri" style="width:90px" value="' + CFG.triageMin + '"> <span class="dim small">minutes in the open box before it is flagged</span></div></div>' +
+    '<div class="setrow"><span>Shifts (IST)</span><div>' + CFG.shifts.map((x, k) => '<span style="margin-right:14px;white-space:nowrap">' + esc(x.name) + ' <input class="inp" style="width:74px" data-shf="' + k + '.from" value="' + esc(x.from) + '"> to <input class="inp" style="width:74px" data-shf="' + k + '.to" value="' + esc(x.to) + '"></span>').join("") + '<div class="dim small" style="margin-top:4px">Used for shift handover. Shifts may overlap; a ticket created in an overlap is in both handovers.</div></div></div>' +
     '<div class="setrow"><label for="sPre">Jira key prefix</label><input class="inp" id="sPre" style="width:140px" value="' + esc(CFG.prefix) + '"></div>' +
     '<div class="setrow"><span>Request types shown</span><div>' + ALLTYPES.map((x) => '<label style="margin-right:12px"><input type="checkbox" data-type="' + esc(x) + '"' + (TYPES.indexOf(x) > -1 ? " checked" : "") + "> " + esc(x) + "</label>").join("") + "</div></div></div>" +
     '<div class="panel"><div class="sec-h" style="margin-top:0">Section 10.1 targets, round the clock</div><div class="tw"><table><thead><tr><th>Priority</th><th>First response</th><th>Analysis and ETR update</th><th>Resolution benchmark</th></tr></thead><tbody>' + HC.SEVS.map((s) => trow(s.id)).join("") + "</tbody></table></div></div>" +
@@ -717,8 +819,32 @@ function wire() {
   on("rFrom", "change", (e) => { UI.from = e.target.value; render(); }); on("rTo", "change", (e) => { UI.to = e.target.value; render(); });
   on("btnHist", "click", (e) => { const rows = histNeed(rangeMs()); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
   document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => { UI.shift = b.dataset.shift; render(); }));
-  on("hoCopy", "click", (e) => { const t = el("hoText").value; navigator.clipboard.writeText(t).then(() => { e.target.textContent = "Copied"; setTimeout(() => { e.target.textContent = "Copy for email"; }, 1500); }); });
-  on("hoPrint", "click", () => { const w = shiftWindow(UI.shift); const txt = el("hoText").value; const v = el("view"); const keep = v.innerHTML; v.innerHTML = '<div class="report"><pre style="white-space:pre-wrap;font-family:var(--mono);font-size:11px">' + esc(txt) + "</pre></div>"; const name = "Swire Hypercare handover " + HC.dayKey(w.start) + " " + w.duty.label; window.HDPrint ? HDPrint(name) : window.print(); setTimeout(render, 300); });
+  /* handover: typing updates the preview only (no full re-render, so the caret stays put) */
+  const hoRefresh = () => { const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" }); const pv = el("hoPreview"); if (pv) pv.innerHTML = '<p class="dim small" style="margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + mailHTML(d, ppl); };
+  on("hoFrom", "input", (e) => { const p = hoPeople(); p.from = e.target.value; hoSavePeople(p); hoRefresh(); });
+  on("hoTo", "input", (e) => { const p = hoPeople(); p.to = e.target.value; hoSavePeople(p); hoRefresh(); });
+  on("hoNote", "input", (e) => { UI.hoNote = e.target.value; hoRefresh(); });
+  on("hoCopy", "click", (e) => {
+    const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" }), html = mailHTML(d, ppl), text = mailText(d, ppl), b = e.target;
+    const done = (msg) => { b.textContent = msg; setTimeout(() => { b.textContent = "Copy email"; }, 1800); };
+    const fallback = () => {           /* select the rendered mail and copy it: keeps the tables when pasted into Outlook */
+      const box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff"; box.innerHTML = html; document.body.appendChild(box);
+      const r = document.createRange(); r.selectNodeContents(box); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      let ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove(); done(ok ? "Copied, paste into Outlook" : "Copy blocked by the browser");
+    };
+    if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), fallback);
+    else fallback();
+  });
+  on("hoEml", "click", () => {
+    /* an unsent .eml opens in Outlook as a new draft (X-Unsent), ready to address and send */
+    const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" });
+    const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
+    const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + mailHTML(d, ppl) + "</body></html>";
+    const eml = ["X-Unsent: 1", "Subject: =?UTF-8?B?" + b64(hoSubject(d)) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")].join("\r\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" }));
+    a.download = "Swire-handover-" + HC.dayKey(d.w.start) + "-" + d.w.key.split("|")[0] + "-shift.eml"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  });
+  on("hoPrint", "click", () => { const d = hoData(UI.shift); const name = "Swire Hypercare handover " + HC.dayKey(d.w.start) + " " + d.w.key.split("|")[0] + " shift"; window.HDPrint ? HDPrint(name) : window.print(); });
   on("wkSel", "change", (e) => { UI.week = +e.target.value; render(); });
   on("wkPrint", "click", () => { const name = "Swire Hypercare Weekly Report - week of " + HC.dayKey(UI.week); window.HDPrint ? HDPrint(name) : window.print(); });
   on("sSave", "click", () => {
@@ -726,6 +852,7 @@ function wire() {
     c.start = el("sStart").value || c.start; c.openBox = el("sBox").value.split(",").map((s) => s.trim()).filter(Boolean);
     c.triageMin = Math.max(1, parseInt(el("sTri").value, 10) || c.triageMin); c.prefix = el("sPre").value.trim().toUpperCase() || c.prefix;
     document.querySelectorAll("[data-tg]").forEach((x) => { const [s, k] = x.dataset.tg.split("."); const v = parseFloat(x.value); if (v > 0) c.targets[s][k] = v; });
+    document.querySelectorAll("[data-shf]").forEach((x) => { const [k, f] = x.dataset.shf.split("."); if (/^\d{1,2}:\d{2}$/.test(x.value.trim())) c.shifts[+k][f] = x.value.trim().padStart(5, "0"); });
     document.querySelectorAll("[data-mod]").forEach((x) => { const [k, f] = x.dataset.mod.split("."); c.modules[+k][f] = f === "match" ? x.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : x.value.trim(); });
     TYPES = Array.from(document.querySelectorAll("[data-type]")).filter((x) => x.checked).map((x) => x.dataset.type);
     saveCfg(c); el("sSave").textContent = "Saved"; setTimeout(render, 600);
