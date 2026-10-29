@@ -245,6 +245,7 @@ tr.row{cursor:pointer}
 .tl{border-left:2px solid var(--line);margin-left:6px;padding-left:12px}
 .tl div{font-size:.8rem;margin:5px 0;position:relative}
 .tl div:before{content:"";position:absolute;left:-17px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--line2)}
+.pre.desc{max-height:300px;margin-bottom:6px}
 .pre{white-space:pre-wrap;font-size:.82rem;line-height:1.5;color:var(--ink2);background:#FCF7F9;border:1px solid var(--line3);border-radius:8px;padding:10px 12px;max-height:240px;overflow:auto}
 .report{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 26px}
 .report h3{font-family:var(--disp);font-size:1.05rem;margin:16px 0 6px;color:var(--navy)}
@@ -1429,13 +1430,14 @@ function openTicket(i) {
   ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<span style="margin-left:auto"></span><button class="btn" data-simkey="' + esc(t.key) + '">Find similar</button>' + (canRemind(i) ? '<button class="btn pri" id="dRem">Send reminder</button>' : '<span class="dim small">' + (e.stage === "closed" ? "Closed" : "With Swire: reply from your own mailbox (R10)") + "</span>") + '<button class="btn" id="dClose">Close</button></div>' +
     (rmLog()[t.key] ? '<p class="small dim" style="margin-top:6px">Last reminder posted ' + esc(fmt((Date.now() - rmLog()[t.key]) / MIN)) + " ago from this browser.</p>" : "") +
     "<h3>" + esc(t.summary) + "</h3>" +
+    (t.description ? '<div class="sec-h" style="margin-top:4px">Description</div><div class="pre desc">' + esc(t.description) + "</div>" : '<p class="dim small" style="margin:4px 0 10px">No description in the data.</p>') +
     '<dl class="kv">' + kv("ME ID", t.meId ? '<span class="mono">' + esc(t.meId) + "</span>" : '<span style="color:var(--ss)">missing</span>') + kv("Request type", esc(t.type)) + kv("Created", esc(fdt(t.created)) + ' <span class="dim">(' + fmt(ageOf(t)) + " ago)</span>") +
     kv("Environment", esc(t.env)) + kv("Components", esc(t.components.join(", "))) + kv("Menu / screen", esc([t.menu, t.screen].filter(Boolean).join(" / "))) + kv("Business user", esc(t.businessUser)) +
     kv("PO", poCell(e)) + kv("SVM In Charge", esc(t.svm)) + kv("Current worker", esc(t.cw)) + kv("LRPS", lrpsCell(t)) + kv("Next action", esc(t.nextAction)) + "</dl>" +
     '<div class="sec-h">Clocks (Section 10.1)</div><dl class="kv">' + kv("First response", frCell(t, e) + (e.target ? ' <span class="dim small">target ' + fmt(e.target.fr) + "</span>" : "")) + kv("Since last move", progCell(t, e)) + kv("Our time", resCell(t, e)) + kv("Time with Swire", e.clientMin != null ? fmt(e.clientMin) : "") + kv("Reopened", e.reopens ? String(e.reopens) : "") + "</dl>" +
     slaTimeline(t) +
     (t.reasonText || t.resolutionDetails ? '<div class="sec-h">Closure notes</div>' + (t.reasonText ? '<div class="small dim">Reason for occurrence</div><div class="pre">' + esc(t.reasonText) + "</div>" : "") + (t.resolutionDetails ? '<div class="small dim" style="margin-top:8px">Resolution details</div><div class="pre">' + esc(t.resolutionDetails) + "</div>" : "") : "") +
-    (t.description ? '<div class="sec-h">Description</div><div class="pre">' + esc(t.description) + "</div>" : "") + "</aside>";
+    "</aside>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
   const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
