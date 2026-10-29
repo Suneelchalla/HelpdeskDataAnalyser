@@ -36,7 +36,8 @@
    "own same that this these those it its i we they he she my our your their you me us him her them what which who whom whose " +
    "hi hello hey dear sir madam team kindly please pls plz thank thanks regards regard best warm greetings good morning afternoon evening " +
    "let know find attached attachment below above mentioned following via etc ie eg re fw fwd cc " +
-   "svm helpdesk desk see ref check").split(" ").forEach(function (w) { if (w) STOP[w] = 1; });
+   "svm helpdesk desk see ref check " +
+   "sent subject wrote original message mailto forwarded forward email mail emails reply replied attached attachments importance external caution sender receive received").split(" ").forEach(function (w) { if (w) STOP[w] = 1; });
 
   /* ── stemming: a light, conservative English suffix stripper (cached) ── */
   var SC = Object.create(null);
@@ -93,7 +94,8 @@
   function tokenize(text, knownPrefix, refs, cap) {
     var out = [];
     if (!text) return out;
-    var s = String(text).replace(URL_RX, function (u) { var m = u.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/); if (m && refs) refs.push(m[1]); return " "; });
+    var s = String(text).replace(/##\d+##/g, " ").replace(/\(\s*id\s*:\s*\)/gi, " ").replace(/\b(fw|fwd|re|aw|wg|tr)\s*:/gi, " ")
+      .replace(URL_RX, function (u) { var m = u.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/); if (m && refs) refs.push(m[1]); return " "; });
     s = s.replace(KEY_RX, function (all, p, n) {
       var P = p.toUpperCase();
       if (knownPrefix && knownPrefix[P]) { if (refs) refs.push(P + "-" + n); return " "; }
@@ -388,7 +390,8 @@
       var covS = cov(sGroups, idlS, r);
       /* the same written cause / resolution on both tickets is strong evidence on its own (needs some substance) */
       var covC = Math.max(cGroups.length >= 4 ? cov(cGroups, idlC, r) : 0, rGroups.length >= 4 ? cov(rGroups, idlR, r) : 0);
-      r.text = Math.min(1, Math.max(r.raw / (idl * 0.30), covS * 0.9, covC * 0.85));
+      var body = Math.min(1, r.raw / (idl * 0.42)), cap = 0.35 + 0.65 * Math.max(covS, covC);
+      r.text = Math.min(1, Math.max(Math.min(body, cap), covS * 0.9, covC * 0.85));
       r.covS = covS; r.covC = covC;
       r.phrase = phraseInfo(E, r.i, qbig);
       r.rank = r.text * 0.85 + Math.min(1, (r.phrase.s * 0.7 + r.phrase.o * 0.3) / Math.max(1, qbig.length)) * 0.15;
