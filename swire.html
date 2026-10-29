@@ -140,7 +140,7 @@ button.dl{font:inherit;color:inherit;cursor:pointer;text-decoration:underline;te
 button.dl:hover{color:var(--teal);text-decoration-color:var(--teal)}
 .sig{cursor:pointer}
 .bars .b{cursor:pointer}.bars .b:hover i{filter:brightness(1.25)}
-.ov.lst{justify-content:center;align-items:flex-start;padding:28px 18px;z-index:45}
+.ov.lst{justify-content:center;align-items:flex-start;padding:28px 18px;z-index:50}
 .lbox{background:var(--card);width:min(1460px,100%);max-height:calc(100vh - 56px);overflow:auto;border-radius:12px;padding:14px 16px 18px;box-shadow:0 20px 50px rgba(14,42,71,.25)}
 .lhead{display:flex;gap:8px;align-items:center;margin-bottom:10px;position:sticky;top:-14px;background:var(--card);padding:6px 0;z-index:2}
 .lhead h3{font-family:var(--disp);font-size:1.08rem;margin-right:auto}
@@ -614,6 +614,8 @@ document.addEventListener("click", (e) => {
   const x = LISTS[b.dataset.list]; if (!x) return;
   e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else openList(x.title, x.idx, x.extra);
 }, true);
+/* Escape closes only the overlay on top (list, ticket details, Engineering window, reminder) */
+function isTop(ov) { const all = document.querySelectorAll(".ov"); return all.length && all[all.length - 1] === ov; }
 function openList(title, idx, extra) {
   idx = idx.slice().sort(bySevAge);
   const ov = document.createElement("div"); ov.className = "ov lst";
@@ -622,7 +624,7 @@ function openList(title, idx, extra) {
     table(idx, extra ? ["key", "pri", "sum", "status", "age", "po", "rem"] : ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra }) + "</div>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
-  const key = (ev) => { if (ev.key === "Escape" && !document.querySelector(".ov:not(.lst)")) close(); };
+  const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
   ov.addEventListener("click", (ev) => {
     if (ev.target === ov) return close();
     const b = ev.target.closest("[data-x]"); if (b) { if (b.dataset.x === "close") close(); else csv(idx, title); return; }
@@ -1398,7 +1400,7 @@ function openTicket(i) {
     (t.description ? '<div class="sec-h">Description</div><div class="pre">' + esc(t.description) + "</div>" : "") + "</aside>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
-  const key = (ev) => { if (ev.key === "Escape") close(); };
+  const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
   ov.addEventListener("click", (ev) => { if (ev.target === ov) close(); });
   document.body.appendChild(ov); ov.querySelector("#dClose").onclick = close; ov.querySelector("#dClose").focus();
   const rb = ov.querySelector("#dRem"); if (rb) rb.onclick = () => openRemind(i);
@@ -1451,7 +1453,7 @@ function enggMail(list, who) {
 }
 function openEngg(idxAll) {
   const S = { tab: "all", st: "", sla: "all", sub: null };
-  const ov = document.createElement("div"); ov.className = "ov lst"; ov.style.zIndex = 46;
+  const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox eg" role="dialog" aria-modal="true" aria-label="Engineering follow-up"></div>';
   const box = ov.querySelector(".lbox");
   const cnt = (l, f) => l.filter(f).length;
@@ -1479,11 +1481,13 @@ function openEngg(idxAll) {
       list.forEach((i) => { const k = key(i); (g[k] = g[k] || []).push(i); });
       const names = Object.keys(g).sort((a, b) => g[b].length - g[a].length);
       body += '<div class="tw" style="margin-bottom:10px"><table><thead><tr><th>' + (S.tab === "svm" ? "SVM In Charge" : "Engineering assignee (LRPS)") + "</th><th>Total</th><th>Breached</th><th>Due soon / at risk</th>" + HC.SEVS.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th></tr></thead><tbody>" +
-        names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
-          return '<tr class="' + (S.sub === n ? "sel" : "") + '"><td><button type="button" class="lnk sm" data-sub="' + esc(n) + '">' + esc(n) + '</button></td><td class="num"><b>' + l.length + '</b></td><td class="num" style="color:var(--ss)">' + (cnt(l, (i) => eSla(i) === "breached") || '<span class="dim">·</span>') + '</td><td class="num">' + (cnt(l, (i) => eSla(i) === "due" || eSla(i) === "risk") || '<span class="dim">·</span>') + "</td>" +
-            HC.SEVS.map((x) => '<td class="num">' + (cnt(l, (i) => T[i].sev === x.id) || '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + fmt(old) + "</td></tr>"; }).join("") + "</tbody></table></div>";
-      if (S.sub) rows = g[S.sub] || []; else rows = [];
-      body += S.sub ? '<p class="small dim" style="margin:0 0 8px">Tickets for <b>' + esc(S.sub) + '</b>. <button type="button" class="lnk sm" data-sub="">Clear</button></p>' : '<p class="small dim" style="margin:0 0 8px">Click a name to see their tickets.</p>';
+        names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0), who = (S.tab === "svm" ? "SVM In Charge " : "Engineering, ") + n;
+          const cell = (q, t, cls) => '<td class="num"' + (cls ? ' style="' + cls + '"' : "") + ">" + (q.length ? dl(q, who + (t ? ", " + t : "")) : '<span class="dim">·</span>') + "</td>";
+          return "<tr><td>" + '<button type="button" class="lnk sm" data-list="' + reg(l, who) + '">' + esc(n) + "</button></td>" + cell(l, "", "font-weight:700") +
+            cell(l.filter((i) => eSla(i) === "breached"), "SLA breached", "color:var(--ss)") + cell(l.filter((i) => eSla(i) === "due" || eSla(i) === "risk"), "due soon or at risk") +
+            HC.SEVS.map((x) => cell(l.filter((i) => T[i].sev === x.id), x.name)).join("") + '<td class="num">' + fmt(old) + "</td></tr>"; }).join("") + "</tbody></table></div>";
+      rows = [];
+      body += '<p class="small dim" style="margin:0 0 8px">Click a name or any number to see those tickets.</p>';
     }
     if (S.tab === "all") rows = list.slice().sort((a, b) => { const o = { breached: 0, due: 1, risk: 2, ok: 3, paused: 4, nodata: 5, notgt: 6 }; return o[eSla(a)] - o[eSla(b)] || bySevAge(a, b); });
     const tbl = rows.length ? table(rows, ["key", "type", "sum", "status", "pri", "sla", "lrps", "svm", "age", "prog", "rem"], { sortable: false, limit: 2000 }) : (S.tab === "svm" || S.tab === "asg" ? "" : '<div class="tw"><div class="empty">No tickets match these filters.</div></div>');
@@ -1495,7 +1499,7 @@ function openEngg(idxAll) {
       '<div class="small dim" style="margin-top:8px">Engineering follow-up: ' + idxAll.length + " tickets. Remind sends an internal note on the SWIPHX ticket to the LRPS assignee.</div>";
   }
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); };
-  const key = (ev) => { if (ev.key === "Escape" && !document.querySelector(".drawer") && !document.querySelector(".rmov")) close(); };
+  const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
   ov.addEventListener("click", (ev) => {
     if (ev.target === ov) return close();
     const b = ev.target.closest("[data-tab],[data-st],[data-sla],[data-sub],[data-e]");
@@ -1665,7 +1669,7 @@ function rmModal(html, size) {
   const ov = document.createElement("div"); ov.className = "ov lst rmov"; ov.style.zIndex = 60;
   ov.innerHTML = '<div class="rmbox' + (size ? " " + size : "") + '" role="dialog" aria-modal="true">' + html + "</div>";
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); };
-  const key = (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); close(); } };
+  const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
   ov.addEventListener("click", (ev) => { if (ev.target === ov || ev.target.closest("[data-rmx]")) close(); });
   document.body.appendChild(ov); document.addEventListener("keydown", key, true);
   return { ov, close };
