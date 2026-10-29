@@ -205,7 +205,9 @@ tr.row{cursor:pointer}
 /* rule checks */
 .chk{display:grid;grid-template-columns:62px 1fr auto;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid #EEF2F5;cursor:pointer}
 .chk:last-child{border-bottom:none}
-.chk:hover{background:#F7FAFB}
+.chk:hover{background:#FCF3F6}
+.chk .c .dl{text-decoration:underline dotted;text-underline-offset:4px;text-decoration-thickness:1.5px}
+.chk:not([data-list]){cursor:default}
 .chk .ref{font-family:var(--mono);font-size:.76rem;color:var(--navy3);font-weight:600}
 .chk .t{font-weight:600}
 .chk .w{font-size:.78rem;color:var(--muted);margin-top:2px}
@@ -543,7 +545,7 @@ function wireFilters() {
 
 /* ── every number opens its tickets: dl() registers a list for this render and returns a clickable count ── */
 let LISTS = {}, LSEQ = 0;
-function reg(idx, title) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title }; return k; }
+function reg(idx, title, extra) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title, extra }; return k; }
 function dl(idx, title, label) { return '<button type="button" class="dl" data-list="' + reg(idx, title) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
 const ICON = {
   siren: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5z"/><path d="M12 3v1M4.2 6.2l.8.8M19.8 6.2l-.8.8"/></svg>',
@@ -554,6 +556,12 @@ const ICON = {
   check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>',
   dash: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8"/></svg>'
 };
+/* "Critical 2h, High 4h, Medium/Low 8h" from the targets in Master data */
+function tgtLine(k) {
+  const t = CFG.targets, f = (m) => fmt(m).replace(/ 0m$/, ""), parts = [["Showstopper", t.showstopper[k]], ["Critical", t.critical[k]], ["High", t.high[k]]];
+  const ml = t.medium[k] === t.low[k] ? [["Medium/Low", t.medium[k]]] : [["Medium", t.medium[k]], ["Low", t.low[k]]];
+  return parts.concat(ml).map(([n, m]) => n + " " + f(m)).join(", ");
+}
 function tile(cls, icon, idx, title, desc, share, listTitle) {
   return '<button type="button" class="tile ' + (idx.length ? cls : "zero") + '" data-list="' + reg(idx, listTitle || title) + '"><span class="ic">' + ICON[icon] + '</span><span class="nm">' + idx.length.toLocaleString() + '</span><span class="tt">' + esc(title) + '</span><span class="ds">' + esc(desc) + '</span><span class="mt"><span style="width:' + Math.min(100, Math.round(share * 100)) + '%"></span></span></button>';
 }
@@ -563,14 +571,14 @@ function sigL(cls, idx, k, h, title) {
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-list]"); if (!b) return;
   const x = LISTS[b.dataset.list]; if (!x) return;
-  e.preventDefault(); e.stopPropagation(); openList(x.title, x.idx);
+  e.preventDefault(); e.stopPropagation(); openList(x.title, x.idx, x.extra);
 }, true);
-function openList(title, idx) {
+function openList(title, idx, extra) {
   idx = idx.slice().sort(bySevAge);
   const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + idx.length.toLocaleString() + "</span></h3>" +
     '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
-    table(idx, ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets." }) + "</div>";
+    table(idx, extra ? ["key", "pri", "sum", "status", "age", "po", "rem"] : ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra }) + "</div>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
   const key = (ev) => { if (ev.key === "Escape" && !document.querySelector(".ov:not(.lst)")) close(); };
@@ -780,9 +788,9 @@ function viewNow() {
     '<div class="grp">Needs action, with us</div><div class="tiles">' +
     tile("t-ss", "siren", ss, "Showstoppers", ss.length ? "Phone the PO, or the Engineering head at night" : "None with us", ss.length / w1, "Showstoppers with us") +
     tile("t-cr", "flame", cr, "Critical", "Major function impaired", cr.length / w1, "Criticals with us") +
-    tile("t-ss", "clock", frOver, "First response overdue", "New since " + fday(hcFrom).replace(/ \d{4}$/, "") + ", past the 10.1 target", frOver.length / w1, "First response overdue") +
-    tile("t-cr", "pause", updDue, "ETR update overdue", "No status change within the 10.1 update interval", updDue.length / w1, "ETR update overdue: no status change within the 10.1 interval") +
-    tile("t-ink", "up", escI, "Escalations to raise", "Section 10.2 triggers met", escI.length / w1, "Escalations to raise") + "</div>" +
+    tile("t-ss", "clock", frOver, "First response overdue", "Created since " + fday(hcFrom).replace(/ \d{4}$/, "") + " and not answered in time (" + tgtLine("fr") + ")", frOver.length / w1, "First response overdue") +
+    tile("t-cr", "pause", updDue, "ETR update overdue", "No status change for longer than its update interval (" + tgtLine("upd") + ")", updDue.length / w1, "ETR update overdue: no status change for longer than the update interval") +
+    tile("t-ink", "up", escI, "Escalations to raise", "Critical with no progress " + fmt(CFG.escalate.critical) + ", High " + fmt(CFG.escalate.high) + ", Showstoppers at once", escI.length / w1, "Escalations to raise") + "</div>" +
     '<h2>Needs attention now</h2><p class="sub">Tickets with us whose SLA is breached (most overdue first) or about to breach (soonest first). Tickets waiting on Swire are in the SLA tab. ' +
     (d.id === "night" ? "Tonight the Hypercare team owns these." : "The PO for the module owns these.") + "</p>" +
     table(br.concat(rk), ["key", "pri", "sum", "status", "sla", "fr", "prog", "po", "svm", "cw", "lrps", "rem"], { sortable: false, empty: "Nothing with us is breached or about to breach." });
@@ -830,19 +838,15 @@ function viewEsc() {
 /* ══ Rule checks ══ */
 function viewRules() {
   const C = HC.checks(T, E, NOW, CFG), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
-  const sel = C.find((c) => c.id === UI.openCheck);
   const mand = C.find((c) => c.id === "mandatory");
-  let h = "<h2>Rule checks</h2><p class=\"sub\">What the data shows against the runbook. Open tickets are checked for logging and triage rules; closed tickets for closure notes. Pick a check to see its tickets.</p>";
+  const detailCol = (c) => c.detail ? { h: "Detail", c: (i) => { const d = c.detail[T[i].key]; if (!d) return ""; if (Array.isArray(d)) return '<span class="small">' + esc((c.id === "mandatory" ? "Missing: " : "") + d.join(", ")) + "</span>"; return '<span class="small">ME ID ' + esc(d.me) + " also on " + d.with.map((k) => '<span class="key">' + esc(k) + "</span>").join(", ") + "</span>"; } } : null;
+  let h = "<h2>Rule checks</h2><p class=\"sub\">What the data shows against the runbook. Open tickets are checked for logging and triage rules; closed tickets for closure notes. Click a check or its number to see the tickets.</p>";
   if (mand && mand.notCarried.length) h += '<div class="note">Not checked, because no Swire ticket has a value for them in this data: <b>' + esc(mand.notCarried.join(", ")) + "</b>. They are either not filled in Jira or not mapped in the launcher’s Jira settings (Refresh data after mapping).</div>";
-  h += '<div class="panel" style="padding:0">' + C.map((c) => '<div class="chk" data-check="' + c.id + '" role="button" tabindex="0" aria-expanded="' + (UI.openCheck === c.id) + '"><span class="ref">' + esc(c.ref) + '</span><div><div class="t">' + esc(c.title) + '</div><div class="w">' + esc(c.why) + " " + esc(c.who) + '.</div></div><span class="c ' + (c.keys.length ? "bad" : "ok") + '">' + (c.keys.length || "✓") + "</span></div>").join("") + "</div>";
-  if (sel) {
-    const idx = sel.keys.map((k) => idxOf[k]).filter((i) => i != null);
-    h += "<h2>" + esc(sel.title) + "</h2>" + table(idx, ["key", "pri", "sum", "status", "age", "po", "svm", "cw"], { empty: "No tickets.",
-      extra: sel.detail ? { h: "Detail", c: (i) => { const d = sel.detail[T[i].key]; if (!d) return ""; if (Array.isArray(d)) return '<span class="small">' + esc(d.join(", ")) + "</span>"; return '<span class="small">' + esc(d.me) + " also on " + d.with.map((k) => '<span class="key">' + esc(k) + "</span>").join(", ") + "</span>"; } } : null });
-  }
+  h += '<div class="panel" style="padding:0">' + C.map((c) => { const idx = c.keys.map((k) => idxOf[k]).filter((i) => i != null);
+    const k = idx.length ? reg(idx, c.title, detailCol(c)) : "";
+    return '<div class="chk"' + (k ? ' data-list="' + k + '"' : "") + ' role="button" tabindex="0" aria-label="' + esc(c.title + ", " + idx.length + " tickets") + '"><span class="ref">' + esc(c.ref) + '</span><div><div class="t">' + esc(c.title) + '</div><div class="w">' + esc(c.why) + " " + esc(c.who) + '.</div></div><span class="c ' + (idx.length ? "bad" : "ok") + '">' + (idx.length ? '<span class="dl">' + idx.length.toLocaleString() + "</span>" : "✓") + "</span></div>"; }).join("") + "</div>";
   return h;
 }
-el("view").addEventListener("click", (e) => { const c = e.target.closest(".chk"); if (c) { UI.openCheck = UI.openCheck === c.dataset.check ? null : c.dataset.check; render(); } });
 el("view").addEventListener("keydown", (e) => { const c = e.target.closest(".chk"); if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); c.click(); } });
 
 /* ══ All open ══ */
