@@ -175,7 +175,7 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal)
 .ghost:hover{border-color:var(--muted);color:var(--ink)}
 
 /* cards: 4 × 2, sized by the screen so nothing scrolls */
-.cards{position:relative;z-index:2;flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:clamp(11px,1.9vh,22px) clamp(11px,1.3vw,22px)}
+.cards{position:relative;z-index:2;flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr)) auto;gap:clamp(11px,1.9vh,22px) clamp(11px,1.3vw,22px)}
 .card{--c:#2563EB;--cs:#EFF4FF;--cl:#CFE0FF;--g:rgba(37,99,235,.28);
   position:relative;display:flex;flex-direction:column;border-radius:1.1rem;padding:.95rem 1.15rem .85rem;overflow:hidden;background:var(--card);border:1px solid var(--line);box-shadow:var(--sh);isolation:isolate;min-height:0;
   animation:cardin .6s cubic-bezier(.22,1,.36,1) both;animation-delay:calc(var(--i,0)*55ms + .2s);
@@ -188,6 +188,13 @@ h1 .two{background:linear-gradient(100deg,var(--blue) 0%,#3A86C9 40%,var(--teal)
 .card.cl{--c:#0891B2;--cs:#ECFEFF;--cl:#A5F3FC;--g:rgba(8,145,178,.30)}
 .card.op{--c:#059669;--cs:#ECFDF5;--cl:#A7F3D0;--g:rgba(5,150,105,.28)}
 .card.sl{--c:#EA580C;--cs:#FFF3E8;--cl:#FDBA8C;--g:rgba(234,88,12,.30)}
+/* client workspace: one full-width strip under the module grid */
+.card.sw{--c:#0E2A47;--cs:#E8F1F8;--cl:#B9CDE0;--g:rgba(14,42,71,.26);grid-column:1/-1;flex-direction:row;align-items:center;gap:1rem;padding:.7rem 1.15rem;container-type:normal}
+.card.sw .top{flex:0 0 auto}.card.sw h2{flex:none;white-space:nowrap}
+.card.sw p{margin-top:0;min-height:0;-webkit-line-clamp:1;flex:1}
+.card.sw .feat{margin-top:0;padding-top:0}
+.card.sw .cli{font-family:var(--mono);font-size:.66rem;font-weight:600;color:var(--c);background:var(--cs);border:1px solid var(--cl);border-radius:.35rem;padding:.1rem .4rem;margin-left:.45rem;vertical-align:.15rem}
+@media (max-width:1000px), (max-height:540px){ .card.sw{flex-wrap:wrap}.card.sw p{-webkit-line-clamp:2;flex-basis:100%} }
 @keyframes cardin{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
 .card::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--line);transition:background .4s,box-shadow .4s}
 /* a small illustration in the card's colour fills whatever height is free, and steps aside when there is none */
@@ -587,12 +594,19 @@ body.canrefresh #tabRefresh{display:flex}
           <div class="feat"><span>Client pause</span><span>Breaches</span><span>Per client</span><span>Timeline</span><span>Search</span></div>
           <div class="lock">◌ Waiting for source file</div>
         </a>
+        <a class="card sw" id="cardSW" href="swire.html" style="--i:8" data-g="🛳️">
+          <i class="spot"></i>
+          <div class="top"><div class="badge">🛳️<span class="kb" aria-hidden="true">9</span></div><h2>Swire Hypercare<span class="cli">SWIPHX</span></h2><span class="go"><span class="gt">Open</span> <span class="ar">→</span></span></div>
+          <p>Everything for Swire Shipping during Hypercare: who is on duty, the open box, first response and escalations, rule checks, shift handover and the weekly report.</p>
+          <div class="feat"><span>On duty</span><span>Open box</span><span>Escalations</span><span>Handover</span></div>
+          <div class="lock">◌ Waiting for source file</div>
+        </a>
     </div>
   </div>
 
   <!-- bottom strip -->
   <div class="strip rise d3">
-    <span class="note">Files stay on your device — nothing is uploaded to a server. <b>· Press 1–8 to open a dashboard</b></span>
+    <span class="note">Files stay on your device — nothing is uploaded to a server. <b>· Press 1–9 to open a dashboard</b></span>
     <span class="spacer"></span>
     <button class="qbtn" id="qview">🔎 View export query</button>
     <button class="qbtn primary" id="qcopy">⧉ Copy JQL</button>
@@ -969,7 +983,7 @@ function buildBackdrop(){
    A trunk drops from the source panel into a bus above the first row of cards; from there it runs down the centre
    gutter to a second bus above row two. Each card gets a coloured stub and a port dot. Everything lives in the
    gaps between cards, so it never sits under (or over) any text. */
-var WIRE_COLORS={cardFU:"#2563EB",cardTR:"#0F766E",cardWR:"#B45309",cardCH:"#7C3AED",cardRE:"#E11D48",cardCL:"#0891B2",cardOP:"#059669",cardSL:"#EA580C"};
+var WIRE_COLORS={cardFU:"#2563EB",cardTR:"#0F766E",cardWR:"#B45309",cardCH:"#7C3AED",cardRE:"#E11D48",cardCL:"#0891B2",cardOP:"#059669",cardSL:"#EA580C",cardSW:"#0E2A47"};
 function drawWires(){
   var stage=el("stage"),src=el("sourceNode"),svg=el("wires"),box=el("cards"),band=document.querySelector(".band");
   if(!stage||!src||!svg||!box||!band) return;
@@ -1190,7 +1204,7 @@ if(HS){
     var t=e.target; if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable)) return;
     if(document.querySelector(".md-ov.open,.js-ov.open")) return;
     if(cards.classList.contains("locked")) return;
-    var n=parseInt(e.key,10); if(!(n>=1&&n<=8)) return;
+    var n=parseInt(e.key,10); if(!(n>=1&&n<=9)) return;
     var c=cards.querySelectorAll(".card")[n-1]; if(c){ e.preventDefault(); if(window.HDTabs) HDTabs.open(c.getAttribute("href")); else location.href=c.getAttribute("href"); }
   });
   // soft spotlight that follows the pointer inside a card
@@ -1451,7 +1465,7 @@ if(HS){
 <script>
 /* ═════ Tabbed workspace — open each dashboard as a tab inside this page ═════ */
 (function(){
-  var MODS={"followup.html":"Follow-up Tracker","trend.html":"HD Trend Tracker","weekly.html":"Reports","change.html":"Change Tracker","releases.html":"Release Tracker","clarify.html":"Similar Ticket Finder","ops.html":"Operations Intelligence","sla.html":"SLA Tracker"};
+  var MODS={"followup.html":"Follow-up Tracker","trend.html":"HD Trend Tracker","weekly.html":"Reports","change.html":"Change Tracker","releases.html":"Release Tracker","clarify.html":"Similar Ticket Finder","ops.html":"Operations Intelligence","sla.html":"SLA Tracker","swire.html":"Swire Hypercare"};
   var SKEY="hd-tabs", BASE_TITLE=document.title;
   var cards=document.getElementById("cards"), list=document.getElementById("tabList"), framesBox=document.getElementById("tabFrames"), homeTab=document.getElementById("tabHome");
   var tabs=[], active="home";
