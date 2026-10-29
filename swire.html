@@ -226,6 +226,10 @@ tr.row{cursor:pointer}
 .hb .tr{background:#F3E8EC;border-radius:4px;height:12px;overflow:hidden}.hb .tr i{display:block;height:100%;background:linear-gradient(90deg,#7A1F3D,#B5486F);border-radius:4px}
 .hb .lb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hb.wide{grid-template-columns:minmax(150px,280px) 1fr 44px}
+.hb.hb-other{border-top:1px dashed var(--line2);margin-top:4px;padding-top:7px}.hb.hb-other .lb{font-weight:600;color:var(--maroon)}
+.hb.hb-other .tr i{background:linear-gradient(90deg,#B9A7B0,#D4C7CD)}
+.hb.hb-none .lb{color:var(--muted);font-style:italic}.hb.hb-none .tr i{background:#E3D6DC}
+.hbscroll{max-height:360px;overflow:auto;padding-right:4px}
 .pct{font-family:var(--disp);font-weight:700}
 .exit li{list-style:none;padding:6px 0;border-bottom:1px solid #EEF2F5;display:flex;gap:10px;font-size:.84rem}
 .exit li:last-child{border-bottom:none}
@@ -307,7 +311,7 @@ tbody tr:hover td{background:#FCF3F6}
 .grid2.wk{grid-template-columns:repeat(auto-fit,minmax(560px,1fr))}
 .wk td,.wk th{white-space:nowrap}
 .tile.t-ok{--ac:#1F8A4C;--acbg:#EAF7EF}
-.tiles.six{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.tiles.six{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 .sla{display:inline-block;border-radius:6px;padding:1px 7px;font-size:.74rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
 .sla.red{background:#FDECEE;color:#B4182D;border-color:#F6C9CF}.sla.orange{background:#FEF0E4;color:#B5520A;border-color:#F8D3B4}
 .sla.amber{background:#FEF7E6;color:#946405;border-color:#F3DFA9}.sla.green{background:#EAF7EF;color:#1F7A45;border-color:#BFE6CD}.sla.grey{background:#F4F1F5;color:#7D7287;border-color:#E3DCE6}
@@ -553,6 +557,9 @@ const ICON = {
   clock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   pause: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
   up: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  toEngg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  toSwire: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
+  reopen: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 3v6h6"/><path d="M12 8v4l2 2"/></svg>',
   check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>',
   dash: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8"/></svg>'
 };
@@ -773,14 +780,15 @@ function viewNow() {
   const ok = sb("ontrack"), nd = sb("nodata");
   const d = HC.duty(NOW, CFG), hr = HC.ist(NOW).min / 60, greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   const DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"], MN = ["January","February","March","April","May","June","July","August","September","October","November","December"], pd = HC.ist(NOW);
-  const parts = [["Open box", box, "#E7A3B9"], ["With Help Desk", hd, "#B5486F"], ["With Engineering", engg, "#5C1730"], ["Waiting on Swire", cl, "#D9A35B"], ["Delivered, billing", bill, "#9A8AA3"]];
+  const hdTriaged = hd.filter((i) => E[i].stage !== "openbox");     // sideOf() puts the open box on the Help Desk side; here it is its own slice
+  const parts = [["Open box", box, "#E7A3B9"], ["With Help Desk", hdTriaged, "#B5486F"], ["With Engineering", engg, "#5C1730"], ["Waiting on Swire", cl, "#D9A35B"], ["Delivered, billing", bill, "#9A8AA3"]];
   const tot = Math.max(1, open.length), pct = (n) => n ? (n / tot * 100 < 1 ? "<1%" : Math.round(n / tot * 100) + "%") : "0%";
-  const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length + box.length).toLocaleString() + " with us, " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
+  const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length).toLocaleString() + " with us (" + box.length + " in the open box), " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
     '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
     '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + "</div></section>";
   const w1 = Math.max(1, withUs.length);
-  return hero + '<div class="grp">SLA, tickets with us (Help Desk and Engineering)</div><div class="tiles">' +
+  return hero + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
     tile("t-cr", "clock", rk, "About to breach", "Due soon or at risk", rk.length / w1, "SLA about to breach, with us") +
     tile("t-ok", "check", ok, "Not yet breached", "Inside the SLA target", ok.length / w1, "SLA not yet breached, with us") +
@@ -899,21 +907,50 @@ function hbars(list, title, n) {
   const mx = list[0].idx.length;
   return list.map((x) => '<div class="hb"><span class="lb" title="' + esc(x.k) + '">' + esc(x.k) + '</span><span class="tr"><i style="width:' + (x.idx.length / mx * 100) + '%"></i></span><span class="num">' + dl(x.idx, title + ", " + x.k) + "</span></div>").join("");
 }
+/* business users: the top 10, then everyone else combined and the tickets with none recorded; "Show all" lists everyone */
+function usersPanel(created) {
+  const withU = created.filter((i) => T[i].businessUser), none = created.filter((i) => !T[i].businessUser);
+  const g = groupIdx(withU, (i) => [T[i].businessUser]), N = 10, shown = UI.allUsers ? g : g.slice(0, N), rest = UI.allUsers ? [] : g.slice(N);
+  if (!g.length && !none.length) return '<div class="dim small">No data.</div>';
+  const mx = Math.max(1, ...(g.length ? [g[0].idx.length] : [0]), rest.length ? rest.reduce((a, x) => a + x.idx.length, 0) : 0);
+  const row = (k, idx, title, cls) => '<div class="hb' + (cls ? " " + cls : "") + '"><span class="lb" title="' + esc(k) + '">' + esc(k) + '</span><span class="tr"><i style="width:' + (idx.length / mx * 100) + '%"></i></span><span class="num">' + dl(idx, title) + "</span></div>";
+  let h = '<div class="' + (UI.allUsers ? "hbscroll" : "") + '">' + shown.map((x) => row(x.k, x.idx, "Business user, " + x.k)).join("") + "</div>";
+  if (rest.length) { const idx = [].concat(...rest.map((x) => x.idx)); h += row("Other business users (" + rest.length + ")", idx, "Other business users: " + rest.map((x) => x.k).slice(0, 8).join(", ") + (rest.length > 8 ? " and " + (rest.length - 8) + " more" : ""), "hb-other"); }
+  if (none.length) h += row("Not recorded", none, "No business user recorded", "hb-none");
+  if (g.length > N) h += '<button type="button" class="lnk sm" id="usersAll" style="margin-top:8px">' + (UI.allUsers ? "Show top " + N : "Show all " + g.length + " users") + "</button>";
+  return h;
+}
 function viewAnalytics() {
   const rg = rangeMs(), all = T.map((t, i) => i), created = all.filter((i) => T[i].created != null), need = histNeed();
   const closed = all.filter((i) => E[i].stage === "closed");
   let h = "<h2>Analytics, " + esc(rg.label) + "</h2><p class=\"sub\">Tickets created in the period chosen at the top, with the other filters applied. Every day counts as a working day during Hypercare. Every number opens its tickets.</p>";
-  if (need.length) h += '<div class="warnbox">' + need.length + ' tickets here have no status history yet, so their first response and resolution are not counted. <button class="btn" id="btnHist">Read their history from Jira</button></div>';
-  /* per day */
-  const days = {}; created.forEach((i) => { const k = HC.dayKey(T[i].created); (days[k] = days[k] || { c: [], x: [] }).c.push(i); });
-  closed.forEach((i) => { if (E[i].closedAt != null) { const k = HC.dayKey(E[i].closedAt); if (days[k]) days[k].x.push(i); } });
-  const keys = Object.keys(days).sort(), seq = [];
-  if (keys.length) for (let d = HC.dateMs(keys[0]); d != null && HC.dayKey(d) <= keys[keys.length - 1] && seq.length < 400; d += DAY) seq.push(HC.dayKey(d));
+  if (need.length) {
+    const pr = L && L.progress ? L.progress() : null, busy = L && L.isFetching && L.isFetching(), other = L && L.otherFetching ? L.otherFetching() : null, auto = L && L.autoOn ? L.autoOn() : true;
+    h += '<div class="warnbox">' + need.length.toLocaleString() + " tickets here have no status history yet, so their first response and resolution are not counted yet. " +
+      (busy ? "Reading it from Jira in the background" + (pr && pr.total ? ": <b>" + pr.done.toLocaleString() + " of " + pr.total.toLocaleString() + "</b>" : "") + ". The numbers update as it arrives."
+       : other ? esc(other) + " is reading history from Jira right now; this page picks it up when it finishes."
+       : auto ? 'It is read automatically in the background whenever the HD Jira Bridge is connected. <button class="btn" id="btnHist">Read now</button>'
+       : 'Automatic reading is switched off in the SLA Tracker. <button class="btn" id="btnHist">Read their history from Jira</button>') + "</div>";
+  }
+  /* per day, week or month, so every period fits (the daily chart used to stop after 400 days) */
+  const tms = created.map((i) => T[i].created).concat(closed.map((i) => E[i].closedAt).filter((x) => x != null));
+  const t0 = rg.from != null ? rg.from : (tms.length ? Math.min(...tms) : NOW), t1 = rg.to != null ? Math.min(rg.to, NOW) : NOW, spanD = (t1 - t0) / DAY;
+  const unit = spanD <= 62 ? "day" : spanD <= 460 ? "week" : "month";
+  const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const bkey = (ms) => { if (unit === "day") return HC.dayKey(ms); if (unit === "week") return HC.dayKey(weekStart(ms)); const p = HC.ist(ms); return p.y + "-" + String(p.mo + 1).padStart(2, "0"); };
+  const blabel = (k) => unit === "month" ? MN3[+k.slice(5, 7) - 1] + " " + k.slice(0, 4) : (unit === "week" ? "Week of " : "") + fday(HC.dateMs(k));
+  const days = {}; created.forEach((i) => { const k = bkey(T[i].created); (days[k] = days[k] || { c: [], x: [] }).c.push(i); });
+  closed.forEach((i) => { if (E[i].closedAt != null) { const k = bkey(E[i].closedAt); (days[k] = days[k] || { c: [], x: [] }).x.push(i); } });
+  const seq = [];
+  if (Object.keys(days).length) {
+    let cur = unit === "week" ? weekStart(t0) : unit === "month" ? (() => { const p = HC.ist(t0); return Date.UTC(p.y, p.mo, 1) - 330 * MIN; })() : HC.istMidnight(t0);
+    for (let n = 0; cur <= t1 && n < 800; n++) { seq.push(bkey(cur)); if (unit === "month") { const p = HC.ist(cur + 2 * DAY); cur = Date.UTC(p.y, p.mo + 1, 1) - 330 * MIN; } else cur += (unit === "week" ? 7 : 1) * DAY; }
+  }
   const mx = Math.max(1, ...seq.map((k) => days[k] ? Math.max(days[k].c.length, days[k].x.length) : 0));
   const chart = seq.length ? '<div class="bars">' + seq.map((k) => { const v = days[k] || { c: [], x: [] };
-      return '<div class="b" data-list="' + reg(v.c.concat(v.x.filter((i) => v.c.indexOf(i) < 0)), "Created or closed on " + fday(HC.dateMs(k))) + '" title="' + k + ": " + v.c.length + " created, " + v.x.length + ' closed (of those created in the period)"><div style="display:flex;gap:1px;align-items:flex-end;height:100%"><i class="c" style="flex:1;height:' + (v.c.length / mx * 100) + '%"></i><i class="x" style="flex:1;height:' + (v.x.length / mx * 100) + '%"></i></div></div>'; }).join("") + "</div>" +
-    '<div class="axis"><span>' + esc(fday(HC.dateMs(seq[0]))) + "</span><span>" + esc(fday(HC.dateMs(seq[seq.length - 1]))) + '</span></div><div class="legend"><span><i style="background:var(--navy3)"></i>Created ' + dl(created, "Created") + '</span><span><i style="background:var(--sea)"></i>Closed ' + dl(closed, "Closed") + "</span></div>" : '<div class="empty">No tickets in this period.</div>';
-  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Inflow and closures per day</div>' + chart + "</div>";
+      return '<div class="b" data-list="' + reg(Array.from(new Set(v.c.concat(v.x))), "Created or closed, " + blabel(k)) + '" title="' + esc(blabel(k)) + ": " + v.c.length + " created, " + v.x.length + ' closed"><div style="display:flex;gap:1px;align-items:flex-end;height:100%"><i class="c" style="flex:1;height:' + (v.c.length / mx * 100) + '%"></i><i class="x" style="flex:1;height:' + (v.x.length / mx * 100) + '%"></i></div></div>'; }).join("") + "</div>" +
+    '<div class="axis"><span>' + esc(blabel(seq[0])) + "</span><span>" + esc(blabel(seq[seq.length - 1])) + '</span></div><div class="legend"><span><i style="background:var(--maroon)"></i>Created ' + dl(created, "Created") + '</span><span><i style="background:#E3A9BC"></i>Closed ' + dl(closed, "Closed") + "</span></div>" : '<div class="empty">No tickets in this period.</div>';
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Inflow and closures per ' + unit + "</div>" + chart + "</div>";
   /* against the Section 10.1 targets */
   const rows = HC.SEVS.map((s) => { const tg = CFG.targets[s.id], c = created.filter((i) => T[i].sev === s.id);
     const frD = c.filter((i) => ["met", "missed", "breached"].indexOf(E[i].frState) > -1), frM = frD.filter((i) => E[i].frState === "met"), frX = frD.filter((i) => E[i].frState !== "met"), frN = c.filter((i) => E[i].frState === "nohist");
@@ -924,7 +961,7 @@ function viewAnalytics() {
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">Against the Section 10.1 targets</div><div class="tw"><table><thead><tr><th>Priority</th><th>Created</th><th>First response target</th><th>Met</th><th>Average first response</th><th>Resolution benchmark</th><th>Closed within benchmark</th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="sub" style="margin:8px 0 0">First response is the first move to a client-side status. The resolution benchmark is a guide, measured on our side only.</p></div>';
   h += '<div class="grid3"><div class="panel"><div class="sec-h" style="margin-top:0">By component</div>' + hbars(groupIdx(created, (i) => T[i].components.length ? T[i].components : ["(none)"]), "Component") +
     '</div><div class="panel"><div class="sec-h" style="margin-top:0">By environment</div>' + hbars(groupIdx(created, (i) => [T[i].env || "(blank)"]), "Environment", 8) + '<div class="sec-h">By request type</div>' + hbars(groupIdx(created, (i) => [T[i].type || "(blank)"]), "Request type", 6) +
-    '</div><div class="panel"><div class="sec-h" style="margin-top:0">Top business users</div>' + hbars(groupIdx(created.filter((i) => T[i].businessUser), (i) => [T[i].businessUser]), "Business user", 10) + "</div></div>";
+    '</div><div class="panel"><div class="sec-h" style="margin-top:0">' + (UI.allUsers ? "All business users" : "Top business users") + "</div>" + usersPanel(created) + "</div></div>";
   /* Section 11 measures */
   const C = HC.checks(T, E, NOW, CFG), get = (id) => (C.find((c) => c.id === id) || { keys: [] }).keys, kset = (keys) => { const m = {}; keys.forEach((k) => { m[k] = 1; }); return all.filter((i) => m[T[i].key]); };
   const noMe = created.filter((i) => !T[i].meId), openC = created.filter((i) => E[i].stage !== "closed"), mandMiss = kset(get("mandatory")), notes = kset(get("notes")), reo = kset(get("reopen"));
@@ -1136,7 +1173,9 @@ function isoWeek(ms) { const p = HC.ist(ms), d = new Date(Date.UTC(p.y, p.mo, p.
 /* solved by Engineering = the ticket was in an Engineering status before it closed, or has a linked LRPS ticket */
 function solvedBy(i) {
   const t = T[i], tr = E[i].tr; if (t.lrps.length) return "engg";
-  if (tr) for (const x of tr) { if (CLS.isTerminal(x.to)) break; if (window.HDClass && HDClass.classify3(x.to) === "engg" && !CLS.isTerminal(x.to)) return "engg"; if (window.HDClass && HDClass.classify3(x.from) === "engg") return "engg"; }
+  if (!tr) return "unk";                                   // status history not read yet: the team is not known
+  const eng = (x) => !CLS.isTerminal(x) && window.HDClass && HDClass.classify3(x) === "engg";
+  for (const x of tr) { if (eng(x.from) || eng(x.to)) return "engg"; if (CLS.isTerminal(x.to)) break; }
   return "hd";
 }
 /* ── report building blocks (all clickable) ── */
@@ -1195,7 +1234,7 @@ function viewWeekly() {
   const ph = HC.phase(b - 1, CFG), fd = (ms) => fday(ms);
   /* executive summary */
   const ex = "<b>Swire Shipping</b> currently has <b>" + open.length.toLocaleString() + " open tickets</b>: <b style=\"color:var(--rose)\">" + svm.length + " with SVM</b> (" + hd.length + " Help Desk, " + en.length + " Engineering) and <b style=\"color:var(--client)\">" + sw.length.toLocaleString() + " waiting on Swire</b>, i.e. <b>" + pct(sw.length, open.length) + "%</b> of open work sits on the client side. " +
-    "<b>" + raised.length + "</b> new tickets came in during " + cur.label + chg(raised.length, raisedP, false) + ", and <b>" + resolved.length + "</b> were resolved" + chg(resolved.length, resolvedP, true) + ": <b>" + byHd.length + "</b> by the Help Desk and <b>" + byEn.length + "</b> by Engineering. " +
+    "<b>" + raised.length + "</b> new tickets came in during " + cur.label + chg(raised.length, raisedP, false) + ", and <b>" + resolved.length + "</b> were resolved" + chg(resolved.length, resolvedP, true) + ": <b>" + byHd.length + "</b> by the Help Desk and <b>" + byEn.length + "</b> by Engineering" + (resolved.length - byHd.length - byEn.length ? " (" + (resolved.length - byHd.length - byEn.length) + " not known yet)" : "") + ". " +
     (svm.length ? "With us, <b style=\"color:var(--ss)\">" + br.length + "</b> tickets have breached SLA and <b>" + rk.length + "</b> are about to. " : "") +
     (frD.length ? "First response within the Section 10.1 target this week: <b>" + pct(frM.length, frD.length) + "%</b>. " : "") +
     (comps[0] ? "The heaviest open area is <b>" + esc(comps[0].k) + "</b> (" + comps[0].idx.length + " SVM tickets). " : "") + "The oldest open ticket has been open <b>" + Math.floor(oldest) + " days</b>.";
@@ -1203,7 +1242,7 @@ function viewWeekly() {
   const prioParts = HC.SEVS.map((s) => ({ label: s.name, color: PC[s.id], idx: open.filter((i) => T[i].sev === s.id) }));
   const crHi = open.filter((i) => T[i].sev === "showstopper" || T[i].sev === "critical" || T[i].sev === "high");
   const infSeries = HC.SEVS.map((s) => ({ label: s.name, color: PC[s.id], get: (w) => createdIn(w).filter((i) => T[i].sev === s.id) }));
-  const resSeries = [{ label: "Solved by Help Desk", color: "#D98BA4", get: (w) => closedIn(w).filter((i) => solvedBy(i) === "hd") }, { label: "Solved by Engineering", color: "#5C1730", get: (w) => closedIn(w).filter((i) => solvedBy(i) === "engg") }];
+  const resSeries = [{ label: "Solved by Help Desk", color: "#D98BA4", get: (w) => closedIn(w).filter((i) => solvedBy(i) === "hd") }, { label: "Solved by Engineering", color: "#5C1730", get: (w) => closedIn(w).filter((i) => solvedBy(i) === "engg") }, { label: "Team not known yet", color: "#D4C7CD", get: (w) => closedIn(w).filter((i) => solvedBy(i) === "unk") }];
   const resAvg = Math.round(weeks.reduce((s0, w) => s0 + closedIn(w).length, 0) / WEEKS);
   const resDays = weeks.map((w) => { const l = closedIn(w).filter((i) => T[i].created != null); return { label: w.label, idx: l, v: l.length ? l.reduce((s0, i) => s0 + (E[i].closedAt - T[i].created) / DAY, 0) / l.length : null }; });
   const rdv = resDays.filter((p) => p.v != null), rdAvg = rdv.length ? rdv.reduce((s0, p) => s0 + p.v, 0) / rdv.length : null;
@@ -1235,13 +1274,10 @@ function viewWeekly() {
       ins(frD.length ? "<b>" + pct(frM.length, frD.length) + "%</b> of the " + frD.length + " tickets raised this week got their first response within target (Showstopper 30 min, Critical and High 1 hour, Medium/Low 4 hours)." : "No first responses to measure for this week yet.") + "</div></div>" +
     wsec("Weekly trends, last " + WEEKS + " weeks") + wcap("How work came in and went out. Weeks are ISO week numbers. Click any bar to list the tickets behind it.") +
     '<div class="grid2"><div class="wcard"><div class="wct">New tickets by priority <span>created each week</span></div>' + wStack(weeks, infSeries, "Created") + ins("<b>" + raised.length + "</b> new tickets in " + cur.label + chg(raised.length, raisedP, false) + (domP && domP[1] ? ", mostly <b>" + esc(domP[0]) + "</b> priority (" + domP[1] + ")" : "") + ".") + "</div>" +
-      '<div class="wcard"><div class="wct">Resolved tickets <span>Help Desk and Engineering</span></div>' + wStack(weeks, resSeries, "Resolved") + ins("<b>" + resolved.length + "</b> resolved in " + cur.label + chg(resolved.length, resolvedP, true) + ", averaging about <b>" + resAvg + "/week</b>. This week <b>" + pct(byHd.length, resolved.length) + "%</b> were solved by the Help Desk without Engineering.") + "</div></div>" +
+      '<div class="wcard"><div class="wct">Resolved tickets <span>Help Desk and Engineering</span></div>' + wStack(weeks, resSeries, "Resolved") + ins("<b>" + resolved.length + "</b> resolved in " + cur.label + chg(resolved.length, resolvedP, true) + ", averaging about <b>" + resAvg + "/week</b>. This week <b>" + pct(byHd.length, byHd.length + byEn.length) + "%</b> of those with a known team were solved by the Help Desk without Engineering.") + "</div></div>" +
     wsec("Open work and turnaround") + wcap("Where the open SVM work sits, and how quickly tickets are being resolved.") +
     '<div class="grid2"><div class="wcard"><div class="wct">Open SVM tickets by component <span>by product area</span></div>' + hbars(comps, "Open with SVM", 10) + ins(comps[0] ? "Open SVM work is concentrated in <b>" + esc(comps[0].k) + "</b>" + (comps[1] ? " and <b>" + esc(comps[1].k) + "</b>" : "") + ", together <b>" + pct(comps[0].idx.length + (comps[1] ? comps[1].idx.length : 0), svm.length) + "%</b> of the " + svm.length + " open SVM tickets." : "No open SVM work.") + "</div>" +
       '<div class="wcard"><div class="wct">Average resolution days <span>created to resolved</span></div>' + wLine(resDays, "Average resolution days", "d") + ins(rdAvg != null ? "Tickets take about <b>" + rdAvg.toFixed(1) + " days</b> on average to resolve" + (resDays[WEEKS - 1].v != null ? " (this week <b>" + resDays[WEEKS - 1].v.toFixed(1) + "d</b>)" : "") + ". A rising line means tickets are taking longer to close." : "Not enough resolved tickets to show a trend yet.") + "</div></div>" +
-    wsec("Open tickets by activity stage", "SVM and Swire") + wcap("Where the open tickets sit in the delivery pipeline right now, and whose action is next.") +
-    '<div class="tw"><table><thead><tr><th>Activity stage</th><th>SVM</th><th>Swire</th><th>Total</th></tr></thead><tbody>' + stKeys.map((k) => { const x = stg[k]; return "<tr><td>" + esc(k) + '</td><td class="num">' + (x.svm.length ? dl(x.svm, k + ", SVM") : '<span class="dim">·</span>') + '</td><td class="num">' + (x.sw.length ? dl(x.sw, k + ", Swire") : '<span class="dim">·</span>') + '</td><td class="num"><b>' + dl(x.svm.concat(x.sw), k) + "</b></td></tr>"; }).join("") + "</tbody></table></div>" +
-    (stTop ? ins("The biggest phase is <b>" + esc(stTop) + "</b> (" + (stg[stTop].svm.length + stg[stTop].sw.length) + " open).") : "") +
     wsec("Showstoppers raised this week") + (ssW.length ? table(ssW, ["key", "pri", "sum", "status", "age", "po", "svm"], { sortable: false }) : '<p class="wcap">None this week.</p>') +
     wsec("Top 5 oldest, Swire side", "longest-open items needing a response") + oldTable(sw) +
     wsec("Top 5 oldest, SVM side", "longest-open items on our side") + oldTable(svm) +
@@ -1324,7 +1360,7 @@ function viewMove() {
   const isT = (x) => CLS.isTerminal(x), isEngg = (x) => !isT(x) && window.HDClass && HDClass.classify3(x) === "engg";
   const bill = (x) => (CFG.billing || []).some((b) => b.toLowerCase().replace(/&/g, "and") === String(x || "").toLowerCase().replace(/&/g, "and"));
   const isCl = (x) => !isT(x) && (CLS.owner(x) === "client" || bill(x));
-  const K = ["created", "hd", "engg", "toEngg", "toClient", "fromClient", "reopen"], ev = {}; K.forEach((k) => { ev[k] = []; });
+  const K = ["created", "hd", "engg", "unk", "toEngg", "toClient", "fromClient", "reopen"], ev = {}; K.forEach((k) => { ev[k] = []; });
   T.forEach((t, i) => {
     const e = E[i]; if (inR(t.created)) ev.created.push({ i, t: t.created });
     const tr = e.tr ? e.tr.slice().sort((a, b) => a.t - b.t) : null;
@@ -1341,7 +1377,7 @@ function viewMove() {
         }
         if (te) wasEngg = true;
       });
-    } else if (e.stage === "closed" && inR(e.closedAt)) ev[t.lrps.length ? "engg" : "hd"].push({ i, t: e.closedAt });
+    } else if (e.stage === "closed" && inR(e.closedAt)) ev[t.lrps.length ? "engg" : "unk"].push({ i, t: e.closedAt });   // no history: only an LRPS link tells us
   });
   /* buckets: days for up to 45 days, else weeks, else months */
   const times = [].concat(...K.map((k) => ev[k].map((x) => x.t)));
@@ -1352,23 +1388,26 @@ function viewMove() {
   const B = {}; K.forEach((k) => ev[k].forEach((x) => { const bk = keyOf(x.t); B[bk] = B[bk] || {}; (B[bk][k] = B[bk][k] || new Set()).add(x.i); }));
   const keys = Object.keys(B).sort(), uniq = (k) => Array.from(new Set(ev[k].map((x) => x.i)));
   const tot = {}; K.forEach((k) => { tot[k] = uniq(k); });
-  const solved = tot.hd.length + tot.engg.length;
-  const hdPct = solved ? Math.round(tot.hd.length / solved * 100) : null;
-  let h = "<h2>Movement and trend, " + esc(rg.label) + "</h2><p class=\"sub\">What came in, who solved it and how tickets moved between teams, counted on the day each event happened (the other filters apply). Solved by Engineering means the ticket was with Engineering at some point before it closed, or has a linked LRPS ticket.</p>" +
-    '<div class="tiles six">' + tile("t-ink", "up", tot.created, "Created", "Tickets raised", 1, "Created") +
-    tile("t-ok", "check", tot.hd, "Solved by Help Desk", hdPct == null ? "" : hdPct + "% of solved", solved ? tot.hd.length / solved : 0, "Solved by Help Desk") +
-    tile("t-ink", "check", tot.engg, "Solved by Engineering", hdPct == null ? "" : (100 - hdPct) + "% of solved", solved ? tot.engg.length / solved : 0, "Solved by Engineering") +
-    tile("t-cr", "up", tot.toEngg, "Sent to Engineering", "Moved into an Engineering status", tot.created.length ? Math.min(1, tot.toEngg.length / tot.created.length) : 0, "Sent to Engineering") +
-    tile("t-cr", "pause", tot.toClient, "Sent to Swire", "Moved to a client status", tot.created.length ? Math.min(1, tot.toClient.length / tot.created.length) : 0, "Sent to Swire") +
-    tile(tot.reopen.length ? "t-ss" : "zero", "pause", tot.reopen, "Reopened", "Came back after closing", solved ? tot.reopen.length / solved : 0, "Reopened") + "</div>";
+  const known = tot.hd.length + tot.engg.length, solved = known + tot.unk.length;
+  const hdPct = known ? Math.round(tot.hd.length / known * 100) : null;
+  const withH = T.filter((t, i) => E[i].tr).length, noH = T.length - withH, busy = L && L.isFetching && L.isFetching();
+  let h = "<h2>Movement and trend, " + esc(rg.label) + "</h2><p class=\"sub\">What came in, who solved it and how tickets moved between teams, counted on the day each event happened (the other filters apply). Each card counts tickets, not individual moves. Solved by Engineering means the ticket was in an Engineering status before it closed, or has a linked LRPS ticket.</p>" +
+    (noH ? '<div class="warnbox">Movement comes from each ticket’s status history, which has been read for <b>' + withH.toLocaleString() + " of " + T.length.toLocaleString() + "</b> tickets" + (busy ? "; the rest is being read in the background and these numbers will rise" : "; the rest is read automatically when the HD Jira Bridge is connected") + ". Until then, closures without history count as <b>team not known yet</b> unless they have a linked LRPS ticket.</div>" : "") +
+    '<div class="grp">Flow</div><div class="tiles">' + tile("t-ink", "up", tot.created, "Created", "Tickets raised", 1, "Created") +
+    tile("t-cr", "toEngg", tot.toEngg, "Sent to Engineering", "Tickets that moved into an Engineering status", tot.created.length ? Math.min(1, tot.toEngg.length / tot.created.length) : 0, "Sent to Engineering") +
+    tile("t-cr", "toSwire", tot.toClient, "Sent to Swire", "Tickets that moved to a client status", tot.created.length ? Math.min(1, tot.toClient.length / tot.created.length) : 0, "Sent to Swire") +
+    tile(tot.reopen.length ? "t-ss" : "zero", "reopen", tot.reopen, "Reopened", "Came back after closing", solved ? tot.reopen.length / solved : 0, "Reopened") + "</div>" +
+    '<div class="grp">Who solved it</div><div class="tiles">' + tile("t-ok", "check", tot.hd, "Solved by Help Desk", hdPct == null ? "Closed without Engineering" : hdPct + "% of solved with a known team", known ? tot.hd.length / known : 0, "Solved by Help Desk") +
+    tile("t-ink", "check", tot.engg, "Solved by Engineering", hdPct == null ? "Closed after Engineering work" : (100 - hdPct) + "% of solved with a known team", known ? tot.engg.length / known : 0, "Solved by Engineering") +
+    (tot.unk.length ? tile("zero", "dash", tot.unk, "Solved, team not known yet", "Closed, status history not read yet", solved ? tot.unk.length / solved : 0, "Solved, team not known yet (history not read)") : "") + "</div>";
   const mx = Math.max(1, ...keys.map((k) => Math.max(...["created", "hd", "engg"].map((x) => (B[k][x] || new Set()).size))));
   const C = { created: "#D9A35B", hd: "#B5486F", engg: "#5C1730" };
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">Created and solved per ' + unit + "</div>" + (keys.length ? '<div class="bars" style="height:170px">' + keys.map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : [];
       return '<div class="b" data-list="' + reg(Array.from(new Set(v("created").concat(v("hd"), v("engg")))), labelOf(k) + ": created or solved") + '" title="' + esc(labelOf(k)) + ": " + v("created").length + " created, " + v("hd").length + " solved by HD, " + v("engg").length + ' solved by Engineering"><div style="display:flex;gap:1px;align-items:flex-end;height:100%">' + ["created", "hd", "engg"].map((x) => '<i style="flex:1;height:' + (v(x).length / mx * 100) + "%;background:" + C[x] + '"></i>').join("") + "</div></div>"; }).join("") + "</div>" +
     '<div class="axis"><span>' + esc(labelOf(keys[0])) + "</span><span>" + esc(labelOf(keys[keys.length - 1])) + '</span></div><div class="legend"><span><i style="background:' + C.created + '"></i>Created</span><span><i style="background:' + C.hd + '"></i>Solved by Help Desk</span><span><i style="background:' + C.engg + '"></i>Solved by Engineering</span></div>' : '<div class="empty">Nothing happened in this period.</div>') + "</div>";
-  const cols = [["created", "Created"], ["hd", "Solved by HD"], ["engg", "Solved by Engg"], ["toEngg", "Sent to Engg"], ["toClient", "Sent to Swire"], ["fromClient", "Back from Swire"], ["reopen", "Reopened"]];
+  const cols = [["created", "Created"], ["hd", "Solved by HD"], ["engg", "Solved by Engg"], ["unk", "Solved, team not known"], ["toEngg", "Sent to Engg"], ["toClient", "Sent to Swire"], ["fromClient", "Back from Swire"], ["reopen", "Reopened"]];
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">Per ' + unit + '</div><div class="tw"><table><thead><tr><th>' + (unit === "day" ? "Day" : unit === "week" ? "Week" : "Month") + "</th>" + cols.map((c) => "<th>" + esc(c[1]) + "</th>").join("") + "<th>HD share of solved</th><th>Net change</th></tr></thead><tbody>" +
-    keys.slice().reverse().map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : []; const sv = v("hd").length + v("engg").length, net = v("created").length - sv;
+    keys.slice().reverse().map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : []; const sv = v("hd").length + v("engg").length, net = v("created").length - sv - v("unk").length;
       return "<tr><td>" + esc(labelOf(k)) + "</td>" + cols.map(([x, n]) => '<td class="num">' + (v(x).length ? dl(v(x), labelOf(k) + ", " + n.toLowerCase()) : '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + (sv ? Math.round(v("hd").length / sv * 100) + "%" : "—") + '</td><td class="num" style="color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") +
     "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">Net change is created minus solved: above zero the backlog grew, below zero it shrank.</p></div>";
   return h;
@@ -1501,6 +1540,7 @@ function wire() {
   on("qIn", "input", (e) => { UI.q = e.target.value; clearTimeout(wire._t); wire._t = setTimeout(render, 220); });
   on("qStage", "change", (e) => { UI.stage = e.target.value; render(); });
   on("qCsv", "click", () => csv(queueIdx(), "open tickets"));
+  on("usersAll", "click", () => { UI.allUsers = !UI.allUsers; render(); });
   on("btnHist", "click", (e) => { const rows = histNeed(); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
   document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => { UI.shift = b.dataset.shift; render(); }));
   /* handover: typing updates the preview only (no full re-render, so the caret stays put) */
@@ -1548,10 +1588,12 @@ el("btnLrps").addEventListener("click", () => fetchLrps(true));
 
 /* ── boot ── */
 function autoHistory() {
-  /* status history: open tickets and everything since counting started (the rest on request in Analytics) */
+  /* status history for EVERY Swire ticket, read in the background through the shared SLA link (it respects the
+     shared Jira lock and the auto-calculate switch). Open tickets first, then newest to oldest. Closed tickets never
+     change, so each is read once and stays cached for every module. */
   if (!L || !L.autoFetch) return;
-  const from = HC.dateMs(CFG.start);
-  L.autoFetch(ALLT.filter((t, i) => ALLE[i].stage !== "closed" || (t.created != null && t.created >= from)).map((t) => t._row));
+  const order = ALLT.map((t, i) => i).sort((a, b) => (ALLE[a].stage === "closed") - (ALLE[b].stage === "closed") || (ALLT[b].created || 0) - (ALLT[a].created || 0));
+  L.autoFetch(order.map((i) => ALLT[i]._row));
 }
 Promise.resolve(HS && HS.loadConfig ? HS.loadConfig().then((c) => { if (window.HDClass && c) HDClass.setOverrides(c.statusOverrides); if (window.HDStages && c) HDStages.setOverrides(c.stageOverrides); }).catch(() => {}) : null)
   .then(() => Promise.all([getRows(), L ? Promise.resolve(L.load()).catch(() => {}) : null]))
