@@ -500,6 +500,8 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
         linkedIssues: col(row, "linked issues"), linkDetails: col(row, "link details"), deliveredDate: col(row, "delivered date"),
         releaseNumber: col(row, "release number"), releaseDataFix: col(row, "release number (data fix)"), parentRelease: col(row, "parent release no")
       };
+      /* "-", "N/A", "nil", "TBD" typed into a Jira field mean nothing was written: never show them as a fix */
+      ["analysis", "solutionSummary", "reasonText", "reasonOcc", "resolutionDetails", "typeOfFix", "rootCause"].forEach(function (f) { var x = String(t[f] || "").trim(); if (/^[\s\-–—_.:;,\/\\*#?]*$/.test(x) || /^(n\/?a|nil|none|null|na|tbd|tba|no|nothing|not applicable|not available|pending)$/i.test(x)) t[f] = ""; });
       t.labelList = t.labels ? t.labels.split(/[;,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean) : [];
       t.isResolved = !!(t.resolved || t.resolution || /closed|resolved|completed|delivered/i.test(t.status));
       t.hasSolution = !!(t.rootCause || t.typeOfFix || hasFix(t));
