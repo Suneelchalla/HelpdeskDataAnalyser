@@ -303,6 +303,22 @@ tbody tr:hover td{background:#FCF3F6}
 .grid2 > *,.grid3 > *{min-width:0}
 .grid2.wk{grid-template-columns:repeat(auto-fit,minmax(560px,1fr))}
 .wk td,.wk th{white-space:nowrap}
+.tile.t-ok{--ac:#1F8A4C;--acbg:#EAF7EF}
+.tiles.six{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.sla{display:inline-block;border-radius:6px;padding:1px 7px;font-size:.74rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
+.sla.red{background:#FDECEE;color:#B4182D;border-color:#F6C9CF}.sla.orange{background:#FEF0E4;color:#B5520A;border-color:#F8D3B4}
+.sla.amber{background:#FEF7E6;color:#946405;border-color:#F3DFA9}.sla.green{background:#EAF7EF;color:#1F7A45;border-color:#BFE6CD}.sla.grey{background:#F4F1F5;color:#7D7287;border-color:#E3DCE6}
+.lnk.sm{padding:3px 9px;font-size:11.5px;border-radius:7px}
+.rmbox{background:#fff;width:min(760px,100%);max-height:calc(100vh - 56px);overflow:auto;border-radius:14px;padding:16px 20px 18px;border:1px solid var(--line2);box-shadow:0 24px 60px rgba(60,14,30,.3)}
+.rmto{font-size:13px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--blush)}
+.rmlbl{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin:10px 0 4px}
+.rmtxt{width:100%;min-height:230px;font-family:var(--mono);font-size:12px;line-height:1.55}
+#rmExtra{width:100%}
+.rmrow{display:flex;gap:8px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.rmrow .rmlbl{margin:0}
+.rmlist{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+.rmlist > div{padding:6px 10px;border-bottom:1px solid var(--line3);font-size:12.5px;display:flex;gap:6px;align-items:center}
+.rmlist > div:last-child{border-bottom:none}
 @media print{
   .side,.toolbar,.bar,.noprint{display:none!important}
   body{display:block}
@@ -347,7 +363,7 @@ const fmt = HC.fmtMin, MIN = 60000, DAY = 86400000;
 const CFG_KEY = "hd-swire-cfg", LRPS_KEY = "hd-swire-lrps";
 
 /* ── state ── */
-let CFG = loadCfg(), ROWS = [], ALLT = [], ALLE = [], T = [], E = [], NOW = Date.now(), TAB = "now", ALLTYPES = [], LRPS = loadLrps();
+let SLAC = {}, CFG = loadCfg(), ROWS = [], ALLT = [], ALLE = [], T = [], E = [], NOW = Date.now(), TAB = "now", ALLTYPES = [], LRPS = loadLrps();
 const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: "", sort: { k: "age", d: -1 }, openCheck: null, week: null, shift: "" };
 
 /* filters at the top, shared by every tab (kept in this browser) */
@@ -394,11 +410,12 @@ function rebuild() {
     let tr = null;
     if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
     const e = HC.evaluate(t, tr, NOW, CFG, CLS, window.HDSla ? HDSla.firstResponse : null);
-    e.po = HC.poFor(t, CFG);
+    e.po = HC.poFor(t, CFG); e.tr = tr;
     return e;
   });
+  SLAC = {};
   ALLTYPES = Array.from(new Set(ALLT.map((t) => t.type || "(blank)"))).sort();
-  const rg = TAB === "weekly" ? { from: null, to: null } : rangeMs(), keep = [];
+  const rg = TAB === "weekly" || TAB === "move" ? { from: null, to: null } : rangeMs(), keep = [];
   const isr = ALLT.some((t) => /^(incident|service request)$/i.test(t.type || ""));
   ALLT.forEach((t, i) => { if (passes(t, ALLE[i], rg, isr)) keep.push(i); });
   T = keep.map((i) => ALLT[i]); E = keep.map((i) => ALLE[i]);
@@ -458,7 +475,9 @@ const ICON = {
   flame: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.4-2.4-5.6-4-8.4-.6 2-1.8 3-3 3 .4-3-1-6-4-8 .3 3.4-3 6.3-3 10.6C5 19.3 8 22 12 22z"/></svg>',
   clock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   pause: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
-  up: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
+  up: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
+  check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.8"/></svg>',
+  dash: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M8 12h8"/></svg>'
 };
 function tile(cls, icon, idx, title, desc, share, listTitle) {
   return '<button type="button" class="tile ' + (idx.length ? cls : "zero") + '" data-list="' + reg(idx, listTitle || title) + '"><span class="ic">' + ICON[icon] + '</span><span class="nm">' + idx.length.toLocaleString() + '</span><span class="tt">' + esc(title) + '</span><span class="ds">' + esc(desc) + '</span><span class="mt"><span style="width:' + Math.min(100, Math.round(share * 100)) + '%"></span></span></button>';
@@ -475,14 +494,14 @@ function openList(title, idx) {
   idx = idx.slice().sort(bySevAge);
   const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + idx.length.toLocaleString() + "</span></h3>" +
-    '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
+    (idx.some(canRemind) ? '<button type="button" class="btn" data-x="rem">Remind all</button>' : "") + '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
     table(idx, ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next"], { sortable: false, limit: 2000, empty: "No tickets." }) + "</div>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
   const key = (ev) => { if (ev.key === "Escape" && !document.querySelector(".ov:not(.lst)")) close(); };
   ov.addEventListener("click", (ev) => {
     if (ev.target === ov) return close();
-    const b = ev.target.closest("[data-x]"); if (b) { if (b.dataset.x === "close") close(); else csv(idx, title); return; }
+    const b = ev.target.closest("[data-x]"); if (b) { if (b.dataset.x === "close") close(); else if (b.dataset.x === "rem") openBulk(idx, title); else csv(idx, title); return; }
     const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
   });
   document.body.appendChild(ov); ov.querySelector('[data-x="close"]').focus(); document.addEventListener("keydown", key);
@@ -501,11 +520,11 @@ window.addEventListener("message", (e) => {
 });
 function ping() { if (BR.ready) return; window.postMessage({ type: "HD_BRIDGE_PING" }, "*"); if (PARENT) try { PARENT.postMessage({ type: "HD_RELAY_PING" }, location.origin); } catch (e) {} }
 [0, 300, 1000, 3000].forEach((ms) => setTimeout(ping, ms));
-function call(path) {
+function call(path, method, body) {
   if (!BR.ready && !window._rmBridge) return Promise.reject(new Error("The HD Jira Bridge extension is not connected."));
   return new Promise((res, rej) => {
     const id = ++BR.seq; BR.pend[id] = { res, rej };
-    const msg = { type: "HD_BRIDGE_CALL", id, host: jiraHost(), path, method: "GET", body: null };
+    const msg = { type: "HD_BRIDGE_CALL", id, host: jiraHost(), path, method: method || "GET", body: body || null };
     if (BR.own || window._rmBridge || !BR.par || !PARENT) window.postMessage(msg, "*"); else { msg.type = "HD_RELAY_CALL"; PARENT.postMessage(msg, location.origin); }
     setTimeout(() => { if (BR.pend[id]) { delete BR.pend[id]; rej(new Error("Jira did not answer in time.")); } }, 60000);
   });
@@ -529,7 +548,7 @@ function fetchLrps(force) {
     return call("/rest/api/3/search/jql?jql=" + encodeURIComponent(jql) + "&fields=assignee,status,updated&maxResults=100").then((d) => {
       const seen = {}, at = Date.now();
       (d.issues || []).forEach((is) => { const f = is.fields || {}; seen[is.key] = 1;
-        LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", s: f.status ? f.status.name : "", at }; });
+        LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", id: f.assignee ? (f.assignee.accountId || "") : "", s: f.status ? f.status.name : "", at }; });
       ch.forEach((k) => { if (!seen[k]) LRPS[k] = { a: "", s: "", at, gone: true }; });
       done += ch.length; paintChips("Reading LRPS tickets " + done + " / " + keys.length + "…");
     });
@@ -569,10 +588,10 @@ function paintChips(lrpsMsg) {
 }
 
 /* ── tabs ── */
-const TABS = [["now", "Now"], ["openbox", "Open box"], ["work", "Workload"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Master data"]];
+const TABS = [["now", "Now"], ["openbox", "Open box"], ["work", "Workload"], ["sla", "SLA"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["move", "Movement"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Master data"]];
 const TAB_IC = {
   now: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', openbox: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/>', work: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.2 3.2 0 0 1 0 6.3M18 14c2 .8 3 3 3 6"/>',
-  esc: '<path d="M12 19V5M5 12l7-7 7 7"/>', rules: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>', queue: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  esc: '<path d="M12 19V5M5 12l7-7 7 7"/>', sla: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>', move: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>', rules: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>', queue: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   analytics: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', handover: '<path d="M4 7h11l-3-3M20 17H9l3 3"/>', weekly: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>', setup: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
 };
 function paintTabs(counts) {
@@ -608,7 +627,21 @@ function poCell(e) {
   const p = e.po; if (!p || !p.po) return '<span class="dim">—</span>';
   return '<span class="who">' + esc(p.po) + '<span class="r">' + esc(p.module || "") + (p.via === "svm" ? " (SVM In Charge)" : "") + "</span></span>";
 }
+/* SLA state from the shared SLA link: the SLA Tracker's targets and calendar. Cached per render. */
+function slaOfT(t) { if (!t) return null; if (SLAC[t.key]) return SLAC[t.key]; const x = L && L.ready() ? L.get(t._row) : { state: "loading" }; SLAC[t.key] = x; return x; }
+function slaOf(i) { return slaOfT(T[i]); }
+function slaB(i) {
+  const x = slaOf(i); if (!x || !x.state) return "nodata";
+  if (x.state === "breached") return "breached"; if (x.state === "missed") return "missed"; if (x.state === "met") return "met"; if (x.state === "paused") return "paused";
+  if (["nohist", "none", "na", "loading"].indexOf(x.state) > -1) return "nodata";
+  return x.atRisk ? "risk" : "ontrack";
+}
+function slaCell(t) {
+  const x = slaOfT(t); if (!x || !x.label) return '<span class="dim" title="' + esc((x && x.tip) || "") + '">—</span>';
+  return '<span class="sla ' + esc(x.tone || "grey") + '" title="' + esc(x.tip || "") + '">' + esc(x.label) + "</span>";
+}
 const COLS = {
+  sla:   { h: "SLA", s: (t) => { const x = slaOfT(t); return x ? (x.state === "breached" ? -1e9 - (x.overByMin || 0) : x.remainingMin != null ? x.remainingMin : 9e9) : 9e9; }, c: (t) => slaCell(t) },
   key:   { h: "Ticket", s: (t) => t.key, c: (t) => '<a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(t.key) + "</a>" },
   pri:   { h: "Priority", s: (t) => HC.sevRank(t.sev), c: (t) => prChip(t) },
   sum:   { h: "Summary", s: (t) => t.summary.toLowerCase(), c: (t) => '<div class="sum">' + esc(t.summary) + "</div>" + (t.meId ? '<span class="mono dim small">' + esc(t.meId) + "</span>" : '<span class="small" style="color:var(--ss)">no ME ID</span>') },
@@ -644,14 +677,16 @@ const openIdx = () => T.map((t, i) => i).filter((i) => E[i].stage !== "closed");
 
 /* ══ Now ══ */
 function viewNow() {
-  const open = openIdx(), live = open.filter((i) => E[i].stage !== "billing");
-  const side = (k) => open.filter((i) => sideOf(i) === k);
+  const open = openIdx(), side = (k) => open.filter((i) => sideOf(i) === k);
   const box = open.filter((i) => E[i].stage === "openbox"), hd = side("hd"), engg = side("engg"), cl = side("client"), bill = side("billing");
-  const ss = live.filter((i) => T[i].sev === "showstopper"), cr = live.filter((i) => T[i].sev === "critical");
-  const hcFrom = HC.dateMs(CFG.start) || 0, frOver = open.filter((i) => E[i].frState === "breached" && (T[i].created || 0) >= hcFrom), updDue = open.filter((i) => E[i].updateDue);
-  const escI = HC.escalations(T, E, NOW, CFG).map((x) => x.i);
-  const oldestBox = box.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
-  const hot = Array.from(new Set(ss.concat(cr, frOver, updDue))).filter((i) => E[i].stage !== "billing").sort(bySevAge);
+  const withUs = hd.concat(engg), live = withUs;
+  const ss = withUs.filter((i) => T[i].sev === "showstopper"), cr = withUs.filter((i) => T[i].sev === "critical");
+  const hcFrom = HC.dateMs(CFG.start) || 0, frOver = withUs.filter((i) => E[i].frState === "breached" && (T[i].created || 0) >= hcFrom), updDue = withUs.filter((i) => E[i].updateDue);
+  const escI = HC.escalations(T, E, NOW, CFG).map((x) => x.i).filter((i) => sideOf(i) === "hd" || sideOf(i) === "engg");
+  const sb = (k) => withUs.filter((i) => slaB(i) === k);
+  const br = sb("breached").sort((a, b) => ((slaOf(b) || {}).overByMin || 0) - ((slaOf(a) || {}).overByMin || 0));
+  const rk = sb("risk").sort((a, b) => ((slaOf(a) || {}).remainingMin || 0) - ((slaOf(b) || {}).remainingMin || 0));
+  const ok = sb("ontrack"), nd = sb("nodata");
   const d = HC.duty(NOW, CFG), hr = HC.ist(NOW).min / 60, greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   const DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"], MN = ["January","February","March","April","May","June","July","August","September","October","November","December"], pd = HC.ist(NOW);
   const parts = [["Open box", box, "#E7A3B9"], ["With Help Desk", hd, "#B5486F"], ["With Engineering", engg, "#5C1730"], ["Waiting on Swire", cl, "#D9A35B"], ["Delivered, billing", bill, "#9A8AA3"]];
@@ -660,16 +695,21 @@ function viewNow() {
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
     '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
     '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + "</div></section>";
-  const live1 = Math.max(1, live.length);
-  return hero + '<div class="grp">Needs action</div><div class="tiles">' +
-    tile("t-ss", "siren", ss, "Showstoppers open", ss.length ? "Phone the PO, or the Engineering head at night" : "None open", ss.length / live1, "Open Showstoppers") +
-    tile("t-cr", "flame", cr, "Critical open", "Major function impaired", cr.length / live1, "Open Criticals") +
-    tile("t-ss", "clock", frOver, "First response overdue", "New since " + fday(hcFrom).replace(/ \d{4}$/, "") + ", past the 10.1 target", frOver.length / live1, "First response overdue") +
-    tile("t-cr", "pause", updDue, "Update interval passed", "No status change within the interval", updDue.length / live1, "Update interval passed") +
-    tile("t-ink", "up", escI, "Escalations to raise", "Section 10.2 triggers met", escI.length / live1, "Escalations to raise") + "</div>" +
-    "<h2>Needs attention now</h2><p class=\"sub\">Open Showstoppers and Criticals, and any ticket whose first response is overdue or whose update interval has passed. " +
-    (d.id === "night" ? "Tonight the Hypercare team owns these; a Showstopper means phoning the Engineering head." : "The PO for the module owns these; for a Critical or Showstopper call and inform the PO.") + "</p>" +
-    table(hot, ["key", "pri", "sum", "status", "fr", "prog", "res", "po", "svm", "cw", "lrps"], { empty: "Nothing needs attention right now." });
+  const w1 = Math.max(1, withUs.length);
+  return hero + '<div class="grp">SLA, tickets with us (Help Desk and Engineering)</div><div class="tiles">' +
+    tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
+    tile("t-cr", "clock", rk, "About to breach", "Due soon or at risk", rk.length / w1, "SLA about to breach, with us") +
+    tile("t-ok", "check", ok, "Not yet breached", "Inside the SLA target", ok.length / w1, "SLA not yet breached, with us") +
+    tile("zero", "dash", nd, "No SLA data", "History not read yet, or no target", nd.length / w1, "No SLA data, with us") + "</div>" +
+    '<div class="grp">Needs action, with us</div><div class="tiles">' +
+    tile("t-ss", "siren", ss, "Showstoppers", ss.length ? "Phone the PO, or the Engineering head at night" : "None with us", ss.length / w1, "Showstoppers with us") +
+    tile("t-cr", "flame", cr, "Critical", "Major function impaired", cr.length / w1, "Criticals with us") +
+    tile("t-ss", "clock", frOver, "First response overdue", "New since " + fday(hcFrom).replace(/ \d{4}$/, "") + ", past the 10.1 target", frOver.length / w1, "First response overdue") +
+    tile("t-cr", "pause", updDue, "Update interval passed", "No status change within the interval", updDue.length / w1, "Update interval passed") +
+    tile("t-ink", "up", escI, "Escalations to raise", "Section 10.2 triggers met", escI.length / w1, "Escalations to raise") + "</div>" +
+    '<h2>Needs attention now</h2><p class="sub">Tickets with us whose SLA is breached (most overdue first) or about to breach (soonest first). Tickets waiting on Swire are in the SLA tab. ' +
+    (d.id === "night" ? "Tonight the Hypercare team owns these." : "The PO for the module owns these.") + ' <button type="button" class="lnk sm" data-rem="' + reg(br.concat(rk), "Needs attention now") + '">Remind all</button></p>' +
+    table(br.concat(rk), ["key", "pri", "sum", "status", "sla", "fr", "prog", "po", "svm", "cw", "lrps"], { sortable: false, empty: "Nothing with us is breached or about to breach." });
 }
 
 /* ══ Workload: who holds the pending tickets ══ */
@@ -679,9 +719,9 @@ function personTable(title, idx, keyOf, note) {
   const S = HC.SEVS;
   const body = names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
     return "<tr><td>" + esc(n) + '</td><td class="num"><b>' + dl(l, title + ", " + n) + "</b></td>" + S.map((x) => { const q = l.filter((i) => T[i].sev === x.id); return '<td class="num">' + (q.length ? dl(q, title + ", " + n + ", " + x.name) : '<span class="dim">·</span>') + "</td>"; }).join("") +
-      '<td class="num">' + fmt(old) + "</td></tr>"; }).join("");
+      '<td class="num">' + fmt(old) + '</td><td><button type="button" class="lnk sm" data-rem="' + reg(l, title + ", " + n) + '">Remind</button></td></tr>'; }).join("");
   return '<div class="panel"><div class="sec-h" style="margin-top:0">' + esc(title) + ' <span class="dim">' + dl(idx, title) + "</span></div>" + (note ? '<p class="sub" style="margin-bottom:8px">' + esc(note) + "</p>" : "") +
-    (names.length ? '<div class="tw"><table><thead><tr><th>Name</th><th>Total</th>' + S.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th></tr></thead><tbody>" + body + "</tbody></table></div>" : '<div class="empty">Nothing pending.</div>') + "</div>";
+    (names.length ? '<div class="tw"><table><thead><tr><th>Name</th><th>Total</th>' + S.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th><th></th></tr></thead><tbody>" + body + "</tbody></table></div>" : '<div class="empty">Nothing pending.</div>') + "</div>";
 }
 function viewWork() {
   const open = openIdx(), hd = open.filter((i) => sideOf(i) === "hd"), engg = open.filter((i) => sideOf(i) === "engg"), ours = hd.concat(engg);
@@ -706,7 +746,7 @@ function viewEsc() {
   const byKey = {}; L2.forEach((x) => { byKey[x.i] = x; });
   const groups = {}; L2.forEach((x) => { (groups[x.trigger] = groups[x.trigger] || []).push(x.i); });
   return "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2. Escalating moves the technical work, not the ownership: the owner keeps updating the user. “No progress” means no status change in Jira for that long while the ticket is with us. Contact details are in Master data.</p>" +
-    (Object.keys(groups).length ? '<div class="bar">' + Object.keys(groups).map((g) => '<span class="pill">' + esc(g) + " <b>" + dl(groups[g], g) + "</b></span>").join("") + "</div>" : "") +
+    (Object.keys(groups).length ? '<div class="bar">' + Object.keys(groups).map((g) => '<span class="pill">' + esc(g) + " <b>" + dl(groups[g], g) + "</b></span>").join("") + '<span style="flex:1"></span><button type="button" class="btn" data-rem="' + reg(L2.map((x) => x.i), "Escalations to raise") + '">Remind all</button></div>' : "") +
     table(L2.map((x) => x.i), ["key", "pri", "sum", "status", "prog", "po", "svm"], { sortable: false, empty: "No escalation triggers are met right now.",
       extra: { h: "Trigger and who to inform", c: (i) => { const x = byKey[i]; return "<b>" + esc(x.trigger) + '</b><div class="small" style="margin-top:3px">' + x.inform.map((r) => { const n = r.indexOf("PO") === 0 ? (E[i].po && E[i].po.po) : namesOf(r); return esc(r) + (n ? ' <span class="dim">(' + esc(n) + ")</span>" : ""); }).join("<br>") + "</div>"; } } });
 }
@@ -1034,7 +1074,8 @@ function openTicket(i) {
   if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
   const kv = (k, v) => "<dt>" + esc(k) + "</dt><dd>" + (v || '<span class="dim">—</span>') + "</dd>";
   const ov = document.createElement("div"); ov.className = "ov";
-  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<button class="btn" style="margin-left:auto" id="dClose">Close</button></div>' +
+  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<span style="margin-left:auto"></span>' + (canRemind(i) ? '<button class="btn pri" id="dRem">Send reminder</button>' : '<span class="dim small">' + (e.stage === "closed" ? "Closed" : "With Swire: reply from your own mailbox (R10)") + "</span>") + '<button class="btn" id="dClose">Close</button></div>' +
+    (rmLog()[t.key] ? '<p class="small dim" style="margin-top:6px">Last reminder posted ' + esc(fmt((Date.now() - rmLog()[t.key]) / MIN)) + " ago from this browser.</p>" : "") +
     "<h3>" + esc(t.summary) + "</h3>" +
     '<dl class="kv">' + kv("ME ID", t.meId ? '<span class="mono">' + esc(t.meId) + "</span>" : '<span style="color:var(--ss)">missing</span>') + kv("Request type", esc(t.type)) + kv("Created", esc(fdt(t.created)) + ' <span class="dim">(' + fmt(ageOf(t)) + " ago)</span>") +
     kv("Environment", esc(t.env)) + kv("Components", esc(t.components.join(", "))) + kv("Menu / screen", esc([t.menu, t.screen].filter(Boolean).join(" / "))) + kv("Business user", esc(t.businessUser)) +
@@ -1048,8 +1089,182 @@ function openTicket(i) {
   const key = (ev) => { if (ev.key === "Escape") close(); };
   ov.addEventListener("click", (ev) => { if (ev.target === ov) close(); });
   document.body.appendChild(ov); ov.querySelector("#dClose").onclick = close; ov.querySelector("#dClose").focus();
+  const rb = ov.querySelector("#dRem"); if (rb) rb.onclick = () => openRemind(i);
   document.addEventListener("keydown", key);
 }
+
+/* ══ SLA: every ticket, with us and with Swire ══ */
+function viewSla() {
+  const all = T.map((t, i) => i), open = openIdx(), closed = all.filter((i) => E[i].stage === "closed");
+  const cats = [["breached", "Breached", "t-ss"], ["risk", "About to breach", "t-cr"], ["ontrack", "Not yet breached", "t-ok"], ["paused", "Paused, with Swire", "t-ink"], ["nodata", "No SLA data", "zero"]];
+  const ob = (k) => open.filter((i) => slaB(i) === k), cm = closed.filter((i) => slaB(i) === "met"), cx = closed.filter((i) => slaB(i) === "missed");
+  const o1 = Math.max(1, open.length), dec = cm.length + cx.length;
+  const sides = [["With Help Desk", "hd"], ["With Engineering", "engg"], ["With Swire", "client"], ["Delivered, billing", "billing"]];
+  let h = "<h2>SLA</h2><p class=\"sub\">Every ticket in the filters, including those waiting on Swire. Same numbers as the SLA Tracker: its targets and working calendar, and the clock pauses while the client has the ticket. Every number opens its tickets.</p>" +
+    '<div class="grp">Open tickets</div><div class="tiles">' + cats.map(([k, n, c]) => { const l = ob(k); return tile(c, k === "breached" ? "siren" : k === "risk" ? "clock" : k === "ontrack" ? "check" : k === "paused" ? "pause" : "dash", l, n, (l.length / o1 * 100).toFixed(0) + "% of open", l.length / o1, "Open, SLA " + n.toLowerCase()); }).join("") + "</div>" +
+    '<div class="grp">Closed tickets</div><div class="tiles">' + tile("t-ok", "check", cm, "Met", dec ? Math.round(cm.length / dec * 100) + "% of closed with SLA data" : "", dec ? cm.length / dec : 0, "Closed, SLA met") + tile("t-ss", "siren", cx, "Missed", dec ? Math.round(cx.length / dec * 100) + "% of closed with SLA data" : "", dec ? cx.length / dec : 0, "Closed, SLA missed") + "</div>";
+  const rows = HC.SEVS.map((sv) => { const op = open.filter((i) => T[i].sev === sv.id), cl = closed.filter((i) => T[i].sev === sv.id), m = cl.filter((i) => slaB(i) === "met"), x = cl.filter((i) => slaB(i) === "missed");
+    return "<tr><td>" + prChip({ sev: sv.id, priority: sv.name }) + "</td>" + cats.map(([k, n]) => { const l = op.filter((i) => slaB(i) === k); return '<td class="num">' + (l.length ? dl(l, sv.name + ", open, " + n) : '<span class="dim">·</span>') + "</td>"; }).join("") +
+      '<td class="num">' + (m.length ? dl(m, sv.name + ", met") : '<span class="dim">·</span>') + '</td><td class="num">' + (x.length ? dl(x, sv.name + ", missed") : '<span class="dim">·</span>') + '</td><td class="num">' + (m.length + x.length ? Math.round(m.length / (m.length + x.length) * 100) + "%" : "—") + "</td></tr>"; }).join("");
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By priority</div><div class="tw"><table><thead><tr><th>Priority</th>' + cats.map(([k, n]) => "<th>Open: " + esc(n) + "</th>").join("") + "<th>Closed, met</th><th>Closed, missed</th><th>Met %</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
+  const brOpen = ob("breached");
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Where the breached tickets are</div><div class="bar" style="margin:0">' + sides.map(([n, k]) => { const l = brOpen.filter((i) => sideOf(i) === k); return '<span class="pill">' + esc(n) + " <b>" + dl(l, "SLA breached, " + n.toLowerCase()) + "</b></span>"; }).join("") + "</div></div>";
+  h += "<h2>Breached, most overdue first</h2>" + table(brOpen.sort((a, b) => ((slaOf(b) || {}).overByMin || 0) - ((slaOf(a) || {}).overByMin || 0)), ["key", "pri", "sum", "status", "sla", "po", "svm", "cw", "lrps"], { sortable: false, empty: "No open ticket has breached its SLA." });
+  return h;
+}
+
+/* ══ Movement and trend: what came in, who solved it, how tickets moved between teams ══ */
+function viewMove() {
+  const rg = rangeMs(), inR = (ms) => ms != null && (rg.from == null || ms >= rg.from) && (rg.to == null || ms < rg.to);
+  const isT = (x) => CLS.isTerminal(x), isEngg = (x) => !isT(x) && window.HDClass && HDClass.classify3(x) === "engg";
+  const bill = (x) => (CFG.billing || []).some((b) => b.toLowerCase().replace(/&/g, "and") === String(x || "").toLowerCase().replace(/&/g, "and"));
+  const isCl = (x) => !isT(x) && (CLS.owner(x) === "client" || bill(x));
+  const K = ["created", "hd", "engg", "toEngg", "toClient", "fromClient", "reopen"], ev = {}; K.forEach((k) => { ev[k] = []; });
+  T.forEach((t, i) => {
+    const e = E[i]; if (inR(t.created)) ev.created.push({ i, t: t.created });
+    const tr = e.tr ? e.tr.slice().sort((a, b) => a.t - b.t) : null;
+    if (tr && tr.length) {
+      let wasEngg = isEngg(tr[0].from);
+      tr.forEach((x) => {
+        const fe = isEngg(x.from), te = isEngg(x.to), fc = isCl(x.from), tc = isCl(x.to), fx = isT(x.from), tx = isT(x.to);
+        if (inR(x.t)) {
+          if (te && !fe) ev.toEngg.push({ i, t: x.t });
+          if (tc && !fc) ev.toClient.push({ i, t: x.t });
+          if (fc && !tc && !tx) ev.fromClient.push({ i, t: x.t });
+          if (fx && !tx) ev.reopen.push({ i, t: x.t });
+          if (tx && !fx) ev[wasEngg || t.lrps.length ? "engg" : "hd"].push({ i, t: x.t });
+        }
+        if (te) wasEngg = true;
+      });
+    } else if (e.stage === "closed" && inR(e.closedAt)) ev[t.lrps.length ? "engg" : "hd"].push({ i, t: e.closedAt });
+  });
+  /* buckets: days for up to 45 days, else weeks, else months */
+  const times = [].concat(...K.map((k) => ev[k].map((x) => x.t)));
+  const a0 = rg.from != null ? rg.from : times.length ? Math.min(...times) : NOW, a1 = rg.to != null ? Math.min(rg.to, NOW) : NOW;
+  const span = (a1 - a0) / DAY, unit = span <= 45 ? "day" : span <= 400 ? "week" : "month";
+  const keyOf = (ms) => { if (unit === "day") return HC.dayKey(ms); if (unit === "week") return HC.dayKey(weekStart(ms)); const p = HC.ist(ms); return p.y + "-" + String(p.mo + 1).padStart(2, "0"); };
+  const labelOf = (k) => unit === "month" ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][+k.slice(5, 7) - 1] + " " + k.slice(0, 4) : (unit === "week" ? "Week of " : "") + fday(HC.dateMs(k));
+  const B = {}; K.forEach((k) => ev[k].forEach((x) => { const bk = keyOf(x.t); B[bk] = B[bk] || {}; (B[bk][k] = B[bk][k] || new Set()).add(x.i); }));
+  const keys = Object.keys(B).sort(), uniq = (k) => Array.from(new Set(ev[k].map((x) => x.i)));
+  const tot = {}; K.forEach((k) => { tot[k] = uniq(k); });
+  const solved = tot.hd.length + tot.engg.length;
+  const hdPct = solved ? Math.round(tot.hd.length / solved * 100) : null;
+  let h = "<h2>Movement and trend, " + esc(rg.label) + "</h2><p class=\"sub\">What came in, who solved it and how tickets moved between teams, counted on the day each event happened (the other filters apply). Solved by Engineering means the ticket was with Engineering at some point before it closed, or has a linked LRPS ticket.</p>" +
+    '<div class="tiles six">' + tile("t-ink", "up", tot.created, "Created", "Tickets raised", 1, "Created") +
+    tile("t-ok", "check", tot.hd, "Solved by Help Desk", hdPct == null ? "" : hdPct + "% of solved", solved ? tot.hd.length / solved : 0, "Solved by Help Desk") +
+    tile("t-ink", "check", tot.engg, "Solved by Engineering", hdPct == null ? "" : (100 - hdPct) + "% of solved", solved ? tot.engg.length / solved : 0, "Solved by Engineering") +
+    tile("t-cr", "up", tot.toEngg, "Sent to Engineering", "Moved into an Engineering status", tot.created.length ? Math.min(1, tot.toEngg.length / tot.created.length) : 0, "Sent to Engineering") +
+    tile("t-cr", "pause", tot.toClient, "Sent to Swire", "Moved to a client status", tot.created.length ? Math.min(1, tot.toClient.length / tot.created.length) : 0, "Sent to Swire") +
+    tile(tot.reopen.length ? "t-ss" : "zero", "pause", tot.reopen, "Reopened", "Came back after closing", solved ? tot.reopen.length / solved : 0, "Reopened") + "</div>";
+  const mx = Math.max(1, ...keys.map((k) => Math.max(...["created", "hd", "engg"].map((x) => (B[k][x] || new Set()).size))));
+  const C = { created: "#D9A35B", hd: "#B5486F", engg: "#5C1730" };
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Created and solved per ' + unit + "</div>" + (keys.length ? '<div class="bars" style="height:170px">' + keys.map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : [];
+      return '<div class="b" data-list="' + reg(Array.from(new Set(v("created").concat(v("hd"), v("engg")))), labelOf(k) + ": created or solved") + '" title="' + esc(labelOf(k)) + ": " + v("created").length + " created, " + v("hd").length + " solved by HD, " + v("engg").length + ' solved by Engineering"><div style="display:flex;gap:1px;align-items:flex-end;height:100%">' + ["created", "hd", "engg"].map((x) => '<i style="flex:1;height:' + (v(x).length / mx * 100) + "%;background:" + C[x] + '"></i>').join("") + "</div></div>"; }).join("") + "</div>" +
+    '<div class="axis"><span>' + esc(labelOf(keys[0])) + "</span><span>" + esc(labelOf(keys[keys.length - 1])) + '</span></div><div class="legend"><span><i style="background:' + C.created + '"></i>Created</span><span><i style="background:' + C.hd + '"></i>Solved by Help Desk</span><span><i style="background:' + C.engg + '"></i>Solved by Engineering</span></div>' : '<div class="empty">Nothing happened in this period.</div>') + "</div>";
+  const cols = [["created", "Created"], ["hd", "Solved by HD"], ["engg", "Solved by Engg"], ["toEngg", "Sent to Engg"], ["toClient", "Sent to Swire"], ["fromClient", "Back from Swire"], ["reopen", "Reopened"]];
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Per ' + unit + '</div><div class="tw"><table><thead><tr><th>' + (unit === "day" ? "Day" : unit === "week" ? "Week" : "Month") + "</th>" + cols.map((c) => "<th>" + esc(c[1]) + "</th>").join("") + "<th>HD share of solved</th><th>Net change</th></tr></thead><tbody>" +
+    keys.slice().reverse().map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : []; const sv = v("hd").length + v("engg").length, net = v("created").length - sv;
+      return "<tr><td>" + esc(labelOf(k)) + "</td>" + cols.map(([x, n]) => '<td class="num">' + (v(x).length ? dl(v(x), labelOf(k) + ", " + n.toLowerCase()) : '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + (sv ? Math.round(v("hd").length / sv * 100) + "%" : "—") + '</td><td class="num" style="color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") +
+    "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">Net change is created minus solved: above zero the backlog grew, below zero it shrank.</p></div>";
+  return h;
+}
+
+/* ══ Reminders: an internal note on the SWIPHX ticket ══
+   The engineer on the linked LRPS ticket is @mentioned (Jira notifies them); for Help Desk tickets the current
+   worker, else the SVM In Charge, is addressed by name. Tickets with Swire are never reminded here: replies to
+   Swire go from the owner's own mailbox (R10). */
+const RM_LOG = "hd-swire-reminded";
+function rmLog() { try { return JSON.parse(localStorage.getItem(RM_LOG) || "{}") || {}; } catch (e) { return {}; } }
+function rmMark(k) { const l = rmLog(); l[k] = Date.now(); try { localStorage.setItem(RM_LOG, JSON.stringify(l)); } catch (e) {} }
+function rmSign() { try { const v = localStorage.getItem("hd-reminder-sign"); return v && v.trim() ? v : "SVM Help Desk"; } catch (e) { return "SVM Help Desk"; } }
+function rmSetSign(v) { try { if (v && v.trim() && v.trim() !== "SVM Help Desk") localStorage.setItem("hd-reminder-sign", v.trim()); else localStorage.removeItem("hd-reminder-sign"); } catch (e) {} }
+function canRemind(i) { const x = sideOf(i); return x === "hd" || x === "engg"; }
+function rmWho(i) {
+  const t = T[i], skip = /^(svm help ?desk|jira misc.*|unassigned|nan|)$/i;
+  if (sideOf(i) === "engg") for (const k of t.lrps) { const x = LRPS[k]; if (x && x.a) return { name: x.a, id: x.id || "", via: "LRPS assignee on " + k }; }
+  if (t.cw && !skip.test(t.cw)) return { name: t.cw, id: "", via: "Current worker" };
+  if (t.svm && !skip.test(t.svm)) return { name: t.svm, id: "", via: "SVM In Charge" };
+  return { name: "Team", id: "", via: "no named owner" };
+}
+function rmText(i, who, sign, extra) {
+  const t = T[i], e = E[i], x = slaOf(i), f = [];
+  f.push("Raised " + fdt(t.created) + " IST, " + fmt(ageOf(t)) + " ago. Status: " + t.status + ".");
+  if (e.sinceMoveMin != null) f.push("No status change for " + fmt(e.sinceMoveMin) + ".");
+  if (x && x.label && ["nohist", "none", "na", "loading"].indexOf(x.state) < 0) f.push("SLA: " + x.label + ".");
+  if (t.lrps.length) f.push("Engineering ticket: " + t.lrps.map((k) => k + (LRPS[k] && LRPS[k].s ? " (" + LRPS[k].s + ")" : "")).join(", ") + ".");
+  return ["Hi " + (who.id ? "@" : "") + who.name + ",",
+    "Reminder from Swire Hypercare on " + t.key + " [" + (t.priority || "-") + "] \"" + t.summary + "\"" + (t.meId ? " (ME ID " + t.meId + ")" : "") + ".",
+    f.join(" ")].concat(extra && extra.trim() ? [extra.trim()] : []).concat(["Please share an update and the next step with an ETR on this ticket.", "Regards,\n" + sign]).join("\n\n");
+}
+function rmAdf(text, who) {
+  const paras = String(text).replace(/\r\n/g, "\n").split(/\n\s*\n/).filter((p) => p.trim());
+  return { type: "doc", version: 1, content: paras.map((p, n) => {
+    const c = [];
+    p.split("\n").forEach((line, k) => {
+      if (k) c.push({ type: "hardBreak" });
+      const tag = "@" + who.name;
+      if (n === 0 && who.id && line.indexOf(tag) > -1) {
+        const [a, b] = [line.slice(0, line.indexOf(tag)), line.slice(line.indexOf(tag) + tag.length)];
+        if (a) c.push({ type: "text", text: a }); c.push({ type: "mention", attrs: { id: who.id, text: tag } }); if (b) c.push({ type: "text", text: b });
+      } else if (line) c.push(/^please share an update/i.test(line) ? { type: "text", text: line, marks: [{ type: "strong" }] } : { type: "text", text: line });
+    });
+    return { type: "paragraph", content: c };
+  }) };
+}
+function rmPost(key, adf) { return call("/rest/api/3/issue/" + encodeURIComponent(key) + "/comment", "POST", { body: adf, properties: [{ key: "sd.public.comment", value: { internal: true } }] }); }
+function rmModal(html) {
+  const ov = document.createElement("div"); ov.className = "ov lst rmov"; ov.style.zIndex = 60;
+  ov.innerHTML = '<div class="rmbox" role="dialog" aria-modal="true">' + html + "</div>";
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key); };
+  const key = (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); close(); } };
+  ov.addEventListener("click", (ev) => { if (ev.target === ov || ev.target.closest("[data-rmx]")) close(); });
+  document.body.appendChild(ov); document.addEventListener("keydown", key, true);
+  return { ov, close };
+}
+function openRemind(i) {
+  const t = T[i], who = rmWho(i), sign = rmSign();
+  const m = rmModal('<div class="lhead"><h3>Send reminder, ' + esc(t.key) + '</h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+    '<div class="rmto">To <b>' + esc(who.name) + '</b> <span class="dim">(' + esc(who.via) + ")</span>" + (who.id ? ' <span class="sla green">@mention, Jira notifies them</span>' : "") + "</div>" +
+    '<p class="small dim" style="margin:4px 0 10px">Posted as an <b>internal note</b> on ' + esc(t.key) + ". Swire does not see it.</p>" +
+    '<label class="rmlbl">Message</label><textarea class="inp rmtxt" id="rmTxt" spellcheck="true">' + esc(rmText(i, who, sign)) + "</textarea>" +
+    '<div class="rmrow"><label class="rmlbl" for="rmSign">Sign as</label><input class="inp" id="rmSign" value="' + esc(sign) + '"><span class="dim small">Shared with the Follow-up Tracker</span></div>' +
+    '<div class="rmrow"><span id="rmMsg" class="small"></span><span style="flex:1"></span><button type="button" class="btn" id="rmCopy">Copy</button><button type="button" class="btn pri" id="rmPost">Post internal note</button></div>');
+  const q = (id) => m.ov.querySelector("#" + id);
+  q("rmSign").addEventListener("input", (e) => { const v = e.target.value, tx = q("rmTxt"); tx.value = tx.value.replace(/Regards,\n[^\n]*$/, "Regards,\n" + (v || "SVM Help Desk")); });
+  q("rmCopy").onclick = () => navigator.clipboard.writeText(q("rmTxt").value).then(() => { q("rmMsg").textContent = "Copied."; });
+  q("rmPost").onclick = () => {
+    const b = q("rmPost"); rmSetSign(q("rmSign").value); b.disabled = true; b.textContent = "Posting…"; q("rmMsg").textContent = "";
+    rmPost(t.key, rmAdf(q("rmTxt").value, who)).then(() => { rmMark(t.key); q("rmMsg").innerHTML = '<span style="color:var(--ok);font-weight:600">Posted as an internal note on ' + esc(t.key) + ".</span>"; b.textContent = "Posted"; },
+      (e) => { q("rmMsg").innerHTML = '<span style="color:var(--ss)">' + esc(e.message || e) + "</span>"; b.disabled = false; b.textContent = "Post internal note"; });
+  };
+  q("rmTxt").focus();
+}
+function openBulk(idx, title) {
+  const ok = idx.filter(canRemind).sort(bySevAge), skip = idx.length - ok.length;
+  if (!ok.length) { alert("None of these tickets are with us. Tickets with Swire or closed are not reminded here."); return; }
+  const sign = rmSign(), w0 = rmWho(ok[0]);
+  const m = rmModal('<div class="lhead"><h3>Remind ' + ok.length + " ticket" + (ok.length > 1 ? "s" : "") + '</h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+    '<p class="small" style="margin-bottom:8px">' + esc(title) + ". One internal note per ticket, addressed to its engineer (LRPS assignee, @mentioned) or Help Desk owner." + (skip ? " " + skip + " with Swire or closed are skipped." : "") + "</p>" +
+    '<label class="rmlbl" for="rmExtra">Extra line for every reminder (optional)</label><textarea class="inp" id="rmExtra" rows="2" placeholder="e.g. Swire has asked for an update by 18:00 today."></textarea>' +
+    '<div class="rmrow"><label class="rmlbl" for="rmSign">Sign as</label><input class="inp" id="rmSign" value="' + esc(sign) + '"></div>' +
+    '<label class="rmlbl">Preview, first ticket (' + esc(T[ok[0]].key) + ")</label><pre class=\"pre\" id=\"rmPrev\">" + esc(rmText(ok[0], w0, sign)) + "</pre>" +
+    '<div class="rmlist" id="rmList">' + ok.map((i) => '<div data-k="' + esc(T[i].key) + '"><span class="key">' + esc(T[i].key) + "</span> " + prChip(T[i]) + ' <span class="dim small">to ' + esc(rmWho(i).name) + '</span><span class="st2"></span></div>').join("") + "</div>" +
+    '<div class="rmrow"><span id="rmMsg" class="small"></span><span style="flex:1"></span><button type="button" class="btn pri" id="rmPost">Post ' + ok.length + " internal note" + (ok.length > 1 ? "s" : "") + "</button></div>");
+  const q = (id) => m.ov.querySelector("#" + id);
+  const prev = () => { q("rmPrev").textContent = rmText(ok[0], w0, q("rmSign").value || "SVM Help Desk", q("rmExtra").value); };
+  q("rmExtra").addEventListener("input", prev); q("rmSign").addEventListener("input", prev);
+  q("rmPost").onclick = () => {
+    const b = q("rmPost"), sg = q("rmSign").value || "SVM Help Desk", ex = q("rmExtra").value; rmSetSign(sg); b.disabled = true;
+    let done = 0, bad = 0;
+    const one = (k) => { if (k >= ok.length) { q("rmMsg").innerHTML = '<span style="color:' + (bad ? "var(--ss)" : "var(--ok)") + ';font-weight:600">' + (done - bad) + " posted" + (bad ? ", " + bad + " failed" : "") + ".</span>"; b.textContent = "Done"; return; }
+      const i = ok[k], t = T[i], who = rmWho(i), row = m.ov.querySelector('[data-k="' + t.key + '"] .st2');
+      b.textContent = "Posting " + (k + 1) + " of " + ok.length + "…"; row.textContent = " posting…";
+      rmPost(t.key, rmAdf(rmText(i, who, sg, ex), who)).then(() => { rmMark(t.key); row.innerHTML = ' <span style="color:var(--ok)">posted</span>'; }, (e) => { bad++; row.innerHTML = ' <span style="color:var(--ss)">' + esc(e.message || e) + "</span>"; })
+        .then(() => { done++; setTimeout(() => one(k + 1), 350); }); };
+    one(0);
+  };
+}
+document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-rem]"); if (!b) return; const x = LISTS[b.dataset.rem]; if (!x) return; e.preventDefault(); e.stopPropagation(); openBulk(x.idx, x.title); }, true);
 
 /* live counts for the launcher's Swire strip (every Incident / Service Request, no filters) */
 function writeStats() {
@@ -1076,8 +1291,8 @@ function render() {
   writeStats();
   const open = openIdx(), C = HC.checks(T, E, NOW, CFG), escN = HC.escalations(T, E, NOW, CFG).length;
   const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
-  paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
-  const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
+  paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, sla: (() => { const n = open.filter((i) => slaB(i) === "breached").length; return { n, hot: n > 0 }; })(), esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
+  const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, sla: viewSla, move: viewMove, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
   const y = window.scrollY, f = document.activeElement && document.activeElement.id;
   el("view").innerHTML = V(); window.scrollTo(0, y);
   if (f && el(f)) { const x = el(f); x.focus(); if (x.setSelectionRange && typeof x.value === "string") x.setSelectionRange(x.value.length, x.value.length); }
