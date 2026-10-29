@@ -340,6 +340,32 @@ table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;
 .rmlist{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:10px}
 .rmlist > div{padding:6px 10px;border-bottom:1px solid var(--line3);font-size:12.5px;display:flex;gap:6px;align-items:center}
 .rmlist > div:last-child{border-bottom:none}
+.lbox.eg{padding:0 0 14px;width:min(1460px,100%)}
+.eg .eh{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line2);position:sticky;top:0;background:#fff;z-index:3}
+.eg .eh h3{font-family:var(--disp);font-size:1.15rem}
+.eic{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#6366F1;background:#EEF0FF;border:1px solid #D9DCFB}
+.etabs{display:flex;gap:2px;padding:8px 14px 0;border-bottom:1px solid var(--line2);background:#FCF7F9;overflow-x:auto}
+.etabs button{padding:9px 14px 11px;font:600 13px var(--disp);color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.etabs button.on{color:var(--maroon);border-bottom-color:var(--rose);background:#fff;border-radius:8px 8px 0 0}
+.etabs b{font:600 11px var(--mono);background:var(--blush2);color:var(--maroon);border-radius:999px;padding:1px 7px;margin-left:4px}
+.efil{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 18px;border-bottom:1px solid var(--line3)}
+.efl{font-size:11px;font-weight:700;color:var(--muted);margin-right:4px}
+.ech{border:1px solid var(--line2);background:#fff;border-radius:999px;padding:4px 11px;font-size:12px;color:var(--ink2)}
+.ech b{font-weight:700;margin-left:2px}.ech:hover{border-color:var(--rose)}
+.ech.on{background:var(--maroon);border-color:var(--maroon);color:#fff}
+.ech.zero{opacity:.45}
+.ech.s-breached{color:#B4182D}.ech.s-due{color:#B5520A}.ech.s-risk{color:#946405}.ech.s-ok{color:#1F7A45}
+.ech.on.s-breached{background:#D7263D;border-color:#D7263D;color:#fff}.ech.on.s-due{background:#C2680A;border-color:#C2680A;color:#fff}.ech.on.s-ok{background:#1F8A4C;border-color:#1F8A4C;color:#fff}
+.eg .tw{margin:10px 18px 0}.eg > .small{padding:0 18px}.eg p.small{padding:0 18px}
+.ebar{display:flex;height:26px;border-radius:7px;overflow:hidden;margin:12px 18px 0;background:#F1E4EA}.ebar button{color:#fff;font-size:11px;font-weight:700;border-right:2px solid #fff}
+.elg{display:flex;gap:8px;flex-wrap:wrap;margin:8px 18px 0}.elg button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);border-radius:999px;padding:4px 10px;font-size:12px;background:#fff}
+.elg button.on{border-color:var(--maroon);box-shadow:0 0 0 2px var(--blush2)}.elg i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.eg tr.sel td{background:#FCF0F4}
+.ty{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.72rem;font-weight:600;white-space:nowrap;border:1px solid var(--line2);color:var(--ink2)}
+.ty.inc{color:#B4182D;background:#FDECEE;border-color:#F6C9CF}.ty.sr{color:#3B5BCC;background:#EEF3FF;border-color:#CCD8FA}
+#printArea{display:none}
+@media print{body.printing-area > *:not(#printArea){display:none!important}body.printing-area #printArea{display:block}}
+
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -557,7 +583,7 @@ function wireFilters() {
 
 /* ── every number opens its tickets: dl() registers a list for this render and returns a clickable count ── */
 let LISTS = {}, LSEQ = 0;
-function reg(idx, title, extra) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title, extra }; return k; }
+function reg(idx, title, extra, kind) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title, extra, kind }; return k; }
 function dl(idx, title, label) { return '<button type="button" class="dl" data-list="' + reg(idx, title) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
 const ICON = {
   siren: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5z"/><path d="M12 3v1M4.2 6.2l.8.8M19.8 6.2l-.8.8"/></svg>',
@@ -586,7 +612,7 @@ function sigL(cls, idx, k, h, title) {
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-list]"); if (!b) return;
   const x = LISTS[b.dataset.list]; if (!x) return;
-  e.preventDefault(); e.stopPropagation(); openList(x.title, x.idx, x.extra);
+  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else openList(x.title, x.idx, x.extra);
 }, true);
 function openList(title, idx, extra) {
   idx = idx.slice().sort(bySevAge);
@@ -739,6 +765,7 @@ function slaCell(t) {
   return '<span class="sla ' + esc(x.tone || "grey") + '" title="' + esc(x.tip || "") + '">' + esc(x.label) + "</span>";
 }
 const COLS = {
+  type:  { h: "Type", s: (t) => t.type, c: (t) => typeChip(t) },
   rem:   { h: "", s: () => 0, c: (t, e) => (e.stage === "openbox" || e.stage === "working") ? '<button type="button" class="lnk sm" data-rmone="' + esc(t.key) + '" title="Send a reminder on ' + esc(t.key) + '">Remind</button>' : "" },
   sla:   { h: "SLA", s: (t) => { const x = slaOfT(t); return x ? (x.state === "breached" ? -1e9 - (x.overByMin || 0) : x.remainingMin != null ? x.remainingMin : 9e9) : 9e9; }, c: (t) => slaCell(t) },
   key:   { h: "Ticket", s: (t) => t.key, c: (t) => '<a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(t.key) + "</a>" },
@@ -793,8 +820,8 @@ function viewNow() {
   const tot = Math.max(1, open.length), pct = (n) => n ? (n / tot * 100 < 1 ? "<1%" : Math.round(n / tot * 100) + "%") : "0%";
   const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length).toLocaleString() + " with us (" + box.length + " in the open box), " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
-    '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
-    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + "</div></section>";
+    '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
+    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + "</div></section>";
   const w1 = Math.max(1, withUs.length);
   return hero + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
@@ -826,7 +853,8 @@ function personTable(title, idx, keyOf, note) {
 function viewWork() {
   const open = openIdx(), hd = open.filter((i) => sideOf(i) === "hd"), engg = open.filter((i) => sideOf(i) === "engg"), ours = hd.concat(engg);
   const lrpsWho = (i) => { const t = T[i]; if (!t.lrps.length) return "(no LRPS ticket)"; const n = t.lrps.map((k) => LRPS[k] && LRPS[k].a).filter(Boolean); return n.length ? n[0] : t.lrps.some((k) => LRPS[k]) ? "(LRPS unassigned)" : "(LRPS not read yet)"; };
-  return "<h2>Workload</h2><p class=\"sub\">Open tickets on our side and who holds them. Help Desk and Engineering follow the Master Data status classes, the same split as the Follow-up Tracker. Every number opens its tickets.</p>" +
+  const eb = engg.length ? ' <button type="button" class="btn pri" style="margin-left:10px;vertical-align:2px" data-list="' + reg(engg, "With Engineering", null, "engg") + '">Engineering follow-up (' + engg.length + ")</button>" : "";
+  return "<h2>Workload" + eb + "</h2><p class=\"sub\">Open tickets on our side and who holds them. Help Desk and Engineering follow the Master Data status classes, the same split as the Follow-up Tracker. Every number opens its tickets.</p>" +
     '<div class="grid2 wk">' + personTable("Pending with Help Desk, by current worker", hd, (i) => T[i].cw) + personTable("Pending with Engineering, by LRPS assignee", engg, lrpsWho, "The engineering owner from the linked LRPS ticket.") + "</div>" +
     '<div class="grid2 wk">' + personTable("Pending with Engineering, by current worker", engg, (i) => T[i].cw) + personTable("Pending with us, by PO", ours, (i) => E[i].po && E[i].po.po) + "</div>";
 }
@@ -1375,6 +1403,136 @@ function openTicket(i) {
   document.body.appendChild(ov); ov.querySelector("#dClose").onclick = close; ov.querySelector("#dClose").focus();
   const rb = ov.querySelector("#dRem"); if (rb) rb.onclick = () => openRemind(i);
   document.addEventListener("keydown", key);
+}
+
+/* ══ Engineering follow-up: the tickets with Engineering, like the Follow-up Tracker's window ══ */
+function copyRich(html, text, btn, label) {
+  const done = (m) => { btn.textContent = m; setTimeout(() => { btn.textContent = label; }, 1800); };
+  const fallback = () => { const box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff"; box.innerHTML = html; document.body.appendChild(box);
+    const r = document.createRange(); r.selectNodeContents(box); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    let ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove(); done(ok ? "Copied, paste into Outlook" : "Copy blocked by the browser"); };
+  if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), fallback);
+  else fallback();
+}
+function emlDownload(subject, html, file) {
+  const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
+  const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
+  const eml = ["X-Unsent: 1", "Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")].join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" })); a.download = file; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+/* SLA chips, same buckets as the Follow-up Tracker */
+const ESLA = [["all", "All"], ["breached", "Breached"], ["due", "Due soon"], ["risk", "At risk"], ["ok", "On track"], ["paused", "Paused"], ["nodata", "No data"], ["notgt", "No target / n.a."]];
+function eSla(i) {
+  const x = slaOf(i); if (!x || !x.state || x.state === "loading" || x.state === "nohist") return "nodata";
+  if (x.state === "none" || x.state === "na") return "notgt"; if (x.state === "breached" || x.state === "missed") return "breached"; if (x.state === "paused") return "paused";
+  return x.level === "danger" ? "due" : x.level === "warning" ? "risk" : "ok";
+}
+function lrpsWho(i) { const t = T[i]; if (!t.lrps.length) return "(no LRPS ticket)"; const n = t.lrps.map((k) => LRPS[k] && LRPS[k].a).filter(Boolean); return n.length ? n[0] : t.lrps.some((k) => LRPS[k]) ? "(LRPS unassigned)" : "(LRPS not read yet)"; }
+const AGEB = [[0, 7, "< 7 days", "#E7A3B9"], [7, 30, "7–30 days", "#C2680A"], [30, 60, "31–60 days", "#D7263D"], [60, 90, "61–90 days", "#A61B3A"], [90, 1e9, "90+ days", "#5C1730"]];
+const typeChip = (t) => /incident/i.test(t.type) ? '<span class="ty inc">Incident</span>' : /service/i.test(t.type) ? '<span class="ty sr">Service Req</span>' : '<span class="ty">' + esc(t.type || "—") + "</span>";
+function enggMail(list, who) {
+  const TDm = TD, groups = {}; list.forEach((i) => { const k = lrpsWho(i); (groups[k] = groups[k] || []).push(i); });
+  const names = Object.keys(groups).sort((a, b) => groups[b].length - groups[a].length);
+  const th = (h) => '<th style="' + TDm + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
+  const br = list.filter((i) => eSla(i) === "breached").length;
+  const tbl = (l) => '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif"><tr>' + ["Ticket", "Priority", "Summary", "Status", "SLA", "Age", "No status change", "LRPS"].map(th).join("") + "</tr>" +
+    l.sort(bySevAge).map((i, k) => { const t = T[i], x = slaOf(i) || {}; return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
+      '<td style="' + TDm + '"><a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a></td>" +
+      '<td style="' + TDm + 'white-space:nowrap">' + esc(t.priority) + '</td><td style="' + TDm + '">' + esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">' + esc(t.meId) + "</span>" : "") + "</td>" +
+      '<td style="' + TDm + 'white-space:nowrap">' + esc(t.status) + '</td><td style="' + TDm + "white-space:nowrap;" + (eSla(i) === "breached" ? "color:#D7263D;font-weight:600" : "") + '">' + esc(x.label || "—") + "</td>" +
+      '<td style="' + TDm + 'white-space:nowrap">' + esc(fmt(ageOf(t))) + '</td><td style="' + TDm + 'white-space:nowrap">' + esc(E[i].sinceMoveMin != null ? fmt(E[i].sinceMoveMin) : "—") + "</td>" +
+      '<td style="' + TDm + 'white-space:nowrap">' + t.lrps.map((k) => esc(k) + (LRPS[k] && LRPS[k].s ? " (" + esc(LRPS[k].s) + ")" : "")).join("<br>") + "</td></tr>"; }).join("") + "</table>";
+  const P = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:14px;color:#5C1730;margin:16px 0 4px"';
+  const html = '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif"><p ' + P + ">Hi " + esc(who || "team") + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> tickets are with Engineering" + (br ? ", <b style=\"color:#D7263D\">" + br + " past their SLA</b>" : "") + ". Please update each one on its SWIPHX ticket with the next step and an ETR.</p>" +
+    names.map((n) => "<h3 " + H + ">" + esc(n) + " (" + groups[n].length + ")</h3>" + tbl(groups[n])).join("") + "<p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+  const text = "Hi " + (who || "team") + ",\n\nSwire Phoenix Hypercare: " + list.length + " tickets are with Engineering" + (br ? ", " + br + " past their SLA" : "") + ".\n\n" +
+    names.map((n) => n + " (" + groups[n].length + ")\n" + groups[n].map((i) => "- " + T[i].key + " [" + T[i].priority + "] " + T[i].summary + " | " + T[i].status + " | SLA " + ((slaOf(i) || {}).label || "-")).join("\n")).join("\n\n") + "\n\nRegards,\n" + rmSign();
+  return { html, text, subject: "Swire Hypercare: " + list.length + " tickets with Engineering" + (br ? ", " + br + " past SLA" : "") };
+}
+function openEngg(idxAll) {
+  const S = { tab: "all", st: "", sla: "all", sub: null };
+  const ov = document.createElement("div"); ov.className = "ov lst"; ov.style.zIndex = 46;
+  ov.innerHTML = '<div class="lbox eg" role="dialog" aria-modal="true" aria-label="Engineering follow-up"></div>';
+  const box = ov.querySelector(".lbox");
+  const cnt = (l, f) => l.filter(f).length;
+  function paint() {
+    LSEQ = Math.max(LSEQ, 90000);
+    let list = idxAll.slice();
+    const stCounts = {}; list.forEach((i) => { stCounts[T[i].status] = (stCounts[T[i].status] || 0) + 1; });
+    if (S.st) list = list.filter((i) => T[i].status === S.st);
+    const slaCounts = {}; ESLA.forEach(([k]) => { slaCounts[k] = k === "all" ? list.length : cnt(list, (i) => eSla(i) === k); });
+    if (S.sla !== "all") list = list.filter((i) => eSla(i) === S.sla);
+    const chip = (attr, val, label, n, cur, tone) => '<button type="button" class="ech' + (cur ? " on" : "") + (tone ? " " + tone : "") + (n === 0 && !cur ? " zero" : "") + '" data-' + attr + '="' + esc(val) + '">' + esc(label) + " <b>" + n + "</b></button>";
+    const tabs = [["all", "All tickets", idxAll.length], ["agec", "Ageing (Created)"], ["ageu", "Ageing (Updated)"], ["svm", "SVM In Charge", new Set(idxAll.map((i) => T[i].svm || "(none)")).size], ["asg", "Engg Assignee", new Set(idxAll.map(lrpsWho)).size]];
+    let body = "", rows = list;
+    const ageBy = (i) => S.tab === "ageu" ? (T[i].updated != null ? (NOW - T[i].updated) / DAY : 0) : (ageOf(T[i]) || 0) / 1440;
+    if (S.tab === "agec" || S.tab === "ageu") {
+      const bk = AGEB.map(([a, b, l, c]) => ({ l, c, idx: list.filter((i) => ageBy(i) >= a && ageBy(i) < b) }));
+      const tot = Math.max(1, list.length);
+      body += '<div class="ebar">' + bk.filter((x) => x.idx.length).map((x) => '<button type="button" style="flex:' + x.idx.length + ' 1 0;background:' + x.c + '" data-sub="' + esc(x.l) + '" title="' + esc(x.l) + ": " + x.idx.length + '">' + (x.idx.length / tot > 0.05 ? x.idx.length : "") + "</button>").join("") + "</div>" +
+        '<div class="elg">' + bk.map((x) => '<button type="button" class="' + (S.sub === x.l ? "on" : "") + '" data-sub="' + esc(x.l) + '"><i style="background:' + x.c + '"></i>' + esc(x.l) + ": <b>" + x.idx.length + "</b></button>").join("") + "</div>";
+      if (S.sub) rows = (bk.find((x) => x.l === S.sub) || { idx: [] }).idx;
+      rows = rows.slice().sort((a, b) => ageBy(b) - ageBy(a));
+      body += '<p class="small dim" style="margin:6px 0 8px">' + (S.tab === "ageu" ? "Days since the ticket was last updated in Jira." : "Days since the ticket was created.") + (S.sub ? " Showing " + esc(S.sub) + '. <button type="button" class="lnk sm" data-sub="">Show all</button>' : " Click a bucket to show only those tickets.") + "</p>";
+    } else if (S.tab === "svm" || S.tab === "asg") {
+      const key = S.tab === "svm" ? (i) => T[i].svm || "(none)" : lrpsWho, g = {};
+      list.forEach((i) => { const k = key(i); (g[k] = g[k] || []).push(i); });
+      const names = Object.keys(g).sort((a, b) => g[b].length - g[a].length);
+      body += '<div class="tw" style="margin-bottom:10px"><table><thead><tr><th>' + (S.tab === "svm" ? "SVM In Charge" : "Engineering assignee (LRPS)") + "</th><th>Total</th><th>Breached</th><th>Due soon / at risk</th>" + HC.SEVS.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th></tr></thead><tbody>" +
+        names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
+          return '<tr class="' + (S.sub === n ? "sel" : "") + '"><td><button type="button" class="lnk sm" data-sub="' + esc(n) + '">' + esc(n) + '</button></td><td class="num"><b>' + l.length + '</b></td><td class="num" style="color:var(--ss)">' + (cnt(l, (i) => eSla(i) === "breached") || '<span class="dim">·</span>') + '</td><td class="num">' + (cnt(l, (i) => eSla(i) === "due" || eSla(i) === "risk") || '<span class="dim">·</span>') + "</td>" +
+            HC.SEVS.map((x) => '<td class="num">' + (cnt(l, (i) => T[i].sev === x.id) || '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + fmt(old) + "</td></tr>"; }).join("") + "</tbody></table></div>";
+      if (S.sub) rows = g[S.sub] || []; else rows = [];
+      body += S.sub ? '<p class="small dim" style="margin:0 0 8px">Tickets for <b>' + esc(S.sub) + '</b>. <button type="button" class="lnk sm" data-sub="">Clear</button></p>' : '<p class="small dim" style="margin:0 0 8px">Click a name to see their tickets.</p>';
+    }
+    if (S.tab === "all") rows = list.slice().sort((a, b) => { const o = { breached: 0, due: 1, risk: 2, ok: 3, paused: 4, nodata: 5, notgt: 6 }; return o[eSla(a)] - o[eSla(b)] || bySevAge(a, b); });
+    const tbl = rows.length ? table(rows, ["key", "type", "sum", "status", "pri", "sla", "lrps", "svm", "age", "prog", "rem"], { sortable: false, limit: 2000 }) : (S.tab === "svm" || S.tab === "asg" ? "" : '<div class="tw"><div class="empty">No tickets match these filters.</div></div>');
+    box.innerHTML = '<div class="eh"><span class="eic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg></span><div><h3>Engineering follow-up</h3><div class="small dim">' + idxAll.length + " Swire tickets with Engineering</div></div>" +
+      '<span style="flex:1"></span><button type="button" class="btn" data-e="report">Engg report</button><button type="button" class="btn pri" data-e="mail">Engg mail</button><button type="button" class="btn" data-e="csv">CSV</button><button type="button" class="btn" data-e="close" aria-label="Close">Close</button></div>' +
+      '<div class="etabs">' + tabs.map(([k, l, n]) => '<button type="button" class="' + (S.tab === k ? "on" : "") + '" data-tab="' + k + '">' + esc(l) + (n != null ? " <b>" + n + "</b>" : "") + "</button>").join("") + "</div>" +
+      '<div class="efil"><span class="efl">Status</span>' + chip("st", "", "All", idxAll.length, !S.st) + Object.keys(stCounts).sort((a, b) => stCounts[b] - stCounts[a]).map((k) => chip("st", k, k, stCounts[k], S.st === k)).join("") + "</div>" +
+      '<div class="efil"><span class="efl">SLA</span>' + ESLA.map(([k, l]) => chip("sla", k, l, slaCounts[k], S.sla === k, "s-" + k)).join("") + "</div>" + body + tbl +
+      '<div class="small dim" style="margin-top:8px">Engineering follow-up: ' + idxAll.length + " tickets. Remind sends an internal note on the SWIPHX ticket to the LRPS assignee.</div>";
+  }
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key); };
+  const key = (ev) => { if (ev.key === "Escape" && !document.querySelector(".drawer") && !document.querySelector(".rmov")) close(); };
+  ov.addEventListener("click", (ev) => {
+    if (ev.target === ov) return close();
+    const b = ev.target.closest("[data-tab],[data-st],[data-sla],[data-sub],[data-e]");
+    if (b) {
+      if (b.dataset.tab != null) { S.tab = b.dataset.tab; S.sub = null; }
+      else if (b.dataset.st != null) S.st = b.dataset.st;
+      else if (b.dataset.sla != null) S.sla = b.dataset.sla;
+      else if (b.dataset.sub != null) S.sub = b.dataset.sub || null;
+      else if (b.dataset.e === "close") return close();
+      else if (b.dataset.e === "csv") return csv(idxAll, "tickets with Engineering");
+      else if (b.dataset.e === "mail") return openEnggMail(idxAll);
+      else if (b.dataset.e === "report") return printEngg(idxAll);
+      return paint();
+    }
+    const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
+  });
+  document.body.appendChild(ov); document.addEventListener("keydown", key); paint();
+}
+function openEnggMail(list) {
+  const m0 = enggMail(list.slice(), "");
+  const m = rmModal('<div class="lhead"><h3>Engineering mail</h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="emTo">Hi</label><input class="inp" id="emTo" placeholder="team" style="width:240px"><span class="dim small">Grouped by LRPS assignee. Subject: ' + esc(m0.subject) + "</span></div>" +
+    '<div class="rmprev" id="emPrev" style="max-height:52vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
+    '<div class="rmrow"><span style="flex:1"></span><button type="button" class="btn" id="emEml">Download email draft</button><button type="button" class="btn pri" id="emCopy">Copy email</button></div>', "wide");
+  const q = (id) => m.ov.querySelector("#" + id), cur = () => enggMail(list.slice(), q("emTo").value.trim());
+  const paint = () => { q("emPrev").innerHTML = cur().html; }; q("emTo").addEventListener("input", paint);
+  q("emCopy").onclick = (e) => { const x = cur(); copyRich(x.html, x.text, e.target, "Copy email"); };
+  q("emEml").onclick = () => { const x = cur(); emlDownload(x.subject, x.html, "Swire-engineering-followup-" + HC.dayKey(NOW) + ".eml"); };
+  paint();
+}
+function printEngg(list) {
+  const x = enggMail(list.slice(), ""), host = document.createElement("div"); host.id = "printArea";
+  host.innerHTML = '<div style="padding:10px 6px"><h2 style="font-family:var(--disp);color:var(--maroon)">Swire Hypercare, engineering follow-up</h2><p class="small dim">' + esc(fdt(NOW)) + " IST</p>" + x.html + "</div>";
+  document.body.appendChild(host); document.body.classList.add("printing-area");
+  const done = () => { host.remove(); document.body.classList.remove("printing-area"); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  window.HDPrint ? HDPrint("Swire-Hypercare-Engineering-followup_" + HC.dayKey(NOW)) : window.print(); setTimeout(done, 2000);
 }
 
 /* ══ SLA: every ticket, with us and with Swire ══ */
