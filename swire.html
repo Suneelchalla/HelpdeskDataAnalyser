@@ -401,6 +401,9 @@ table.xl th{white-space:nowrap}
 .xl-btns{display:flex;gap:6px;padding-top:8px;border-top:1px solid var(--line3)}
 @media print{.xl-f,.xl-foot,.xl-pop{display:none!important}}
 .simty{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-4px 0 12px}.simty:empty{display:none}
+.simread{font-size:11.5px;color:var(--muted);margin-top:4px}
+.simdesc{margin-top:6px;font-size:12px}.simdesc summary{cursor:pointer;color:var(--maroon);font-weight:600}
+.simdesc > div{margin-top:6px;max-height:160px;overflow:auto;background:#fff;border:1px solid var(--line3);border-radius:8px;padding:8px 10px;color:var(--ink2);line-height:1.5}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -1606,9 +1609,13 @@ function simFor(key) {
   const i = SIM.byKey[key]; if (i == null) return null;
   const a = SIM.tix[i], out = HDSearch.similar(SIM.eng, i, { topN: 120, pool: 400 }), res = [], chg = [];
   const linkedTo = (b) => a.lrps.indexOf(b.key) > -1 || b.lrps.indexOf(a.key) > -1;
-  out.results.forEach((r) => { const b = SIM.tix[r.i]; if (b.key === a.key) return; const m = simScore(a, b, r.text, linkedTo(b)); if (m.st === 0 && !m.linked && m.s < 28) return; (b.isChange ? chg : res).push(Object.assign({ t: b }, m)); });
+  const FN = { s: "subject", d: "description", c: "cause", r: "resolution", m: "screen / menu" };
+  out.results.forEach((r) => { const b = SIM.tix[r.i]; if (b.key === a.key) return; const m = simScore(a, b, r.text, linkedTo(b)); if (m.st === 0 && !m.linked && m.s < 28) return;
+    const wh = r.where ? ["s", "d", "c", "r"].filter((k) => r.where[k] && r.where[k].length).map((k) => FN[k]) : [];
+    if (wh.length) m.rs = m.rs.filter((x) => x !== "Similar wording"), m.rs.unshift("Matched in " + wh.join(", "));
+    (b.isChange ? chg : res).push(Object.assign({ t: b }, m)); });
   res.sort((x, y) => y.s - x.s || (y.t.fix ? 1 : 0) - (x.t.fix ? 1 : 0)); chg.sort((x, y) => y.s - x.s);
-  return { a, sim: res.slice(0, 40), changes: chg.slice(0, 10) };
+  return { a, sim: res.slice(0, 40), changes: chg.slice(0, 10), used: out.used || {} };
 }
 function simSearch(q) {
   const out = HDSearch.query(SIM.eng, q, { topN: 60 });
@@ -1647,7 +1654,11 @@ function openSimilar(key) {
     const r = simFor(k); if (!r) { body.innerHTML = '<p class="dim">This ticket is not in the loaded data.</p>'; return; }
     last = () => showFor(k); qi.value = r.a.summary; paintTy([r.sim, r.changes]);
     const sim = r.sim.filter(keep).slice(0, 15), chg = r.changes.filter(keep).slice(0, 6), best = sim.find((m) => m.s >= 40 && m.t.isResolved && m.t.fix) || null;
-    body.innerHTML = '<div class="simfor">For <a class="key" href="' + jiraUrl(r.a.key) + '" target="_blank" rel="noopener">' + esc(r.a.key) + "</a> " + esc(r.a.summary) + '<span class="dim small" style="float:right">searched ' + SIM.tix.length.toLocaleString() + " tickets, all clients</span></div>" +
+    const u = r.used, dsc = String(r.a.description || "").replace(/\s+/g, " ").trim();
+    const read = [["subject", u.s], ["description", u.d], ["cause", u.c], ["resolution", u.r], ["screen / menu", u.m]].filter((x) => x[1]).map((x) => x[0] + " " + x[1]).join(", ");
+    body.innerHTML = '<div class="simfor">For <a class="key" href="' + jiraUrl(r.a.key) + '" target="_blank" rel="noopener">' + esc(r.a.key) + "</a> " + esc(r.a.summary) + '<span class="dim small" style="float:right">searched ' + SIM.tix.length.toLocaleString() + " tickets, all clients</span>" +
+      '<div class="simread"><b>Analysed:</b> ' + (read ? esc(read) + " telling words" : "the subject only (no description on this ticket)") + "</div>" +
+      (dsc ? '<details class="simdesc"><summary>Description used (' + dsc.length.toLocaleString() + " characters)</summary><div>" + esc(dsc.slice(0, 1500)) + (dsc.length > 1500 ? "…" : "") + "</div></details>" : '<div class="simread" style="color:var(--cr)">This ticket has no description in the data, so only the subject could be compared.</div>') + "</div>" +
       (best ? simCard(best, true) : TY === "chg" ? "" : '<div class="note">No closed ticket with a recorded fix matches closely enough' + (TY !== "all" ? " for this type" : "") + ". The closest tickets are below.</div>") +
       (TY !== "chg" ? '<div class="grp">Similar tickets (' + sim.length + ")</div>" + (sim.length ? sim.filter((m) => m !== best).map((m) => simCard(m)).join("") : '<p class="dim small">No similar tickets of this type.</p>') : "") +
       (chg.length ? '<div class="grp">Related changes (' + chg.length + ")</div>" + chg.map((m) => simCard(m)).join("") : TY === "chg" ? '<p class="dim small">No related changes.</p>' : "");
