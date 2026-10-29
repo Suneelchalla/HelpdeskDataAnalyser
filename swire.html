@@ -384,6 +384,22 @@ table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;
 .sc-f{margin:8px 0 0 54px;font-size:12.5px;line-height:1.5;color:var(--ink2);border-top:1px solid var(--line3);padding-top:8px}
 .sc-f .lb{display:inline-block;font-size:11px;font-weight:700;color:var(--maroon);margin-right:6px}
 .sc-f > div{margin-bottom:4px}
+table.xl th{white-space:nowrap}
+.xl-s{cursor:pointer;user-select:none}.xl-s:hover{color:var(--maroon)}
+.xl-ar{font-style:normal;color:var(--rose)}
+.xl-f{margin-left:4px;width:18px;height:18px;border-radius:5px;border:1px solid transparent;font-size:10px;line-height:1;color:var(--faint);vertical-align:1px}
+.xl-f:hover{border-color:var(--line2);color:var(--maroon);background:#fff}
+.xl-f.on{background:var(--maroon);color:#fff;border-color:var(--maroon)}
+.xl-foot{font-size:12px;color:var(--ink2);padding:7px 12px;border-top:1px dashed var(--line2);background:#FCF7F9}
+.xl-pop{position:fixed;z-index:80;width:290px;background:#fff;border:1px solid var(--line2);border-radius:12px;box-shadow:0 18px 40px rgba(60,14,30,.25);padding:10px;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.xl-srt{display:flex;gap:6px}.xl-srt button{flex:1;border:1px solid var(--line2);border-radius:8px;padding:5px;font-size:12px;color:var(--ink2);background:#FCF7F9}.xl-srt button:hover{border-color:var(--rose);color:var(--maroon)}
+.xl-pop .inp{width:100%;font-size:12.5px}
+.xl-all{display:flex;gap:6px;align-items:center;padding:2px 4px;border-bottom:1px solid var(--line3)}
+.xl-vals{max-height:240px;overflow:auto;display:flex;flex-direction:column}
+.xl-vals label{display:flex;gap:6px;align-items:flex-start;padding:3px 4px;border-radius:6px;cursor:pointer}.xl-vals label:hover{background:var(--blush)}
+.xl-vals span{flex:1;word-break:break-word}.xl-vals em{font-style:normal;color:var(--faint);font-size:11px}
+.xl-btns{display:flex;gap:6px;padding-top:8px;border-top:1px solid var(--line3)}
+@media print{.xl-f,.xl-foot,.xl-pop{display:none!important}}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -806,11 +822,10 @@ const COLS = {
 function table(idx, cols, opts) {
   opts = opts || {};
   if (!idx.length) return '<div class="tw"><div class="empty">' + esc(opts.empty || "Nothing here.") + "</div></div>";
-  const sk = opts.sortable === false ? null : UI.sort;
-  if (sk && COLS[sk.k] && cols.indexOf(sk.k) > -1) idx = idx.slice().sort((a, b) => { const x = COLS[sk.k].s(T[a], E[a]), y = COLS[sk.k].s(T[b], E[b]); return (x > y ? 1 : x < y ? -1 : 0) * sk.d; });
-  const lim = opts.limit || 400, more = idx.length - lim;
-  return '<div class="tw"><table><thead><tr>' + cols.map((c) => '<th class="' + (opts.sortable === false ? "" : "sort") + '" data-sort="' + c + '">' + esc(COLS[c].h) + (sk && sk.k === c ? (sk.d > 0 ? " ▲" : " ▼") : "") + "</th>").join("") + (opts.extra ? "<th>" + esc(opts.extra.h) + "</th>" : "") +
-    "</tr></thead><tbody>" + idx.slice(0, lim).map((i) => '<tr class="row" data-i="' + i + '">' + cols.map((c) => "<td>" + COLS[c].c(T[i], E[i]) + "</td>").join("") + (opts.extra ? "<td>" + opts.extra.c(i) + "</td>" : "") + "</tr>").join("") +
+  const lim = opts.limit || 3000, more = idx.length - lim;
+  const dv = (c, i) => { if (c === "rem") return ""; try { const v = COLS[c].s(T[i], E[i]); return ' data-v="' + esc(typeof v === "number" && isFinite(v) ? "n:" + v : "s:" + String(v == null ? "" : v).toLowerCase()) + '"'; } catch (x) { return ""; } };
+  return '<div class="tw"><table><thead><tr>' + cols.map((c) => "<th>" + esc(COLS[c].h) + "</th>").join("") + (opts.extra ? "<th>" + esc(opts.extra.h) + "</th>" : "") +
+    "</tr></thead><tbody>" + idx.slice(0, lim).map((i) => '<tr class="row" data-i="' + i + '">' + cols.map((c) => "<td" + dv(c, i) + ">" + COLS[c].c(T[i], E[i]) + "</td>").join("") + (opts.extra ? "<td>" + opts.extra.c(i) + "</td>" : "") + "</tr>").join("") +
     "</tbody></table>" + (more > 0 ? '<div class="empty small">' + more + " more not shown. Narrow the filters to see them.</div>" : "") + "</div>";
 }
 el("view").addEventListener("click", (e) => {
@@ -1644,6 +1659,111 @@ function openSimilar(key) {
     (e) => { body.innerHTML = '<p style="color:var(--ss)">' + esc(e.message) + "</p>"; });
 }
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-simkey]"); if (!b) return; e.preventDefault(); e.stopPropagation(); openSimilar(b.dataset.simkey); }, true);
+
+/* ══ Excel-style sort and filter on every table ══
+   Attaches itself to each table as it appears (main views, lists, Engineering window, SLA, Workload, analytics,
+   weekly report). Click a header to sort (A→Z, Z→A, original order); ▾ opens an Excel-like filter with search,
+   Select all and a ticked list of values. State is kept per table, so it survives the page's own refreshes. */
+const XLS = {};
+function xlVal(td) {
+  if (td.dataset.v != null) return td.dataset.v;
+  const x = (td.innerText || "").replace(/\s+/g, " ").trim();
+  if (/^-?[\d,]+(\.\d+)?%?$/.test(x)) return "n:" + String(parseFloat(x.replace(/[,%]/g, ""))).padStart(1);
+  const m = x.match(/^(?:overdue |due in |open )?(\d+d)?\s*(\d+h)?\s*(\d+m)?(?:\s|$)/);
+  if (m && (m[1] || m[2] || m[3])) return "n:" + ((parseInt(m[1]) || 0) * 1440 + (parseInt(m[2]) || 0) * 60 + (parseInt(m[3]) || 0));
+  return "s:" + x.toLowerCase();
+}
+function xlCmp(a, b) {
+  const na = a.indexOf("n:") === 0, nb = b.indexOf("n:") === 0;
+  if (na && nb) return parseFloat(a.slice(2)) - parseFloat(b.slice(2));
+  if (na !== nb) return na ? -1 : 1;
+  return a.slice(2).localeCompare(b.slice(2), undefined, { numeric: true });
+}
+const xlLabel = (td) => { const x = (td.innerText || "").replace(/\s+/g, " ").trim(); return x.length > 90 ? x.slice(0, 89) + "…" : x || "(blank)"; };
+function xlId(tbl) {
+  const box = tbl.closest(".lbox,.drawer,.panel,.wcard,#view"), h = box && box.querySelector("h2,h3,.sec-h,.wct");
+  const heads = Array.from(tbl.tHead ? tbl.tHead.rows[0].cells : []).map((c) => (c.dataset.h || c.innerText).trim()).join("|");
+  return (h ? h.innerText.trim().slice(0, 60) : "") + "#" + heads;
+}
+function xlInit(scope) {
+  (scope || document).querySelectorAll(".tw > table").forEach((tbl) => {
+    if (tbl.dataset.xl || tbl.closest("#hoPreview,#emPrev,.rmprev,.rmlist") || !tbl.tHead || !tbl.tBodies[0]) return;
+    const rows = Array.from(tbl.tBodies[0].rows); if (rows.length < 2) return;
+    tbl.dataset.xl = xlId(tbl); tbl.classList.add("xl");
+    rows.forEach((r, k) => { r.dataset.o = k; });
+    Array.from(tbl.tHead.rows[0].cells).forEach((th, c) => {
+      const label = th.innerText.trim(); th.dataset.h = label; th.dataset.c = c; if (!label) return;
+      th.innerHTML = '<span class="xl-s" title="Sort">' + esc(label) + '<i class="xl-ar"></i></span><button type="button" class="xl-f" title="Filter ' + esc(label) + '" aria-label="Filter ' + esc(label) + '">▾</button>';
+    });
+    const ft = document.createElement("div"); ft.className = "xl-foot hidden"; tbl.parentNode.insertBefore(ft, tbl.nextSibling);
+    xlApply(tbl);
+  });
+}
+function xlApply(tbl) {
+  const st = XLS[tbl.dataset.xl] || {}, body = tbl.tBodies[0], rows = Array.from(body.rows), heads = tbl.tHead.rows[0].cells;
+  let shown = 0;
+  rows.forEach((r) => {
+    let ok = true;
+    for (const c in st.f || {}) { const allow = st.f[c]; const td = r.cells[c]; if (allow && td && !allow.has(xlLabel(td))) { ok = false; break; } }
+    r.style.display = ok ? "" : "none"; if (ok) shown++;
+  });
+  const sorted = rows.slice().sort((a, b) => st.s != null && st.d ? xlCmp(xlVal(a.cells[st.s] || a.cells[0]), xlVal(b.cells[st.s] || b.cells[0])) * st.d || (a.dataset.o - b.dataset.o) : a.dataset.o - b.dataset.o);
+  sorted.forEach((r) => body.appendChild(r));
+  Array.from(heads).forEach((th, c) => { const ar = th.querySelector(".xl-ar"), fb = th.querySelector(".xl-f"); if (ar) ar.textContent = st.s == c && st.d ? (st.d > 0 ? " ▲" : " ▼") : ""; if (fb) fb.classList.toggle("on", !!(st.f && st.f[c])); });
+  const ft = tbl.nextSibling && tbl.nextSibling.classList && tbl.nextSibling.classList.contains("xl-foot") ? tbl.nextSibling : null;
+  const nf = Object.keys(st.f || {}).length;
+  if (ft) { ft.classList.toggle("hidden", !nf); ft.innerHTML = nf ? "Showing <b>" + shown + "</b> of " + rows.length + " rows, filtered on " + nf + " column" + (nf > 1 ? "s" : "") + ' <button type="button" class="lnk sm" data-xlclear>Clear filters</button>' : ""; }
+}
+let xlPop = null;
+function xlClose() { if (xlPop) { xlPop.remove(); xlPop = null; } }
+function xlOpen(tbl, c, btn) {
+  xlClose();
+  const id = tbl.dataset.xl, st = XLS[id] = XLS[id] || {}, rows = Array.from(tbl.tBodies[0].rows);
+  /* values of this column among rows that pass the OTHER filters, like Excel */
+  const pass = rows.filter((r) => { for (const k in st.f || {}) { if (k == c) continue; const td = r.cells[k]; if (td && !st.f[k].has(xlLabel(td))) return false; } return true; });
+  const cnt = new Map(), key = new Map(); pass.forEach((r) => { const td = r.cells[c]; if (!td) return; const v = xlLabel(td); cnt.set(v, (cnt.get(v) || 0) + 1); if (!key.has(v)) key.set(v, xlVal(td)); });
+  const vals = Array.from(cnt.keys()).sort((a, b) => xlCmp(key.get(a), key.get(b)));   // same order as the column sorts (e.g. Showstopper → Low)
+  const cur = st.f && st.f[c];
+  const p = document.createElement("div"); p.className = "xl-pop"; p.setAttribute("role", "dialog");
+  p.innerHTML = '<div class="xl-srt"><button type="button" data-xs="1">Sort A → Z</button><button type="button" data-xs="-1">Sort Z → A</button></div>' +
+    '<input class="inp" placeholder="Search values" aria-label="Search values"><label class="xl-all"><input type="checkbox"> <b>Select all</b></label>' +
+    '<div class="xl-vals">' + vals.slice(0, 1500).map((v) => '<label><input type="checkbox" value="' + esc(v) + '"' + (!cur || cur.has(v) ? " checked" : "") + "> <span>" + esc(v) + "</span><em>" + cnt.get(v) + "</em></label>").join("") + "</div>" +
+    '<div class="xl-btns"><button type="button" class="btn" data-xa="clear">Clear filter</button><span style="flex:1"></span><button type="button" class="btn" data-xa="cancel">Cancel</button><button type="button" class="btn pri" data-xa="ok">OK</button></div>';
+  document.body.appendChild(p); xlPop = p;
+  const r = btn.getBoundingClientRect(); p.style.top = Math.min(window.innerHeight - p.offsetHeight - 8, r.bottom + 4) + "px"; p.style.left = Math.max(8, Math.min(window.innerWidth - p.offsetWidth - 8, r.right - p.offsetWidth)) + "px";
+  const boxes = () => Array.from(p.querySelectorAll(".xl-vals input")), all = p.querySelector(".xl-all input"), q = p.querySelector("input.inp");
+  const syncAll = () => { const vis = boxes().filter((b) => b.closest("label").style.display !== "none"); all.checked = vis.length && vis.every((b) => b.checked); };
+  syncAll(); q.focus();
+  q.addEventListener("input", () => { const s = q.value.toLowerCase(); boxes().forEach((b) => { b.closest("label").style.display = b.value.toLowerCase().indexOf(s) > -1 ? "" : "none"; }); syncAll(); });
+  all.addEventListener("change", () => boxes().forEach((b) => { if (b.closest("label").style.display !== "none") b.checked = all.checked; }));
+  p.addEventListener("change", (e) => { if (e.target.closest(".xl-vals")) syncAll(); });
+  p.addEventListener("click", (e) => {
+    const s = e.target.closest("[data-xs]"); if (s) { st.s = c; st.d = +s.dataset.xs; xlApply(tbl); return xlClose(); }
+    const a = e.target.closest("[data-xa]"); if (!a) return;
+    if (a.dataset.xa === "ok") {
+      const ch = boxes().filter((b) => b.checked && (!q.value || b.closest("label").style.display !== "none")).map((b) => b.value);
+      st.f = st.f || {}; if (ch.length === vals.length && !q.value) delete st.f[c]; else st.f[c] = new Set(ch);
+      xlApply(tbl);
+    } else if (a.dataset.xa === "clear") { if (st.f) delete st.f[c]; xlApply(tbl); }
+    xlClose();
+  });
+  p.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); xlClose(); } if (e.key === "Enter") p.querySelector('[data-xa="ok"]').click(); });
+}
+document.addEventListener("click", (e) => {
+  if (xlPop && !e.target.closest(".xl-pop") && !e.target.closest(".xl-f")) xlClose();
+  const f = e.target.closest && e.target.closest("table.xl .xl-f");
+  if (f) { e.preventDefault(); e.stopPropagation(); const th = f.closest("th"); return xlOpen(th.closest("table"), +th.dataset.c, f); }
+  const s = e.target.closest && e.target.closest("table.xl .xl-s");
+  if (s) { e.preventDefault(); e.stopPropagation(); const th = s.closest("th"), tbl = th.closest("table"), id = tbl.dataset.xl, st = XLS[id] = XLS[id] || {}, c = +th.dataset.c;
+    if (st.s == c) st.d = st.d === 1 ? -1 : st.d === -1 ? 0 : 1; else { st.s = c; st.d = 1; } xlApply(tbl); return; }
+  const cl = e.target.closest && e.target.closest("[data-xlclear]");
+  if (cl) { e.preventDefault(); e.stopPropagation(); const tbl = cl.closest(".xl-foot").previousSibling; const st = XLS[tbl.dataset.xl]; if (st) st.f = {}; xlApply(tbl); }
+}, true);
+window.addEventListener("keydown", (e) => { if (e.key === "Escape" && xlPop) { e.stopImmediatePropagation(); xlClose(); } }, true);
+document.addEventListener("scroll", () => xlClose(), true);
+/* attach to tables as they appear */
+let xlT = null;
+new MutationObserver(() => { clearTimeout(xlT); xlT = setTimeout(() => xlInit(document), 60); }).observe(document.body, { childList: true, subtree: true });
 
 /* ══ SLA: every ticket, with us and with Swire ══ */
 function viewSla() {
