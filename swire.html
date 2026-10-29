@@ -53,16 +53,64 @@ a{color:var(--teal)}
 .tab[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--teal)}
 .tab .n{font:600 11px var(--mono);color:var(--faint)}
 .tab .n.hot{color:var(--ss)}
-.fbar{max-width:1500px;margin:8px auto 0;padding:0 22px;display:flex;flex-direction:column;gap:6px}
-.fr1,.fr2{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:center}
-.fl{font-size:11.5px;font-weight:600;color:var(--muted)}
-.fg{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted);font-weight:600}
-.fg .inp{font-size:12.5px;padding:5px 8px;max-width:210px;font-weight:400}
-.fbar .pill{padding:4px 10px;font-size:12px}
-.fbar input[type=date]{font-size:12px;padding:4px 8px}
-.fcount{margin-left:auto;font-size:12px;color:var(--muted);align-self:flex-end;padding-bottom:6px;display:flex;gap:10px;align-items:center}
-.fcount b{color:var(--ink)}
-.grp{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 6px}
+.fbar{max-width:1500px;margin:10px auto 2px;padding:0 22px;display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center}
+/* date range: a segmented control */
+.segc{display:inline-flex;gap:2px;background:#EDF1F5;border:1px solid var(--line);border-radius:11px;padding:3px}
+.segc button{border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:500;color:var(--ink2);white-space:nowrap;transition:background .15s,color .15s}
+.segc button:hover{color:var(--ink)}
+.segc button[aria-pressed="true"]{background:#fff;color:var(--navy);font-weight:700;box-shadow:0 1px 2px rgba(14,42,71,.12),0 0 0 1px rgba(14,42,71,.06)}
+.dates{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:11px;padding:2px 4px 2px 10px;background:#fff;font-size:12px;color:var(--muted)}
+.dates input{border:none;font:inherit;font-size:12px;color:var(--ink);padding:4px 2px;background:transparent}
+.dates.on{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-bg)}
+/* filters: pill dropdowns that show their value */
+.fsel{appearance:none;-webkit-appearance:none;border:1px solid var(--line2);border-radius:10px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B7A8C' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  padding:6px 28px 6px 11px;font:500 12.5px var(--sans);color:var(--ink2);max-width:220px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.fsel:hover{border-color:var(--teal)}
+.fsel.on{border-color:var(--teal);background-color:var(--teal-bg);color:#075E66;font-weight:600}
+.fdiv{width:1px;height:22px;background:var(--line2);margin:0 2px}
+.fcount{margin-left:auto;display:inline-flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.fcount .ct{background:var(--navy);color:#fff;border-radius:999px;padding:4px 11px;font-weight:600;font-size:12px}
+.fcount .ct b{font-family:var(--disp);font-weight:700;font-size:13px}
+.grp{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 8px}
+/* ── hero: greeting + the pipeline of open tickets ── */
+.hero{position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);padding:20px 24px 18px;margin-bottom:14px;
+  background:linear-gradient(118deg,#FFFFFF 0%,#F2F8FA 52%,#E9F1F8 100%);box-shadow:0 1px 2px rgba(14,42,71,.05),0 10px 26px -16px rgba(14,42,71,.28)}
+.hero::after{content:"";position:absolute;right:-70px;top:-90px;width:300px;height:300px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(14,124,134,.16),rgba(14,124,134,0) 70%)}
+.hero>*{position:relative;z-index:1}
+.hero-top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.hero-eye{font-size:12px;color:var(--muted);font-weight:500}
+.hero-title{font-family:var(--disp);font-size:27px;font-weight:700;letter-spacing:-.6px;line-height:1.15;margin-top:2px;color:var(--navy)}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){.hero-title{background:linear-gradient(90deg,#0E2A47 0%,#24507C 55%,#0E7C86 100%);-webkit-background-clip:text;background-clip:text;color:transparent}}
+.hero-sub{font-size:13.5px;color:var(--ink2);margin-top:4px}
+.hero-total{text-align:right;border-radius:12px;padding:4px 6px}.hero-total:hover .n{color:var(--teal)}
+.hero-total .n{font-family:var(--disp);font-size:34px;font-weight:700;letter-spacing:-1px;line-height:1;color:var(--navy)}
+.hero-total .l{font-size:12px;color:var(--muted);margin-top:3px}
+.pipe{display:flex;height:16px;border-radius:999px;overflow:hidden;margin:16px 0 12px;background:#E3EAF0;box-shadow:inset 0 1px 2px rgba(14,42,71,.12)}
+.pipe button{height:100%;min-width:4px;border-right:2px solid rgba(255,255,255,.75);transition:filter .15s}
+.pipe button:last-child{border-right:none}
+.pipe button:hover{filter:brightness(1.12) saturate(1.1)}
+.legend2{display:flex;flex-wrap:wrap;gap:8px}
+.lg{display:inline-flex;align-items:center;gap:8px;padding:7px 13px 7px 11px;border-radius:999px;background:rgba(255,255,255,.88);border:1px solid var(--line);box-shadow:0 1px 2px rgba(14,42,71,.05);transition:transform .15s,box-shadow .15s,border-color .15s}
+.lg:hover{transform:translateY(-1px);box-shadow:0 6px 14px -8px rgba(14,42,71,.35);border-color:var(--pc)}
+.lg i{width:9px;height:9px;border-radius:50%;background:var(--pc);box-shadow:0 0 0 3px color-mix(in srgb,var(--pc) 18%,transparent)}
+.lg b{font-family:var(--disp);font-size:16px;font-weight:700;color:var(--pc);font-variant-numeric:tabular-nums}
+.lg span{font-size:12px;font-weight:600;color:var(--ink2)}
+.lg em{font-style:normal;font-size:11px;color:var(--faint)}
+/* ── action tiles ── */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:20px}
+.tile{--ac:var(--teal);--acbg:var(--teal-bg);position:relative;overflow:hidden;text-align:left;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:center;padding:14px 16px 14px 18px;border-radius:15px;background:#fff;border:1px solid var(--line);box-shadow:0 1px 2px rgba(14,42,71,.04);transition:transform .15s,box-shadow .2s,border-color .2s}
+.tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ac)}
+.tile::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(100deg,var(--acbg) 0%,rgba(255,255,255,0) 60%)}
+.tile>*{position:relative;z-index:1}
+.tile:hover{transform:translateY(-2px);border-color:var(--ac);box-shadow:0 12px 24px -16px var(--ac)}
+.tile .ic{grid-row:1/3;width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--ac);background:#fff;border:1px solid color-mix(in srgb,var(--ac) 28%,transparent)}
+.tile .nm{font-family:var(--disp);font-size:28px;font-weight:700;letter-spacing:-1px;line-height:1;color:var(--ac);font-variant-numeric:tabular-nums}
+.tile .tt{font-size:13px;font-weight:700;color:var(--ink)}
+.tile .ds{grid-column:1/3;font-size:11.5px;color:var(--muted);margin-top:4px}
+.tile .mt{grid-column:1/3;height:4px;border-radius:99px;background:rgba(14,42,71,.07);margin-top:6px;overflow:hidden}
+.tile .mt>span{display:block;height:100%;border-radius:99px;background:var(--ac)}
+.tile.t-ss{--ac:#C8102E;--acbg:#FDECEF}.tile.t-cr{--ac:#C2680A;--acbg:#FEF3E6}.tile.t-ink{--ac:#24507C;--acbg:#EAF1F8}.tile.zero{--ac:#9AA8B6;--acbg:#F4F7F9}
+@media(max-width:700px){.hero{padding:16px}.hero-title{font-size:22px}.hero-total{text-align:left}}
 .sig.eng{border-left-color:var(--navy3)}
 button.dl{font:inherit;color:inherit;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--faint);text-underline-offset:3px;padding:0;background:none;border:none}
 button.dl:hover{color:var(--teal);text-decoration-color:var(--teal)}
@@ -93,7 +141,8 @@ h2{font-family:var(--disp);font-size:1.12rem;font-weight:600;margin:4px 0 4px}
 
 /* counters: a row of signals, each opens its list */
 .signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:18px}
-.sig{text-align:left;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:8px;padding:10px 12px}
+.sig{text-align:left;background:linear-gradient(100deg,#F7FAFC 0%,#fff 60%);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:13px;padding:11px 14px;box-shadow:0 1px 2px rgba(14,42,71,.04);transition:transform .15s,box-shadow .2s}
+.sig:hover{transform:translateY(-2px);box-shadow:0 10px 22px -16px rgba(14,42,71,.5)}
 .sig:hover{border-color:var(--teal);border-left-color:inherit}
 .sig .v{font-family:var(--disp);font-size:1.5rem;font-weight:700;line-height:1.1}
 .sig .k{font-size:.8rem;color:var(--ink2);margin-top:2px}
@@ -290,21 +339,21 @@ function passes(t, e, rg, isr) {
   return true;
 }
 
-/* ── filter bar ── */
+/* ── filter bar: date range as a segmented control, filters as pills that show their value ── */
 function paintFilters() {
   const uniq = (vals) => Array.from(new Set(vals)).filter((x) => x != null && x !== "").sort((a, b) => a === "(none)" || a === "(blank)" ? 1 : b === "(none)" || b === "(blank)" ? -1 : a.localeCompare(b));
   const comps = [], pos = [], svms = [], cws = [], envs = [];
   ALLT.forEach((t, i) => { (t.components.length ? t.components : ["(none)"]).forEach((c) => comps.push(c)); pos.push((ALLE[i].po && ALLE[i].po.po) || "(none)"); svms.push(t.svm || "(none)"); cws.push(t.cw || "(none)"); envs.push(t.env || "(blank)"); });
-  const sel = (id, all, list, cur, lbl) => '<label class="fg"><span>' + esc(lbl) + '</span><select class="inp" data-gf="' + id + '"><option value="">' + esc(all) + "</option>" + list.map((v) => '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(v) + "</option>").join("") + "</select></label>";
-  const typeSel = '<label class="fg"><span>Request type</span><select class="inp" data-gf="type">' + [["isr", "Incident + Service Request"], ["all", "All types"]].concat(ALLTYPES.map((x) => [x, x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
-  const sevSel = '<label class="fg"><span>Priority</span><select class="inp" data-gf="sev"><option value="">All priorities</option>' + HC.SEVS.map((x) => '<option value="' + x.id + '"' + (x.id === GF.sev ? " selected" : "") + ">" + esc(x.name) + "</option>").join("") + "</select></label>";
-  const R = [["all", "All time"], ["start", "Since " + fday(HC.dateMs(CFG.start)).replace(/ \d{4}$/, "")], ["official", "Since 1 Nov"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"], ["lastmonth", "Last month"]];
-  const active = Object.keys(GF_DEF).filter((k) => GF[k] !== GF_DEF[k]).length;
-  el("fbar").innerHTML = '<div class="fr1"><span class="fl">Created</span>' + R.map(([id, t]) => '<button type="button" class="pill" data-gfr="' + id + '" aria-pressed="' + (GF.range === id) + '">' + esc(t) + "</button>").join("") +
-    '<span class="fl" style="margin-left:6px">Custom</span><input type="date" class="inp" data-gfd="from" value="' + esc(GF.range === "custom" ? GF.from : "") + '" aria-label="From"><span class="dim">to</span><input type="date" class="inp" data-gfd="to" value="' + esc(GF.range === "custom" ? GF.to : "") + '" aria-label="To"></div>' +
-    '<div class="fr2">' + typeSel + sevSel + sel("po", "All POs", uniq(pos), GF.po, "PO") + sel("svm", "All SVM In Charge", uniq(svms), GF.svm, "SVM In Charge") + sel("cw", "All workers", uniq(cws), GF.cw, "Current worker") +
-    sel("comp", "All components", uniq(comps), GF.comp, "Component") + sel("env", "All environments", uniq(envs), GF.env, "Environment") +
-    '<span class="fcount"><b>' + T.length.toLocaleString() + "</b> of " + ALLT.length.toLocaleString() + " tickets" + (active ? ' <button type="button" class="lnk" id="gfReset">Reset filters</button>' : "") + "</span></div>";
+  const sel = (id, all, list, cur, lbl) => '<select class="fsel' + (cur ? " on" : "") + '" data-gf="' + id + '" aria-label="' + esc(lbl) + '" title="' + esc(lbl) + '"><option value="">' + esc(all) + "</option>" + list.map((v) => '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(lbl + ": " + v) + "</option>").join("") + "</select>";
+  const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"], ["all", "All request types"]].concat(ALLTYPES.map((x) => [x, "Type: " + x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
+  const sevSel = '<select class="fsel' + (GF.sev ? " on" : "") + '" data-gf="sev" aria-label="Priority"><option value="">All priorities</option>' + HC.SEVS.map((x) => '<option value="' + x.id + '"' + (x.id === GF.sev ? " selected" : "") + ">Priority: " + esc(x.name) + "</option>").join("") + "</select>";
+  const R = [["all", "All time"], ["start", "Since " + fday(HC.dateMs(CFG.start)).replace(/ \d{4}$/, "")], ["official", "Since 1 Nov"], ["7", "7 days"], ["30", "30 days"], ["month", "This month"], ["lastmonth", "Last month"]];
+  const active = Object.keys(GF_DEF).filter((k) => GF[k] !== GF_DEF[k]).length, cust = GF.range === "custom";
+  el("fbar").innerHTML = '<div class="segc" role="group" aria-label="Created">' + R.map(([id, t]) => '<button type="button" data-gfr="' + id + '" aria-pressed="' + (GF.range === id) + '">' + esc(t) + "</button>").join("") + "</div>" +
+    '<span class="dates' + (cust ? " on" : "") + '">Custom<input type="date" data-gfd="from" value="' + esc(cust ? GF.from : "") + '" aria-label="Created from"><span>–</span><input type="date" data-gfd="to" value="' + esc(cust ? GF.to : "") + '" aria-label="Created to"></span>' +
+    '<span class="fdiv"></span>' + typeSel + sevSel + sel("po", "All POs", uniq(pos), GF.po, "PO") + sel("svm", "All SVM In Charge", uniq(svms), GF.svm, "SVM") + sel("cw", "All workers", uniq(cws), GF.cw, "Worker") +
+    sel("comp", "All components", uniq(comps), GF.comp, "Component") + sel("env", "All environments", uniq(envs), GF.env, "Env") +
+    '<span class="fcount">' + (active ? '<button type="button" class="lnk" id="gfReset">Reset</button>' : "") + '<span class="ct"><b>' + T.length.toLocaleString() + "</b> of " + ALLT.length.toLocaleString() + "</span></span>";
 }
 function wireFilters() {
   const fb = el("fbar");
@@ -318,6 +367,16 @@ function wireFilters() {
 let LISTS = {}, LSEQ = 0;
 function reg(idx, title) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title }; return k; }
 function dl(idx, title, label) { return '<button type="button" class="dl" data-list="' + reg(idx, title) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
+const ICON = {
+  siren: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5z"/><path d="M12 3v1M4.2 6.2l.8.8M19.8 6.2l-.8.8"/></svg>',
+  flame: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.4-2.4-5.6-4-8.4-.6 2-1.8 3-3 3 .4-3-1-6-4-8 .3 3.4-3 6.3-3 10.6C5 19.3 8 22 12 22z"/></svg>',
+  clock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  pause: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
+  up: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
+};
+function tile(cls, icon, idx, title, desc, share, listTitle) {
+  return '<button type="button" class="tile ' + (idx.length ? cls : "zero") + '" data-list="' + reg(idx, listTitle || title) + '"><span class="ic">' + ICON[icon] + '</span><span class="nm">' + idx.length.toLocaleString() + '</span><span class="tt">' + esc(title) + '</span><span class="ds">' + esc(desc) + '</span><span class="mt"><span style="width:' + Math.min(100, Math.round(share * 100)) + '%"></span></span></button>';
+}
 function sigL(cls, idx, k, h, title) {
   return '<button type="button" class="sig ' + cls + (idx.length ? "" : " zero") + '" data-list="' + reg(idx, title || k) + '"><div class="v num">' + idx.length.toLocaleString() + '</div><div class="k">' + esc(k) + '</div><div class="h">' + esc(h || "") + "</div></button>";
 }
@@ -502,20 +561,21 @@ function viewNow() {
   const escI = HC.escalations(T, E, NOW, CFG).map((x) => x.i);
   const oldestBox = box.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
   const hot = Array.from(new Set(ss.concat(cr, frOver, updDue))).filter((i) => E[i].stage !== "billing").sort(bySevAge);
-  const d = HC.duty(NOW, CFG);
-  return '<div class="grp">Where the open tickets are</div><div class="signals">' +
-    sigL("", open, "Open in total", "all backlog in the filters", "All open tickets") +
-    sigL("teal", box, "In the open box", box.length ? "oldest " + fmt(oldestBox) : "all triaged", "Open box") +
-    sigL("teal", hd, "With Help Desk", "pending with HD", "Pending with Help Desk") +
-    sigL("eng", engg, "With Engineering", "pending with Engg, LRPS", "Pending with Engineering") +
-    sigL("", cl, "Waiting on Swire", "with the client", "Waiting on Swire") +
-    sigL("", bill, "Delivered, billing", "with Receivables", "Delivered, billing") + "</div>" +
-    '<div class="grp">Needs action</div><div class="signals">' +
-    sigL("ss", ss, "Showstoppers open", ss.length ? "phone the PO / Engineering head" : "none open", "Open Showstoppers") +
-    sigL("cr", cr, "Critical open", "", "Open Criticals") +
-    sigL(frOver.length ? "ss" : "", frOver, "First response overdue", "new since " + fday(hcFrom).replace(/ \d{4}$/, ""), "First response overdue") +
-    sigL(updDue.length ? "cr" : "", updDue, "Update interval passed", "no status change", "Update interval passed") +
-    sigL(escI.length ? "cr" : "", escI, "Escalations to raise", "Section 10.2", "Escalations to raise") + "</div>" +
+  const d = HC.duty(NOW, CFG), hr = HC.ist(NOW).min / 60, greet = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+  const DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"], MN = ["January","February","March","April","May","June","July","August","September","October","November","December"], pd = HC.ist(NOW);
+  const parts = [["Open box", box, "#6366F1"], ["With Help Desk", hd, "#0E7C86"], ["With Engineering", engg, "#24507C"], ["Waiting on Swire", cl, "#D97706"], ["Delivered, billing", bill, "#8B5CF6"]];
+  const tot = Math.max(1, open.length), pct = (n) => n ? (n / tot * 100 < 1 ? "<1%" : Math.round(n / tot * 100) + "%") : "0%";
+  const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length + box.length).toLocaleString() + " with us, " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
+    '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
+    '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
+    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + "</div></section>";
+  const live1 = Math.max(1, live.length);
+  return hero + '<div class="grp">Needs action</div><div class="tiles">' +
+    tile("t-ss", "siren", ss, "Showstoppers open", ss.length ? "Phone the PO, or the Engineering head at night" : "None open", ss.length / live1, "Open Showstoppers") +
+    tile("t-cr", "flame", cr, "Critical open", "Major function impaired", cr.length / live1, "Open Criticals") +
+    tile("t-ss", "clock", frOver, "First response overdue", "New since " + fday(hcFrom).replace(/ \d{4}$/, "") + ", past the 10.1 target", frOver.length / live1, "First response overdue") +
+    tile("t-cr", "pause", updDue, "Update interval passed", "No status change within the interval", updDue.length / live1, "Update interval passed") +
+    tile("t-ink", "up", escI, "Escalations to raise", "Section 10.2 triggers met", escI.length / live1, "Escalations to raise") + "</div>" +
     "<h2>Needs attention now</h2><p class=\"sub\">Open Showstoppers and Criticals, and any ticket whose first response is overdue or whose update interval has passed. " +
     (d.id === "night" ? "Tonight the Hypercare team owns these; a Showstopper means phoning the Engineering head." : "The PO for the module owns these; for a Critical or Showstopper call and inform the PO.") + "</p>" +
     table(hot, ["key", "pri", "sum", "status", "fr", "prog", "res", "po", "svm", "cw", "lrps"], { empty: "Nothing needs attention right now." });
@@ -900,11 +960,29 @@ function openTicket(i) {
   document.addEventListener("keydown", key);
 }
 
+/* live counts for the launcher's Swire strip (every Incident / Service Request, no filters) */
+function writeStats() {
+  try {
+    const st = { open: 0, box: 0, hd: 0, engg: 0, client: 0, billing: 0, ss: 0, cr: 0, at: NOW };
+    ALLT.forEach((t, i) => {
+      if (!/^(incident|service request)$/i.test(t.type || "")) return;
+      const e = ALLE[i]; if (e.stage === "closed") return;
+      st.open++;
+      if (e.stage === "client") st.client++; else if (e.stage === "billing") st.billing++;
+      else if (e.stage === "openbox") { st.box++; st.hd++; }
+      else { const c = window.HDClass && HDClass.classify3 ? HDClass.classify3(t.status) : "hd"; if (c === "engg") st.engg++; else if (c === "client") st.client++; else st.hd++; }
+      if (e.stage !== "billing" && t.sev === "showstopper") st.ss++;
+      if (e.stage !== "billing" && t.sev === "critical") st.cr++;
+    });
+    localStorage.setItem("hd-swire-stats", JSON.stringify(st));
+  } catch (e) {}
+}
 /* ══ render ══ */
 function render() {
   if (!ROWS.length) return;
   LISTS = {}; LSEQ = 0;
   rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters();
+  writeStats();
   const open = openIdx(), C = HC.checks(T, E, NOW, CFG), escN = HC.escalations(T, E, NOW, CFG).length;
   const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
   paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
