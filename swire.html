@@ -94,6 +94,7 @@ body{display:grid;grid-template-columns:var(--sideW) minmax(0,1fr);background:va
 .fpanel .fsel{max-width:none;width:100%}
 .fcount{margin-left:auto;display:inline-flex;gap:10px;align-items:center;font-size:12px;color:var(--muted)}
 .fcount b{font-family:var(--disp);font-weight:800;font-size:14px;color:var(--maroon)}
+.fhid{font-size:11.5px;color:var(--muted);background:#fff;border:1px dashed var(--line2);border-radius:999px;padding:2px 9px}
 .grp{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 8px}
 /* ── hero: greeting + the pipeline of open tickets ── */
 .hero{position:relative;overflow:hidden;border-radius:20px;border:1px solid var(--line);padding:22px 26px 20px;margin-bottom:16px;
@@ -509,9 +510,27 @@ function paintFilters() {
     typeSel +
     '<button type="button" class="fbtn" id="gfMore" aria-expanded="' + !!UI.moreF + '" aria-controls="fpanel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filters' + (act.length ? '<span class="bd">' + act.length + "</span>" : "") + "</button>" +
     (act.length ? '<span class="chips">' + act.map((k) => '<span class="chip">' + esc(GF_LBL[k] + ": " + chipVal(k)) + '<button type="button" data-gfx="' + k + '" aria-label="Remove ' + esc(GF_LBL[k]) + ' filter">×</button></span>').join("") + "</span>" : "") +
-    '<span class="fcount">' + (act.length || GF.range !== "all" || GF.type !== "isr" ? '<button type="button" class="lnk" id="gfReset">Reset</button>' : "") + "<span><b>" + T.length.toLocaleString() + "</b> of " + ALLT.length.toLocaleString() + " tickets</span></span>";
+    '<span class="fcount">' + (act.length || GF.range !== "all" || GF.type !== "isr" ? '<button type="button" class="lnk" id="gfReset">Reset</button>' : "") + "<span title=\"" + esc(hiddenWhy()) + "\"><b>" + T.length.toLocaleString() + "</b> of " + ALLT.length.toLocaleString() + " tickets</span>" + (T.length < ALLT.length ? '<span class="fhid">' + esc(hiddenShort()) + "</span>" : "") + "</span>";
   const fp = el("fpanel"); fp.innerHTML = Object.keys(GF_LBL).map(sel).join(""); fp.classList.toggle("hidden", !UI.moreF);
 }
+/* why the count is lower than all Swire tickets: the request-type filter, the date range, or the other filters */
+function hiddenParts() {
+  const isr = ALLT.some((t) => /^(incident|service request)$/i.test(t.type || "")), byType = {}, shown = new Set(T.map((t) => t.key));
+  let typeN = 0, otherN = 0;
+  ALLT.forEach((t, i) => {
+    if (shown.has(t.key)) return;
+    const ty = t.type || "(blank)", typeOut = GF.type === "isr" ? isr && !/^(incident|service request)$/i.test(ty) : GF.type !== "all" && ty !== GF.type;
+    if (typeOut) { typeN++; byType[ty] = (byType[ty] || 0) + 1; } else otherN++;
+  });
+  return { typeN, otherN, byType };
+}
+function hiddenShort() {
+  const h = hiddenParts(), parts = [];
+  if (h.typeN) parts.push(Object.keys(h.byType).sort((a, b) => h.byType[b] - h.byType[a]).map((k) => h.byType[k].toLocaleString() + " " + k).join(", ") + " hidden by request type");
+  if (h.otherN) parts.push(h.otherN.toLocaleString() + " outside the date range or filters");
+  return parts.join("; ");
+}
+function hiddenWhy() { return T.length < ALLT.length ? "All " + ALLT.length.toLocaleString() + " Swire tickets are loaded. " + hiddenShort() + "." : "All Swire tickets are shown."; }
 function wireFilters() {
   const fb = el("toolbarWrap") || document.querySelector(".toolbar");
   const mf = el("gfMore"); if (mf) mf.addEventListener("click", () => { UI.moreF = !UI.moreF; el("fpanel").classList.toggle("hidden", !UI.moreF); mf.setAttribute("aria-expanded", String(!!UI.moreF)); });
