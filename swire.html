@@ -30,36 +30,48 @@ a{color:var(--teal)}
 .mono{font-family:var(--mono);font-size:.92em;font-variant-numeric:tabular-nums}
 .num{font-variant-numeric:tabular-nums}
 
-/* ── header: navy chrome + the 24-hour watch band ── */
-.hdr{background:var(--navy);color:#E6EEF6;padding:14px 22px 0}
-.hdr-top{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap}
-.brand h1{font-family:var(--disp);font-weight:700;font-size:1.55rem;letter-spacing:-.01em;color:#fff}
-.brand p{color:#A9BED3;font-size:.86rem;margin-top:2px}
-.hdr-side{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.chip-d{background:var(--navy2);border:1px solid var(--navy3);color:#D6E3EF;border-radius:999px;padding:5px 11px;font-size:.8rem}
-.chip-d b{color:#fff;font-weight:600}
-.hbtn{background:var(--navy2);border:1px solid var(--navy3);color:#fff;border-radius:8px;padding:6px 12px;font-size:.82rem;font-weight:600}
-.hbtn:hover{background:var(--navy3)}
-.watch{margin-top:14px;display:grid;grid-template-columns:minmax(260px,380px) 1fr;gap:18px;align-items:end;padding-bottom:14px}
-.watch-now .k{color:#A9BED3;font-size:.78rem}
-.watch-now .v{font-family:var(--disp);font-size:1.25rem;font-weight:600;color:#fff;margin-top:1px}
-.watch-now .s{font-size:.82rem;color:#C9D7E5;margin-top:4px;line-height:1.45}
-.band{position:relative;height:56px}
-.band-row{position:absolute;left:0;right:0;top:14px;height:26px;display:flex;border-radius:6px;overflow:hidden}
-.seg{height:100%;display:flex;align-items:center;padding:0 8px;font-size:.74rem;color:#fff;white-space:nowrap;overflow:hidden;border-right:1px solid rgba(255,255,255,.15)}
-.seg.night{background:#0A1F36;color:#9FC3E6}.seg.call{background:#7A4A12;color:#FCE3C2}.seg.day{background:var(--teal);color:#E3F7F8}.seg.weekend{background:#3B4E66;color:#DCE6F0}
-.seg.cur{box-shadow:inset 0 0 0 2px var(--sea)}
-.ticks{position:absolute;left:0;right:0;top:42px;height:12px;font-size:.68rem;color:#8EA7BF}
-.ticks span{position:absolute;transform:translateX(-50%)}
-.nowmark{position:absolute;top:6px;height:40px;width:2px;background:var(--sea);border-radius:2px}
-.nowmark i{position:absolute;top:-6px;left:50%;transform:translateX(-50%);background:var(--sea);color:var(--navy);font-style:normal;font-size:.68rem;font-weight:700;padding:0 5px;border-radius:4px;white-space:nowrap}
-.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -22px;padding:0 18px;background:var(--navy2)}
+/* ── header: same plain module header as the other dashboards ── */
+.hdr{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.hdr-top{max-width:1500px;margin:0 auto;padding:12px 22px 0;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.back{font-size:12px;font-weight:600;color:var(--muted);text-decoration:none}.back:hover{color:var(--ink)}
+.brand{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:-.3px;display:flex;align-items:center;gap:9px;color:var(--ink)}
+.brand .cl{font:600 11px var(--mono);color:var(--muted);border:1px solid var(--line2);border-radius:5px;padding:1px 6px}
+.asof{margin-left:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.asof b{color:var(--ink2);font-weight:600}
+.lnk{font-size:12px;font-weight:600;color:var(--teal);border:1px solid var(--line2);border-radius:7px;padding:4px 10px;background:var(--card)}
+.lnk:hover{border-color:var(--teal)}.lnk:disabled{opacity:.5;cursor:default}
+.duty{max-width:1500px;margin:8px auto 0;padding:0 22px;font-size:13px;color:var(--ink2);display:flex;gap:6px 18px;flex-wrap:wrap;align-items:baseline}
+.duty .now{font-weight:600;color:var(--ink)}
+.duty .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--teal);margin-right:6px;vertical-align:1px}
+.duty .dot.night{background:var(--navy3)}.duty .dot.call{background:var(--cr)}.duty .dot.weekend{background:var(--lo)}
+.duty .nx{color:var(--muted)}
+.tabs{max-width:1500px;margin:6px auto 0;padding:0 14px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
-.tab{padding:10px 13px;color:#B9CBDD;font-size:.86rem;font-weight:500;border-bottom:3px solid transparent;white-space:nowrap}
-.tab:hover{color:#fff}
-.tab[aria-selected="true"]{color:#fff;border-bottom-color:var(--sea);font-weight:600}
-.tab .n{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:rgba(255,255,255,.12);font-size:.74rem;text-align:center}
-.tab .n.hot{background:var(--ss);color:#fff}
+.tab{padding:10px 12px 12px;font:600 13.5px var(--disp);color:var(--muted);position:relative;white-space:nowrap;display:flex;gap:7px;align-items:center}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--teal)}
+.tab .n{font:600 11px var(--mono);color:var(--faint)}
+.tab .n.hot{color:var(--ss)}
+.fbar{max-width:1500px;margin:8px auto 0;padding:0 22px;display:flex;flex-direction:column;gap:6px}
+.fr1,.fr2{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:center}
+.fl{font-size:11.5px;font-weight:600;color:var(--muted)}
+.fg{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted);font-weight:600}
+.fg .inp{font-size:12.5px;padding:5px 8px;max-width:210px;font-weight:400}
+.fbar .pill{padding:4px 10px;font-size:12px}
+.fbar input[type=date]{font-size:12px;padding:4px 8px}
+.fcount{margin-left:auto;font-size:12px;color:var(--muted);align-self:flex-end;padding-bottom:6px;display:flex;gap:10px;align-items:center}
+.fcount b{color:var(--ink)}
+.grp{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 6px}
+.sig.eng{border-left-color:var(--navy3)}
+button.dl{font:inherit;color:inherit;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--faint);text-underline-offset:3px;padding:0;background:none;border:none}
+button.dl:hover{color:var(--teal);text-decoration-color:var(--teal)}
+.sig{cursor:pointer}
+.bars .b{cursor:pointer}.bars .b:hover i{filter:brightness(1.25)}
+.ov.lst{justify-content:center;align-items:flex-start;padding:28px 18px;z-index:45}
+.lbox{background:var(--card);width:min(1460px,100%);max-height:calc(100vh - 56px);overflow:auto;border-radius:12px;padding:14px 16px 18px;box-shadow:0 20px 50px rgba(14,42,71,.25)}
+.lhead{display:flex;gap:8px;align-items:center;margin-bottom:10px;position:sticky;top:-14px;background:var(--card);padding:6px 0;z-index:2}
+.lhead h3{font-family:var(--disp);font-size:1.08rem;margin-right:auto}
 
 /* ── body ── */
 .wrap{max-width:1500px;margin:0 auto;padding:18px 22px 60px}
@@ -77,10 +89,10 @@ h2{font-family:var(--disp);font-size:1.12rem;font-weight:600;margin:4px 0 4px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media (max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}.watch{grid-template-columns:1fr}}
+@media (max-width:1000px){.grid2,.grid3{grid-template-columns:1fr}}
 
 /* counters: a row of signals, each opens its list */
-.signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.signals{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:18px}
 .sig{text-align:left;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:8px;padding:10px 12px}
 .sig:hover{border-color:var(--teal);border-left-color:inherit}
 .sig .v{font-family:var(--disp);font-size:1.5rem;font-weight:700;line-height:1.1}
@@ -107,7 +119,7 @@ tr.row{cursor:pointer}
 .pr.showstopper{background:var(--ss);color:#fff}.pr.critical{background:var(--cr-bg);color:var(--cr)}.pr.high{background:var(--hi-bg);color:var(--hi)}
 .pr.medium{background:var(--md-bg);color:var(--md)}.pr.low{background:var(--lo-bg);color:var(--lo)}.pr.none{background:var(--lo-bg);color:var(--muted)}
 .st{display:inline-block;border-radius:5px;padding:1px 7px;font-size:.74rem;background:var(--lo-bg);color:var(--ink2);white-space:nowrap}
-.st.openbox{background:#EEF2FF;color:#4338CA}.st.client{background:#FEF3E6;color:var(--client)}.st.working{background:var(--teal-bg);color:var(--teal)}.st.closed{background:var(--ok-bg);color:var(--ok)}
+.st.openbox{background:#EEF2FF;color:#4338CA}.st.billing{background:#F3EFFF;color:#6D28D9}.st.client{background:#FEF3E6;color:var(--client)}.st.working{background:var(--teal-bg);color:var(--teal)}.st.closed{background:var(--ok-bg);color:var(--ok)}
 .clk{white-space:nowrap;font-variant-numeric:tabular-nums}
 .clk.bad{color:var(--ss);font-weight:600}.clk.warn{color:var(--cr);font-weight:600}.clk.good{color:var(--ok)}
 .who{white-space:nowrap}.who .r{color:var(--muted);font-size:.72rem;display:block}
@@ -178,26 +190,17 @@ textarea.ho{width:100%;min-height:420px;font-family:var(--mono);font-size:.8rem;
 
 <header class="hdr">
   <div class="hdr-top">
-    <div class="brand">
-      <h1>Swire Shipping Hypercare</h1>
-      <p id="brandSub">Phoenix support, run to the Hypercare runbook</p>
-    </div>
-    <div class="hdr-side">
-      <span class="chip-d" id="phaseChip">Loading…</span>
-      <span class="chip-d" id="histChip" title="Status history drives first response and progress"></span>
-      <span class="chip-d" id="lrpsChip"></span>
-      <button class="hbtn" id="btnLrps" title="Read the assignee of every linked LRPS ticket from Jira">Refresh LRPS assignees</button>
-      <a class="hbtn" href="index.html" style="text-decoration:none">Launcher</a>
+    <a class="back" href="index.html">← Launcher</a>
+    <div class="brand"><svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#0E2A47"/><path d="M6 20h20l-3 5H9z" fill="#57C5CF"/><path d="M15 7v12M15 8l7 9h-7" stroke="#fff" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>Swire Hypercare <span class="cl">SWIPHX</span></div>
+    <div class="asof">
+      <span id="phaseChip">Loading…</span>
+      <span id="histChip" title="Status history drives first response and progress"></span>
+      <span id="lrpsChip"></span>
+      <button class="lnk" id="btnLrps" title="Read the assignee of every linked LRPS ticket from Jira">Refresh LRPS assignees</button>
     </div>
   </div>
-  <div class="watch">
-    <div class="watch-now">
-      <div class="k" id="watchDay">Now</div>
-      <div class="v" id="watchWho">—</div>
-      <div class="s" id="watchSub"></div>
-    </div>
-    <div class="band" id="band" aria-label="Today's duty windows"></div>
-  </div>
+  <div class="duty" id="duty" aria-live="polite"></div>
+  <div class="fbar" id="fbar"></div>
   <nav class="tabs" role="tablist" id="tabs"></nav>
 </header>
 
@@ -216,9 +219,13 @@ const fmt = HC.fmtMin, MIN = 60000, DAY = 86400000;
 const CFG_KEY = "hd-swire-cfg", LRPS_KEY = "hd-swire-lrps";
 
 /* ── state ── */
-let CFG = loadCfg(), ROWS = [], T = [], E = [], NOW = Date.now(), TAB = "now", TYPES = null, ALLTYPES = [], LRPS = loadLrps();
+let CFG = loadCfg(), ROWS = [], ALLT = [], ALLE = [], T = [], E = [], NOW = Date.now(), TAB = "now", ALLTYPES = [], LRPS = loadLrps();
 const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: "", sort: { k: "age", d: -1 }, openCheck: null, week: null, shift: "" };
 
+/* filters at the top, shared by every tab (kept in this browser) */
+const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", type: "isr", sev: "", po: "", svm: "", cw: "", comp: "", env: "" };
+let GF = (() => { try { return Object.assign({}, GF_DEF, JSON.parse(localStorage.getItem(GF_KEY) || "{}")); } catch (e) { return Object.assign({}, GF_DEF); } })();
+function saveGF() { try { localStorage.setItem(GF_KEY, JSON.stringify(GF)); } catch (e) {} }
 function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
 function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); }
 function loadLrps() { try { return JSON.parse(localStorage.getItem(LRPS_KEY) || "{}") || {}; } catch (e) { return {}; } }
@@ -232,7 +239,7 @@ function fdt(ms) { if (ms == null) return "—"; const d = new Date(ms + 330 * M
 function fday(ms) { if (ms == null) return "—"; const d = new Date(ms + 330 * MIN); const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return d.getUTCDate() + " " + M[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
 function hhmm(min) { return String(Math.floor(min / 60) % 24).padStart(2, "0") + ":" + String(min % 60).padStart(2, "0"); }
 const prChip = (t) => '<span class="pr ' + (t.sev || "none") + '">' + esc(t.priority || "—") + "</span>";
-const STAGE_TXT = { openbox: "Open box", working: "With us", client: "With Swire", closed: "Closed" };
+const STAGE_TXT = { openbox: "Open box", working: "With us", client: "With Swire", billing: "Delivered, billing", closed: "Closed" };
 const stChip = (t, e) => '<span class="st ' + e.stage + '" title="' + esc(STAGE_TXT[e.stage]) + '">' + esc(t.status || "—") + "</span>";
 function ageOf(t) { return t.created != null ? (NOW - t.created) / MIN : null; }
 
@@ -253,19 +260,87 @@ const CLS = { isTerminal: (s) => window.HDClass ? HDClass.isTerminal(s) : /^clos
 function rebuild() {
   NOW = Date.now();
   const get = HC.getter(ROWS), pre = String(CFG.prefix || "SWIPHX").toUpperCase();
-  const all = [];
-  ROWS.forEach((row) => { const t = HC.normTicket(row, get); if (t.prefix === pre) { t.nextAction = String(get(row, "next action") || "").trim(); all.push(t); } });
-  ALLTYPES = Array.from(new Set(all.map((t) => t.type || "(blank)"))).sort();
-  if (!TYPES) TYPES = ALLTYPES.filter((x) => /^(incident|service request)$/i.test(x));
-  if (!TYPES.length) TYPES = ALLTYPES.slice();
-  T = all.filter((t) => TYPES.indexOf(t.type || "(blank)") > -1);
-  E = T.map((t) => {
+  ALLT = [];
+  ROWS.forEach((row) => { const t = HC.normTicket(row, get); if (t.prefix === pre) { t.nextAction = String(get(row, "next action") || "").trim(); ALLT.push(t); } });
+  ALLE = ALLT.map((t) => {
     let tr = null;
     if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
     const e = HC.evaluate(t, tr, NOW, CFG, CLS, window.HDSla ? HDSla.firstResponse : null);
     e.po = HC.poFor(t, CFG);
     return e;
   });
+  ALLTYPES = Array.from(new Set(ALLT.map((t) => t.type || "(blank)"))).sort();
+  const rg = TAB === "weekly" ? { from: null, to: null } : rangeMs(), keep = [];
+  const isr = ALLT.some((t) => /^(incident|service request)$/i.test(t.type || ""));
+  ALLT.forEach((t, i) => { if (passes(t, ALLE[i], rg, isr)) keep.push(i); });
+  T = keep.map((i) => ALLT[i]); E = keep.map((i) => ALLE[i]);
+}
+function passes(t, e, rg, isr) {
+  const ty = t.type || "(blank)";
+  if (GF.type === "isr") { if (isr && !/^(incident|service request)$/i.test(ty)) return false; }
+  else if (GF.type !== "all" && ty !== GF.type) return false;
+  if (rg.from != null && (t.created == null || t.created < rg.from)) return false;
+  if (rg.to != null && (t.created == null || t.created >= rg.to)) return false;
+  if (GF.sev && t.sev !== GF.sev) return false;
+  if (GF.po && ((e.po && e.po.po) || "(none)") !== GF.po) return false;
+  if (GF.svm && (t.svm || "(none)") !== GF.svm) return false;
+  if (GF.cw && (t.cw || "(none)") !== GF.cw) return false;
+  if (GF.comp && !(GF.comp === "(none)" ? !t.components.length : t.components.indexOf(GF.comp) > -1)) return false;
+  if (GF.env && (t.env || "(blank)") !== GF.env) return false;
+  return true;
+}
+
+/* ── filter bar ── */
+function paintFilters() {
+  const uniq = (vals) => Array.from(new Set(vals)).filter((x) => x != null && x !== "").sort((a, b) => a === "(none)" || a === "(blank)" ? 1 : b === "(none)" || b === "(blank)" ? -1 : a.localeCompare(b));
+  const comps = [], pos = [], svms = [], cws = [], envs = [];
+  ALLT.forEach((t, i) => { (t.components.length ? t.components : ["(none)"]).forEach((c) => comps.push(c)); pos.push((ALLE[i].po && ALLE[i].po.po) || "(none)"); svms.push(t.svm || "(none)"); cws.push(t.cw || "(none)"); envs.push(t.env || "(blank)"); });
+  const sel = (id, all, list, cur, lbl) => '<label class="fg"><span>' + esc(lbl) + '</span><select class="inp" data-gf="' + id + '"><option value="">' + esc(all) + "</option>" + list.map((v) => '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(v) + "</option>").join("") + "</select></label>";
+  const typeSel = '<label class="fg"><span>Request type</span><select class="inp" data-gf="type">' + [["isr", "Incident + Service Request"], ["all", "All types"]].concat(ALLTYPES.map((x) => [x, x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
+  const sevSel = '<label class="fg"><span>Priority</span><select class="inp" data-gf="sev"><option value="">All priorities</option>' + HC.SEVS.map((x) => '<option value="' + x.id + '"' + (x.id === GF.sev ? " selected" : "") + ">" + esc(x.name) + "</option>").join("") + "</select></label>";
+  const R = [["all", "All time"], ["start", "Since " + fday(HC.dateMs(CFG.start)).replace(/ \d{4}$/, "")], ["official", "Since 1 Nov"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"], ["lastmonth", "Last month"]];
+  const active = Object.keys(GF_DEF).filter((k) => GF[k] !== GF_DEF[k]).length;
+  el("fbar").innerHTML = '<div class="fr1"><span class="fl">Created</span>' + R.map(([id, t]) => '<button type="button" class="pill" data-gfr="' + id + '" aria-pressed="' + (GF.range === id) + '">' + esc(t) + "</button>").join("") +
+    '<span class="fl" style="margin-left:6px">Custom</span><input type="date" class="inp" data-gfd="from" value="' + esc(GF.range === "custom" ? GF.from : "") + '" aria-label="From"><span class="dim">to</span><input type="date" class="inp" data-gfd="to" value="' + esc(GF.range === "custom" ? GF.to : "") + '" aria-label="To"></div>' +
+    '<div class="fr2">' + typeSel + sevSel + sel("po", "All POs", uniq(pos), GF.po, "PO") + sel("svm", "All SVM In Charge", uniq(svms), GF.svm, "SVM In Charge") + sel("cw", "All workers", uniq(cws), GF.cw, "Current worker") +
+    sel("comp", "All components", uniq(comps), GF.comp, "Component") + sel("env", "All environments", uniq(envs), GF.env, "Environment") +
+    '<span class="fcount"><b>' + T.length.toLocaleString() + "</b> of " + ALLT.length.toLocaleString() + " tickets" + (active ? ' <button type="button" class="lnk" id="gfReset">Reset filters</button>' : "") + "</span></div>";
+}
+function wireFilters() {
+  const fb = el("fbar");
+  fb.querySelectorAll("[data-gf]").forEach((x) => x.addEventListener("change", () => { GF[x.dataset.gf] = x.value || GF_DEF[x.dataset.gf]; saveGF(); render(); }));
+  fb.querySelectorAll("[data-gfr]").forEach((x) => x.addEventListener("click", () => { GF.range = x.dataset.gfr; GF.from = GF.to = ""; saveGF(); render(); }));
+  fb.querySelectorAll("[data-gfd]").forEach((x) => x.addEventListener("change", () => { GF[x.dataset.gfd] = x.value; GF.range = (GF.from || GF.to) ? "custom" : "all"; saveGF(); render(); }));
+  const r = el("gfReset"); if (r) r.addEventListener("click", () => { GF = Object.assign({}, GF_DEF); saveGF(); render(); });
+}
+
+/* ── every number opens its tickets: dl() registers a list for this render and returns a clickable count ── */
+let LISTS = {}, LSEQ = 0;
+function reg(idx, title) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title }; return k; }
+function dl(idx, title, label) { return '<button type="button" class="dl" data-list="' + reg(idx, title) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
+function sigL(cls, idx, k, h, title) {
+  return '<button type="button" class="sig ' + cls + (idx.length ? "" : " zero") + '" data-list="' + reg(idx, title || k) + '"><div class="v num">' + idx.length.toLocaleString() + '</div><div class="k">' + esc(k) + '</div><div class="h">' + esc(h || "") + "</div></button>";
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("[data-list]"); if (!b) return;
+  const x = LISTS[b.dataset.list]; if (!x) return;
+  e.preventDefault(); e.stopPropagation(); openList(x.title, x.idx);
+}, true);
+function openList(title, idx) {
+  idx = idx.slice().sort(bySevAge);
+  const ov = document.createElement("div"); ov.className = "ov lst";
+  ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + idx.length.toLocaleString() + "</span></h3>" +
+    '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
+    table(idx, ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next"], { sortable: false, limit: 2000, empty: "No tickets." }) + "</div>";
+  const prev = document.activeElement;
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
+  const key = (ev) => { if (ev.key === "Escape" && !document.querySelector(".ov:not(.lst)")) close(); };
+  ov.addEventListener("click", (ev) => {
+    if (ev.target === ov) return close();
+    const b = ev.target.closest("[data-x]"); if (b) { if (b.dataset.x === "close") close(); else csv(idx, title); return; }
+    const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
+  });
+  document.body.appendChild(ov); ov.querySelector('[data-x="close"]').focus(); document.addEventListener("keydown", key);
 }
 
 /* ── the HD Jira Bridge (direct, or through the launcher when opened as a tab) ── */
@@ -295,7 +370,7 @@ function call(path) {
 let lrpsBusy = false;
 function lrpsKeys(onlyStale) {
   const keys = new Set();
-  T.forEach((t, i) => { if (E[i].stage !== "closed") t.lrps.forEach((k) => keys.add(k)); });
+  ALLT.forEach((t, i) => { if (ALLE[i].stage !== "closed") t.lrps.forEach((k) => keys.add(k)); });
   return Array.from(keys).filter((k) => !onlyStale || !LRPS[k] || NOW - (LRPS[k].at || 0) > 30 * MIN);
 }
 function fetchLrps(force) {
@@ -328,35 +403,28 @@ const lrpsNames = (t) => t.lrps.map((k) => (LRPS[k] && LRPS[k].a) || "").filter(
 
 /* ── header: who is on duty, the 24-hour band ── */
 function paintDuty() {
-  const d = HC.duty(NOW, CFG), p = HC.ist(NOW), DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const d = HC.duty(NOW, CFG), p = HC.ist(NOW), DN = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const nx = HC.nextDutyChange(NOW, CFG), nd = nx ? HC.duty(nx, CFG) : null;
-  el("watchDay").textContent = DN[p.dow] + ", " + hhmm(p.min) + " IST";
-  el("watchWho").textContent = d.owns + " owns new tickets";
-  el("watchSub").innerHTML = esc(d.logs) + " logs and tags.<br>Critical or Showstopper: " + esc(d.critical) + "." +
-    (nd ? '<br><span style="color:#8EA7BF">From ' + hhmm(HC.ist(nx).min) + ": " + esc(nd.owns) + "</span>" : "");
-  const segs = (p.dow === 0 || p.dow === 6)
-    ? [{ c: "weekend", a: 0, b: 1440, t: "General Support logs, PO owns all day" }]
-    : [{ c: "night", a: 0, b: 360, t: "Hypercare team" }, { c: "call", a: 360, b: 540, t: "PO, call for Critical" }, { c: "day", a: 540, b: 1260, t: "PO for the module" }, { c: "night", a: 1260, b: 1440, t: "Hypercare team" }];
-  const html = '<div class="band-row">' + segs.map((s) => '<div class="seg ' + s.c + (p.min >= s.a && p.min < s.b ? " cur" : "") + '" style="width:' + ((s.b - s.a) / 14.4) + '%" title="' + hhmm(s.a) + "–" + hhmm(s.b % 1440 || 1440) + " " + esc(s.t) + '">' + esc(s.t) + "</div>").join("") + "</div>" +
-    '<div class="ticks">' + [0, 360, 540, 1260, 1440].map((m) => '<span style="left:' + (m / 14.4) + '%">' + (m === 1440 ? "24:00" : hhmm(m)) + "</span>").join("") + "</div>" +
-    '<div class="nowmark" style="left:' + (p.min / 14.4) + '%"><i>' + hhmm(p.min) + "</i></div>";
-  el("band").innerHTML = html;
+  el("duty").innerHTML = '<span class="now"><span class="dot ' + d.id + '"></span>' + DN[p.dow] + " " + hhmm(p.min) + " IST, " + esc(d.label.toLowerCase()) + "</span>" +
+    "<span>" + esc(d.owns) + " owns new tickets, " + esc(d.logs) + " logs them.</span>" +
+    "<span>Critical or Showstopper: " + esc(d.critical.charAt(0).toLowerCase() + d.critical.slice(1)) + ".</span>" +
+    (nd ? '<span class="nx">From ' + hhmm(HC.ist(nx).min) + ": " + esc(nd.owns) + ".</span>" : "");
 }
 function paintChips(lrpsMsg) {
   const ph = HC.phase(NOW, CFG);
-  el("phaseChip").innerHTML = ph.month ? "Month <b>" + ph.month + "</b> of 6, " + esc(ph.name) : "Counting starts " + esc(fday(HC.dateMs(CFG.start)));
+  el("phaseChip").innerHTML = ph.month ? "Hypercare month <b>" + ph.month + "</b> of 6, " + esc(ph.name.toLowerCase()) : "Counting starts " + esc(fday(HC.dateMs(CFG.start)));
   const withH = E.filter((e) => e.hist).length, openN = E.filter((e) => e.stage !== "closed").length, openH = E.filter((e) => e.stage !== "closed" && e.hist).length;
   const pr = L && L.progress ? L.progress() : null, other = L && L.otherFetching ? L.otherFetching() : null;
   el("histChip").innerHTML = (L && L.isFetching && L.isFetching()) ? "Reading status history" + (pr && pr.total ? " <b>" + pr.done + "/" + pr.total + "</b>" : "…")
     : other ? "Status history: " + esc(other) + " is reading it"
-    : "Status history for <b>" + openH + "</b> of " + openN + " open";
+    : "History <b>" + openH + "</b> of " + openN + " open";
   const ks = lrpsKeys(false), known = ks.filter((k) => LRPS[k]).length;
   el("lrpsChip").innerHTML = lrpsMsg ? esc(lrpsMsg) : "LRPS assignees <b>" + known + "</b> of " + ks.length;
   el("btnLrps").disabled = lrpsBusy;
 }
 
 /* ── tabs ── */
-const TABS = [["now", "Now"], ["openbox", "Open box"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Setup"]];
+const TABS = [["now", "Now"], ["openbox", "Open box"], ["work", "Workload"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Master data"]];
 function paintTabs(counts) {
   el("tabs").innerHTML = TABS.map(([id, name]) => {
     const c = counts[id];
@@ -377,6 +445,7 @@ function frCell(t, e) {
 function progCell(t, e) {
   if (e.stage === "closed") return '<span class="dim">' + esc(fdt(e.closedAt)) + "</span>";
   if (e.stage === "client") return '<span class="dim">with Swire</span>';
+  if (e.stage === "billing") return '<span class="dim">delivered, billing</span>';
   if (e.sinceMoveMin == null) return '<span class="dim">—</span>';
   return '<span class="clk ' + (e.updateDue ? "warn" : "") + '" title="Last status change ' + esc(fdt(e.lastMove)) + (e.target ? ", update interval " + fmt(e.target.upd) : "") + '">' + fmt(e.sinceMoveMin) + "</span>";
 }
@@ -387,8 +456,7 @@ function resCell(t, e) {
 }
 function poCell(e) {
   const p = e.po; if (!p || !p.po) return '<span class="dim">—</span>';
-  return '<span class="who">' + esc(p.po) + '<span class="r">' + esc(p.module || "") + (p.via === "svm" ? " (SVM In Charge)" : "") + "</span>" +
-    (p.phone ? '<a class="tel" href="tel:' + esc(p.phone.replace(/\s+/g, "")) + '" onclick="event.stopPropagation()">' + esc(p.phone) + "</a>" : "") + "</span>";
+  return '<span class="who">' + esc(p.po) + '<span class="r">' + esc(p.module || "") + (p.via === "svm" ? " (SVM In Charge)" : "") + "</span></span>";
 }
 const COLS = {
   key:   { h: "Ticket", s: (t) => t.key, c: (t) => '<a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(t.key) + "</a>" },
@@ -426,29 +494,50 @@ const openIdx = () => T.map((t, i) => i).filter((i) => E[i].stage !== "closed");
 
 /* ══ Now ══ */
 function viewNow() {
-  const open = openIdx(), box = open.filter((i) => E[i].stage === "openbox");
-  const ss = open.filter((i) => T[i].sev === "showstopper"), cr = open.filter((i) => T[i].sev === "critical");
-  const hcFrom = HC.dateMs(CFG.start) || 0, frOver = open.filter((i) => E[i].frState === "breached" && (T[i].created || 0) >= hcFrom), updDue = open.filter((i) => E[i].updateDue), withSwire = open.filter((i) => E[i].stage === "client");
-  const escN = HC.escalations(T, E, NOW, CFG).length;
+  const open = openIdx(), live = open.filter((i) => E[i].stage !== "billing");
+  const side = (k) => open.filter((i) => sideOf(i) === k);
+  const box = open.filter((i) => E[i].stage === "openbox"), hd = side("hd"), engg = side("engg"), cl = side("client"), bill = side("billing");
+  const ss = live.filter((i) => T[i].sev === "showstopper"), cr = live.filter((i) => T[i].sev === "critical");
+  const hcFrom = HC.dateMs(CFG.start) || 0, frOver = open.filter((i) => E[i].frState === "breached" && (T[i].created || 0) >= hcFrom), updDue = open.filter((i) => E[i].updateDue);
+  const escI = HC.escalations(T, E, NOW, CFG).map((x) => x.i);
   const oldestBox = box.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
-  const sig = (cls, v, k, h, jump, check) => '<button class="sig ' + cls + (v ? "" : " zero") + '" data-jump="' + jump + '"' + (check ? ' data-check="' + check + '"' : "") + '><div class="v num">' + v + '</div><div class="k">' + esc(k) + '</div><div class="h">' + esc(h) + "</div></button>";
-  /* what needs someone now: Showstoppers, Criticals, overdue first responses, updates due */
-  const hot = Array.from(new Set(ss.concat(cr, frOver, updDue)));
-  hot.sort((a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev) || (T[a].created || 0) - (T[b].created || 0));
+  const hot = Array.from(new Set(ss.concat(cr, frOver, updDue))).filter((i) => E[i].stage !== "billing").sort(bySevAge);
   const d = HC.duty(NOW, CFG);
-  return '<div class="signals">' +
-    sig("ss", ss.length, "Showstoppers open", ss.length ? "phone the PO / Engineering head" : "none open", "queue") +
-    sig("cr", cr.length, "Critical open", "", "queue") +
-    sig("teal", box.length, "In the open box", box.length ? "oldest " + fmt(oldestBox) : "all triaged", "openbox") +
-    sig(frOver.length ? "ss" : "", frOver.length, "First response overdue", "new since " + fday(hcFrom).replace(/ \d{4}$/, ""), "rules", "fr") +
-    sig(updDue.length ? "cr" : "", updDue.length, "Update interval passed", "no status change", "rules", "upd") +
-    sig(escN ? "cr" : "", escN, "Escalations to raise", "Section 10.2", "esc") +
-    sig("", withSwire.length, "Waiting on Swire", "", "queue") +
-    sig("", open.length, "Open in total", "all backlog included", "queue") +
-    "</div>" +
+  return '<div class="grp">Where the open tickets are</div><div class="signals">' +
+    sigL("", open, "Open in total", "all backlog in the filters", "All open tickets") +
+    sigL("teal", box, "In the open box", box.length ? "oldest " + fmt(oldestBox) : "all triaged", "Open box") +
+    sigL("teal", hd, "With Help Desk", "pending with HD", "Pending with Help Desk") +
+    sigL("eng", engg, "With Engineering", "pending with Engg, LRPS", "Pending with Engineering") +
+    sigL("", cl, "Waiting on Swire", "with the client", "Waiting on Swire") +
+    sigL("", bill, "Delivered, billing", "with Receivables", "Delivered, billing") + "</div>" +
+    '<div class="grp">Needs action</div><div class="signals">' +
+    sigL("ss", ss, "Showstoppers open", ss.length ? "phone the PO / Engineering head" : "none open", "Open Showstoppers") +
+    sigL("cr", cr, "Critical open", "", "Open Criticals") +
+    sigL(frOver.length ? "ss" : "", frOver, "First response overdue", "new since " + fday(hcFrom).replace(/ \d{4}$/, ""), "First response overdue") +
+    sigL(updDue.length ? "cr" : "", updDue, "Update interval passed", "no status change", "Update interval passed") +
+    sigL(escI.length ? "cr" : "", escI, "Escalations to raise", "Section 10.2", "Escalations to raise") + "</div>" +
     "<h2>Needs attention now</h2><p class=\"sub\">Open Showstoppers and Criticals, and any ticket whose first response is overdue or whose update interval has passed. " +
     (d.id === "night" ? "Tonight the Hypercare team owns these; a Showstopper means phoning the Engineering head." : "The PO for the module owns these; for a Critical or Showstopper call and inform the PO.") + "</p>" +
     table(hot, ["key", "pri", "sum", "status", "fr", "prog", "res", "po", "svm", "cw", "lrps"], { empty: "Nothing needs attention right now." });
+}
+
+/* ══ Workload: who holds the pending tickets ══ */
+function personTable(title, idx, keyOf, note) {
+  const g = {}; idx.forEach((i) => { const k = keyOf(i) || "(not assigned)"; (g[k] = g[k] || []).push(i); });
+  const names = Object.keys(g).sort((a, b) => g[b].length - g[a].length || a.localeCompare(b));
+  const S = HC.SEVS;
+  const body = names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
+    return "<tr><td>" + esc(n) + '</td><td class="num"><b>' + dl(l, title + ", " + n) + "</b></td>" + S.map((x) => { const q = l.filter((i) => T[i].sev === x.id); return '<td class="num">' + (q.length ? dl(q, title + ", " + n + ", " + x.name) : '<span class="dim">·</span>') + "</td>"; }).join("") +
+      '<td class="num">' + fmt(old) + "</td></tr>"; }).join("");
+  return '<div class="panel"><div class="sec-h" style="margin-top:0">' + esc(title) + ' <span class="dim">' + dl(idx, title) + "</span></div>" + (note ? '<p class="sub" style="margin-bottom:8px">' + esc(note) + "</p>" : "") +
+    (names.length ? '<div class="tw"><table><thead><tr><th>Name</th><th>Total</th>' + S.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th></tr></thead><tbody>" + body + "</tbody></table></div>" : '<div class="empty">Nothing pending.</div>') + "</div>";
+}
+function viewWork() {
+  const open = openIdx(), hd = open.filter((i) => sideOf(i) === "hd"), engg = open.filter((i) => sideOf(i) === "engg"), ours = hd.concat(engg);
+  const lrpsWho = (i) => { const t = T[i]; if (!t.lrps.length) return "(no LRPS ticket)"; const n = t.lrps.map((k) => LRPS[k] && LRPS[k].a).filter(Boolean); return n.length ? n[0] : t.lrps.some((k) => LRPS[k]) ? "(LRPS unassigned)" : "(LRPS not read yet)"; };
+  return "<h2>Workload</h2><p class=\"sub\">Open tickets on our side and who holds them. Help Desk and Engineering follow the Master Data status classes, the same split as the Follow-up Tracker. Every number opens its tickets.</p>" +
+    '<div class="grid2">' + personTable("Pending with Help Desk, by current worker", hd, (i) => T[i].cw) + personTable("Pending with Engineering, by LRPS assignee", engg, lrpsWho, "The engineering owner from the linked LRPS ticket.") + "</div>" +
+    '<div class="grid2">' + personTable("Pending with Engineering, by current worker", engg, (i) => T[i].cw) + personTable("Pending with us, by PO", ours, (i) => E[i].po && E[i].po.po) + "</div>";
 }
 
 /* ══ Open box ══ */
@@ -462,11 +551,13 @@ function viewOpenBox() {
 /* ══ Escalations ══ */
 function viewEsc() {
   const L2 = HC.escalations(T, E, NOW, CFG), contacts = CFG.contacts;
-  const phoneOf = (role) => contacts.filter((c) => role.indexOf(c.role) === 0).map((c) => esc(c.name) + ' <a class="tel" href="tel:' + esc(c.phone.replace(/\s+/g, "")) + '">' + esc(c.phone) + "</a>").join("<br>");
+  const namesOf = (role) => contacts.filter((c) => role.indexOf(c.role) === 0).map((c) => c.name).join(", ");
   const byKey = {}; L2.forEach((x) => { byKey[x.i] = x; });
-  return "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2. Escalating moves the technical work, not the ownership: the owner keeps updating the user. “No progress” means no status change in Jira for that long while the ticket is with us.</p>" +
+  const groups = {}; L2.forEach((x) => { (groups[x.trigger] = groups[x.trigger] || []).push(x.i); });
+  return "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2. Escalating moves the technical work, not the ownership: the owner keeps updating the user. “No progress” means no status change in Jira for that long while the ticket is with us. Contact details are in Master data.</p>" +
+    (Object.keys(groups).length ? '<div class="bar">' + Object.keys(groups).map((g) => '<span class="pill">' + esc(g) + " <b>" + dl(groups[g], g) + "</b></span>").join("") + "</div>" : "") +
     table(L2.map((x) => x.i), ["key", "pri", "sum", "status", "prog", "po", "svm"], { sortable: false, empty: "No escalation triggers are met right now.",
-      extra: { h: "Trigger and who to inform", c: (i) => { const x = byKey[i]; return "<b>" + esc(x.trigger) + "</b><div class=\"small\" style=\"margin-top:3px\">" + x.inform.map((r) => { const ph = phoneOf(r); return esc(r) + (ph ? '<div class="dim">' + ph + "</div>" : r.indexOf("PO") === 0 && E[i].po.phone ? '<div class="dim">' + esc(E[i].po.po) + ' <a class="tel" href="tel:' + esc(E[i].po.phone.replace(/\s+/g, "")) + '">' + esc(E[i].po.phone) + "</a></div>" : ""); }).join("<br>") + "</div>"; } } });
+      extra: { h: "Trigger and who to inform", c: (i) => { const x = byKey[i]; return "<b>" + esc(x.trigger) + '</b><div class="small" style="margin-top:3px">' + x.inform.map((r) => { const n = r.indexOf("PO") === 0 ? (E[i].po && E[i].po.po) : namesOf(r); return esc(r) + (n ? ' <span class="dim">(' + esc(n) + ")</span>" : ""); }).join("<br>") + "</div>"; } } });
 }
 
 /* ══ Rule checks ══ */
@@ -488,101 +579,105 @@ el("view").addEventListener("click", (e) => { const c = e.target.closest(".chk")
 el("view").addEventListener("keydown", (e) => { const c = e.target.closest(".chk"); if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); c.click(); } });
 
 /* ══ All open ══ */
-function viewQueue() {
+function queueIdx() {
   let idx = openIdx();
-  const pos = Array.from(new Set(idx.map((i) => (E[i].po && E[i].po.po) || "(none)"))).sort();
   if (UI.stage) idx = idx.filter((i) => E[i].stage === UI.stage);
-  if (UI.sev) idx = idx.filter((i) => T[i].sev === UI.sev);
-  if (UI.po) idx = idx.filter((i) => ((E[i].po && E[i].po.po) || "(none)") === UI.po);
   if (UI.q) { const q = UI.q.toLowerCase(); idx = idx.filter((i) => { const t = T[i]; return (t.key + " " + t.summary + " " + t.meId + " " + t.svm + " " + t.cw + " " + t.components.join(" ") + " " + lrpsNames(t)).toLowerCase().indexOf(q) > -1; }); }
+  return idx;
+}
+function viewQueue() {
+  const idx = queueIdx();
   const buckets = [[0, 1, "under 1 day"], [1, 3, "1–3 days"], [3, 7, "3–7 days"], [7, 30, "7–30 days"], [30, 1e9, "over 30 days"]];
-  const ages = buckets.map((b) => idx.filter((i) => { const a = (ageOf(T[i]) || 0) / 1440; return a >= b[0] && a < b[1]; }).length);
   const opt = (v, txt, cur) => '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(txt) + "</option>";
-  return "<h2>All open Swire tickets</h2><p class=\"sub\">The whole backlog, not only tickets created since Hypercare started.</p>" +
+  return "<h2>All open Swire tickets</h2><p class=\"sub\">The whole backlog within the filters at the top.</p>" +
     '<div class="bar"><input class="inp" id="qIn" placeholder="Search key, summary, ME ID, person, component" value="' + esc(UI.q) + '" style="min-width:300px">' +
     '<select class="inp" id="qStage">' + opt("", "Any stage", UI.stage) + Object.keys(STAGE_TXT).filter((k) => k !== "closed").map((k) => opt(k, STAGE_TXT[k], UI.stage)).join("") + "</select>" +
-    '<select class="inp" id="qSev">' + opt("", "Any priority", UI.sev) + HC.SEVS.map((s) => opt(s.id, s.name, UI.sev)).join("") + "</select>" +
-    '<select class="inp" id="qPo">' + opt("", "Any PO", UI.po) + pos.map((p) => opt(p, p, UI.po)).join("") + "</select>" +
     '<button class="btn" id="qCsv">Download CSV (' + idx.length + ")</button></div>" +
-    '<div class="bar"><span class="lbl">Age</span>' + buckets.map((b, k) => '<span class="pill">' + esc(b[2]) + " <b class=\"num\">" + ages[k] + "</b></span>").join("") + "</div>" +
+    '<div class="bar"><span class="lbl">Age</span>' + buckets.map((b) => { const l = idx.filter((i) => { const a = (ageOf(T[i]) || 0) / 1440; return a >= b[0] && a < b[1]; }); return '<span class="pill">' + esc(b[2]) + " <b>" + dl(l, "Open, " + b[2]) + "</b></span>"; }).join("") + "</div>" +
     table(idx, ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next"], { empty: "No open tickets match." });
 }
-function csv(idx) {
+function csv(idx, title) {
   const head = ["Key", "Priority", "Summary", "ME ID", "Status", "Stage", "Created", "Age", "First response", "Since last move", "Our time", "Benchmark", "PO", "Module", "SVM In Charge", "Current Worker", "LRPS", "LRPS assignee", "Next action", "Components"];
   const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
   const lines = [head.map(q).join(",")].concat(idx.map((i) => { const t = T[i], e = E[i];
     return [t.key, t.priority, t.summary, t.meId, t.status, STAGE_TXT[e.stage], fdt(t.created), fmt(ageOf(t)), e.frState === "met" || e.frState === "missed" ? fmt(e.fr.min) + " (" + e.frState + ")" : e.frState || "",
       fmt(e.sinceMoveMin), fmt(e.oursMin), e.target ? fmt(e.target.res) : "", e.po.po, e.po.module, t.svm, t.cw, t.lrps.join(" "), lrpsNames(t), t.nextAction, t.components.join("; ")].map(q).join(","); }));
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv" }));
-  a.download = "Swire-open-tickets-" + HC.dayKey(NOW) + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  a.download = "Swire-" + String(title || "open tickets").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") + "-" + HC.dayKey(NOW) + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 /* ══ Analytics ══ */
 function rangeMs() {
-  const today = HC.istMidnight(NOW);
-  switch (UI.range) {
+  const today = HC.istMidnight(NOW), p = HC.ist(NOW);
+  switch (GF.range) {
     case "start": return { from: HC.dateMs(CFG.start), to: null, label: "since " + fday(HC.dateMs(CFG.start)) };
     case "official": return { from: HC.dateMs(CFG.officialStart), to: null, label: "since " + fday(HC.dateMs(CFG.officialStart)) };
     case "7": return { from: today - 6 * DAY, to: null, label: "last 7 days" };
     case "30": return { from: today - 29 * DAY, to: null, label: "last 30 days" };
-    case "month": { const p = HC.ist(NOW); return { from: Date.UTC(p.y, p.mo, 1) - 330 * MIN, to: null, label: "this month" }; }
-    case "all": return { from: null, to: null, label: "all time" };
-    case "custom": { const f = HC.dateMs(UI.from), t = HC.dateMs(UI.to); return { from: f, to: t != null ? t + DAY : null, label: (UI.from || "…") + " to " + (UI.to || "…") }; }
+    case "month": return { from: Date.UTC(p.y, p.mo, 1) - 330 * MIN, to: null, label: "this month" };
+    case "lastmonth": return { from: Date.UTC(p.y, p.mo - 1, 1) - 330 * MIN, to: Date.UTC(p.y, p.mo, 1) - 330 * MIN, label: "last month" };
+    case "custom": { const f = HC.dateMs(GF.from), t = HC.dateMs(GF.to); return { from: f, to: t != null ? t + DAY : null, label: (GF.from ? fday(f) : "…") + " to " + (GF.to ? fday(t) : "…") }; }
   }
-  return { from: null, to: null, label: "" };
+  return { from: null, to: null, label: "all time" };
 }
-function rangeBar() {
-  const R = [["start", "Since counting start (" + fday(HC.dateMs(CFG.start)) + ")"], ["official", "Since 1 Nov 2026"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"], ["all", "All time"], ["custom", "Custom"]];
-  return '<div class="bar"><span class="lbl">Period</span>' + R.map(([id, t]) => '<button class="pill" data-range="' + id + '" aria-pressed="' + (UI.range === id) + '">' + esc(t) + "</button>").join("") +
-    (UI.range === "custom" ? '<input type="date" class="inp" id="rFrom" value="' + esc(UI.from) + '"><span class="dim">to</span><input type="date" class="inp" id="rTo" value="' + esc(UI.to) + '">' : "") + "</div>";
-}
-function histNeed(rg) {
-  /* status history is fetched automatically for open tickets and the counting period; an older range may need it */
-  const need = T.filter((t, i) => !E[i].hist && t.created != null && (rg.from == null || t.created >= rg.from) && (rg.to == null || t.created < rg.to)).map((t) => t._row);
-  return need;
+function histNeed() { return T.filter((t, i) => !E[i].hist && t.created != null).map((t) => t._row); }
+function groupIdx(idx, keysOf) { const g = {}; idx.forEach((i) => { keysOf(i).forEach((k) => { (g[k] = g[k] || []).push(i); }); }); return Object.keys(g).map((k) => ({ k, idx: g[k] })).sort((a, b) => b.idx.length - a.idx.length); }
+function hbars(list, title, n) {
+  list = list.slice(0, n || 14);
+  if (!list.length) return '<div class="dim small">No data.</div>';
+  const mx = list[0].idx.length;
+  return list.map((x) => '<div class="hb"><span class="lb" title="' + esc(x.k) + '">' + esc(x.k) + '</span><span class="tr"><i style="width:' + (x.idx.length / mx * 100) + '%"></i></span><span class="num">' + dl(x.idx, title + ", " + x.k) + "</span></div>").join("");
 }
 function viewAnalytics() {
-  const rg = rangeMs(), A = HC.analytics(T, E, rg.from, rg.to, NOW), need = histNeed(rg);
-  let h = rangeBar() + "<h2>Analytics, " + esc(rg.label) + "</h2><p class=\"sub\">Tickets created in the period (closures counted on the day they closed). Every day counts as a working day during Hypercare.</p>";
-  if (need.length) h += '<div class="warnbox">' + need.length + " tickets in this period have no status history yet, so their first response and resolution are not counted. <button class=\"btn\" id=\"btnHist\">Read their history from Jira</button></div>";
-  /* inflow vs closed per day */
-  const keys = Object.keys(A.days).sort(); let first = keys[0], last = keys[keys.length - 1];
-  if (rg.from != null) first = HC.dayKey(rg.from); if (!last || last < HC.dayKey(NOW)) last = HC.dayKey(Math.min(NOW, rg.to != null ? rg.to - 1 : NOW));
-  const seq = []; if (first) for (let d = HC.dateMs(first); d != null && HC.dayKey(d) <= last && seq.length < 400; d += DAY) seq.push(HC.dayKey(d));
-  const mx = Math.max(1, ...seq.map((k) => Math.max((A.days[k] || {}).c || 0, (A.days[k] || {}).x || 0)));
-  const chart = seq.length ? '<div class="bars">' + seq.map((k) => { const v = A.days[k] || { c: 0, x: 0 }; return '<div class="b" title="' + k + ": " + v.c + " created, " + v.x + ' closed"><div style="display:flex;gap:1px;align-items:flex-end;height:100%"><i class="c" style="flex:1;height:' + (v.c / mx * 100) + '%"></i><i class="x" style="flex:1;height:' + (v.x / mx * 100) + '%"></i></div></div>'; }).join("") + "</div>" +
-    '<div class="axis"><span>' + esc(fday(HC.dateMs(seq[0]))) + "</span><span>" + esc(fday(HC.dateMs(seq[seq.length - 1]))) + '</span></div><div class="legend"><span><i style="background:var(--navy3)"></i>Created ' + A.created.length + '</span><span><i style="background:var(--sea)"></i>Closed ' + A.closed.length + "</span></div>" : '<div class="empty">No tickets in this period.</div>';
+  const rg = rangeMs(), all = T.map((t, i) => i), created = all.filter((i) => T[i].created != null), need = histNeed();
+  const closed = all.filter((i) => E[i].stage === "closed");
+  let h = "<h2>Analytics, " + esc(rg.label) + "</h2><p class=\"sub\">Tickets created in the period chosen at the top, with the other filters applied. Every day counts as a working day during Hypercare. Every number opens its tickets.</p>";
+  if (need.length) h += '<div class="warnbox">' + need.length + ' tickets here have no status history yet, so their first response and resolution are not counted. <button class="btn" id="btnHist">Read their history from Jira</button></div>';
+  /* per day */
+  const days = {}; created.forEach((i) => { const k = HC.dayKey(T[i].created); (days[k] = days[k] || { c: [], x: [] }).c.push(i); });
+  closed.forEach((i) => { if (E[i].closedAt != null) { const k = HC.dayKey(E[i].closedAt); if (days[k]) days[k].x.push(i); } });
+  const keys = Object.keys(days).sort(), seq = [];
+  if (keys.length) for (let d = HC.dateMs(keys[0]); d != null && HC.dayKey(d) <= keys[keys.length - 1] && seq.length < 400; d += DAY) seq.push(HC.dayKey(d));
+  const mx = Math.max(1, ...seq.map((k) => days[k] ? Math.max(days[k].c.length, days[k].x.length) : 0));
+  const chart = seq.length ? '<div class="bars">' + seq.map((k) => { const v = days[k] || { c: [], x: [] };
+      return '<div class="b" data-list="' + reg(v.c.concat(v.x.filter((i) => v.c.indexOf(i) < 0)), "Created or closed on " + fday(HC.dateMs(k))) + '" title="' + k + ": " + v.c.length + " created, " + v.x.length + ' closed (of those created in the period)"><div style="display:flex;gap:1px;align-items:flex-end;height:100%"><i class="c" style="flex:1;height:' + (v.c.length / mx * 100) + '%"></i><i class="x" style="flex:1;height:' + (v.x.length / mx * 100) + '%"></i></div></div>'; }).join("") + "</div>" +
+    '<div class="axis"><span>' + esc(fday(HC.dateMs(seq[0]))) + "</span><span>" + esc(fday(HC.dateMs(seq[seq.length - 1]))) + '</span></div><div class="legend"><span><i style="background:var(--navy3)"></i>Created ' + dl(created, "Created") + '</span><span><i style="background:var(--sea)"></i>Closed ' + dl(closed, "Closed") + "</span></div>" : '<div class="empty">No tickets in this period.</div>';
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">Inflow and closures per day</div>' + chart + "</div>";
-  /* service performance by priority */
-  const rows = HC.SEVS.map((s) => { const b = A.bySev[s.id], tg = CFG.targets[s.id];
-    const pf = (m, d) => d ? '<span class="pct">' + Math.round(m / d * 100) + "%</span> <span class=\"dim small\">" + m + "/" + d + "</span>" : '<span class="dim">—</span>';
-    return "<tr><td>" + prChip({ sev: s.id, priority: s.name }) + "</td><td class=\"num\">" + b.n + "</td><td>" + fmt(tg.fr) + "</td><td>" + pf(b.frMet, b.frDecided) + (b.frNoHist ? ' <span class="dim small">(' + b.frNoHist + " no history)</span>" : "") + "</td><td>" + (b.frCnt ? fmt(b.frSum / b.frCnt) : "—") + "</td><td>" + fmt(tg.res) + "</td><td>" + pf(b.resMet, b.resDecided) + "</td></tr>"; }).join("");
-  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Against the Section 10.1 targets</div><div class="tw"><table><thead><tr><th>Priority</th><th>Created</th><th>First response target</th><th>Met</th><th>Average first response</th><th>Resolution benchmark</th><th>Closed within benchmark</th></tr></thead><tbody>' + rows + "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">First response is the first move to a client-side status. The resolution benchmark is a guide, measured on our side only.</p></div>";
-  const hbars = (list, total) => list.length ? list.map((x) => '<div class="hb"><span class="lb" title="' + esc(x.k) + '">' + esc(x.k) + '</span><span class="tr"><i style="width:' + (x.n / Math.max(1, list[0].n) * 100) + '%"></i></span><span class="num">' + x.n + "</span></div>").join("") : '<div class="dim small">No data.</div>';
-  h += '<div class="grid3"><div class="panel"><div class="sec-h" style="margin-top:0">By component</div>' + hbars(A.comp) + '</div><div class="panel"><div class="sec-h" style="margin-top:0">By environment</div>' + hbars(A.env) + '<div class="sec-h">By request type</div>' + hbars(A.type) + '</div><div class="panel"><div class="sec-h" style="margin-top:0">Top business users</div>' + hbars(A.users) + "</div></div>";
-  /* Section 11 measures + exit criteria */
-  const C = HC.checks(T.filter((t, i) => A.created.indexOf(i) > -1), E.filter((e, i) => A.created.indexOf(i) > -1), NOW, CFG);
-  const mand = C.find((c) => c.id === "mandatory"), openInR = A.created.filter((i) => E[i].stage !== "closed").length;
-  const mandPct = openInR ? Math.round((openInR - mand.keys.length) / openInR * 100) : null;
-  const meas = [["ME ID recorded (target 100%)", A.meidPct], ["Open tickets with all mandatory fields", mandPct], ["Closed with closure notes", A.notesPct]];
-  h += '<div class="grid2"><div class="panel"><div class="sec-h" style="margin-top:0">Section 11 measures</div>' + meas.map(([k, v]) => '<div class="hb wide"><span class="lb">' + esc(k) + '</span><span class="tr"><i style="width:' + (v || 0) + '%;background:' + (v == null ? "var(--line2)" : v >= 95 ? "var(--ok)" : v >= 80 ? "var(--cr)" : "var(--ss)") + '"></i></span><span class="num">' + (v == null ? "—" : v + "%") + "</span></div>").join("") +
-    '<div class="hb wide"><span class="lb">Reopened tickets</span><span></span><span class="num">' + A.reopened + "</span></div></div>" + exitPanel() + "</div>";
+  /* against the Section 10.1 targets */
+  const rows = HC.SEVS.map((s) => { const tg = CFG.targets[s.id], c = created.filter((i) => T[i].sev === s.id);
+    const frD = c.filter((i) => ["met", "missed", "breached"].indexOf(E[i].frState) > -1), frM = frD.filter((i) => E[i].frState === "met"), frX = frD.filter((i) => E[i].frState !== "met"), frN = c.filter((i) => E[i].frState === "nohist");
+    const rsD = c.filter((i) => E[i].resState === "met" || E[i].resState === "missed"), rsM = rsD.filter((i) => E[i].resState === "met"), rsX = rsD.filter((i) => E[i].resState === "missed");
+    const avg = frD.filter((i) => E[i].fr && E[i].fr.min != null), av = avg.length ? avg.reduce((a, i) => a + E[i].fr.min, 0) / avg.length : null;
+    const pf = (m, d, x, what) => d.length ? '<span class="pct">' + Math.round(m.length / d.length * 100) + '%</span> <span class="small">' + dl(m, s.name + ", " + what + " met") + " of " + dl(d, s.name + ", " + what + " decided") + (x.length ? ', <span style="color:var(--ss)">' + dl(x, s.name + ", " + what + " missed") + " missed</span>" : "") + "</span>" : '<span class="dim">—</span>';
+    return "<tr><td>" + prChip({ sev: s.id, priority: s.name }) + '</td><td class="num">' + dl(c, s.name + " created") + "</td><td>" + fmt(tg.fr) + "</td><td>" + pf(frM, frD, frX, "first response") + (frN.length ? ' <span class="dim small">(' + dl(frN, s.name + ", no history") + " no history)</span>" : "") + "</td><td>" + (av != null ? fmt(av) : "—") + "</td><td>" + fmt(tg.res) + "</td><td>" + pf(rsM, rsD, rsX, "resolution") + "</td></tr>"; }).join("");
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">Against the Section 10.1 targets</div><div class="tw"><table><thead><tr><th>Priority</th><th>Created</th><th>First response target</th><th>Met</th><th>Average first response</th><th>Resolution benchmark</th><th>Closed within benchmark</th></tr></thead><tbody>' + rows + '</tbody></table></div><p class="sub" style="margin:8px 0 0">First response is the first move to a client-side status. The resolution benchmark is a guide, measured on our side only.</p></div>';
+  h += '<div class="grid3"><div class="panel"><div class="sec-h" style="margin-top:0">By component</div>' + hbars(groupIdx(created, (i) => T[i].components.length ? T[i].components : ["(none)"]), "Component") +
+    '</div><div class="panel"><div class="sec-h" style="margin-top:0">By environment</div>' + hbars(groupIdx(created, (i) => [T[i].env || "(blank)"]), "Environment", 8) + '<div class="sec-h">By request type</div>' + hbars(groupIdx(created, (i) => [T[i].type || "(blank)"]), "Request type", 6) +
+    '</div><div class="panel"><div class="sec-h" style="margin-top:0">Top business users</div>' + hbars(groupIdx(created.filter((i) => T[i].businessUser), (i) => [T[i].businessUser]), "Business user", 10) + "</div></div>";
+  /* Section 11 measures */
+  const C = HC.checks(T, E, NOW, CFG), get = (id) => (C.find((c) => c.id === id) || { keys: [] }).keys, kset = (keys) => { const m = {}; keys.forEach((k) => { m[k] = 1; }); return all.filter((i) => m[T[i].key]); };
+  const noMe = created.filter((i) => !T[i].meId), openC = created.filter((i) => E[i].stage !== "closed"), mandMiss = kset(get("mandatory")), notes = kset(get("notes")), reo = kset(get("reopen"));
+  const hcFrom = HC.dateMs(CFG.start) || 0, closedHc = closed.filter((i) => (E[i].closedAt || 0) >= hcFrom);
+  const meas = [["ME ID recorded (target 100%)", created.length, noMe, "No ME ID"], ["Open tickets with all mandatory fields", openC.length, mandMiss, "Mandatory fields missing"], ["Closed with closure notes (since counting start)", closedHc.length, notes, "Closed without closure notes"]];
+  h += '<div class="grid2"><div class="panel"><div class="sec-h" style="margin-top:0">Section 11 measures</div>' + meas.map(([k, n, bad, t]) => { const v = n ? Math.round((n - bad.length) / n * 100) : null;
+      return '<div class="hb wide"><span class="lb">' + esc(k) + '</span><span class="tr"><i style="width:' + (v || 0) + "%;background:" + (v == null ? "var(--line2)" : v >= 95 ? "var(--ok)" : v >= 80 ? "var(--cr)" : "var(--ss)") + '"></i></span><span class="num">' + (v == null ? "—" : v + "%") + "</span></div>" + (bad.length ? '<div class="small dim" style="margin:-2px 0 6px">' + dl(bad, t) + " " + esc(t.toLowerCase()) + "</div>" : ""); }).join("") +
+    '<div class="hb wide"><span class="lb">Reopened tickets</span><span></span><span class="num">' + dl(reo, "Reopened tickets") + "</span></div></div>" + exitPanel() + "</div>";
   return h;
 }
 function exitPanel() {
-  const open = openIdx(), ssOpen = open.filter((i) => T[i].sev === "showstopper").length;
+  const open = openIdx(), ssOpen = open.filter((i) => T[i].sev === "showstopper" && E[i].stage !== "billing");
   const p = HC.ist(NOW), m0 = Date.UTC(p.y, p.mo, 1) - 330 * MIN, m1 = Date.UTC(p.y, p.mo - 1, 1) - 330 * MIN;
-  const inflow = (a, b) => T.filter((t) => t.created != null && t.created >= a && t.created < b).length;
-  const thisM = inflow(m0, NOW + 1), lastM = inflow(m1, m0);
-  const wk = (k) => T.filter((t) => t.sev === "critical" && t.created != null && t.created >= NOW - (k + 1) * 7 * DAY && t.created < NOW - k * 7 * DAY).length;
-  const crit = [wk(0), wk(1), wk(2), wk(3)], stable = Math.max(...crit) - Math.min(...crit) <= Math.max(2, Math.round(Math.max(...crit) * 0.25));
-  const item = (ok, txt, d) => '<li><span class="m ' + (ok == null ? "na" : ok ? "ok" : "no") + '">' + (ok == null ? "–" : ok ? "✓" : "✕") + "</span><span>" + esc(txt) + (d ? '<span class="dim small"> ' + esc(d) + "</span>" : "") + "</span></li>";
+  const inR = (a, b) => T.map((t, i) => i).filter((i) => T[i].created != null && T[i].created >= a && T[i].created < b);
+  const thisM = inR(m0, NOW + 1), lastM = inR(m1, m0);
+  const wk = (k) => inR(NOW - (k + 1) * 7 * DAY, NOW - k * 7 * DAY).filter((i) => T[i].sev === "critical");
+  const crit = [wk(3), wk(2), wk(1), wk(0)], n = crit.map((x) => x.length), stable = Math.max(...n) - Math.min(...n) <= Math.max(2, Math.round(Math.max(...n) * 0.25));
+  const item = (ok, txt, d) => '<li><span class="m ' + (ok == null ? "na" : ok ? "ok" : "no") + '">' + (ok == null ? "–" : ok ? "✓" : "✕") + "</span><span>" + esc(txt) + (d ? ' <span class="dim small">' + d + "</span>" : "") + "</span></li>";
   const ph = HC.phase(NOW, CFG);
-  return '<div class="panel"><div class="sec-h" style="margin-top:0">Exit criteria (Section 10.7), Month ' + (ph.month || "–") + " " + esc(ph.name) + '</div><ul class="exit">' +
-    item(ssOpen === 0, "No open Showstopper", ssOpen ? ssOpen + " open" : "") +
-    item(stable, "Critical volume stable for 4+ weeks", "last 4 weeks: " + crit.slice().reverse().join(", ")) +
-    item(lastM ? thisM < lastM : null, "Inflow falling month on month", "this month so far " + thisM + ", last month " + lastM) +
-    item(null, "Backlog within the agreed level", open.length + " open; level not agreed yet") +
+  return '<div class="panel"><div class="sec-h" style="margin-top:0">Exit criteria (Section 10.7), month ' + (ph.month || "–") + ", " + esc(ph.name.toLowerCase()) + '</div><ul class="exit">' +
+    item(ssOpen.length === 0, "No open Showstopper", ssOpen.length ? dl(ssOpen, "Open Showstoppers") + " open" : "") +
+    item(stable, "Critical volume stable for 4+ weeks", "last 4 weeks: " + crit.map((x, k) => dl(x, "Criticals created " + (3 - k === 0 ? "in the last 7 days" : (3 - k) + " week" + (3 - k > 1 ? "s" : "") + " before"))).join(", ")) +
+    item(lastM.length ? thisM.length < lastM.length : null, "Inflow falling month on month", "this month so far " + dl(thisM, "Created this month") + ", last month " + dl(lastM, "Created last month")) +
+    item(null, "Backlog within the agreed level", dl(open, "All open tickets") + " open; level not agreed yet") +
     item(null, "Known-issues log complete", "kept by the PO team") +
     item(null, "BAU team trained and has shadowed Hypercare", "open item 2") +
     item(null, "Swire sign-off", "") + "</ul></div>";
@@ -620,7 +715,7 @@ function overlapNote() {
    hd, engg : every open ticket on our side at the end of the shift, split Help Desk / Engineering (Master Data)
    client   : open tickets with the client, counted only */
 function sideOf(i) {
-  const e = E[i]; if (e.stage === "closed") return "closed"; if (e.stage === "client") return "client";
+  const e = E[i]; if (e.stage === "closed") return "closed"; if (e.stage === "client") return "client"; if (e.stage === "billing") return "billing";
   if (e.stage === "openbox") return "hd";
   const c = window.HDClass && HDClass.classify3 ? HDClass.classify3(T[i].status) : "hd";
   return c === "engg" ? "engg" : c === "client" ? "client" : "hd";
@@ -629,14 +724,14 @@ const bySevAge = (a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev) || (T[a].
 function hoData(which) {
   const w = shiftWindow(which), all = T.map((t, i) => i), open = openIdx();
   const createdAll = all.filter((i) => T[i].created != null && T[i].created >= w.start && T[i].created < w.end);
-  const created = createdAll.filter((i) => sideOf(i) !== "client").sort(bySevAge);
+  const created = createdAll.filter((i) => sideOf(i) !== "client" && sideOf(i) !== "billing").sort(bySevAge);
   const createdClient = createdAll.length - created.length;
   const hd = open.filter((i) => sideOf(i) === "hd").sort(bySevAge), engg = open.filter((i) => sideOf(i) === "engg").sort(bySevAge);
-  const client = open.filter((i) => sideOf(i) === "client");
+  const client = open.filter((i) => sideOf(i) === "client"), billing = open.filter((i) => sideOf(i) === "billing");
   const closed = all.filter((i) => E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt >= w.start && E[i].closedAt < w.end);
   const cnt = (list) => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = 0; }); list.forEach((i) => { if (T[i].sev) o[T[i].sev]++; }); return o; };
   const escL = HC.escalations(T, E, NOW, CFG).filter((x) => sideOf(x.i) !== "client");
-  return { w, created, createdClient, hd, engg, client, closed, clientBySev: cnt(client), hdBySev: cnt(hd), enggBySev: cnt(engg), createdBySev: cnt(created), esc: escL };
+  return { w, createdAll, created, createdClient, hd, engg, client, billing, closed, clientBySev: cnt(client), hdBySev: cnt(hd), enggBySev: cnt(engg), createdBySev: cnt(created), esc: escL };
 }
 const HO_KEY = "hd-swire-ho";
 function hoPeople() { try { return JSON.parse(localStorage.getItem(HO_KEY) || "{}") || {}; } catch (e) { return {}; } }
@@ -686,7 +781,8 @@ function mailHTML(d, ppl) {
     '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;width:auto">' +
     "<tr>" + cell("Created this shift", d.created.length + d.createdClient, "") + cell("Closed this shift", d.closed.length, "#15803D") + "</tr>" +
     "<tr>" + cell("Pending with SVM, Help Desk", d.hd.length, "#0E7C86") + cell("Pending with SVM, Engineering", d.engg.length, "#24507C") + "</tr>" +
-    "<tr>" + cell("With the client (not listed)", d.client.length, "#B45309") + cell("Escalations to raise", d.esc.length, d.esc.length ? "#C8102E" : "") + "</tr></table>" +
+    "<tr>" + cell("With the client (not listed)", d.client.length, "#B45309") + cell("Delivered, with Receivables (not listed)", d.billing.length, "#6D28D9") + "</tr>" +
+    "<tr>" + cell("Escalations to raise", d.esc.length, d.esc.length ? "#C8102E" : "") + '<td style="' + TD + '"></td><td style="' + TD + '"></td></tr></table>' +
     (note ? "<h3 " + H2 + ">Notes for the next shift</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
     /* Showstopper / Critical / High escalations one by one; Medium and Low past benchmark as a count (weekly ageing review) */
     (function () {
@@ -707,7 +803,7 @@ function mailText(d, ppl) {
   const sec = (title, list, line) => title + "\n" + (list.length ? list.map(row).join("\n") : "- none") + "\n";
   const note = (ppl.note || "").trim();
   return "Hi " + (ppl.to || "team") + ",\n\nHanding over the Swire Phoenix Hypercare " + d.w.label + (d.w.live ? ", position at " + fdt(d.w.end) + " IST" : "") + ".\n\n" +
-    "Created this shift: " + (d.created.length + d.createdClient) + "   Closed: " + d.closed.length + "\nPending with SVM: Help Desk " + d.hd.length + ", Engineering " + d.engg.length + "\nWith the client (not listed): " + d.client.length + "\n\n" +
+    "Created this shift: " + (d.created.length + d.createdClient) + "   Closed: " + d.closed.length + "\nPending with SVM: Help Desk " + d.hd.length + ", Engineering " + d.engg.length + "\nWith the client (not listed): " + d.client.length + "   Delivered, with Receivables: " + d.billing.length + "\n\n" +
     (note ? "Notes for the next shift:\n" + note + "\n\n" : "") +
     sec("1. CREATED THIS SHIFT (" + d.created.length + ")", d.created) + "\n" + sec("2. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("3. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" +
     "4. WITH THE CLIENT: " + d.client.length + " (" + sevLine(d.clientBySev) + "), not listed.\n\nEvery open ticket must have a named owner on the next shift (R8).\n\nRegards,\n" + (ppl.from || "");
@@ -722,9 +818,9 @@ function viewHandover() {
   return '<div class="bar noprint"><span class="lbl">Shift</span>' + pills +
     '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoEml">Download email draft</button><button class="btn" id="hoPrint">Print</button></div>' +
     "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>" +
-    '<div class="signals noprint">' + sig("teal", d.created.length + d.createdClient, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : "")) + sig("", d.closed.length, "Closed this shift", "") +
-    sig("teal", d.hd.length, "Pending with Help Desk", sevLine(d.hdBySev)) + sig("", d.engg.length, "Pending with Engineering", sevLine(d.enggBySev)) +
-    sig("", d.client.length, "With the client", "counted only") + sig(d.esc.length ? "cr" : "", d.esc.length, "Escalations to raise", "") + "</div>" +
+    '<div class="signals noprint">' + sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift") +
+    sigL("teal", d.hd, "Pending with Help Desk", sevLine(d.hdBySev), "Pending with Help Desk") + sigL("eng", d.engg, "Pending with Engineering", sevLine(d.enggBySev), "Pending with Engineering") +
+    sigL("", d.client, "With the client", "counted only", "With the client") + sigL("", d.billing, "Delivered, billing", "counted only", "Delivered, billing") + sigL(d.esc.length ? "cr" : "", d.esc.map((x) => x.i), "Escalations to raise", "", "Escalations to raise") + "</div>" +
     '<div class="panel noprint"><div class="grid2" style="gap:12px"><div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoFrom">Handed over by</label><input class="inp" id="hoFrom" value="' + esc(ppl.from || "") + '" placeholder="Your name"></div>' +
     '<div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoTo">Handed over to</label><input class="inp" id="hoTo" value="' + esc(ppl.to || "") + '" placeholder="Next shift, e.g. Night Hypercare team"></div></div>' +
     '<div class="setrow" style="grid-template-columns:130px 1fr;align-items:start"><label for="hoNote">Notes for the next shift</label><textarea class="inp" id="hoNote" rows="3" placeholder="Anything promised to Swire, calls in progress, things to watch">' + esc(UI.hoNote || "") + "</textarea></div></div>" +
@@ -735,21 +831,27 @@ function viewHandover() {
 function weekStart(ms) { const m = HC.istMidnight(ms), dow = HC.ist(m).dow; return m - ((dow + 6) % 7) * DAY; }
 function viewWeekly() {
   if (UI.week == null) UI.week = weekStart(NOW);
-  const a = UI.week, b = a + 7 * DAY, A = HC.analytics(T, E, a, b, NOW);
-  const openEnd = T.map((t, i) => i).filter((i) => T[i].created != null && T[i].created < b && !(E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt < b));
-  const ssList = A.created.filter((i) => T[i].sev === "showstopper");
-  let fm = 0, fd = 0, rm = 0, rd = 0; HC.SEVS.forEach((s) => { const x = A.bySev[s.id]; fm += x.frMet; fd += x.frDecided; rm += x.resMet; rd += x.resDecided; });
-  const pct = (m, d) => d ? Math.round(m / d * 100) + "% (" + m + " of " + d + ")" : "no data";
-  const bySev = HC.SEVS.map((s) => "<tr><td>" + esc(s.name) + "</td><td class=\"num\">" + A.bySev[s.id].n + "</td><td class=\"num\">" + openEnd.filter((i) => T[i].sev === s.id).length + "</td><td>" + (A.bySev[s.id].frDecided ? Math.round(A.bySev[s.id].frMet / A.bySev[s.id].frDecided * 100) + "%" : "—") + "</td></tr>").join("");
+  const a = UI.week, b = a + 7 * DAY, all = T.map((t, i) => i);   // T already reflects the filters (date range lifted on this tab, see rebuild)
+  const raised = all.filter((i) => T[i].created != null && T[i].created >= a && T[i].created < b);
+  const closedW = all.filter((i) => E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt >= a && E[i].closedAt < b);
+  const openEnd = all.filter((i) => T[i].created != null && T[i].created < b && !(E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt < b));
+  const ssList = raised.filter((i) => T[i].sev === "showstopper");
+  const frD = raised.filter((i) => ["met", "missed", "breached"].indexOf(E[i].frState) > -1), frM = frD.filter((i) => E[i].frState === "met");
+  const rsD = raised.filter((i) => E[i].resState === "met" || E[i].resState === "missed"), rsM = rsD.filter((i) => E[i].resState === "met");
+  const reo = raised.filter((i) => E[i].reopens > 0), noMe = raised.filter((i) => !T[i].meId), noNotes = closedW.filter((i) => !T[i].reasonText || !T[i].resolutionDetails);
+  const pct = (m, d, t) => d.length ? Math.round(m.length / d.length * 100) + "% (" + dl(m, t + " met") + " of " + dl(d, t) + ")" : "no data";
+  const bySev = HC.SEVS.map((s) => { const r = raised.filter((i) => T[i].sev === s.id), o = openEnd.filter((i) => T[i].sev === s.id), fd = frD.filter((i) => T[i].sev === s.id), fm = fd.filter((i) => E[i].frState === "met");
+    return "<tr><td>" + esc(s.name) + '</td><td class="num">' + dl(r, s.name + " raised this week") + '</td><td class="num">' + dl(o, s.name + " open at week end") + "</td><td>" + (fd.length ? Math.round(fm.length / fd.length * 100) + "% <span class=\"dim small\">" + dl(fm, s.name + " first response met") + " of " + dl(fd, s.name + " first response decided") + "</span>" : "—") + "</td></tr>"; }).join("");
+  const comps = groupIdx(raised, (i) => T[i].components.length ? T[i].components : ["(none)"]).slice(0, 6);
   const opts = []; for (let k = 0; k < 10; k++) { const w = weekStart(NOW) - k * 7 * DAY; opts.push('<option value="' + w + '"' + (w === a ? " selected" : "") + ">Week of " + esc(fday(w)) + "</option>"); }
-  return '<div class="bar noprint"><select class="inp" id="wkSel">' + opts.join("") + '</select><button class="btn pri" id="wkPrint">Print or save as PDF</button></div>' +
+  return '<div class="bar noprint"><select class="inp" id="wkSel">' + opts.join("") + '</select><button class="btn pri" id="wkPrint">Print or save as PDF</button><span class="dim small">The week replaces the date filter here; the other filters apply.</span></div>' +
     '<div class="report" id="wkReport"><h3>Swire Shipping, Phoenix Hypercare weekly report</h3><p class="sub">Week of ' + esc(fday(a)) + " to " + esc(fday(b - DAY)) + ". Hypercare month " + (HC.phase(b - 1, CFG).month || "–") + ".</p>" +
-    '<div class="signals">' + [["Tickets raised", A.created.length], ["Tickets closed", A.closed.length], ["Open at week end", openEnd.length], ["Showstoppers raised", ssList.length]].map(([k, v]) => '<div class="sig"><div class="v num">' + v + '</div><div class="k">' + esc(k) + "</div></div>").join("") + "</div>" +
-    "<h3>Service</h3><p>First response within target: <b>" + pct(fm, fd) + "</b>. Closed within the resolution benchmark: <b>" + pct(rm, rd) + "</b>. Reopened: <b>" + A.reopened + "</b>.</p>" +
+    '<div class="signals">' + sigL("", raised, "Tickets raised", "", "Raised this week") + sigL("", closedW, "Tickets closed", "", "Closed this week") + sigL("", openEnd, "Open at week end", "", "Open at week end") + sigL(ssList.length ? "ss" : "", ssList, "Showstoppers raised", "", "Showstoppers raised this week") + "</div>" +
+    "<h3>Service</h3><p>First response within target: <b>" + pct(frM, frD, "First response") + "</b>. Closed within the resolution benchmark: <b>" + pct(rsM, rsD, "Resolution") + "</b>. Reopened: <b>" + dl(reo, "Reopened") + "</b>.</p>" +
     '<h3>By priority</h3><div class="tw"><table><thead><tr><th>Priority</th><th>Raised</th><th>Open at week end</th><th>First response met</th></tr></thead><tbody>' + bySev + "</tbody></table></div>" +
     "<h3>Showstoppers this week</h3>" + (ssList.length ? "<ul style=\"padding-left:18px\">" + ssList.map((i) => "<li><span class=\"key\">" + esc(T[i].key) + "</span> " + esc(T[i].summary) + " <span class=\"dim\">(" + esc(T[i].status) + ")</span></li>").join("") + "</ul>" : "<p>None.</p>") +
-    "<h3>Most affected areas</h3><p>" + (A.comp.slice(0, 6).map((x) => esc(x.k) + " " + x.n).join(", ") || "No data.") + "</p>" +
-    "<h3>Data quality</h3><p>ME ID recorded on " + (A.meidPct == null ? "—" : A.meidPct + "%") + " of tickets raised. Closure notes on " + (A.notesPct == null ? "—" : A.notesPct + "%") + " of tickets closed.</p>" +
+    "<h3>Most affected areas</h3><p>" + (comps.map((x) => esc(x.k) + " " + dl(x.idx, "Raised this week, " + x.k)).join(", ") || "No data.") + "</p>" +
+    "<h3>Data quality</h3><p>ME ID missing on " + dl(noMe, "Raised without ME ID") + " of " + raised.length + " tickets raised. Closure notes missing on " + dl(noNotes, "Closed without closure notes") + " of " + closedW.length + " tickets closed.</p>" +
     '<p class="dim small" style="margin-top:14px">Targets are Solverminds internal working targets (Section 10.1), not contractual. Generated ' + esc(fdt(NOW)) + " IST.</p></div>";
 }
 
@@ -757,18 +859,21 @@ function viewWeekly() {
 function viewSetup() {
   const t = CFG.targets;
   const trow = (id) => { const s = HC.SEVS.find((x) => x.id === id); return "<tr><td>" + esc(s.name) + "</td>" + ["fr", "upd", "res"].map((k) => '<td><input class="inp" style="width:90px" data-tg="' + id + "." + k + '" value="' + t[id][k] + '"> <span class="dim small">min</span></td>').join("") + "</tr>"; };
-  return "<h2>Setup</h2><p class=\"sub\">Saved in this browser. Defaults come from the runbook (v1.0, 28 Oct 2026).</p>" +
+  return "<h2>Master data</h2><p class=\"sub\">Settings and contacts for this module, saved in this browser. Defaults come from the runbook (v1.0, 28 Oct 2026).</p>" +
     '<div class="panel"><div class="setrow"><label for="sStart">Counting starts</label><div><input type="date" class="inp" id="sStart" value="' + esc(CFG.start) + '"> <span class="dim small">Month 1 of the Hypercare phases counts from here. The runbook’s effective date is ' + esc(fday(HC.dateMs(CFG.officialStart))) + ".</span></div></div>" +
     '<div class="setrow"><label for="sBox">Open box statuses</label><input class="inp" id="sBox" value="' + esc(CFG.openBox.join(", ")) + '"></div>' +
+    '<div class="setrow"><label for="sBill">Delivered, billing statuses</label><div><input class="inp" id="sBill" style="width:100%" value="' + esc((CFG.billing || []).join(", ")) + '"><div class="dim small" style="margin-top:4px">Delivered and with Receivables for invoicing or payment. Not escalated, off our clock, counted only in handover.</div></div></div>' +
     '<div class="setrow"><label for="sTri">Triage within</label><div><input class="inp" id="sTri" style="width:90px" value="' + CFG.triageMin + '"> <span class="dim small">minutes in the open box before it is flagged</span></div></div>' +
     '<div class="setrow"><span>Shifts (IST)</span><div>' + CFG.shifts.map((x, k) => '<span style="margin-right:14px;white-space:nowrap">' + esc(x.name) + ' <input class="inp" style="width:74px" data-shf="' + k + '.from" value="' + esc(x.from) + '"> to <input class="inp" style="width:74px" data-shf="' + k + '.to" value="' + esc(x.to) + '"></span>').join("") + '<div class="dim small" style="margin-top:4px">Used for shift handover. Shifts may overlap; a ticket created in an overlap is in both handovers.</div></div></div>' +
     '<div class="setrow"><label for="sPre">Jira key prefix</label><input class="inp" id="sPre" style="width:140px" value="' + esc(CFG.prefix) + '"></div>' +
-    '<div class="setrow"><span>Request types shown</span><div>' + ALLTYPES.map((x) => '<label style="margin-right:12px"><input type="checkbox" data-type="' + esc(x) + '"' + (TYPES.indexOf(x) > -1 ? " checked" : "") + "> " + esc(x) + "</label>").join("") + "</div></div></div>" +
+    "</div>" +
     '<div class="panel"><div class="sec-h" style="margin-top:0">Section 10.1 targets, round the clock</div><div class="tw"><table><thead><tr><th>Priority</th><th>First response</th><th>Analysis and ETR update</th><th>Resolution benchmark</th></tr></thead><tbody>' + HC.SEVS.map((s) => trow(s.id)).join("") + "</tbody></table></div></div>" +
-    '<div class="panel"><div class="sec-h" style="margin-top:0">Product Owners by module (Section 15.3)</div><p class="sub">A ticket with one component goes to that module’s PO. With several components, or a component not listed, the SVM In Charge is the PO. “Matches” lists the component names used in Jira, comma separated.</p><div class="tw"><table><thead><tr><th>Module</th><th>Product Owner</th><th>Phone</th><th>Matches components</th></tr></thead><tbody>' +
-    CFG.modules.map((m, k) => "<tr><td>" + esc(m.module) + '</td><td><input class="inp" data-mod="' + k + '.po" value="' + esc(m.po) + '"></td><td><input class="inp" data-mod="' + k + '.phone" value="' + esc(m.phone) + '"></td><td><input class="inp" style="width:100%" data-mod="' + k + '.match" value="' + esc(m.match.join(", ")) + '"></td></tr>').join("") + "</tbody></table></div>" +
+    '<div class="panel"><div class="sec-h" style="margin-top:0">Product Owners by module (Section 15.3)</div><p class="sub">A ticket with one component goes to that module’s PO. With several components, or a component not listed, the SVM In Charge is the PO. “Matches” lists the component names used in Jira, comma separated.</p><div class="tw"><table><thead><tr><th>Module</th><th>Product Owner</th><th>Email</th><th>Phone</th><th>Matches components</th></tr></thead><tbody>' +
+    CFG.modules.map((m, k) => "<tr><td>" + esc(m.module) + '</td><td><input class="inp" data-mod="' + k + '.po" value="' + esc(m.po) + '"></td><td><input class="inp" data-mod="' + k + '.email" value="' + esc(m.email || "") + '"></td><td><input class="inp" data-mod="' + k + '.phone" value="' + esc(m.phone) + '"></td><td><input class="inp" style="width:100%" data-mod="' + k + '.match" value="' + esc(m.match.join(", ")) + '"></td></tr>').join("") + "</tbody></table></div>" +
     '<p class="sub" style="margin-top:8px">Components on open Swire tickets that match no module: ' + esc(unmatched().join(", ") || "none") + ".</p></div>" +
-    '<div class="bar"><button class="btn pri" id="sSave">Save settings</button><button class="btn" id="sReset">Restore runbook defaults</button></div>';
+    '<div class="panel"><div class="sec-h" style="margin-top:0">Key contacts (Section 15.2)</div><div class="tw"><table><thead><tr><th>Role</th><th>Name</th><th>Email</th><th>Phone</th></tr></thead><tbody>' +
+    CFG.contacts.map((c, k) => "<tr>" + ["role", "name", "email", "phone"].map((f) => '<td><input class="inp" style="width:100%" data-ct="' + k + "." + f + '" value="' + esc(c[f] || "") + '"></td>').join("") + "</tr>").join("") + "</tbody></table></div></div>" +
+    '<div class="bar"><button class="btn pri" id="sSave">Save master data</button><button class="btn" id="sReset">Restore runbook defaults</button></div>';
 }
 function unmatched() { const s = new Set(); T.forEach((t, i) => { if (E[i].stage !== "closed") t.components.forEach((c) => { if (!HC.moduleOf(c, CFG)) s.add(c); }); }); return Array.from(s).sort(); }
 
@@ -798,11 +903,12 @@ function openTicket(i) {
 /* ══ render ══ */
 function render() {
   if (!ROWS.length) return;
-  rebuild(); paintDuty(); paintChips();
+  LISTS = {}; LSEQ = 0;
+  rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters();
   const open = openIdx(), C = HC.checks(T, E, NOW, CFG), escN = HC.escalations(T, E, NOW, CFG).length;
   const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
-  paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
-  const V = { now: viewNow, openbox: viewOpenBox, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
+  paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
+  const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
   const y = window.scrollY, f = document.activeElement && document.activeElement.id;
   el("view").innerHTML = V(); window.scrollTo(0, y);
   if (f && el(f)) { const x = el(f); x.focus(); if (x.setSelectionRange && typeof x.value === "string") x.setSelectionRange(x.value.length, x.value.length); }
@@ -812,12 +918,8 @@ function wire() {
   const on = (id, ev, fn) => { const x = el(id); if (x) x.addEventListener(ev, fn); };
   on("qIn", "input", (e) => { UI.q = e.target.value; clearTimeout(wire._t); wire._t = setTimeout(render, 220); });
   on("qStage", "change", (e) => { UI.stage = e.target.value; render(); });
-  on("qSev", "change", (e) => { UI.sev = e.target.value; render(); });
-  on("qPo", "change", (e) => { UI.po = e.target.value; render(); });
-  on("qCsv", "click", () => { let idx = openIdx(); if (UI.stage) idx = idx.filter((i) => E[i].stage === UI.stage); if (UI.sev) idx = idx.filter((i) => T[i].sev === UI.sev); if (UI.po) idx = idx.filter((i) => ((E[i].po && E[i].po.po) || "(none)") === UI.po); csv(idx); });
-  document.querySelectorAll("[data-range]").forEach((b) => b.addEventListener("click", () => { UI.range = b.dataset.range; render(); }));
-  on("rFrom", "change", (e) => { UI.from = e.target.value; render(); }); on("rTo", "change", (e) => { UI.to = e.target.value; render(); });
-  on("btnHist", "click", (e) => { const rows = histNeed(rangeMs()); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
+  on("qCsv", "click", () => csv(queueIdx(), "open tickets"));
+  on("btnHist", "click", (e) => { const rows = histNeed(); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
   document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => { UI.shift = b.dataset.shift; render(); }));
   /* handover: typing updates the preview only (no full re-render, so the caret stays put) */
   const hoRefresh = () => { const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" }); const pv = el("hoPreview"); if (pv) pv.innerHTML = '<p class="dim small" style="margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + mailHTML(d, ppl); };
@@ -850,14 +952,15 @@ function wire() {
   on("sSave", "click", () => {
     const c = JSON.parse(JSON.stringify(CFG));
     c.start = el("sStart").value || c.start; c.openBox = el("sBox").value.split(",").map((s) => s.trim()).filter(Boolean);
+    c.billing = el("sBill").value.split(",").map((x) => x.trim()).filter(Boolean);
     c.triageMin = Math.max(1, parseInt(el("sTri").value, 10) || c.triageMin); c.prefix = el("sPre").value.trim().toUpperCase() || c.prefix;
     document.querySelectorAll("[data-tg]").forEach((x) => { const [s, k] = x.dataset.tg.split("."); const v = parseFloat(x.value); if (v > 0) c.targets[s][k] = v; });
     document.querySelectorAll("[data-shf]").forEach((x) => { const [k, f] = x.dataset.shf.split("."); if (/^\d{1,2}:\d{2}$/.test(x.value.trim())) c.shifts[+k][f] = x.value.trim().padStart(5, "0"); });
     document.querySelectorAll("[data-mod]").forEach((x) => { const [k, f] = x.dataset.mod.split("."); c.modules[+k][f] = f === "match" ? x.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : x.value.trim(); });
-    TYPES = Array.from(document.querySelectorAll("[data-type]")).filter((x) => x.checked).map((x) => x.dataset.type);
+    document.querySelectorAll("[data-ct]").forEach((x) => { const [k, f] = x.dataset.ct.split("."); c.contacts[+k][f] = x.value.trim(); });
     saveCfg(c); el("sSave").textContent = "Saved"; setTimeout(render, 600);
   });
-  on("sReset", "click", () => { if (confirm("Restore every setting to the runbook defaults?")) { try { localStorage.removeItem(CFG_KEY); } catch (e) {} CFG = HC.merge(null); TYPES = null; render(); } });
+  on("sReset", "click", () => { if (confirm("Restore every setting to the runbook defaults?")) { try { localStorage.removeItem(CFG_KEY); } catch (e) {} CFG = HC.merge(null); render(); } });
 }
 el("btnLrps").addEventListener("click", () => fetchLrps(true));
 
@@ -866,7 +969,7 @@ function autoHistory() {
   /* status history: open tickets and everything since counting started (the rest on request in Analytics) */
   if (!L || !L.autoFetch) return;
   const from = HC.dateMs(CFG.start);
-  L.autoFetch(T.filter((t, i) => E[i].stage !== "closed" || (t.created != null && t.created >= from)).map((t) => t._row));
+  L.autoFetch(ALLT.filter((t, i) => ALLE[i].stage !== "closed" || (t.created != null && t.created >= from)).map((t) => t._row));
 }
 Promise.resolve(HS && HS.loadConfig ? HS.loadConfig().then((c) => { if (window.HDClass && c) HDClass.setOverrides(c.statusOverrides); }).catch(() => {}) : null)
   .then(() => Promise.all([getRows(), L ? Promise.resolve(L.load()).catch(() => {}) : null]))
@@ -874,7 +977,7 @@ Promise.resolve(HS && HS.loadConfig ? HS.loadConfig().then((c) => { if (window.H
     ROWS = rows || [];
     if (!ROWS.length) { el("landing").innerHTML = '<div><h2>No data loaded</h2><p class="sub" style="margin:8px auto 14px">Load a Jira export or fetch from Jira on the launcher, then come back here.</p><a class="btn pri" href="index.html" style="text-decoration:none">Open the launcher</a></div>'; return; }
     rebuild();
-    if (!T.length) { el("landing").innerHTML = '<div><h2>No ' + esc(CFG.prefix) + ' tickets in this data</h2><p class="sub" style="margin:8px auto 0">The loaded data has no tickets whose key starts with ' + esc(CFG.prefix) + '. Check the Jira query on the launcher.</p></div>'; return; }
+    if (!ALLT.length) { el("landing").innerHTML = '<div><h2>No ' + esc(CFG.prefix) + ' tickets in this data</h2><p class="sub" style="margin:8px auto 0">The loaded data has no tickets whose key starts with ' + esc(CFG.prefix) + '. Check the Jira query on the launcher.</p></div>'; return; }
     el("landing").classList.add("hidden"); el("view").classList.remove("hidden");
     render();
     if (L) { let pend = null; L.subscribe(() => { clearTimeout(pend); pend = setTimeout(render, 400); }); if (L.onProgress) L.onProgress(() => paintChips()); }
