@@ -35,19 +35,17 @@ a{color:var(--teal)}
 
 /* ── layout: sidebar (brand, on duty, navigation, data status) + main (filter toolbar, content) ── */
 body{display:grid;grid-template-columns:var(--sideW) minmax(0,1fr);background:var(--paper)}
-.side{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:16px 14px 14px;gap:14px;scrollbar-width:thin}
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:14px 14px 14px;gap:10px;scrollbar-width:thin}
 .back{font-size:12px;font-weight:600;color:var(--muted);text-decoration:none}.back:hover{color:var(--maroon)}
 .brand{display:flex;align-items:center;gap:10px}
 .brand .bt{font-family:var(--disp);font-weight:800;font-size:17px;letter-spacing:-.3px;color:var(--ink);line-height:1.15}
 .brand .bs{font-size:11.5px;color:var(--muted);margin-top:1px}
 .brand .cl{font:600 10px var(--mono);color:var(--maroon);background:var(--blush2);border-radius:5px;padding:1px 6px;margin-right:4px}
-/* on duty now */
-.duty{border-radius:14px;padding:12px 13px;background:linear-gradient(150deg,#7A1F3D 0%,#9C3358 100%);color:#FBEFF3;box-shadow:0 10px 24px -14px rgba(122,31,61,.7);font-size:12.5px;line-height:1.45}
-.duty .k{font-size:11px;color:#F1C9D6;display:flex;align-items:center;gap:6px}
-.duty .k i{width:7px;height:7px;border-radius:50%;background:#7CE3A9;box-shadow:0 0 0 3px rgba(124,227,169,.25)}
-.duty .w{font-family:var(--disp);font-weight:700;font-size:15px;color:#fff;margin:4px 0 2px;line-height:1.25}
-.duty .x{color:#F6DCE5}
-.duty .nx{margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.18);color:#EEC3D1;font-size:11.5px}
+/* on duty now: one line */
+.duty{display:flex;align-items:center;gap:8px;border-radius:10px;padding:8px 11px;background:linear-gradient(150deg,#7A1F3D 0%,#9C3358 100%);color:#FBEFF3;border:1px solid #6A1A35;font-size:12.5px;cursor:help}
+.duty i{width:7px;height:7px;border-radius:50%;background:#7CE3A9;box-shadow:0 0 0 3px rgba(124,227,169,.25);flex-shrink:0}
+.duty .w{font-family:var(--disp);font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.duty .t{margin-left:auto;font-size:11px;color:#F1C9D6;white-space:nowrap}
 /* navigation */
 .tabs{display:flex;flex-direction:column;gap:2px}
 .tab{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font:600 13px var(--disp);color:var(--ink2);text-align:left;transition:background .15s,color .15s}
@@ -693,12 +691,12 @@ const lrpsNames = (t) => t.lrps.map((k) => (LRPS[k] && LRPS[k].a) || "").filter(
 
 /* ── header: who is on duty, the 24-hour band ── */
 function paintDuty() {
+  /* one compact line: who is on duty and the time; the rules are in the tooltip */
   const d = HC.duty(NOW, CFG), p = HC.ist(NOW), DN = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const nx = HC.nextDutyChange(NOW, CFG), nd = nx ? HC.duty(nx, CFG) : null;
-  el("duty").innerHTML = '<div class="k"><i></i>On duty now, ' + DN[p.dow] + " " + hhmm(p.min) + " IST</div>" +
-    '<div class="w">' + esc(d.owns) + "</div>" +
-    '<div class="x">' + esc(d.logs) + " logs and tags. Critical or Showstopper: " + esc(d.critical.charAt(0).toLowerCase() + d.critical.slice(1)) + ".</div>" +
-    (nd ? '<div class="nx">From ' + hhmm(HC.ist(nx).min) + ": " + esc(nd.owns) + "</div>" : "");
+  const tip = "On duty now, " + DN[p.dow] + " " + hhmm(p.min) + " IST: " + d.owns + " owns new tickets. " + d.logs + " logs and tags. Critical or Showstopper: " + d.critical.charAt(0).toLowerCase() + d.critical.slice(1) + "." + (nd ? " From " + hhmm(HC.ist(nx).min) + ": " + nd.owns + "." : "");
+  const el2 = el("duty"); el2.title = tip; el2.setAttribute("aria-label", tip);
+  el2.innerHTML = '<i></i><span class="w">' + esc(d.owns) + '</span><span class="t">' + DN[p.dow] + " " + hhmm(p.min) + "</span>";
 }
 function paintChips(lrpsMsg) {
   const ph = HC.phase(NOW, CFG);
