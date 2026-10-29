@@ -369,15 +369,21 @@
     function add(set, w, tag, limit) {
       var list = Object.keys(set).filter(function (t) { return E.DF[t] && E.DF[t] < E.N * 0.2; });
       list.sort(function (a, b) { return set[b] * idf(E, b) - set[a] * idf(E, a); });
-      list.slice(0, limit || 999).forEach(function (t) { var v = w * Math.min(1.5, 1 + 0.15 * (set[t] - 1)); if (!weights[t] || weights[t] < v) { weights[t] = v; from[t] = tag; } });
+      list.slice(0, limit || 999).forEach(function (t) { var v = w * Math.min(1.5, 1 + 0.15 * (set[t] - 1)); if (!weights[t] || weights[t] < v) weights[t] = v; if (!from[t]) from[t] = tag; });   // a word keeps its most meaningful field (subject → screen/menu → cause → resolution → description), with the highest weight
     }
-    add(lz.f.s, 1.0, "s", 40); add(lz.f.m, 0.6, "m", 20); add(lz.f.c, 0.45, "c", 18); add(lz.f.r, 0.35, "r", 18); add(lz.f.d, 0.4, "d", 30);
-    var groups = Object.keys(weights).map(function (t) { return { w: weights[t], terms: [{ t: t, rel: 1 }], orig: true, word: t, idf: idf(E, t), from: from[t] }; });
+    /* the description counts properly: up to 45 of its most telling words (rare ones, not every word) */
+    add(lz.f.s, 1.0, "s", 30); add(lz.f.m, 0.6, "m", 12); add(lz.f.c, 0.45, "c", 14); add(lz.f.r, 0.35, "r", 14); add(lz.f.d, 0.55, "d", 45);
+    var all = Object.keys(weights).map(function (t) { return { w: weights[t], terms: [{ t: t, rel: 1 }], orig: true, word: t, idf: idf(E, t), from: from[t] }; });
+    all.sort(function (a, b) { return b.w * b.idf - a.w * a.idf; });
+    /* every field keeps its own share of the 64 words compared, so a long description cannot crowd out the
+       subject or the written cause / resolution: subject 20, description 18, cause 9, resolution 9, screen/menu 8 */
+    var share = { s: 20, d: 18, c: 9, r: 9, m: 8 }, groups = [], spare = [];
+    all.forEach(function (g) { if (share[g.from] > 0) { share[g.from]--; groups.push(g); } else spare.push(g); });
+    groups = groups.concat(spare.slice(0, Math.max(0, 64 - groups.length)));
     groups.sort(function (a, b) { return b.w * b.idf - a.w * a.idf; });
-    groups = groups.slice(0, 64);
     if (!groups.length) return { results: [], terms: [] };
-    var sGroups = groups.filter(function (g) { return g.from === "s"; }), cGroups = groups.filter(function (g) { return g.from === "c"; }), rGroups = groups.filter(function (g) { return g.from === "r"; });
-    var idl = ideal(E, groups), idlS = sGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0), idlC = cGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0), idlR = rGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0);
+    var sGroups = groups.filter(function (g) { return g.from === "s"; }), cGroups = groups.filter(function (g) { return g.from === "c"; }), rGroups = groups.filter(function (g) { return g.from === "r"; }), dGroups = groups.filter(function (g) { return g.from === "d"; });
+    var idl = ideal(E, groups), idlS = sGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0), idlC = cGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0), idlR = rGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0), idlD = dGroups.reduce(function (s, g) { return s + g.w * g.idf; }, 0);
     var bitOf = {}; groups.forEach(function (g, gi) { bitOf[g.word] = gi; });
     function cov(list, idlX, r) { if (!idlX) return 0; var x = 0; list.forEach(function (g) { if (hasBit(r, bitOf[g.word])) x += g.w * g.idf; }); return x / idlX; }
     var res = score(E, groups, { exclude: i, filter: opts.filter });
@@ -390,16 +396,19 @@
       var covS = cov(sGroups, idlS, r);
       /* the same written cause / resolution on both tickets is strong evidence on its own (needs some substance) */
       var covC = Math.max(cGroups.length >= 4 ? cov(cGroups, idlC, r) : 0, rGroups.length >= 4 ? cov(rGroups, idlR, r) : 0);
-      var body = Math.min(1, r.raw / (idl * 0.42)), cap = 0.35 + 0.65 * Math.max(covS, covC);
-      r.text = Math.min(1, Math.max(Math.min(body, cap), covS * 0.9, covC * 0.85));
-      r.covS = covS; r.covC = covC;
+      /* the same problem written in the description (enough of its telling words found) is evidence on its own */
+      var covD = dGroups.length >= 6 ? cov(dGroups, idlD, r) : 0;
+      var body = Math.min(1, r.raw / (idl * 0.42)), cap = 0.35 + 0.65 * Math.max(covS, covC, covD * 0.85);
+      r.text = Math.min(1, Math.max(Math.min(body, cap), covS * 0.9, covC * 0.85, covD * 0.75));
+      r.covS = covS; r.covC = covC; r.covD = covD;
       r.phrase = phraseInfo(E, r.i, qbig);
       r.rank = r.text * 0.85 + Math.min(1, (r.phrase.s * 0.7 + r.phrase.o * 0.3) / Math.max(1, qbig.length)) * 0.15;
     });
     pool.sort(function (a, b) { return b.rank - a.rank; });
     var top = pool.slice(0, opts.topN || 40), words = groups.map(function (g) { return g.word; });
-    top.forEach(function (r) { r.words = explain(E, r.i, words).words; });
-    return { results: top, terms: words };
+    top.forEach(function (r) { var x = explain(E, r.i, words); r.words = x.words; r.where = x.where; });
+    var used = { s: sGroups.length, d: dGroups.length, c: cGroups.length, r: rGroups.length, m: groups.filter(function (g) { return g.from === "m"; }).length };
+    return { results: top, terms: words, used: used };
   }
 
   return {
