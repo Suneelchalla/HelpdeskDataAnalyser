@@ -24,6 +24,8 @@
     start: "2026-10-29",                  // counting starts today (agreed); the runbook's effective date is below
     officialStart: "2026-11-01",
     openBox: ["Open", "Acknowledged", "Analysis and Study"],
+    /* delivered, now with finance for invoicing / payment: no technical work left, so never escalated and our clock stops */
+    billing: ["Invoice Issued", "Invoice Yet to Raise"],
     /* Section 10.1 — minutes, measured round the clock (Hypercare: every day counts, holidays too) */
     targets: {
       showstopper: { fr: 30, upd: 60, res: 4 * 60 },
@@ -189,6 +191,7 @@
   function stageOf(t, cfg, cls) {
     var st = normSt(t.status);
     if (cls && cls.isTerminal(t.status)) return "closed";
+    if ((cfg.billing || []).some(function (s) { return normSt(s) === st; })) return "billing";
     if (cfg.openBox.some(function (s) { return normSt(s) === st; })) return "openbox";
     if (cls && cls.owner(t.status) === "client") return "client";
     return "working";
@@ -203,7 +206,8 @@
   function evaluate(t, transitions, now, cfg, cls, firstResponse) {
     var tg = cfg.targets[t.sev] || null, stage = stageOf(t, cfg, cls), out = { stage: stage, sev: t.sev, target: tg, hist: !!transitions };
     if (t.created == null) return out;
-    var isClient = function (s) { return cls && !cls.isTerminal(s) && cls.owner(s) === "client"; };
+    var isBilling = function (s) { var n = normSt(s); return (cfg.billing || []).some(function (b) { return normSt(b) === n; }); };
+    var isClient = function (s) { return cls && !cls.isTerminal(s) && (cls.owner(s) === "client" || isBilling(s)); };   // delivered for billing = answered, off our clock
     var isClosed = function (s) { return cls ? cls.isTerminal(s) : /^closed$/i.test(String(s || "")); };
     if (transitions) {
       var tr = transitions.slice().sort(function (a, b) { return a.t - b.t; });
@@ -278,7 +282,7 @@
       T.filter(function (t, i) { return E[i].stage === "openbox" && t.created != null && (now - t.created) / MIN > cfg.triageMin; }).map(function (t) { return t.key; }));
     push("lrps", "Step 4", "Past the open box, but no linked LRPS ticket", "Shadow team / General Support",
       "Setting Technical Analysis creates the linked LRPS ticket for the engineering owner.",
-      T.filter(function (t, i) { return E[i].stage !== "openbox" && E[i].stage !== "closed" && !t.lrps.length && /incident/i.test(t.type); }).map(function (t) { return t.key; }));
+      T.filter(function (t, i) { return E[i].stage !== "openbox" && E[i].stage !== "closed" && E[i].stage !== "billing" && !t.lrps.length && /incident/i.test(t.type); }).map(function (t) { return t.key; }));
     push("nosvm", "R6", "No SVM In Charge", "Product Owners", "Every ticket needs one named owner. With several components the SVM In Charge is the PO.",
       open.filter(function (t) { return !t.svm; }).map(function (t) { return t.key; }));
     var hcStart = dateMs(cfg.start) || 0;
@@ -301,6 +305,7 @@
     var out = [];
     T.forEach(function (t, i) {
       var e = E[i]; if (e.stage === "closed") return;
+      if (e.stage === "billing") return;                              // delivered, with finance: nothing technical to escalate
       if (t.sev === "showstopper") out.push({ i: i, key: t.key, sev: t.sev, trigger: "Showstopper open", inform: ["Engineering head", "Customer relationship head", "Account manager", "Swire IT"], since: t.created, when: "at once" });
       else if (t.sev === "critical" && e.stage !== "client" && e.sinceMoveMin != null && e.sinceMoveMin > cfg.escalate.critical)
         out.push({ i: i, key: t.key, sev: t.sev, trigger: "Critical, no progress for " + Math.round(cfg.escalate.critical / 60) + " hours", inform: ["Engineering head"], since: e.lastMove });
