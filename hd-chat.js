@@ -193,8 +193,7 @@
       [/ (?:in|with|at|under|on|for) (?:the )?(?:hd|help ?desk)(?= )/g, " hd action"],
       // "SVM" = our side (Help Desk or Engineering) — as in the SLA Tracker's "SVM pending tickets"
       [/ (?:svm (?:pending|side|team|court|end|queue|action)|(?:pending )?(?:with|at|on|for|under|by) (?:the )?svm(?! in charge| incharge| help)(?: team| side| end| court)?)(?= )/g, function () {
-        if (!ctx.slaOk()) { note("SVM-side questions need SLA data, which isn’t available on this page — open the Follow-up Tracker."); return " "; }
-        plan.f.holder = ["Help Desk", "Engineering"]; plan.svmSide = true; plan.recognised++; note("“SVM” = tickets currently with Help Desk or Engineering (clock running) — the same as the SLA Tracker’s “SVM pending tickets”."); return " "; }],
+        plan.f.holder = ["Help Desk", "Engineering"]; plan.svmSide = true; plan.recognised++; note("“SVM side” = every open ticket with SVM: the open box, Help Desk and Engineering together (not the client, not billing)."); return " "; }],
       // people questions
       [/ who (?:is |are )?(?:handling|working on|working with|looking after|looking at|taking care of|managing|owning|owns|responsible for|dealing with|assigned to|covering|supporting)(?= )/g, " who has the most open tickets for"],
       [/ (?:who (?:is|are) (?:the )?(?:busiest|most busy|most loaded|most overloaded|overloaded|overburdened|swamped|stretched)|busiest|most overloaded|most loaded|who has (?:the )?(?:most|more|maximum|highest|max) (?:work|workload|load)|who (?:is )?(?:got|has) (?:the )?(?:most|more) (?:work|load))(?= )/g, " who has the most open tickets"],
@@ -269,6 +268,13 @@
     });
     var byKey = {}, STAT = {}; T.forEach(function (t) { byKey[t.key.toLowerCase()] = t; if (t.status) STAT[t.status] = 1; });
 
+    /* who holds an open ticket: the SLA link's answer when it has one, otherwise the Master Data status class
+       (open box statuses such as Open / Acknowledged / Analysis & Study are Help Desk) */
+    function heldBy(t) {
+      if (t.closed) return "Closed";
+      var s = slaOk() ? sla(t) : null; if (s && s.heldBy) return s.heldBy;
+      var o = ownerOf(t); return o === "engg" ? "Engineering" : o === "hd" ? "Help Desk" : o === "client" ? "Client" : o === "inv" ? "Billing" : o === "hold" ? "On hold" : "Help Desk";
+    }
     function ownerOf(t) { if (t._own) return t._own; return (t._own = t.status === "On-Hold" ? "hold" : /^invoice (yet to raise|issued)$/i.test(t.status) ? "inv" : classify3(t.status)); }
     function age(t) { return t.created == null ? null : Math.max(0, Math.floor((nowMs - t.created) / DAY)); }
     function idle(t) {
@@ -396,9 +402,20 @@
         if (f[field].indexOf(e.value) < 0) f[field].push(e.value); plan.recognised++; plan.personBoth = (e.w > 0 && e.s > 0);
       }
       mp.found.forEach(addPerson);
-      ["root", "screen", "fix", "menu", "buser"].forEach(function (d) {
+      ["root", "screen", "fix", "menu"].forEach(function (d) {
         var r = matchEntities(w, E[d], 3); w = r.w; r.found.forEach(function (e) { f[d].push(e.value); plan.recognised++; });
       });
+      /* business users: a one-word name ("SVM", "Jaya") counts only when a business user is clearly asked for
+         ("business user …", "raised / reported / requested by …"); without that cue, names that are also words
+         the chat understands or a client / person name ("SVM", "Swire Shipping") are left alone */
+      (function () {
+        var cue = /\b(business users?|raised by|reported by|requested by|requesters?|requested from)\b/.test(w);
+        var clash = {}; E.project.concat(E.person).forEach(function (e) { clash[String(e.value).toLowerCase()] = 1; });
+        var words = /^(svm|hd|help ?desk|swire|engineering|engg|client|customer|support|team|it|admin|user|users)$/i;
+        var cands = E.buser.filter(function (e) { var v = String(e.value).trim();
+          return cue || (v.length >= 3 && !clash[v.toLowerCase()] && !words.test(v)); });
+        var r = matchEntities(w, cands, 3); w = r.w; r.found.forEach(function (e) { f.buser.push(e.value); plan.recognised++; });
+      })();
       // names with typos ("milha", "vijai") — only when exactly one name is clearly the closest
       fuzzyEntities(w, E.project).forEach(function (x) { f.client.push(x[1].value); plan.recognised++; w = erase(w, x[0]); plan.notes.push("I read “" + x[0] + "” as “" + x[1].value + "”"); });
       fuzzyEntities(w, E.person).forEach(function (x) { addPerson(x[1]); w = erase(w, x[0]); plan.notes.push("I read “" + x[0] + "” as “" + x[1].value + "”"); });
@@ -408,8 +425,15 @@
       var lctx = { w: function () { return w; }, hasEntity: function () { return f.client.length || f.worker.length || f.svm.length; }, group: function (d) { plan.forceGroup = d; }, slaOk: function () { return slaOk(); }, statusIf: function (names) { return names.filter(function (n) { return STAT[n]; }); } };
       LAYMAN(plan, lctx).forEach(function (r) { w = w.replace(r[0], r[1]); });
       // owner side
-      if (/ (awaiting|waiting (on|for)|pending (with|on|from)|with|on) (the )?(client|customer)s? | client side | client follow ?ups? | client followup | waiting client | client action /.test(w)) { f.owner.push("client"); w = w.replace(/ (awaiting|waiting on|waiting for|pending with|pending on|pending from|with|on) (the )?(client|customer)s? | client side | client follow ?ups? | client followup | waiting client | client action /g, " "); plan.recognised++; }
-      if (/ (with|in|at) (the )?(engineering|engg|dev|development|developers?) | engg follow ?ups? | engineering follow ?ups? | escalated | with dev /.test(w)) { f.owner.push("engg"); w = w.replace(/ (with|in|at) (the )?(engineering|engg|dev|development|developers?) | engg follow ?ups? | engineering follow ?ups? | escalated | with dev /g, " "); plan.recognised++; }
+      /* whose court the ticket is in: the client (Swire / customer) or Engineering; many ways of saying it */
+      var CLIENT_RX = / (awaiting|waiting (on|for)|pending (with|on|from|at)|with|on|at) (the )?(clients?|customers?|users?)( side| end| court)? | (client|customer)s?( side| end| court| pending| action| queue| follow ?ups?| followup)( tickets?)? | waiting client | client action /;
+      var ENGG_RX = / (with|in|at|on|pending (with|on|at)|waiting (on|for)) (the )?(engineering|engg|eng|dev|development|developers?|product team|tech team)( side| team| end| court| queue)? | (engineering|engg|dev|development)( side| end| court| team| queue| pending| action| follow ?ups?| followup)( tickets?)? | escalated | with dev /;
+      var swireCl = /\b(with|waiting (on|for)|pending (with|on)|on) swire\b|\bswire(?:'s)? (side|end|court|action|pending)\b/.test(lc) && !/\bswire\b.*\b(engineering|engg|dev|help ?desk|svm)\b/.test(lc);
+      /* "pending" is read earlier as "open"; look at the original words too */
+      var lcClient = /\b(clients?|customers?)\s+(side|end|court|pending|action|queue)\b/.test(lc), lcEngg = /\b(engineering|engg|dev|development)\s+(side|end|court|team|queue|pending|action)\b/.test(lc);
+      if (lcEngg && !ENGG_RX.test(w) && f.owner.indexOf("engg") < 0) { f.owner.push("engg"); plan.recognised++; }
+      if ((CLIENT_RX.test(w) || swireCl || lcClient) && f.owner.indexOf("client") < 0) { f.owner.push("client"); w = w.replace(new RegExp(CLIENT_RX.source, "g"), " "); plan.recognised++; }
+      if (ENGG_RX.test(w) && f.owner.indexOf("engg") < 0) { f.owner.push("engg"); w = w.replace(new RegExp(ENGG_RX.source, "g"), " "); plan.recognised++; }
       /* delivered and with Receivables: Invoice Yet to Raise / Invoice Issued */
       if (/ invoices? (pending|yet to raise|issued|raised) | pending invoices? | billing | with receivables | receivables | delivered for billing /.test(w) || /\binvoices? (pending|yet to raise|issued|raised)\b|\bpending invoices?\b/.test(lc)) { f.owner.push("inv"); plan.recognised++; w = w.replace(/ invoices? (pending|yet to raise|issued|raised) | pending invoices? | billing | with receivables | receivables | delivered for billing /g, " "); }
       if (/ hd action | needs? action | needs? hd action | action needed | help ?desk action | help ?desk side | our side | with us /.test(w)) { f.owner.push("hd"); w = w.replace(/ hd action | needs? action | needs? hd action | action needed | help ?desk action | help ?desk side | our side | with us /g, " "); plan.recognised++; }
@@ -592,7 +616,7 @@
         return true;
       });
       if (f.idleMin != null) out = out.filter(function (t) { if (t.closed) return false; var d = idle(t); return d != null && d >= f.idleMin; });
-      if (f.holder.length) { if (!slaOk()) return out.slice(0, 0); out = out.filter(function (t) { var s = sla(t); return s && f.holder.indexOf(s.heldBy) > -1; }); }
+      if (f.holder.length) out = out.filter(function (t) { return f.holder.indexOf(heldBy(t)) > -1; });
       if (f.sla) { if (!slaOk()) return out.slice(0, 0); out = out.filter(function (t) { return slaPass(sla(t), f.sla); }); }
       return out;
     }
@@ -608,7 +632,7 @@
       if (f.status.length) P("status: " + f.status.join(", "), { status: [] }); if (f.owner.length) P({ client: "with client", engg: "with engineering", hd: "HD action", hold: "on hold", inv: "invoice pending" }[f.owner[0]] + (f.owner.length > 1 ? " +" : ""), { owner: [] });
       ["root", "screen", "fix", "menu", "buser"].forEach(function (d) { if (f[d] && f[d].length) { var r = {}; r[d] = []; P(DIMLBL[d].toLowerCase() + ": " + f[d].join(", "), r); } });
       f.missing.forEach(function (k) { P("no " + (k === "svm" ? "SVM in charge" : k === "linked" ? "linked issue" : k === "root" ? "root cause" : k), { missing: f.missing.filter(function (x) { return x !== k; }) }); });
-      if (f.holder.length) P("with SVM (Help Desk / Engineering)", { holder: [] });
+      if (f.holder.length) P("with SVM (open box, Help Desk, Engineering)", { holder: [] });
       if (f.sla) P({ breached: "SLA breached", atrisk: "SLA at risk", duesoon: "SLA due soon", ontrack: "SLA on track", paused: "SLA paused (with client)", nohist: "no SLA data", none: "no SLA target", met: "SLA met", missed: "SLA missed" }[f.sla], { sla: null });
       if (f.idleMin != null) P("no status change " + f.idleMin + "+ days", { idleMin: null }); if (f.ageMin != null) P("older than " + f.ageMin + " days", { ageMin: null }); if (f.ageMax != null) P("younger than " + (f.ageMax + 1) + " days", { ageMax: null });
       if (f.range) P((ef.dateField === "resolved" ? "closed " : ef.dateField === "updated" ? "updated " : "created ") + f.range.label, { range: null });
@@ -769,22 +793,22 @@
     /* "SVM pending tickets" — same table as the SLA Tracker: every open ticket that is with Help Desk or Engineering right now,
        not limited by the Created range, in order of urgency. */
     B.svmPending = function (plan) {
-      if (!slaOk()) return { type: "text", text: "This view comes from the SLA Tracker data, which isn’t available on this page. Open the Follow-up Tracker and ask again.", chips: [] };
       var base = clonePlan(plan); base.f.holder = []; base.f.sla = null; base.f.range = null; base.f.closed = false; base.f.allStatuses = false;
-      var list = select(base), defs = [["atrisk", "Ready to breach", "75% or more of the target used"], ["breached", "Breached", "already past their target"], ["ontrack", "Not yet breached", "under 75% used"]], R = {}, wait = 0, hold = 0, nohist = 0, notgt = 0;
+      var list = select(base), defs = [["atrisk", "Ready to breach", "75% or more of the target used"], ["breached", "Breached", "already past their target"], ["ontrack", "Not yet breached", "under 75% used"], ["nodata", "No SLA data yet", "history not read yet, or no SLA target"]], R = {}, wait = 0, hold = 0, nohist = 0, notgt = 0;
       defs.forEach(function (d) { R[d[0]] = { inc: 0, sr: 0, hd: 0, eng: 0, n: 0, top: null }; });
       var TOT = { inc: 0, sr: 0, hd: 0, eng: 0, n: 0 };
       list.forEach(function (t) {
-        var s = sla(t); if (!s || s.state === "na" || s.state === "loading") return;
-        var b = svmBucket(s), mine = s.heldBy === "Help Desk" || s.heldBy === "Engineering";
-        if (b && mine) {
-          var r = R[b]; r.n++; TOT.n++; if (/incident/i.test(t.type)) { r.inc++; TOT.inc++; } else { r.sr++; TOT.sr++; } if (s.heldBy === "Help Desk") { r.hd++; TOT.hd++; } else { r.eng++; TOT.eng++; }
-          if (!r.top || urgentAt(t) < urgentAt(r.top)) r.top = t;
-        } else if (s.state === "nohist") nohist++; else if (s.state === "none") notgt++; else if (s.heldBy === "Client" || ownerOf(t) === "client" || ownerOf(t) === "hold") { wait++; if (t.status === "On-Hold") hold++; }
+        /* every open ticket with SVM (open box, Help Desk, Engineering) is counted; without SLA data it goes in "No SLA data yet" */
+        var s = slaOk() ? sla(t) : null, hb = heldBy(t), mine = hb === "Help Desk" || hb === "Engineering";
+        if (!mine) { if (hb === "Client" || hb === "On hold" || ownerOf(t) === "client" || ownerOf(t) === "hold") { wait++; if (t.status === "On-Hold") hold++; } return; }
+        var b = (s && svmBucket(s)) || "nodata";
+        var r = R[b]; r.n++; TOT.n++; if (/incident/i.test(t.type)) { r.inc++; TOT.inc++; } else { r.sr++; TOT.sr++; } if (hb === "Help Desk") { r.hd++; TOT.hd++; } else { r.eng++; TOT.eng++; }
+        if (b !== "nodata" && (!r.top || urgentAt(t) < urgentAt(r.top))) r.top = t;
       });
       function W(ms) { return ms == null ? "" : new Date(ms).toLocaleString("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }); }
-      function drill(bucket) { var p = clonePlan(plan); p.metric = "list"; p.svmSide = false; p.notes = []; p.f.holder = ["Help Desk", "Engineering"]; p.f.sla = bucket; p.f.range = null; p.f.closed = false; p.slaFocus = true; return p; }
+      function drill(bucket) { var p = clonePlan(plan); p.metric = "list"; p.svmSide = false; p.notes = []; p.f.holder = ["Help Desk", "Engineering"]; p.f.sla = bucket === "nodata" ? "nohist" : bucket; p.f.range = null; p.f.closed = false; p.slaFocus = true; return p; }
       var rows = defs.map(function (d) { var r = R[d[0]]; return { cells: [d[1], r.inc, r.sr, r.n, r.hd, r.eng], bar: 0, drill: drill(d[0]) }; });
+      rows = rows.filter(function (r, k) { return defs[k][0] !== "nodata" || r.cells[3] > 0; });
       rows.push({ cells: ["Total SVM pending", TOT.inc, TOT.sr, TOT.n, TOT.hd, TOT.eng], bar: 0, drill: drill(null) });
       var urgent = []; defs.forEach(function (d) { var r = R[d[0]]; if (r.top) { var s = sla(r.top); urgent.push({ label: d[1], key: r.top.key, raw: r.top.raw, when: (s.state === "breached" ? "breached " + W(s.breachedAt) : "breaks " + W(s.breachAt)) + " IST" }); } });
       var best = null; ["atrisk", "breached", "ontrack"].forEach(function (k) { if (!best && R[k].top) best = R[k].top; }); 
