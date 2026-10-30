@@ -342,6 +342,8 @@
   root.HDSlaLink = {
     load: load, ready: function () { return L.loaded; }, version: function () { return L.ver; },
     subscribe: function (fn) { L.subs.push(fn); return function () { L.subs = L.subs.filter(function (f) { return f !== fn; }); }; },
+    /* just the validated status history for a row (no SLA calculation): cheap enough to call for every ticket */
+    entry: function (row) { if (!L.loaded || !Sla() || !row) return null; var hc = histCheck(norm(row)); return hc.e || null; },
     get: get, detail: detail, lastMove: lastMove, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
     isFetching: function () { return L.fetching; }, config: function () { return L.cfg; },
     autoFetch: autoFetch,
