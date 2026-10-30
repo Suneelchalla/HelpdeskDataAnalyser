@@ -667,7 +667,7 @@ function openList(title, idx, extra) {
   const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + idx.length.toLocaleString() + "</span></h3>" +
     '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
-    table(idx, extra ? ["key", "pri", "sum", "status", "age", "po", "rem"] : ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra }) + "</div>";
+    table(idx, extra ? ["key", "type", "pri", "sum", "status", "age", "po", "rem"] : ["key", "type", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra }) + "</div>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
   const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
@@ -883,7 +883,7 @@ function viewNow() {
     tile("t-ink", "up", escI, "Escalations to raise", "Critical with no progress " + fmt(CFG.escalate.critical) + ", High " + fmt(CFG.escalate.high) + ", Showstoppers at once", escI.length / w1, "Escalations to raise") + "</div>" +
     '<h2>Needs attention now</h2><p class="sub">Tickets with us whose SLA is breached (most overdue first) or about to breach (soonest first). Tickets waiting on Swire are in the SLA tab. ' +
     (d.id === "night" ? "Tonight the Hypercare team owns these." : "The PO for the module owns these.") + "</p>" +
-    table(br.concat(rk), ["key", "pri", "sum", "status", "sla", "fr", "prog", "po", "svm", "cw", "lrps", "rem"], { sortable: false, empty: "Nothing with us is breached or about to breach." });
+    table(br.concat(rk), ["key", "type", "pri", "sum", "status", "sla", "fr", "prog", "po", "svm", "cw", "lrps", "rem"], { sortable: false, empty: "Nothing with us is breached or about to breach." });
 }
 
 /* ══ Workload: who holds the pending tickets ══ */
@@ -911,7 +911,7 @@ function viewOpenBox() {
   const box = openIdx().filter((i) => E[i].stage === "openbox");
   if (UI.sort.k !== "age" && UI.sort.k !== "pri") UI.sort = { k: "age", d: -1 };
   return "<h2>Open box</h2><p class=\"sub\">Tickets in " + esc(CFG.openBox.join(", ")) + ". These are logged but not yet triaged: Step 4 asks for the owner in an internal note and the status set to Technical Analysis, straight after logging. Tickets created automatically are included.</p>" +
-    table(box, ["key", "pri", "sum", "status", "age", "fr", "po", "svm", "cw", "rem"], { empty: "The open box is empty. Every logged ticket has been triaged." });
+    table(box, ["key", "type", "pri", "sum", "status", "age", "fr", "po", "svm", "cw", "rem"], { empty: "The open box is empty. Every logged ticket has been triaged." });
 }
 
 /* ══ Escalations ══ */
@@ -922,7 +922,7 @@ function viewEsc() {
   const groups = {}; L2.forEach((x) => { (groups[x.trigger] = groups[x.trigger] || []).push(x.i); });
   return "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2. Escalating moves the technical work, not the ownership: the owner keeps updating the user. “No progress” means no status change in Jira for that long while the ticket is with us. Contact details are in Master data.</p>" +
     (Object.keys(groups).length ? '<div class="bar">' + Object.keys(groups).map((g) => '<span class="pill">' + esc(g) + " <b>" + dl(groups[g], g) + "</b></span>").join("") + "</div>" : "") +
-    table(L2.map((x) => x.i), ["key", "pri", "sum", "status", "prog", "po", "svm", "rem"], { sortable: false, empty: "No escalation triggers are met right now.",
+    table(L2.map((x) => x.i), ["key", "type", "pri", "sum", "status", "prog", "po", "svm", "rem"], { sortable: false, empty: "No escalation triggers are met right now.",
       extra: { h: "Trigger and who to inform", c: (i) => { const x = byKey[i]; return "<b>" + esc(x.trigger) + '</b><div class="small" style="margin-top:3px">' + x.inform.map((r) => { const n = r.indexOf("PO") === 0 ? (E[i].po && E[i].po.po) : namesOf(r); return esc(r) + (n ? ' <span class="dim">(' + esc(n) + ")</span>" : ""); }).join("<br>") + "</div>"; } } });
 }
 
@@ -956,13 +956,13 @@ function viewQueue() {
     '<select class="inp" id="qStage">' + opt("", "Any stage", UI.stage) + Object.keys(STAGE_TXT).filter((k) => k !== "closed").map((k) => opt(k, STAGE_TXT[k], UI.stage)).join("") + "</select>" +
     '<button class="btn" id="qCsv">Download CSV (' + idx.length + ")</button></div>" +
     '<div class="bar"><span class="lbl">Age</span>' + buckets.map((b) => { const l = idx.filter((i) => { const a = (ageOf(T[i]) || 0) / 1440; return a >= b[0] && a < b[1]; }); return '<span class="pill">' + esc(b[2]) + " <b>" + dl(l, "Open, " + b[2]) + "</b></span>"; }).join("") + "</div>" +
-    table(idx, ["key", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { empty: "No open tickets match." });
+    table(idx, ["key", "type", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { empty: "No open tickets match." });
 }
 function csv(idx, title) {
-  const head = ["Key", "Priority", "Summary", "ME ID", "Status", "Stage", "Created", "Age", "First response", "Since last move", "Our time", "Benchmark", "PO", "Module", "SVM In Charge", "Current Worker", "LRPS", "LRPS assignee", "Next action", "Components"];
+  const head = ["Key", "Type", "Priority", "Summary", "ME ID", "Status", "Stage", "Created", "Age", "First response", "Since last move", "Our time", "Benchmark", "PO", "Module", "SVM In Charge", "Current Worker", "LRPS", "LRPS assignee", "Next action", "Components"];
   const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
   const lines = [head.map(q).join(",")].concat(idx.map((i) => { const t = T[i], e = E[i];
-    return [t.key, t.priority, t.summary, t.meId, t.status, STAGE_TXT[e.stage], fdt(t.created), fmt(ageOf(t)), e.frState === "met" || e.frState === "missed" ? fmt(e.fr.min) + " (" + e.frState + ")" : e.frState || "",
+    return [t.key, t.type, t.priority, t.summary, t.meId, t.status, STAGE_TXT[e.stage], fdt(t.created), fmt(ageOf(t)), e.frState === "met" || e.frState === "missed" ? fmt(e.fr.min) + " (" + e.frState + ")" : e.frState || "",
       fmt(e.sinceMoveMin), fmt(e.oursMin), e.target ? fmt(e.target.res) : "", e.po.po, e.po.module, t.svm, t.cw, t.lrps.join(" "), lrpsNames(t), t.nextAction, t.components.join("; ")].map(q).join(","); }));
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv" }));
   a.download = "Swire-" + String(title || "open tickets").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") + "-" + HC.dayKey(NOW) + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -1361,11 +1361,11 @@ function viewWeekly() {
     wsec("Open work and turnaround") + wcap("Where the open SVM work sits, and how quickly tickets are being resolved.") +
     '<div class="grid2"><div class="wcard"><div class="wct">Open SVM tickets by component <span>by product area</span></div>' + hbars(comps, "Open with SVM", 10) + ins(comps[0] ? "Open SVM work is concentrated in <b>" + esc(comps[0].k) + "</b>" + (comps[1] ? " and <b>" + esc(comps[1].k) + "</b>" : "") + ", together <b>" + pct(comps[0].idx.length + (comps[1] ? comps[1].idx.length : 0), svm.length) + "%</b> of the " + svm.length + " open SVM tickets." : "No open SVM work.") + "</div>" +
       '<div class="wcard"><div class="wct">Average resolution days <span>created to resolved</span></div>' + wLine(resDays, "Average resolution days", "d") + ins(rdAvg != null ? "Tickets take about <b>" + rdAvg.toFixed(1) + " days</b> on average to resolve" + (resDays[WEEKS - 1].v != null ? " (this week <b>" + resDays[WEEKS - 1].v.toFixed(1) + "d</b>)" : "") + ". A rising line means tickets are taking longer to close." : "Not enough resolved tickets to show a trend yet.") + "</div></div>" +
-    wsec("Showstoppers raised this week") + (ssW.length ? table(ssW, ["key", "pri", "sum", "status", "age", "po", "svm"], { sortable: false }) : '<p class="wcap">None this week.</p>') +
+    wsec("Showstoppers raised this week") + (ssW.length ? table(ssW, ["key", "type", "pri", "sum", "status", "age", "po", "svm"], { sortable: false }) : '<p class="wcap">None this week.</p>') +
     wsec("Top 5 oldest, Swire side", "longest-open items needing a response") + oldTable(sw) +
     wsec("Top 5 oldest, SVM side", "longest-open items on our side") + oldTable(svm) +
-    wsec("Pending tickets with SVM", svm.length + " open, our action") + wcap("Oldest first.") + table(sortOld(svm), ["key", "pri", "sum", "status", "sla", "age", "po", "svm", "cw"], { sortable: false, limit: 3000 }) +
-    wsec("Pending tickets with Swire", sw.length.toLocaleString() + " open, awaiting your team") + wcap("Oldest first.") + table(sortOld(sw), ["key", "pri", "sum", "status", "age", "po", "svm"], { sortable: false, limit: 3000 }) +
+    wsec("Pending tickets with SVM", svm.length + " open, our action") + wcap("Oldest first.") + table(sortOld(svm), ["key", "type", "pri", "sum", "status", "sla", "age", "po", "svm", "cw"], { sortable: false, limit: 3000 }) +
+    wsec("Pending tickets with Swire", sw.length.toLocaleString() + " open, awaiting your team") + wcap("Oldest first.") + table(sortOld(sw), ["key", "type", "pri", "sum", "status", "age", "po", "svm"], { sortable: false, limit: 3000 }) +
     '<div class="wfoot">Targets are Solverminds internal working targets (Section 10.1), not contractual. ME ID recorded on ' + pct(raised.filter((i) => T[i].meId).length, raised.length) + "% of tickets raised this week. Generated " + esc(fdt(NOW)) + " IST from " + ALLT.length.toLocaleString() + " Swire tickets.</div>" +
     "</div></div>";
 }
@@ -1816,7 +1816,7 @@ function viewSla() {
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">By priority</div><div class="tw"><table><thead><tr><th>Priority</th>' + cats.map(([k, n]) => "<th>Open: " + esc(n) + "</th>").join("") + "<th>Closed: met</th><th>Closed: missed</th><th>Closed: no SLA data yet</th><th>Met %</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
   const brOpen = ob("breached");
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">Where the breached tickets are</div><div class="bar" style="margin:0">' + sides.map(([n, k]) => { const l = brOpen.filter((i) => sideOf(i) === k); return '<span class="pill">' + esc(n) + " <b>" + dl(l, "SLA breached, " + n.toLowerCase()) + "</b></span>"; }).join("") + "</div></div>";
-  h += "<h2>Breached, most overdue first</h2>" + table(brOpen.sort((a, b) => ((slaOf(b) || {}).overByMin || 0) - ((slaOf(a) || {}).overByMin || 0)), ["key", "pri", "sum", "status", "sla", "po", "svm", "cw", "lrps", "rem"], { sortable: false, empty: "No open ticket has breached its SLA." });
+  h += "<h2>Breached, most overdue first</h2>" + table(brOpen.sort((a, b) => ((slaOf(b) || {}).overByMin || 0) - ((slaOf(a) || {}).overByMin || 0)), ["key", "type", "pri", "sum", "status", "sla", "po", "svm", "cw", "lrps", "rem"], { sortable: false, empty: "No open ticket has breached its SLA." });
   return h;
 }
 
