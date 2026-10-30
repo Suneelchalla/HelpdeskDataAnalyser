@@ -431,6 +431,9 @@ table.xl th{white-space:nowrap}
   #hoPreview td,#hoPreview td span{min-width:0!important}
   #hoPreview tr{break-inside:avoid}
 }
+.lgpdf{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:7px 12px;border-radius:999px;background:#fff;border:1px dashed var(--line2);font-size:12px;font-weight:700;color:var(--maroon)}
+.lgpdf:hover{border-style:solid;border-color:var(--maroon);background:var(--blush)}
+@media print{.lgpdf{display:none!important}}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -896,7 +899,7 @@ function viewNow() {
   const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length).toLocaleString() + " with us (" + box.length + " in the open box), " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
     '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
-    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + "</div></section>";
+    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + '<button type="button" class="lgpdf" id="withUsPdf" title="PDF of the open box, Help Desk and Engineering tickets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>PDF</button></div></section>';
   const w1 = Math.max(1, withUs.length);
   return hero + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
@@ -1613,6 +1616,33 @@ function openEnggMail(list) {
   q("emEml").onclick = () => { const x = cur(); emlDownload(x.subject, x.html, "Swire-engineering-followup-" + HC.dayKey(NOW) + ".eml"); };
   paint();
 }
+/* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
+function printWithUs() {
+  const open = openIdx(), box = open.filter((i) => E[i].stage === "openbox").sort(bySevAge);
+  const hd = open.filter((i) => sideOf(i) === "hd" && E[i].stage !== "openbox").sort(bySevAge), en = open.filter((i) => sideOf(i) === "engg").sort(bySevAge);
+  const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
+  const cols = [["Ticket", (t) => '<b style="color:#7A1F3D;white-space:nowrap">' + esc(t.key) + "</b>"], ["Type", (t) => typeMail(t)], ["Priority", (t) => '<b style="white-space:nowrap">' + esc(t.priority || "—") + "</b>"],
+    ["Summary", (t) => esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "")], ["Status", (t) => '<span style="white-space:nowrap">' + esc(t.status) + "</span>"],
+    ["SLA", (t) => { const x = slaOfT(t) || {}; return '<span style="white-space:nowrap;' + (x.state === "breached" ? "color:#D7263D;font-weight:600" : "") + '">' + esc(x.label || "—") + "</span>"; }],
+    ["Created", (t) => '<span style="white-space:nowrap">' + esc(fdt(t.created)) + "</span>"], ["Updated", (t) => '<span style="white-space:nowrap">' + esc(fdt(t.updated)) + "</span>"],
+    ["Age", (t) => '<span style="white-space:nowrap">' + esc(fmt(ageOf(t))) + "</span>"], ["Sitting with", (t, e) => '<b style="color:#5C1730">' + esc(holderOf(t, e)) + "</b>"],
+    ["PO", (t, e) => esc((e.po && e.po.po) || "—") + (e.po && e.po.module ? '<br><span style="color:#8A7380">' + esc(e.po.module) + "</span>" : "")], ["SVM In Charge", (t) => esc(t.svm || "—")], ["Current worker", (t) => esc(t.cw || "—")],
+    ["LRPS (assignee, status)", (t) => t.lrps.length ? t.lrps.map((k) => '<span style="white-space:nowrap">' + esc(k) + "</span>" + (LRPS[k] ? "<br>" + esc(LRPS[k].a || "Unassigned") + (LRPS[k].s ? " (" + esc(LRPS[k].s) + ")" : "") : "")).join("<br>") : "—"],
+    ["Next action", (t) => esc(t.nextAction || "—")]];
+  const tbl = (l) => l.length ? '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif"><tr>' + cols.map((c) => th(c[0])).join("") + "</tr>" +
+    l.map((i, k) => "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" + cols.map((c) => '<td style="' + TD + '">' + c[1](T[i], E[i]) + "</td>").join("") + "</tr>").join("") + "</table>" : '<p style="color:#8A7380;font-size:12px">None.</p>';
+  const H = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:14px;color:#5C1730;margin:14px 0 4px"';
+  const sec = (n, l) => "<h3 " + H + ">" + esc(n) + " (" + l.length + ")</h3><p style=\"font-size:11px;color:#5A4450;margin:0 0 4px\">" + esc(sevLine((() => { const o = {}; HC.SEVS.forEach((x) => { o[x.id] = l.filter((i) => T[i].sev === x.id).length; }); return o; })())) + "</p>" + tbl(l);
+  const host = document.createElement("div"); host.id = "printArea";
+  host.innerHTML = '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif;color:#2A161D"><h2 style="font-size:18px;color:#7A1F3D;margin:0">Swire Hypercare: tickets with us</h2>' +
+    '<p style="font-size:11.5px;color:#8A7380;margin:2px 0 8px">Open box ' + box.length + ", with Help Desk " + hd.length + ", with Engineering " + en.length + " (" + (box.length + hd.length + en.length) + " in total). Generated " + esc(fdt(NOW)) + " IST. Filters at the top apply.</p>" +
+    sec("Open box, not triaged", box) + sec("With Help Desk", hd) + sec("With Engineering", en) + "</div>";
+  document.body.appendChild(host); document.body.classList.add("printing-area");
+  const st = document.createElement("style"); st.textContent = "@page{size:A4 landscape;margin:8mm} #printArea td,#printArea th{font-size:8.5px!important;padding:3px 4px!important} #printArea tr{break-inside:avoid}"; document.head.appendChild(st);
+  const done = () => { host.remove(); st.remove(); document.body.classList.remove("printing-area"); window.removeEventListener("afterprint", done); };
+  window.addEventListener("afterprint", done);
+  window.HDPrint ? HDPrint("Swire-Hypercare-tickets-with-us_" + HC.dayKey(NOW)) : window.print(); setTimeout(done, 3000);
+}
 function printEngg(list) {
   const x = enggMail(list.slice(), ""), host = document.createElement("div"); host.id = "printArea";
   host.innerHTML = '<div style="padding:10px 6px"><h2 style="font-family:var(--disp);color:var(--maroon)">Swire Hypercare, engineering follow-up</h2><p class="small dim">' + esc(fdt(NOW)) + " IST</p>" + x.html + "</div>";
@@ -2233,6 +2263,7 @@ function wire() {
   on("qIn", "input", (e) => { UI.q = e.target.value; clearTimeout(wire._t); wire._t = setTimeout(render, 220); });
   on("qStage", "change", (e) => { UI.stage = e.target.value; render(); });
   on("qCsv", "click", () => csv(queueIdx(), "open tickets"));
+  on("withUsPdf", "click", printWithUs);
   on("usersAll", "click", () => { UI.allUsers = !UI.allUsers; render(); });
   on("btnHist", "click", (e) => { const rows = histNeed(); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
   document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => { UI.shift = b.dataset.shift; render(); }));
