@@ -405,6 +405,22 @@ table.xl th{white-space:nowrap}
 .simread{font-size:11.5px;color:var(--muted);margin-top:4px}
 .simdesc{margin-top:6px;font-size:12px}.simdesc summary{cursor:pointer;color:var(--maroon);font-weight:600}
 .simdesc > div{margin-top:6px;max-height:160px;overflow:auto;background:#fff;border:1px solid var(--line3);border-radius:8px;padding:8px 10px;color:var(--ink2);line-height:1.5}
+.tiles.esc4{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.tile.sel{outline:2px solid var(--maroon);outline-offset:2px}
+.ewh{color:var(--maroon)}
+.btn.sm2{padding:4px 10px;font-size:12px}
+.escsec{margin:18px 0 8px;border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:#fff;scroll-margin-top:110px}
+.escsec-h{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line2);background:linear-gradient(100deg,var(--acbg,#FCF7F9),#fff 70%);border-left:5px solid var(--ac,var(--maroon))}
+.escsec-h > div{flex:1}.escsec-h b{font-family:var(--disp);font-size:15px;color:var(--ink)}.escsec-h > div > span{font:700 12px var(--mono);background:#fff;border:1px solid var(--line2);border-radius:999px;padding:1px 8px;margin-left:6px;color:var(--ac,var(--maroon))}
+.escsec-h .small{color:var(--ink2);margin-top:2px}
+.escsec.t-ss{--ac:#D7263D;--acbg:#FDECEE}.escsec.t-cr{--ac:#C2680A;--acbg:#FEF3E6}.escsec.t-ink{--ac:#7A1F3D;--acbg:#F8ECF0}
+.escgrp{padding:10px 14px 4px}.escgrp + .escgrp{border-top:1px dashed var(--line2)}
+.escgrp-h{font-size:12.5px;font-weight:700;color:var(--ink);margin:2px 0 8px}.escgrp-h b{font:700 11px var(--mono);color:var(--maroon);margin:0 4px}
+.escwait{margin:6px 14px 12px;border:1px dashed var(--line2);border-radius:10px;padding:8px 12px;background:#FCF7F9}
+.escwait summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ink2)}.escwait[open] summary{margin-bottom:8px}
+.rlst{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:600;white-space:nowrap;color:var(--rc);background:color-mix(in srgb,var(--rc) 10%,#fff);border:1px solid color-mix(in srgb,var(--rc) 30%,#fff)}
+.escsec.t-ok{--ac:#1F8A4C;--acbg:#EAF7EF}
+.wsb button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -547,7 +563,9 @@ function rebuild() {
   NOW = Date.now();
   const get = HC.getter(ROWS), pre = String(CFG.prefix || "SWIPHX").toUpperCase();
   ALLT = [];
-  ROWS.forEach((row) => { const t = HC.normTicket(row, get); if (t.prefix === pre) { t.nextAction = String(get(row, "next action") || "").trim(); ALLT.push(t); } });
+  ROWS.forEach((row) => { const t = HC.normTicket(row, get); if (t.prefix === pre) { t.nextAction = String(get(row, "next action") || "").trim();
+    t.rels = Array.from(new Set(["release number", "release number (data fix)", "parent release no"].map((c) => String(get(row, c) || "").trim()).filter((x) => x && !/^[-–.]+$|^n\/?a$/i.test(x))));
+    t.delivered = HC.parseTs(get(row, "delivered date")); t.typeOfFix = String(get(row, "type of fix") || "").trim(); ALLT.push(t); } });
   ALLE = ALLT.map((t) => {
     let tr = null;
     /* the status history only: L.entry() is a lookup; L.detail() builds the whole SLA explanation and is kept for the ticket view */
@@ -760,10 +778,10 @@ function paintChips(lrpsMsg) {
 }
 
 /* ── tabs ── */
-const TABS = [["now", "Now"], ["openbox", "Open box"], ["work", "Workload"], ["sla", "SLA"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["move", "Movement"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Master data"]];
+const TABS = [["now", "Now"], ["openbox", "Open box"], ["work", "Workload"], ["sla", "SLA"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["move", "Movement"], ["rel", "Releases"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Master data"]];
 const TAB_IC = {
   now: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', openbox: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/>', work: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.2 3.2 0 0 1 0 6.3M18 14c2 .8 3 3 3 6"/>',
-  esc: '<path d="M12 19V5M5 12l7-7 7 7"/>', sla: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>', move: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>', rules: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>', queue: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  esc: '<path d="M12 19V5M5 12l7-7 7 7"/>', sla: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>', rel: '<path d="M12 2l3 6 6 .9-4.5 4.3 1 6.3L12 16.5 6.5 19.5l1-6.3L3 8.9 9 8z"/>', move: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>', rules: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>', queue: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   analytics: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', handover: '<path d="M4 7h11l-3-3M20 17H9l3 3"/>', weekly: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>', setup: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
 };
 function paintTabs(counts) {
@@ -912,18 +930,6 @@ function viewOpenBox() {
   if (UI.sort.k !== "age" && UI.sort.k !== "pri") UI.sort = { k: "age", d: -1 };
   return "<h2>Open box</h2><p class=\"sub\">Tickets in " + esc(CFG.openBox.join(", ")) + ". These are logged but not yet triaged: Step 4 asks for the owner in an internal note and the status set to Technical Analysis, straight after logging. Tickets created automatically are included.</p>" +
     table(box, ["key", "type", "pri", "sum", "status", "age", "fr", "po", "svm", "cw", "rem"], { empty: "The open box is empty. Every logged ticket has been triaged." });
-}
-
-/* ══ Escalations ══ */
-function viewEsc() {
-  const L2 = HC.escalations(T, E, NOW, CFG), contacts = CFG.contacts;
-  const namesOf = (role) => contacts.filter((c) => role.indexOf(c.role) === 0).map((c) => c.name).join(", ");
-  const byKey = {}; L2.forEach((x) => { byKey[x.i] = x; });
-  const groups = {}; L2.forEach((x) => { (groups[x.trigger] = groups[x.trigger] || []).push(x.i); });
-  return "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2. Escalating moves the technical work, not the ownership: the owner keeps updating the user. “No progress” means no status change in Jira for that long while the ticket is with us. Contact details are in Master data.</p>" +
-    (Object.keys(groups).length ? '<div class="bar">' + Object.keys(groups).map((g) => '<span class="pill">' + esc(g) + " <b>" + dl(groups[g], g) + "</b></span>").join("") + "</div>" : "") +
-    table(L2.map((x) => x.i), ["key", "type", "pri", "sum", "status", "prog", "po", "svm", "rem"], { sortable: false, empty: "No escalation triggers are met right now.",
-      extra: { h: "Trigger and who to inform", c: (i) => { const x = byKey[i]; return "<b>" + esc(x.trigger) + '</b><div class="small" style="margin-top:3px">' + x.inform.map((r) => { const n = r.indexOf("PO") === 0 ? (E[i].po && E[i].po.po) : namesOf(r); return esc(r) + (n ? ' <span class="dim">(' + esc(n) + ")</span>" : ""); }).join("<br>") + "</div>"; } } });
 }
 
 /* ══ Rule checks ══ */
@@ -1113,13 +1119,14 @@ function sideOf(i) {
 }
 const bySevAge = (a, b) => HC.sevRank(T[a].sev) - HC.sevRank(T[b].sev) || (T[a].created || 0) - (T[b].created || 0);
 function hoData(which) {
-  const w = shiftWindow(which), all = T.map((t, i) => i), open = openIdx();
-  const createdAll = all.filter((i) => T[i].created != null && T[i].created >= w.start && T[i].created < w.end);
+  const gen = which === "general";
+  const w = gen ? { start: NOW, end: NOW, planEnd: NOW, live: false, key: "general", general: true, label: "General handover, position at " + fdt(NOW) + " IST" } : shiftWindow(which), all = T.map((t, i) => i), open = openIdx();
+  const createdAll = gen ? [] : all.filter((i) => T[i].created != null && T[i].created >= w.start && T[i].created < w.end);
   const created = createdAll.filter((i) => sideOf(i) !== "client" && sideOf(i) !== "billing").sort(bySevAge);
   const createdClient = createdAll.length - created.length;
   const hd = open.filter((i) => sideOf(i) === "hd").sort(bySevAge), engg = open.filter((i) => sideOf(i) === "engg").sort(bySevAge);
   const client = open.filter((i) => sideOf(i) === "client"), billing = open.filter((i) => sideOf(i) === "billing");
-  const closed = all.filter((i) => E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt >= w.start && E[i].closedAt < w.end);
+  const closed = gen ? [] : all.filter((i) => E[i].stage === "closed" && E[i].closedAt != null && E[i].closedAt >= w.start && E[i].closedAt < w.end);
   const cnt = (list) => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = 0; }); list.forEach((i) => { if (T[i].sev) o[T[i].sev]++; }); return o; };
   const escL = HC.escalations(T, E, NOW, CFG).filter((x) => sideOf(x.i) !== "client");
   return { w, createdAll, created, createdClient, hd, engg, client, billing, closed, clientBySev: cnt(client), hdBySev: cnt(hd), enggBySev: cnt(engg), createdBySev: cnt(created), esc: escL };
@@ -1127,7 +1134,7 @@ function hoData(which) {
 const HO_KEY = "hd-swire-ho";
 function hoPeople() { try { return JSON.parse(localStorage.getItem(HO_KEY) || "{}") || {}; } catch (e) { return {}; } }
 function hoSavePeople(o) { try { localStorage.setItem(HO_KEY, JSON.stringify(o)); } catch (e) {} }
-function hoSubject(d) { return "Swire Hypercare shift handover: " + d.w.label; }
+function hoSubject(d) { return d.w.general ? "Swire Hypercare general handover: everything pending, " + fdt(NOW) + " IST" : "Swire Hypercare shift handover: " + d.w.label; }
 
 /* the columns every list in the mail carries */
 const HO_COLS = [
@@ -1197,13 +1204,14 @@ function mailHTML(d, ppl) {
   const note = (ppl.note || "").trim();
   return '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif;color:#0F1E2E">' +
     "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
-    "<p " + P + ">Handing over the Swire Phoenix Hypercare <b>" + esc(d.w.label) + "</b>" + (d.w.live ? ", position at " + esc(fdt(d.w.end)) + " IST" : "") + ".</p>" +
+    (d.w.general ? "<p " + P + ">Handing over <b>everything pending</b> on Swire Phoenix Hypercare that needs follow-up, position at " + esc(fdt(NOW)) + " IST.</p>"
+      : "<p " + P + ">Handing over the Swire Phoenix Hypercare <b>" + esc(d.w.label) + "</b>" + (d.w.live ? ", position at " + esc(fdt(d.w.end)) + " IST" : "") + ".</p>") +
     '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;width:auto">' +
-    "<tr>" + cell("Created this shift", d.created.length + d.createdClient, "") + cell("Closed this shift", d.closed.length, "#15803D") + "</tr>" +
+    (d.w.general ? "" : "<tr>" + cell("Created this shift", d.created.length + d.createdClient, "") + cell("Closed this shift", d.closed.length, "#15803D") + "</tr>") +
     "<tr>" + cell("Pending with SVM, Help Desk", d.hd.length, "#0E7C86") + cell("Pending with SVM, Engineering", d.engg.length, "#24507C") + "</tr>" +
     "<tr>" + cell("With the client (not listed)", d.client.length, "#B45309") + cell("Delivered, with Receivables (not listed)", d.billing.length, "#6D28D9") + "</tr>" +
     "<tr>" + cell("Escalations to raise", d.esc.length, d.esc.length ? "#C8102E" : "") + '<td style="' + TD + '"></td><td style="' + TD + '"></td></tr></table>' +
-    (note ? "<h3 " + H2 + ">Notes for the next shift</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
+    (note ? "<h3 " + H2 + ">" + (d.w.general ? "Notes" : "Notes for the next shift") + "</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
     /* Section 10.2 escalations as a table like the ticket lists: Showstopper / Critical / High one by one, with the
        trigger, how long without progress and who to inform BY NAME; Medium / Low past benchmark as one line */
     (function () {
@@ -1213,23 +1221,23 @@ function mailHTML(d, ppl) {
         (hot.length ? "<p " + P + ">Escalating moves the technical work, not the ownership: the owner keeps updating Swire.</p>" + escMailTable(hot) : "") +
         (age.length ? "<p " + P + "><b>" + age.length + "</b> Medium/Low ticket" + (age.length > 1 ? "s are" : " is") + " past the resolution benchmark, for the PO at the weekly ageing review: " + age.slice(0, 12).map((x) => '<a href="' + jiraUrl(T[x.i].key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(T[x.i].key) + "</a>").join(", ") + (age.length > 12 ? " and " + (age.length - 12) + " more" : "") + ".</p>" : "");
     })() +
-    "<h3 " + H2 + ">1. Created this shift (" + d.created.length + ")</h3><p " + P + ">" + esc(sevLine(d.createdBySev)) + (d.createdClient ? ". " + d.createdClient + " more already moved to the client, not listed" : "") + ".</p>" + mailTable(d.created, "No tickets were created this shift.") +
-    "<h3 " + H2 + ">2. Pending with SVM, Help Desk (" + d.hd.length + ")</h3><p " + P + ">" + esc(sevLine(d.hdBySev)) + ".</p>" + mailTable(d.hd, "Nothing pending with the Help Desk.") +
-    "<h3 " + H2 + ">3. Pending with SVM, Engineering (" + d.engg.length + ")</h3><p " + P + ">" + esc(sevLine(d.enggBySev)) + ".</p>" + mailTable(d.engg, "Nothing pending with Engineering.") +
-    "<h3 " + H2 + ">4. With the client (" + d.client.length + ")</h3><p " + P + ">" + esc(sevLine(d.clientBySev)) + ". Not listed: these are waiting on Swire.</p>" +
-    "<p " + P + ">Every open ticket must have a named owner on the next shift (R8). Please acknowledge on this thread.</p>" +
+    (d.w.general ? "" : "<h3 " + H2 + ">1. Created this shift (" + d.created.length + ")</h3><p " + P + ">" + esc(sevLine(d.createdBySev)) + (d.createdClient ? ". " + d.createdClient + " more already moved to the client, not listed" : "") + ".</p>" + mailTable(d.created, "No tickets were created this shift.")) +
+    "<h3 " + H2 + ">" + (d.w.general ? "1" : "2") + ". Pending with SVM, Help Desk (" + d.hd.length + ")</h3><p " + P + ">" + esc(sevLine(d.hdBySev)) + ".</p>" + mailTable(d.hd, "Nothing pending with the Help Desk.") +
+    "<h3 " + H2 + ">" + (d.w.general ? "2" : "3") + ". Pending with SVM, Engineering (" + d.engg.length + ")</h3><p " + P + ">" + esc(sevLine(d.enggBySev)) + ".</p>" + mailTable(d.engg, "Nothing pending with Engineering.") +
+    "<h3 " + H2 + ">" + (d.w.general ? "3" : "4") + ". With the client (" + d.client.length + ")</h3><p " + P + ">" + esc(sevLine(d.clientBySev)) + ". Not listed: these are waiting on Swire.</p>" +
+    "<p " + P + ">" + (d.w.general ? "Every open ticket must have a named owner (R8). Please acknowledge on this thread." : "Every open ticket must have a named owner on the next shift (R8). Please acknowledge on this thread.") + "</p>" +
     "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
 }
 function mailText(d, ppl) {
   const row = (i) => "- " + HO_COLS.map((c) => c[0] + ": " + (c[1](T[i], E[i]) || "-")).join(" | ");
   const sec = (title, list, line) => title + "\n" + (list.length ? list.map(row).join("\n") : "- none") + "\n";
   const note = (ppl.note || "").trim();
-  return "Hi " + (ppl.to || "team") + ",\n\nHanding over the Swire Phoenix Hypercare " + d.w.label + (d.w.live ? ", position at " + fdt(d.w.end) + " IST" : "") + ".\n\n" +
-    "Created this shift: " + (d.created.length + d.createdClient) + "   Closed: " + d.closed.length + "\nPending with SVM: Help Desk " + d.hd.length + ", Engineering " + d.engg.length + "\nWith the client (not listed): " + d.client.length + "   Delivered, with Receivables: " + d.billing.length + "\n\n" +
+  return "Hi " + (ppl.to || "team") + ",\n\n" + (d.w.general ? "Handing over everything pending on Swire Phoenix Hypercare, position at " + fdt(NOW) + " IST.\n\n" : "Handing over the Swire Phoenix Hypercare " + d.w.label + (d.w.live ? ", position at " + fdt(d.w.end) + " IST" : "") + ".\n\n" +
+    "Created this shift: " + (d.created.length + d.createdClient) + "   Closed: " + d.closed.length + "\n") + "Pending with SVM: Help Desk " + d.hd.length + ", Engineering " + d.engg.length + "\nWith the client (not listed): " + d.client.length + "   Delivered, with Receivables: " + d.billing.length + "\n\n" +
     (note ? "Notes for the next shift:\n" + note + "\n\n" : "") +
     (d.esc.length ? "ESCALATIONS TO RAISE (SECTION 10.2, " + d.esc.length + ")\n" + d.esc.map((x) => "- " + T[x.i].key + " [" + T[x.i].priority + "] " + T[x.i].summary + "\n    " + x.trigger + ", " + escWait(x) + ". Inform: " + informNames(x).join("; ")).join("\n") + "\n\n" : "") +
-    sec("1. CREATED THIS SHIFT (" + d.created.length + ")", d.created) + "\n" + sec("2. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("3. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" +
-    "4. WITH THE CLIENT: " + d.client.length + " (" + sevLine(d.clientBySev) + "), not listed.\n\nEvery open ticket must have a named owner on the next shift (R8).\n\nRegards,\n" + (ppl.from || "");
+    (d.w.general ? sec("1. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("2. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" + "3. WITH THE CLIENT: "
+      : sec("1. CREATED THIS SHIFT (" + d.created.length + ")", d.created) + "\n" + sec("2. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("3. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" + "4. WITH THE CLIENT: ") + + d.client.length + " (" + sevLine(d.clientBySev) + "), not listed.\n\nEvery open ticket must have a named owner on the next shift (R8).\n\nRegards,\n" + (ppl.from || "");
 }
 function viewHandover() {
   if (!UI.shift || UI.shift === "current" || UI.shift === "last") UI.shift = currentShiftKey();
@@ -1238,14 +1246,16 @@ function viewHandover() {
   const cur = currentShiftKey();
   const pills = recentShifts().map((x) => { const k = x.id + "|" + x.start, d0 = HC.ist(x.start), live = x.end > NOW;
     return '<button class="pill" data-shift="' + esc(k) + '" aria-pressed="' + (d.w.key === k) + '">' + esc(x.name) + " " + d0.d + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d0.mo] + (live ? " (now)" : "") + "</button>"; }).join("");
-  return '<div class="bar noprint"><span class="lbl">Shift</span>' + pills +
+  const gen = d.w.general;
+  return '<div class="bar noprint"><span class="lbl">Handover</span><button class="pill" data-shift="general" aria-pressed="' + gen + '">General (all pending)</button><span class="lbl" style="margin-left:6px">Shift</span>' + pills +
     '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoEml">Download email draft</button><button class="btn" id="hoPrint">Print</button></div>' +
-    "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>" +
-    '<div class="signals noprint">' + sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift") +
+    (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). Tickets with the client are counted, not listed.</p>"
+      : "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>") +
+    '<div class="signals noprint">' + (gen ? "" : sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift")) +
     sigL("teal", d.hd, "Pending with Help Desk", sevLine(d.hdBySev), "Pending with Help Desk") + sigL("eng", d.engg, "Pending with Engineering", sevLine(d.enggBySev), "Pending with Engineering") +
     sigL("", d.client, "With the client", "counted only", "With the client") + sigL("", d.billing, "Delivered, billing", "counted only", "Delivered, billing") + sigL(d.esc.length ? "cr" : "", d.esc.map((x) => x.i), "Escalations to raise", "", "Escalations to raise") + "</div>" +
     '<div class="panel noprint"><div class="grid2" style="gap:12px"><div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoFrom">Handed over by</label><input class="inp" id="hoFrom" value="' + esc(ppl.from || "") + '" placeholder="Your name"></div>' +
-    '<div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoTo">Handed over to</label><input class="inp" id="hoTo" value="' + esc(ppl.to || "") + '" placeholder="Next shift, e.g. Night Hypercare team"></div></div>' +
+    '<div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoTo">Handed over to</label><input class="inp" id="hoTo" value="' + esc(ppl.to || "") + '" placeholder="' + (gen ? "e.g. Hypercare team, POs" : "Next shift, e.g. Night Hypercare team") + '"></div></div>' +
     '<div class="setrow" style="grid-template-columns:130px 1fr;align-items:start"><label for="hoNote">Notes for the next shift</label><textarea class="inp" id="hoNote" rows="3" placeholder="Anything promised to Swire, calls in progress, things to watch">' + esc(UI.hoNote || "") + "</textarea></div></div>" +
     '<div class="sec-h noprint">Email preview</div><div class="report" id="hoPreview" style="overflow-x:auto"><p class="dim small" style="margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + mailHTML(d, ppl) + "</div>";
 }
@@ -1462,10 +1472,10 @@ function copyRich(html, text, btn, label) {
   if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), fallback);
   else fallback();
 }
-function emlDownload(subject, html, file) {
+function emlDownload(subject, html, file, to) {
   const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
   const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
-  const eml = ["X-Unsent: 1", "Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")].join("\r\n");
+  const eml = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : []).concat(["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")]).join("\r\n");
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" })); a.download = file; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 /* SLA chips, same buckets as the Follow-up Tracker */
@@ -1712,6 +1722,7 @@ function xlCmp(a, b) {
 }
 const xlLabel = (td) => { const x = (td.innerText || "").replace(/\s+/g, " ").trim(); return x.length > 90 ? x.slice(0, 89) + "…" : x || "(blank)"; };
 function xlId(tbl) {
+  const named = tbl.closest("[data-xlname]"); if (named) return named.dataset.xlname;   // several tables under one heading each keep their own state
   const box = tbl.closest(".lbox,.drawer,.panel,.wcard,#view"), h = box && box.querySelector("h2,h3,.sec-h,.wct");
   const heads = Array.from(tbl.tHead ? tbl.tHead.rows[0].cells : []).map((c) => (c.dataset.h || c.innerText).trim()).join("|");
   return (h ? h.innerText.trim().slice(0, 60) : "") + "#" + heads;
@@ -1796,6 +1807,169 @@ document.addEventListener("scroll", () => xlClose(), true);
 let xlT = null;
 new MutationObserver(() => { clearTimeout(xlT); xlT = setTimeout(() => xlInit(document), 60); }).observe(document.body, { childList: true, subtree: true });
 
+/* ══ Escalations (Section 10.2): why, since when, who holds it, who to tell, and the escalation itself ══ */
+const ESC_LOG = "hd-swire-escalated";
+function escLog() { try { return JSON.parse(localStorage.getItem(ESC_LOG) || "{}") || {}; } catch (e) { return {}; } }
+function escMark(keys) { const l = escLog(), now = Date.now(); keys.forEach((k) => { l[k] = now; }); try { localStorage.setItem(ESC_LOG, JSON.stringify(l)); } catch (e) {} }
+let ESCM = {};                                   // key → escalation entry, set while the tab renders
+const ESC_KIND = (x) => x.sev === "showstopper" ? "ss" : x.sev === "critical" ? "cr" : x.sev === "high" ? "hi" : "bm";
+function escWhy(x) {
+  const e = E[x.i], t = T[x.i];
+  if (x.sev === "showstopper") return { head: "Showstopper open", line: "Open " + fmt(ageOf(t)) + ". Escalate at once and phone the Engineering head.", over: ageOf(t) };
+  if (x.sev === "critical" || x.sev === "high") {
+    const lim = x.sev === "critical" ? CFG.escalate.critical : CFG.escalate.high, nm = e.sinceMoveMin || 0;
+    return { head: (x.sev === "critical" ? "Critical" : "High") + ", no progress", line: "No status change for " + fmt(nm) + " (limit " + fmt(lim) + "), " + fmt(nm - lim) + " over.", over: nm - lim };
+  }
+  const tg = e.target ? e.target.res : 0;
+  return { head: "Past resolution benchmark", line: "Our time " + fmt(e.oursMin) + " against a " + fmt(tg) + " benchmark, " + fmt((e.oursMin || 0) - tg) + " over. For the weekly ageing review.", over: (e.oursMin || 0) - tg };
+}
+/* email addresses for "who to inform": contacts from Master data, and the ticket's own PO */
+function informEmails(x) {
+  const out = [];
+  x.inform.forEach((r) => {
+    if (r.indexOf("PO") === 0) { const po = E[x.i].po || {}; let em = po.email; if (!em && po.po) { const m = CFG.modules.find((mm) => mm.po.toLowerCase().replace(/[^a-z]/g, "") === po.po.toLowerCase().replace(/[^a-z]/g, "")); if (m) em = m.email; } if (em) out.push(em); }
+    else CFG.contacts.filter((c) => r.indexOf(c.role) === 0 && c.email).forEach((c) => out.push(c.email));
+  });
+  return Array.from(new Set(out));
+}
+COLS.created = { h: "Created", s: (t) => t.created || 0, c: (t) => '<span class="nw">' + esc(fdt(t.created)) + '</span><div class="dim small">' + fmt(ageOf(t)) + " ago</div>" };
+COLS.why = { h: "Why escalate", s: (t) => { const x = ESCM[t.key]; return x ? -escWhy(x).over : 0; }, c: (t) => { const x = ESCM[t.key]; if (!x) return ""; const w = escWhy(x); return '<div style="min-width:240px"><b class="ewh">' + esc(w.head) + '</b><div class="small">' + esc(w.line) + "</div></div>"; } };
+COLS.lrpsfull = { h: "LRPS (assignee, status)", s: (t) => lrpsNames(t), c: (t) => t.lrps.length ? t.lrps.map((k) => { const x = LRPS[k]; return '<div class="nw"><a class="key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a> " + (x ? (x.gone ? '<span class="dim small">not found</span>' : esc(x.a || "Unassigned") + (x.s ? ' <span class="st">' + esc(x.s) + "</span>" : "")) : '<span class="dim small">not read yet</span>') + "</div>"; }).join("") : '<span class="dim">no LRPS ticket</span>' };
+COLS.inform = { h: "Inform", s: (t) => { const x = ESCM[t.key]; return x ? x.inform.join(" ") : ""; }, c: (t) => { const x = ESCM[t.key]; return x ? '<div class="small" style="min-width:270px">' + informNames(x).map(esc).join("<br>") + "</div>" : ""; } };
+COLS.escact = { h: "", s: () => 0, c: (t, e) => { const l = escLog()[t.key], r = rmLog()[t.key];
+  return '<div class="acts" style="flex-direction:column;align-items:stretch;gap:4px"><button type="button" class="btn pri sm2" data-escone="' + esc(t.key) + '">Escalate</button>' +
+    ((e.stage === "openbox" || e.stage === "working") ? '<button type="button" class="lnk sm" data-rmone="' + esc(t.key) + '">Remind</button>' : "") + '<button type="button" class="lnk sm" data-simkey="' + esc(t.key) + '">Similar</button>' +
+    (l ? '<span class="dim small nw">escalated ' + fmt((Date.now() - l) / MIN) + " ago</span>" : "") + (r ? '<span class="dim small nw">reminded ' + fmt((Date.now() - r) / MIN) + " ago</span>" : "") + "</div>"; } };
+
+function viewEsc() {
+  /* sections by trigger (most urgent first), and inside each, by who has to act; most overdue first;
+     tickets escalated in the last 24 hours fold into "waiting for progress" at the end of their section */
+  const L2 = HC.escalations(T, E, NOW, CFG); ESCM = {}; L2.forEach((x) => { ESCM[T[x.i].key] = x; });
+  const K = [["ss", "Showstoppers open", "Escalate at once: phone the Engineering head, open a bridge call, inform Swire IT.", "t-ss", "siren"],
+    ["cr", "Critical, no progress for " + fmt(CFG.escalate.critical), "Inform the Engineering head. The owner keeps updating Swire.", "t-cr", "flame"],
+    ["hi", "High, no progress for " + fmt(CFG.escalate.high), "Inform the PO for the module (Hypercare lead).", "t-cr", "clock"],
+    ["bm", "Past the resolution benchmark", "Medium and Low: take to the PO at the weekly ageing review.", "t-ink", "pause"]];
+  const SIDES = [["engg", "With Engineering", "the LRPS engineer has the next step"], ["hd", "With Help Desk / open box", "the Help Desk has the next step"], ["client", "With Swire", "chase the client for what they owe"], ["billing", "Delivered, billing", "with Receivables"]];
+  const recent = (i) => { const l = escLog()[T[i].key]; return l && Date.now() - l < 24 * 3600e3; };
+  const order = (a, b) => escWhy(ESCM[T[b].key]).over - escWhy(ESCM[T[a].key]).over;
+  const cols = ["key", "type", "pri", "sum", "status", "created", "why", "prog", "sla", "po", "svm", "cw", "lrpsfull", "inform", "escact"];
+  const by = {}; K.forEach(([k]) => { by[k] = L2.filter((x) => ESC_KIND(x) === k).map((x) => x.i); });
+  const done = L2.filter((x) => recent(x.i)).length;
+  let h = "<h2>Escalations to raise</h2><p class=\"sub\">Section 10.2, by urgency and then by who has to act. Escalating moves the technical work, not the ownership: the owner keeps updating Swire. “No progress” means no status change in Jira while the ticket is with us. Emails go to the people in Master data and the ticket’s PO.</p>" +
+    '<div class="tiles esc4">' + K.map(([k, n, d, c, ic]) => '<button type="button" class="tile ' + (by[k].length ? c : "zero") + '" data-escgo="' + k + '"><span class="ic">' + ICON[ic] + '</span><span class="nm">' + by[k].length + '</span><span class="tt">' + esc(n) + '</span><span class="ds">' + esc(d.split(":")[0].split(".")[0]) + '</span><span class="mt"><span style="width:' + Math.round(by[k].length / Math.max(1, L2.length) * 100) + '%"></span></span></button>').join("") + "</div>" +
+    '<div class="bar"><span class="dim small">' + L2.length + " to escalate" + (done ? ", " + done + " escalated in the last 24 hours" : "") + '</span><span style="flex:1"></span>' + (L2.length ? '<button type="button" class="btn pri" data-escall="' + reg(L2.map((x) => x.i), "Escalations") + '">Escalation mail for all ' + L2.length + "</button>" : "") + "</div>";
+  if (!L2.length) return h + '<div class="tw"><div class="empty">No escalation triggers are met right now.</div></div>';
+  K.forEach(([k, n, d, c]) => {
+    const all = by[k]; if (!all.length) return;
+    const open = all.filter((i) => !recent(i)), waiting = all.filter(recent);
+    h += '<section class="escsec ' + c + '" id="esc-' + k + '"><div class="escsec-h"><div><b>' + esc(n) + "</b> <span>" + all.length + '</span><div class="small">' + esc(d) + '</div></div><button type="button" class="btn" data-escall="' + reg(all, n) + '">Escalation mail for these ' + all.length + "</button></div>";
+    SIDES.forEach(([sk, sn, sd]) => {
+      const g = open.filter((i) => sideOf(i) === sk).sort(order); if (!g.length) return;
+      h += '<div class="escgrp" data-xlname="esc-' + k + "-" + sk + '"><div class="escgrp-h">' + esc(sn) + " <b>" + g.length + '</b> <span class="dim small">' + esc(sd) + "</span></div>" + table(g, cols, { sortable: false }) + "</div>";
+    });
+    if (waiting.length) h += '<details class="escwait" data-xlname="esc-' + k + '-waiting"><summary>Escalated in the last 24 hours, waiting for progress <b>' + waiting.length + "</b></summary>" + table(waiting.sort(order), cols, { sortable: false }) + "</details>";
+    h += "</section>";
+  });
+  return h;
+}
+
+/* the escalation email (one ticket or many), and the internal note version */
+function escMailHTML(list, note) {
+  const groups = {}; list.forEach((x) => { const k = escWhy(x).head; (groups[k] = groups[k] || []).push(x); });
+  const P = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:14px;color:#5C1730;margin:16px 0 4px"';
+  const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
+  const tbl = (l) => '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif"><tr>' + ["Ticket", "Priority", "Summary", "Status", "Created", "Why escalate", "SLA", "PO", "LRPS (assignee, status)"].map(th).join("") + "</tr>" +
+    l.map((x, k) => { const t = T[x.i], e = E[x.i], w = escWhy(x), s0 = slaOf(x.i) || {};
+      return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + '><td style="' + TD + '"><a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a></td>" +
+        '<td style="' + TD + 'white-space:nowrap;font-weight:600">' + esc(t.priority) + '</td><td style="' + TD + '">' + esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "") + "</td>" +
+        '<td style="' + TD + 'white-space:nowrap">' + esc(t.status) + '</td><td style="' + TD + 'white-space:nowrap">' + esc(fdt(t.created)) + "<br>" + esc(fmt(ageOf(t))) + " ago</td>" +
+        '<td style="' + TD + '"><b>' + esc(w.head) + "</b><br>" + esc(w.line) + '</td><td style="' + TD + 'white-space:nowrap">' + esc(s0.label || "—") + "</td>" +
+        '<td style="' + TD + '">' + esc((e.po && e.po.po) || "—") + '</td><td style="' + TD + '">' + (t.lrps.length ? t.lrps.map((kk) => esc(kk) + (LRPS[kk] ? ": " + esc(LRPS[kk].a || "Unassigned") + (LRPS[kk].s ? " (" + esc(LRPS[kk].s) + ")" : "") : "")).join("<br>") : "—") + "</td></tr>"; }).join("") + "</table>";
+  const inform = Array.from(new Set([].concat(...list.map((x) => informNames(x)))));
+  return '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif"><p ' + P + ">Hi,</p><p " + P + ">Escalating " + (list.length === 1 ? "this Swire Phoenix Hypercare ticket" : "<b>" + list.length + "</b> Swire Phoenix Hypercare tickets") + " under Section 10.2 of the Hypercare runbook. The owner keeps updating Swire; please help move the technical work.</p>" +
+    (note && note.trim() ? "<p " + P + "><b>Note:</b> " + esc(note.trim()).replace(/\n/g, "<br>") + "</p>" : "") +
+    Object.keys(groups).map((g) => "<h3 " + H + ">" + esc(g) + " (" + groups[g].length + ")</h3>" + tbl(groups[g])).join("") +
+    "<p " + P + "><b>Informed:</b> " + esc(inform.join("; ")) + "</p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+}
+function escNoteText(x, who, note) {
+  const t = T[x.i], w = escWhy(x), s0 = slaOf(x.i) || {};
+  return ["Hi " + (who.id ? "@" : "") + who.name + ",", "Escalation (Section 10.2) on " + t.key + " [" + t.priority + "] \"" + t.summary + "\"" + (t.meId ? " (ME ID " + t.meId + ")" : "") + ".",
+    w.head + ": " + w.line + (s0.label ? " SLA: " + s0.label + "." : "") + " Raised " + fdt(t.created) + " IST.", "Informed: " + informNames(x).join("; ") + "."].concat(note && note.trim() ? [note.trim()] : [])
+    .concat(["Please share an update and the next step with an ETR on this ticket.", "Regards,\n" + rmSign()]).join("\n\n");
+}
+function openEscalate(list) {
+  const one = list.length === 1 ? list[0] : null, to = Array.from(new Set([].concat(...list.map(informEmails))));
+  const short = (x) => x.sev === "showstopper" ? "Showstopper open " + fmt(ageOf(T[x.i])) : x.sev === "critical" || x.sev === "high" ? "no progress for " + fmt(E[x.i].sinceMoveMin || 0) : "past resolution benchmark";
+  const subj = one ? "Escalation: " + T[one.i].key + " [" + T[one.i].priority + "] " + short(one) + ": " + T[one.i].summary.replace(/^(\s*(fw|fwd|re)\s*:\s*|\(\s*id\s*:\s*##\d+##\)\s*)+/gi, "").slice(0, 70) : "Swire Hypercare escalations: " + list.length + " tickets (Section 10.2)";
+  const who = one ? rmWho(one.i) : null;
+  const m = rmModal('<div class="lhead"><h3>' + (one ? "Escalate " + esc(T[one.i].key) : "Escalation mail, " + list.length + " tickets") + '</h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+    '<div class="rmrow" style="border:none;margin-top:0;padding-top:0"><label class="rmlbl" for="esTo">To</label><input class="inp" id="esTo" style="flex:1" value="' + esc(to.join("; ")) + '" placeholder="Add email addresses in Master data"></div>' +
+    '<div class="rmrow" style="border:none;margin-top:0;padding-top:6px"><label class="rmlbl" for="esSub">Subject</label><input class="inp" id="esSub" style="flex:1" value="' + esc(subj) + '"></div>' +
+    '<label class="rmlbl" for="esNote">Note (optional)</label><textarea class="inp" id="esNote" rows="2" style="width:100%" placeholder="e.g. Swire has chased twice today; please call back by 18:00."></textarea>' +
+    '<span class="rmlbl">Preview</span><div class="rmprev" id="esPrev" style="max-height:44vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
+    '<div class="rmrow"><span id="esMsg" class="small"></span><span style="flex:1"></span>' + (one && who ? '<button type="button" class="btn" id="esNoteBtn" title="Internal note on ' + esc(T[one.i].key) + " to " + esc(who.name) + '">Post as internal note</button>' : "") +
+    '<button type="button" class="btn" id="esEml">Download email draft</button><button type="button" class="btn pri" id="esCopy">Copy email</button></div>', "wide");
+  const q = (id) => m.ov.querySelector("#" + id), html = () => escMailHTML(list, q("esNote").value);
+  const paint = () => { q("esPrev").innerHTML = html(); }; q("esNote").addEventListener("input", paint); paint();
+  const keys = list.map((x) => T[x.i].key), ok = (msg) => { escMark(keys); q("esMsg").innerHTML = '<span style="color:var(--ok);font-weight:600">' + esc(msg) + "</span>"; };
+  q("esCopy").onclick = (e) => { const tx = q("esPrev").innerText; copyRich(html(), tx, e.target, "Copy email"); ok("Copied. Paste into Outlook; marked as escalated."); };
+  q("esEml").onclick = () => { emlDownload(q("esSub").value, html(), "Swire-escalation-" + (one ? T[one.i].key : list.length + "-tickets") + ".eml", q("esTo").value); ok("Draft downloaded; marked as escalated."); };
+  const nb = q("esNoteBtn"); if (nb) nb.onclick = () => { nb.disabled = true; nb.textContent = "Posting…"; rmPost(T[one.i].key, rmAdf(escNoteText(one, who, q("esNote").value), who)).then(() => { rmMark(T[one.i].key); ok("Posted as an internal note on " + T[one.i].key + "."); nb.textContent = "Posted"; }, (er) => { q("esMsg").innerHTML = '<span style="color:var(--ss)">' + esc(er.message || er) + "</span>"; nb.disabled = false; nb.textContent = "Post as internal note"; }); };
+}
+document.addEventListener("click", (e) => {
+  const one = e.target.closest && e.target.closest("[data-escone]"); if (one) { e.preventDefault(); e.stopPropagation(); const x = ESCM[one.dataset.escone]; if (x) openEscalate([x]); return; }
+  const all = e.target.closest && e.target.closest("[data-escall]"); if (all) { e.preventDefault(); e.stopPropagation(); const L0 = LISTS[all.dataset.escall]; if (L0) openEscalate(L0.idx.map((i) => ESCM[T[i].key]).filter(Boolean)); return; }
+  const go = e.target.closest && e.target.closest("[data-escgo]"); if (go) { e.preventDefault(); e.stopPropagation(); const sec = el("esc-" + go.dataset.escgo); if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" }); }
+}, true);
+
+/* ══ Releases: already moved, and expected (same rules as the Release Tracker) ══ */
+const REL_DONE = ["closed", "completed", "resolved", "resolved with clarification", "delivered", "published", "confirmation", "get confirmation", "release move to production", "db script delivered", "invoice yet to raise", "invoice issued"];
+const REL_EARLY = ["open", "acknowledged", "analysis & study", "analysis and study", "technical analysis", "assign hd (wfc)", "re-open review", "user request"];
+const REL_STAGES = [
+  { id: "build", label: "Fix & Testing", color: "#D7263D", st: ["development in progress", "testing in progress", "team lead review & approval", "svm hotfix testing", "review", "impact study", "db script request"] },
+  { id: "prep", label: "Release Prep & Approval", color: "#C2680A", st: ["release plan (uat or hot fix)", "release plan (production)", "release kit prep.", "poc release approval", "project lead approval", "approval db admin", "db admin approval", "script release", "assign to svm deployment team"] },
+  { id: "client", label: "Client Approval & Deploy", color: "#1F8A4C", st: ["release in progress", "client release approval", "client release approval (prod)", "client hotfix testing", "client deployment (prod)", "client approval (db script)", "svm (db script) release in-progress"] }];
+const relKey = (s) => String(s || "").trim().toLowerCase();
+const relStage = (t) => REL_STAGES.find((g) => g.st.indexOf(relKey(t.status)) > -1) || null;
+const relDone = (t, e) => e.stage === "closed" || REL_DONE.indexOf(relKey(t.status)) > -1;
+const NOREL = "(release no. not assigned)";
+COLS.rel = { h: "Release no.", s: (t) => t.rels.join(" "), c: (t) => t.rels.length ? t.rels.map((r) => '<span class="mono nw">' + esc(r) + "</span>").join("<br>") : '<span class="dim">—</span>' };
+COLS.relstage = { h: "Release stage", s: (t) => { const g = relStage(t); return g ? REL_STAGES.indexOf(g) : 9; }, c: (t) => { const g = relStage(t); return g ? '<span class="rlst" style="--rc:' + g.color + '">' + esc(g.label) + "</span>" : '<span class="dim">—</span>'; } };
+COLS.delivered = { h: "Delivered", s: (t, e) => t.delivered || e.closedAt || 0, c: (t, e) => { const d = t.delivered || e.closedAt; return d ? '<span class="nw">' + esc(fday(d)) + "</span>" : '<span class="dim">—</span>'; } };
+function viewRel() {
+  const all = T.map((t, i) => i), withRel = all.filter((i) => T[i].rels.length);
+  const released = withRel.filter((i) => relDone(T[i], E[i]));
+  const expected = all.filter((i) => !relDone(T[i], E[i]) && relStage(T[i]));
+  /* released, grouped by release number, newest first */
+  const g = {}; released.forEach((i) => T[i].rels.forEach((r) => { (g[r] = g[r] || []).push(i); }));
+  const relDate = (l) => Math.max(...l.map((i) => T[i].delivered || E[i].closedAt || T[i].resolved || 0));
+  const rels = Object.keys(g).map((r) => ({ r, l: g[r], d: relDate(g[r]) })).sort((a, b) => b.d - a.d);
+  const d30 = rels.filter((x) => x.d >= NOW - 30 * DAY), d7 = rels.filter((x) => x.d >= NOW - 7 * DAY);
+  const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
+  const relRow = (x) => '<tr><td><button type="button" class="lnk sm mono" data-list="' + reg(x.l, "Release " + x.r) + '">' + esc(x.r) + '</button></td><td class="num"><b>' + dl(x.l, "Release " + x.r) + "</b></td><td class=\"nw\">" + (x.d ? esc(fday(x.d)) : "—") + "</td><td>" + esc(uniq(x.l.map((i) => T[i].typeOfFix)).join(", ") || "—") +
+    "</td><td>" + esc(uniq([].concat(...x.l.map((i) => T[i].components))).join(", ") || "—") + "</td><td>" + esc(uniq(x.l.map((i) => E[i].po && E[i].po.po)).join(", ") || "—") + "</td><td>" + HC.SEVS.map((s) => { const n = x.l.filter((i) => T[i].sev === s.id).length; return n ? '<span class="pr ' + s.id + '">' + n + " " + esc(s.name) + "</span> " : ""; }).join("") + "</td></tr>";
+  /* expected, by stage and by release number */
+  const byStage = REL_STAGES.map((s) => ({ s, l: expected.filter((i) => relStage(T[i]) === s) }));
+  const eg = {}; expected.forEach((i) => (T[i].rels.length ? T[i].rels : [NOREL]).forEach((r) => { (eg[r] = eg[r] || []).push(i); }));
+  const erels = Object.keys(eg).sort((a, b) => (a === NOREL) - (b === NOREL) || eg[b].length - eg[a].length);
+  const tot = Math.max(1, expected.length);
+  let h = "<h2>Releases</h2><p class=\"sub\">Swire tickets moved to production, and tickets expected in a coming release. Same rules as the Release Tracker: <b>released</b> = has a release number and a done status; <b>expected</b> = open in a release-pipeline status (with or without a release number yet). The filters at the top apply.</p>" +
+    '<div class="tiles">' + tile("t-ok", "check", released, "Tickets released", rels.length + " release numbers", 1, "Released tickets") +
+    tile("t-ink", "up", [].concat(...d7.map((x) => x.l)), "Released in the last 7 days", d7.length + " release" + (d7.length === 1 ? "" : "s"), rels.length ? d7.length / rels.length : 0, "Released in the last 7 days") +
+    tile("t-ink", "up", [].concat(...d30.map((x) => x.l)), "Released in the last 30 days", d30.length + " release" + (d30.length === 1 ? "" : "s"), rels.length ? d30.length / rels.length : 0, "Released in the last 30 days") +
+    tile("t-cr", "clock", expected, "Expected releases", erels.filter((r) => r !== NOREL).length + " release numbers, " + (eg[NOREL] || []).length + " not numbered yet", 1, "Expected releases") + "</div>" +
+    '<section class="escsec t-cr"><div class="escsec-h"><div><b>Expected releases</b> <span>' + expected.length + '</span><div class="small">Open tickets in the release pipeline, by stage. Click a stage or a number to see the tickets.</div></div></div>' +
+    '<div class="escgrp"><div class="wsb" style="height:30px">' + byStage.filter((x) => x.l.length).map((x) => '<button type="button" style="flex:' + x.l.length + ' 1 0;background:' + x.s.color + '" data-list="' + reg(x.l, "Expected, " + x.s.label) + '">' + x.l.length + " " + esc(x.s.label) + "</button>").join("") + "</div>" +
+    '<div class="wlg">' + byStage.map((x) => '<span><i style="background:' + x.s.color + '"></i>' + esc(x.s.label) + " <b>" + dl(x.l, "Expected, " + x.s.label) + "</b> (" + Math.round(x.l.length / tot * 100) + "%)</span>").join("") + "</div></div>" +
+    '<div class="escgrp" data-xlname="rel-exp-by-number"><div class="escgrp-h">By release number</div><div class="tw"><table><thead><tr><th>Release no.</th><th>Tickets</th>' + REL_STAGES.map((s) => "<th>" + esc(s.label) + "</th>").join("") + "<th>Priorities</th><th>POs</th></tr></thead><tbody>" +
+    erels.map((r) => { const l = eg[r]; return "<tr><td>" + (r === NOREL ? '<span class="dim">' + esc(r) + "</span>" : '<span class="mono">' + esc(r) + "</span>") + '</td><td class="num"><b>' + dl(l, "Expected, " + r) + "</b></td>" + REL_STAGES.map((s) => { const q = l.filter((i) => relStage(T[i]) === s); return '<td class="num">' + (q.length ? dl(q, r + ", " + s.label) : '<span class="dim">·</span>') + "</td>"; }).join("") +
+      "<td>" + HC.SEVS.map((s) => { const n = l.filter((i) => T[i].sev === s.id).length; return n ? '<span class="pr ' + s.id + '">' + n + " " + esc(s.name) + "</span> " : ""; }).join("") + "</td><td>" + esc(uniq(l.map((i) => E[i].po && E[i].po.po)).join(", ") || "—") + "</td></tr>"; }).join("") + "</tbody></table></div></div>" +
+    REL_STAGES.map((s, k) => { const l = byStage[k].l; return l.length ? '<div class="escgrp" data-xlname="rel-exp-' + s.id + '"><div class="escgrp-h"><span class="rlst" style="--rc:' + s.color + '">' + esc(s.label) + "</span> <b>" + l.length + "</b></div>" + table(l.slice().sort(bySevAge), ["key", "type", "pri", "sum", "status", "rel", "age", "prog", "po", "svm", "lrpsfull", "rem"], { sortable: false }) + "</div>" : ""; }).join("") + "</section>" +
+    '<section class="escsec t-ok"><div class="escsec-h"><div><b>Already moved</b> <span>' + rels.length + ' releases</span><div class="small">Releases with tickets delivered or closed, newest first. Click a release to see its tickets.</div></div></div>' +
+    (rels.length ? '<div class="escgrp" data-xlname="rel-done"><div class="tw"><table><thead><tr><th>Release no.</th><th>Tickets</th><th>Delivered</th><th>Type of fix</th><th>Components</th><th>POs</th><th>Priorities</th></tr></thead><tbody>' + rels.map(relRow).join("") + "</tbody></table></div></div>" : '<div class="escgrp"><p class="dim">No released tickets with a release number in these filters.</p></div>') + "</section>";
+  return h;
+}
+
 /* ══ SLA: every ticket, with us and with Swire ══ */
 function viewSla() {
   const all = T.map((t, i) => i), open = openIdx(), closed = all.filter((i) => E[i].stage === "closed");
@@ -1876,6 +2050,20 @@ function viewMove() {
     keys.slice().reverse().map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : []; const sv = v("hd").length + v("engg").length, net = v("created").length - sv - v("unk").length;
       return "<tr><td>" + esc(labelOf(k)) + "</td>" + cols.map(([x, n]) => '<td class="num">' + (v(x).length ? dl(v(x), labelOf(k) + ", " + n.toLowerCase()) : '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + (sv ? Math.round(v("hd").length / sv * 100) + "%" : "—") + '</td><td class="num" style="color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") +
     "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">Net change is created minus solved: above zero the backlog grew, below zero it shrank.</p></div>";
+  /* ── shift by shift: how many came in and went out in each team shift (1st 06:00–15:00, 2nd 12:30–21:30, Night 21:00–06:00) ── */
+  const sFrom = Math.max(rg.from != null ? rg.from : 0, NOW - 14 * DAY), sTo = Math.min(rg.to != null ? rg.to : NOW, NOW);
+  const shifts = HC.shiftInstances(CFG, sFrom, sTo).filter((x) => x.start <= NOW && x.end > sFrom).slice(-42).reverse();
+  const inS = (x, k) => Array.from(new Set(ev[k].filter((v) => v.t >= x.start && v.t < Math.min(x.end, NOW)).map((v) => v.i)));
+  const SR = shifts.map((x) => { const r = { x }; ["created", "hd", "engg", "unk", "toEngg", "toClient", "fromClient", "reopen"].forEach((k) => { r[k] = inS(x, k); }); r.solved = Array.from(new Set(r.hd.concat(r.engg, r.unk))); return r; });
+  const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], sl = (x) => { const d0 = HC.ist(x.start); return x.name + ", " + d0.d + " " + MN3[d0.mo] + (x.end > NOW ? " (now)" : ""); };
+  const avg = (id, k) => { const l = SR.filter((r) => r.x.id === id && r.x.end <= NOW); return l.length ? (l.reduce((a, r) => a + r[k].length, 0) / l.length) : null; };
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">last ' + Math.round((sTo - sFrom) / DAY) + " days. A ticket in an overlap (12:30–15:00, 21:00–21:30) counts in both shifts, as in the handover.</span></div>" +
+    '<div class="tiles six" style="margin-bottom:12px">' + (CFG.shifts || []).map((sh) => { const ai = avg(sh.id, "created"), ao = avg(sh.id, "solved"), n = SR.filter((r) => r.x.id === sh.id && r.x.end <= NOW).length;
+      return '<div class="tile t-ink" style="cursor:default"><span class="ic">' + ICON.clock + '</span><span class="nm">' + (ai == null ? "—" : ai.toFixed(1)) + '</span><span class="tt">' + esc(sh.name) + " in / shift</span><span class=\"ds\">" + (ao == null ? "" : ao.toFixed(1) + " solved per shift, " + n + " shifts (" + esc(sh.from) + "–" + esc(sh.to) + ")") + '</span><span class="mt"><span style="width:' + (ai && ao != null ? Math.min(100, ao / Math.max(ai, ao) * 100) : 0) + '%"></span></span></div>'; }).join("") + "</div>" +
+    (SR.length ? '<div class="tw" data-xlname="move-by-shift"><table><thead><tr><th>Shift</th><th>Came in</th><th>Went out (solved)</th><th>by HD</th><th>by Engg</th><th>Sent to Engg</th><th>Sent to Swire</th><th>Back from Swire</th><th>Reopened</th><th>Net</th></tr></thead><tbody>' +
+      SR.map((r) => { const net = r.created.length - r.solved.length, c = (l, t) => '<td class="num">' + (l.length ? dl(l, sl(r.x) + ", " + t) : '<span class="dim">·</span>') + "</td>";
+        return "<tr><td class=\"nw\"><b>" + esc(sl(r.x)) + '</b><div class="dim small">' + esc(r.x.from) + "–" + esc(r.x.to) + "</div></td>" + c(r.created, "came in") + c(r.solved, "solved") + c(r.hd, "solved by Help Desk") + c(r.engg, "solved by Engineering") + c(r.toEngg, "sent to Engineering") + c(r.toClient, "sent to Swire") + c(r.fromClient, "back from Swire") + c(r.reopen, "reopened") +
+          '<td class="num" style="font-weight:700;color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="dim small">No shifts in this period.</p>') + "</div>";
   return h;
 }
 
@@ -1995,7 +2183,7 @@ function render() {
   const open = openIdx(), C = HC.checks(T, E, NOW, CFG), escN = HC.escalations(T, E, NOW, CFG).length;
   const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
   paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, sla: (() => { const n = open.filter((i) => slaB(i) === "breached").length; return { n, hot: n > 0 }; })(), esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
-  const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, sla: viewSla, move: viewMove, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
+  const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, sla: viewSla, move: viewMove, rel: viewRel, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
   const y = window.scrollY, f = document.activeElement && document.activeElement.id;
   el("view").innerHTML = V(); window.scrollTo(0, y);
   if (f && el(f)) { const x = el(f); x.focus(); if (x.setSelectionRange && typeof x.value === "string") x.setSelectionRange(x.value.length, x.value.length); }
