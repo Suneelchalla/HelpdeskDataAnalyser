@@ -421,6 +421,16 @@ table.xl th{white-space:nowrap}
 .rlst{display:inline-block;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:600;white-space:nowrap;color:var(--rc);background:color-mix(in srgb,var(--rc) 10%,#fff);border:1px solid color-mix(in srgb,var(--rc) 30%,#fff)}
 .escsec.t-ok{--ac:#1F8A4C;--acbg:#EAF7EF}
 .wsb button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
+.hoprevwrap{position:relative}
+.hocorner{position:absolute;top:10px;right:12px;z-index:2;box-shadow:0 6px 14px -8px rgba(122,31,61,.7)}
+@media print{.hoprevwrap .hocorner{display:none!important}
+  /* the handover prints on its own landscape pages, every column on the page */
+  #hoPreview{overflow:visible!important;border:none!important;padding:0!important}
+  #hoPreview table:not([style*="width:auto"]){width:100%!important;table-layout:auto}
+  #hoPreview td,#hoPreview th{font-size:9px!important;padding:3px 4px!important}
+  #hoPreview td,#hoPreview td span{min-width:0!important}
+  #hoPreview tr{break-inside:avoid}
+}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -1137,14 +1147,29 @@ function hoSavePeople(o) { try { localStorage.setItem(HO_KEY, JSON.stringify(o))
 function hoSubject(d) { return d.w.general ? "Swire Hypercare general handover: everything pending, " + fdt(NOW) + " IST" : "Swire Hypercare shift handover: " + d.w.label; }
 
 /* the columns every list in the mail carries */
+/* where a ticket sits right now and with whom: Help Desk / Engineering (with the person), open box, Swire, billing */
+function holderOf(t, e) {
+  if (e.stage === "closed") return "Closed";
+  if (e.stage === "client") return "Swire (waiting on the client)";
+  if (e.stage === "billing") return "Receivables (billing)";
+  if (e.stage === "openbox") return "Open box, not triaged" + (t.cw ? ": " + t.cw : "");
+  const engg = window.HDClass && HDClass.classify3 && HDClass.classify3(t.status) === "engg";
+  if (engg) { const n = t.lrps.map((k) => LRPS[k] && LRPS[k].a).filter(Boolean); return "Engineering: " + (n[0] || t.cw || "not assigned"); }
+  return "Help Desk: " + (t.cw || t.svm || "not assigned");
+}
+const typeTxt = (t) => /incident/i.test(t.type) ? "Incident" : /service/i.test(t.type) ? "Service Req" : t.type || "—";
+const typeMail = (t) => { const c = /incident/i.test(t.type) ? "#B4182D" : /service/i.test(t.type) ? "#3B5BCC" : "#6D28D9"; return '<span style="color:' + c + ';font-weight:600;white-space:nowrap">' + esc(typeTxt(t)) + "</span>"; };
 const HO_COLS = [
   ["Ticket", (t) => t.key, (t) => '<a href="' + jiraUrl(t.key) + '" style="color:#24507C;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>"],
   ["Priority", (t) => t.priority || "", (t) => { const c = { showstopper: "#C8102E", critical: "#C2680A", high: "#A16207", medium: "#2563EB", low: "#64748B" }[t.sev] || "#64748B"; return '<span style="color:' + c + ';font-weight:600;white-space:nowrap">' + esc(t.priority || "—") + "</span>"; }],
-  ["Summary", (t) => t.summary, (t) => esc(t.summary)],
+  ["Type", (t) => typeTxt(t), (t) => typeMail(t)],
+  ["Summary", (t) => t.summary, (t) => '<span style="display:inline-block;min-width:200px">' + esc(t.summary) + "</span>"],
   ["ME ID", (t) => t.meId, (t) => t.meId ? '<span style="white-space:nowrap">' + esc(t.meId) + "</span>" : '<span style="color:#C8102E">missing</span>'],
   ["Status", (t) => t.status, (t) => '<span style="white-space:nowrap">' + esc(t.status) + "</span>"],
   ["Created", (t) => fdt(t.created), (t) => '<span style="white-space:nowrap">' + esc(fdt(t.created)) + "</span>"],
+  ["Updated", (t) => fdt(t.updated), (t) => '<span style="white-space:nowrap">' + esc(fdt(t.updated)) + "</span>"],
   ["Age", (t) => fmt(ageOf(t)), (t) => '<span style="white-space:nowrap">' + esc(fmt(ageOf(t))) + "</span>"],
+  ["Sitting with", (t, e) => holderOf(t, e), (t, e) => '<b style="color:#5C1730">' + esc(holderOf(t, e)) + "</b>"],
   ["PO / module", (t, e) => [e.po.po, e.po.module].filter(Boolean).join(" / "), (t, e) => esc(e.po.po || "—") + (e.po.module ? '<br><span style="color:#6B7A8C">' + esc(e.po.module) + "</span>" : "")],
   ["SVM In Charge", (t) => t.svm, (t) => esc(t.svm || "—")],
   ["Current worker", (t) => t.cw, (t) => esc(t.cw || "—")],
@@ -1186,16 +1211,18 @@ function escMailTable(list) {
   const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
   const pc = { showstopper: "#D7263D", critical: "#C2680A", high: "#A16207" };
   return '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif">' +
-    "<tr>" + ["Ticket", "Priority", "Summary", "Status", "Trigger", "No progress", "Inform"].map(th).join("") + "</tr>" +
+    "<tr>" + ["Ticket", "Type", "Priority", "Summary", "Status", "Created", "Updated", "Sitting with", "Trigger", "No progress", "Inform"].map(th).join("") + "</tr>" +
     list.map((x, k) => { const t = T[x.i];
       return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
         '<td style="' + TD + '"><a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a></td>" +
+        '<td style="' + TD + '">' + typeMail(t) + "</td>" +
         '<td style="' + TD + 'color:' + (pc[x.sev] || "#5A4450") + ';font-weight:600;white-space:nowrap">' + esc(t.priority) + "</td>" +
-        '<td style="' + TD + '">' + esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">' + esc(t.meId) + "</span>" : "") + "</td>" +
+        '<td style="' + TD + 'min-width:200px">' + esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">' + esc(t.meId) + "</span>" : "") + "</td>" +
         '<td style="' + TD + 'white-space:nowrap">' + esc(t.status) + "</td>" +
+        '<td style="' + TD + 'white-space:nowrap">' + esc(fdt(t.created)) + '</td><td style="' + TD + 'white-space:nowrap">' + esc(fdt(t.updated)) + '</td><td style="' + TD + 'font-weight:600;color:#5C1730">' + esc(holderOf(t, E[x.i])) + "</td>" +
         '<td style="' + TD + 'font-weight:600">' + esc(x.trigger) + "</td>" +
         '<td style="' + TD + 'white-space:nowrap">' + esc(escWait(x)) + "</td>" +
-        '<td style="' + TD + '">' + informNames(x).map(esc).join("<br>") + "</td></tr>"; }).join("") + "</table>";
+        '<td style="' + TD + 'min-width:220px">' + informNames(x).map(esc).join("<br>") + "</td></tr>"; }).join("") + "</table>";
 }
 function mailHTML(d, ppl) {
   const H2 = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:15px;color:#0E2A47;margin:18px 0 4px"';
@@ -1248,7 +1275,7 @@ function viewHandover() {
     return '<button class="pill" data-shift="' + esc(k) + '" aria-pressed="' + (d.w.key === k) + '">' + esc(x.name) + " " + d0.d + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d0.mo] + (live ? " (now)" : "") + "</button>"; }).join("");
   const gen = d.w.general;
   return '<div class="bar noprint"><span class="lbl">Handover</span><button class="pill" data-shift="general" aria-pressed="' + gen + '">General (all pending)</button><span class="lbl" style="margin-left:6px">Shift</span>' + pills +
-    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoEml">Download email draft</button><button class="btn" id="hoPrint">Print</button></div>' +
+    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoPrint">Print / Save PDF</button></div>' +
     (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). Tickets with the client are counted, not listed.</p>"
       : "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>") +
     '<div class="signals noprint">' + (gen ? "" : sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift")) +
@@ -1257,7 +1284,7 @@ function viewHandover() {
     '<div class="panel noprint"><div class="grid2" style="gap:12px"><div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoFrom">Handed over by</label><input class="inp" id="hoFrom" value="' + esc(ppl.from || "") + '" placeholder="Your name"></div>' +
     '<div class="setrow" style="margin:0;grid-template-columns:130px 1fr"><label for="hoTo">Handed over to</label><input class="inp" id="hoTo" value="' + esc(ppl.to || "") + '" placeholder="' + (gen ? "e.g. Hypercare team, POs" : "Next shift, e.g. Night Hypercare team") + '"></div></div>' +
     '<div class="setrow" style="grid-template-columns:130px 1fr;align-items:start"><label for="hoNote">Notes for the next shift</label><textarea class="inp" id="hoNote" rows="3" placeholder="Anything promised to Swire, calls in progress, things to watch">' + esc(UI.hoNote || "") + "</textarea></div></div>" +
-    '<div class="sec-h noprint">Email preview</div><div class="report" id="hoPreview" style="overflow-x:auto"><p class="dim small" style="margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + mailHTML(d, ppl) + "</div>";
+    '<div class="sec-h noprint">Email preview</div><div class="hoprevwrap"><button type="button" class="btn pri hocorner noprint" id="hoCopy2" title="Copy the email, paste into Outlook">Copy email</button><div class="report" id="hoPreview" style="overflow-x:auto"><p class="dim small" style="margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + mailHTML(d, ppl) + "</div></div>";
 }
 
 /* ══ Weekly report (to Swire, Section 9.1) ══ */
@@ -1878,11 +1905,12 @@ function escMailHTML(list, note) {
   const groups = {}; list.forEach((x) => { const k = escWhy(x).head; (groups[k] = groups[k] || []).push(x); });
   const P = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:14px;color:#5C1730;margin:16px 0 4px"';
   const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
-  const tbl = (l) => '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif"><tr>' + ["Ticket", "Priority", "Summary", "Status", "Created", "Why escalate", "SLA", "PO", "LRPS (assignee, status)"].map(th).join("") + "</tr>" +
+  const tbl = (l) => '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif"><tr>' + ["Ticket", "Type", "Priority", "Summary", "Status", "Created", "Updated", "Sitting with", "Why escalate", "SLA", "PO", "LRPS (assignee, status)"].map(th).join("") + "</tr>" +
     l.map((x, k) => { const t = T[x.i], e = E[x.i], w = escWhy(x), s0 = slaOf(x.i) || {};
       return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + '><td style="' + TD + '"><a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a></td>" +
-        '<td style="' + TD + 'white-space:nowrap;font-weight:600">' + esc(t.priority) + '</td><td style="' + TD + '">' + esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "") + "</td>" +
+        '<td style="' + TD + '">' + typeMail(t) + '</td><td style="' + TD + 'white-space:nowrap;font-weight:600">' + esc(t.priority) + '</td><td style="' + TD + '">' + esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "") + "</td>" +
         '<td style="' + TD + 'white-space:nowrap">' + esc(t.status) + '</td><td style="' + TD + 'white-space:nowrap">' + esc(fdt(t.created)) + "<br>" + esc(fmt(ageOf(t))) + " ago</td>" +
+        '<td style="' + TD + 'white-space:nowrap">' + esc(fdt(t.updated)) + '</td><td style="' + TD + 'font-weight:600;color:#5C1730">' + esc(holderOf(t, e)) + "</td>" +
         '<td style="' + TD + '"><b>' + esc(w.head) + "</b><br>" + esc(w.line) + '</td><td style="' + TD + 'white-space:nowrap">' + esc(s0.label || "—") + "</td>" +
         '<td style="' + TD + '">' + esc((e.po && e.po.po) || "—") + '</td><td style="' + TD + '">' + (t.lrps.length ? t.lrps.map((kk) => esc(kk) + (LRPS[kk] ? ": " + esc(LRPS[kk].a || "Unassigned") + (LRPS[kk].s ? " (" + esc(LRPS[kk].s) + ")" : "") : "")).join("<br>") : "—") + "</td></tr>"; }).join("") + "</table>";
   const inform = Array.from(new Set([].concat(...list.map((x) => informNames(x)))));
@@ -1953,12 +1981,23 @@ function viewRel() {
   const eg = {}; expected.forEach((i) => (T[i].rels.length ? T[i].rels : [NOREL]).forEach((r) => { (eg[r] = eg[r] || []).push(i); }));
   const erels = Object.keys(eg).sort((a, b) => (a === NOREL) - (b === NOREL) || eg[b].length - eg[a].length);
   const tot = Math.max(1, expected.length);
+  /* first: tickets with Engineering right now, and the release each is expected in */
+  const enggNow = all.filter((i) => E[i].stage !== "closed" && sideOf(i) === "engg");
+  const ng = {}; enggNow.forEach((i) => (T[i].rels.length ? T[i].rels : [NOREL]).forEach((r) => { (ng[r] = ng[r] || []).push(i); }));
+  const nrels = Object.keys(ng).sort((a, b) => (a === NOREL) - (b === NOREL) || ng[b].length - ng[a].length);
+  const numbered = enggNow.filter((i) => T[i].rels.length);
   let h = "<h2>Releases</h2><p class=\"sub\">Swire tickets moved to production, and tickets expected in a coming release. Same rules as the Release Tracker: <b>released</b> = has a release number and a done status; <b>expected</b> = open in a release-pipeline status (with or without a release number yet). The filters at the top apply.</p>" +
-    '<div class="tiles">' + tile("t-ok", "check", released, "Tickets released", rels.length + " release numbers", 1, "Released tickets") +
+    '<div class="tiles">' + tile("t-cr", "toEngg", enggNow, "With Engineering now", numbered.length + " with a release number, " + (enggNow.length - numbered.length) + " not yet", 1, "With Engineering now") +
+    tile("t-ok", "check", released, "Tickets released", rels.length + " release numbers", 1, "Released tickets") +
     tile("t-ink", "up", [].concat(...d7.map((x) => x.l)), "Released in the last 7 days", d7.length + " release" + (d7.length === 1 ? "" : "s"), rels.length ? d7.length / rels.length : 0, "Released in the last 7 days") +
     tile("t-ink", "up", [].concat(...d30.map((x) => x.l)), "Released in the last 30 days", d30.length + " release" + (d30.length === 1 ? "" : "s"), rels.length ? d30.length / rels.length : 0, "Released in the last 30 days") +
     tile("t-cr", "clock", expected, "Expected releases", erels.filter((r) => r !== NOREL).length + " release numbers, " + (eg[NOREL] || []).length + " not numbered yet", 1, "Expected releases") + "</div>" +
-    '<section class="escsec t-cr"><div class="escsec-h"><div><b>Expected releases</b> <span>' + expected.length + '</span><div class="small">Open tickets in the release pipeline, by stage. Click a stage or a number to see the tickets.</div></div></div>' +
+    '<section class="escsec t-ink"><div class="escsec-h"><div><b>With Engineering now: expected releases</b> <span>' + enggNow.length + '</span><div class="small">Every open Swire ticket currently with Engineering, grouped by the release it is expected in. Not numbered yet comes last.</div></div></div>' +
+    (enggNow.length ? nrels.map((r) => { const l = ng[r].slice().sort(bySevAge), st = {}; l.forEach((i) => { const g0 = relStage(T[i]); const k = g0 ? g0.label : "Engineering work (" + T[i].status + ")"; st[k] = (st[k] || 0) + 1; });
+      return '<div class="escgrp" data-xlname="rel-engg-' + esc(r) + '"><div class="escgrp-h">' + (r === NOREL ? '<span class="dim">' + esc(r) + "</span>" : '<span class="mono">' + esc(r) + "</span>") + " <b>" + l.length + '</b> <span class="dim small">' + esc(Object.keys(st).map((k) => st[k] + " " + k).join(", ")) + "</span></div>" +
+        table(l, ["key", "type", "pri", "sum", "status", "relstage", "age", "prog", "sla", "lrpsfull", "po", "svm", "rem"], { sortable: false }) + "</div>"; }).join("")
+      : '<div class="escgrp"><p class="dim">No Swire ticket is with Engineering right now.</p></div>') + "</section>" +
+    '<section class="escsec t-cr"><div class="escsec-h"><div><b>Whole release pipeline</b> <span>' + expected.length + '</span><div class="small">Every open ticket in a release-pipeline status, by stage, including those waiting on Swire approval or deployment. Click a stage or a number to see the tickets.</div></div></div>' +
     '<div class="escgrp"><div class="wsb" style="height:30px">' + byStage.filter((x) => x.l.length).map((x) => '<button type="button" style="flex:' + x.l.length + ' 1 0;background:' + x.s.color + '" data-list="' + reg(x.l, "Expected, " + x.s.label) + '">' + x.l.length + " " + esc(x.s.label) + "</button>").join("") + "</div>" +
     '<div class="wlg">' + byStage.map((x) => '<span><i style="background:' + x.s.color + '"></i>' + esc(x.s.label) + " <b>" + dl(x.l, "Expected, " + x.s.label) + "</b> (" + Math.round(x.l.length / tot * 100) + "%)</span>").join("") + "</div></div>" +
     '<div class="escgrp" data-xlname="rel-exp-by-number"><div class="escgrp-h">By release number</div><div class="tw"><table><thead><tr><th>Release no.</th><th>Tickets</th>' + REL_STAGES.map((s) => "<th>" + esc(s.label) + "</th>").join("") + "<th>Priorities</th><th>POs</th></tr></thead><tbody>" +
@@ -2202,6 +2241,7 @@ function wire() {
   on("hoFrom", "input", (e) => { const p = hoPeople(); p.from = e.target.value; hoSavePeople(p); hoRefresh(); });
   on("hoTo", "input", (e) => { const p = hoPeople(); p.to = e.target.value; hoSavePeople(p); hoRefresh(); });
   on("hoNote", "input", (e) => { UI.hoNote = e.target.value; hoRefresh(); });
+  on("hoCopy2", "click", () => { const b0 = el("hoCopy"); if (b0) b0.click(); const b2 = el("hoCopy2"); b2.textContent = "Copied"; setTimeout(() => { b2.textContent = "Copy email"; }, 1800); });
   on("hoCopy", "click", (e) => {
     const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" }), html = mailHTML(d, ppl), text = mailText(d, ppl), b = e.target;
     const done = (msg) => { b.textContent = msg; setTimeout(() => { b.textContent = "Copy email"; }, 1800); };
@@ -2222,7 +2262,10 @@ function wire() {
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" }));
     a.download = "Swire-handover-" + HC.dayKey(d.w.start) + "-" + d.w.key.split("|")[0] + "-shift.eml"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   });
-  on("hoPrint", "click", () => { const d = hoData(UI.shift); const name = "Swire Hypercare handover " + HC.dayKey(d.w.start) + " " + d.w.key.split("|")[0] + " shift"; window.HDPrint ? HDPrint(name) : window.print(); });
+  on("hoPrint", "click", () => {
+    /* landscape pages only for the handover print, so every column fits */
+    const st = document.createElement("style"); st.id = "hoPage"; st.textContent = "@page{size:A4 landscape;margin:9mm}"; document.head.appendChild(st);
+    const drop = () => { st.remove(); window.removeEventListener("afterprint", drop); }; window.addEventListener("afterprint", drop); setTimeout(drop, 4000); const d = hoData(UI.shift); const name = "Swire Hypercare handover " + HC.dayKey(d.w.start) + " " + d.w.key.split("|")[0] + " shift"; window.HDPrint ? HDPrint(name) : window.print(); });
   on("wkSel", "change", (e) => { UI.week = +e.target.value; render(); });
   on("wkPrint", "click", () => { const name = "Swire Hypercare Weekly Report - week of " + HC.dayKey(UI.week); window.HDPrint ? HDPrint(name) : window.print(); });
   on("sSave", "click", () => {
