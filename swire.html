@@ -6,12 +6,12 @@
 <title>Swire Hypercare</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237A1F3D'/%3E%3Cpath d='M6 20h20l-3 5H9z' fill='%23F3C6D4'/%3E%3Cpath d='M15 7v12M15 8l7 9h-7' stroke='%23fff' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="hd-store.js?v=20261030b"></script>
-<script src="sla-engine.js?v=20261030b"></script>
-<script src="sla-history.js?v=20261030b"></script>
-<script src="sla-link.js?v=20261030b"></script>
-<script src="hd-hypercare.js?v=20261030b"></script>
-<script src="hd-search.js?v=20261030b"></script>
+<script src="hd-store.js?v=20261031a"></script>
+<script src="sla-engine.js?v=20261031a"></script>
+<script src="sla-history.js?v=20261031a"></script>
+<script src="sla-link.js?v=20261031a"></script>
+<script src="hd-hypercare.js?v=20261031a"></script>
+<script src="hd-search.js?v=20261031a"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -508,7 +508,7 @@ const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", ty
 let GF = (() => { try { return Object.assign({}, GF_DEF, JSON.parse(localStorage.getItem(GF_KEY) || "{}")); } catch (e) { return Object.assign({}, GF_DEF); } })();
 function saveGF() { try { localStorage.setItem(GF_KEY, JSON.stringify(GF)); } catch (e) {} }
 function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
-function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); }
+function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); DIRTY = true; }
 function loadLrps() { try { return JSON.parse(localStorage.getItem(LRPS_KEY) || "{}") || {}; } catch (e) { return {}; } }
 function saveLrps() { try { localStorage.setItem(LRPS_KEY, JSON.stringify(LRPS)); } catch (e) {} }
 function jiraHost() { try { const c = JSON.parse(localStorage.getItem("hd-jira-cfg") || "{}"); if (c.jiraHost) return c.jiraHost; } catch (e) {} return "svmhelpdesk.atlassian.net"; }
@@ -538,14 +538,20 @@ function getRows() {
 }
 const CLS = { isTerminal: (s) => window.HDClass ? HDClass.isTerminal(s) : /^closed$/i.test(String(s || "")), owner: (s) => window.HDClass ? HDClass.owner(s) : null };
 
+let DIRTY = true, LASTSIG = "";
+function markDirty() { DIRTY = true; }
 function rebuild() {
+  const sig = JSON.stringify(GF) + "|" + (TAB === "weekly" || TAB === "move") + "|" + JSON.stringify(CFG).length + "|" + ROWS.length;
+  if (!DIRTY && sig === LASTSIG && ALLT.length) return;          // same inputs as last time: reuse the evaluation
+  DIRTY = false; LASTSIG = sig;
   NOW = Date.now();
   const get = HC.getter(ROWS), pre = String(CFG.prefix || "SWIPHX").toUpperCase();
   ALLT = [];
   ROWS.forEach((row) => { const t = HC.normTicket(row, get); if (t.prefix === pre) { t.nextAction = String(get(row, "next action") || "").trim(); ALLT.push(t); } });
   ALLE = ALLT.map((t) => {
     let tr = null;
-    if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
+    /* the status history only: L.entry() is a lookup; L.detail() builds the whole SLA explanation and is kept for the ticket view */
+    if (L && L.ready()) { const en = L.entry ? L.entry(t._row) : (L.detail(t._row) || {}).entry; if (en) tr = en.transitions; }
     const e = HC.evaluate(t, tr, NOW, CFG, CLS, window.HDSla ? HDSla.firstResponse : null);
     e.po = HC.poFor(t, CFG); e.tr = tr;
     return e;
@@ -2042,7 +2048,7 @@ function wire() {
     document.querySelectorAll("[data-ct]").forEach((x) => { const [k, f] = x.dataset.ct.split("."); c.contacts[+k][f] = x.value.trim(); });
     saveCfg(c); el("sSave").textContent = "Saved"; setTimeout(render, 600);
   });
-  on("sReset", "click", () => { if (confirm("Restore every setting to the runbook defaults?")) { try { localStorage.removeItem(CFG_KEY); } catch (e) {} CFG = HC.merge(null); render(); } });
+  on("sReset", "click", () => { if (confirm("Restore every setting to the runbook defaults?")) { try { localStorage.removeItem(CFG_KEY); } catch (e) {} CFG = HC.merge(null); DIRTY = true; render(); } });
 }
 el("btnLrps").addEventListener("click", () => fetchLrps(true));
 
@@ -2064,10 +2070,10 @@ Promise.resolve(HS && HS.loadConfig ? HS.loadConfig().then((c) => { if (window.H
     if (!ALLT.length) { el("landing").innerHTML = '<div><h2>No ' + esc(CFG.prefix) + ' tickets in this data</h2><p class="sub" style="margin:8px auto 0">The loaded data has no tickets whose key starts with ' + esc(CFG.prefix) + '. Check the Jira query on the launcher.</p></div>'; return; }
     el("landing").classList.add("hidden"); el("view").classList.remove("hidden");
     render();
-    if (L) { let pend = null; L.subscribe(() => { clearTimeout(pend); pend = setTimeout(render, 400); }); if (L.onProgress) L.onProgress(() => paintChips()); }
+    if (L) { let pend = null; L.subscribe(() => { DIRTY = true; clearTimeout(pend); pend = setTimeout(render, 400); }); if (L.onProgress) L.onProgress(() => paintChips()); }
     autoHistory();
     setTimeout(() => { if (BR.ready || window._rmBridge) fetchLrps(false); }, 3500);
-    setInterval(() => { if (!document.hidden && !document.querySelector(".ov") && TAB !== "handover" && TAB !== "setup") render(); else paintDuty(); }, 60000);
+    setInterval(() => { DIRTY = true; if (!document.hidden && !document.querySelector(".ov") && TAB !== "handover" && TAB !== "setup") render(); else { NOW = Date.now(); paintDuty(); } }, 60000);
   })
   .catch((e) => { el("landing").innerHTML = '<div><h2>Could not load the data</h2><p class="sub">' + esc(e.message || e) + "</p></div>"; });
 })();
