@@ -434,6 +434,10 @@ table.xl th{white-space:nowrap}
 .lgpdf{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:7px 12px;border-radius:999px;background:#fff;border:1px dashed var(--line2);font-size:12px;font-weight:700;color:var(--maroon)}
 .lgpdf:hover{border-style:solid;border-color:var(--maroon);background:var(--blush)}
 @media print{.lgpdf{display:none!important}}
+.shday{border:1px solid var(--line2);border-left:5px solid var(--sc);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff}
+.shday-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}.shday-h > b{font-family:var(--disp);font-size:14px}
+.shday-n{margin-left:auto;font-size:12px;color:var(--ink2)}.shday-n b{color:var(--maroon)}
+.wcol[data-shpick]{cursor:pointer}
 /* ── weekly report ── */
 .wrep{background:#fff;border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(122,31,61,.05)}
 .wr-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:22px 26px;background:linear-gradient(120deg,#5C1730 0%,#7A1F3D 55%,#A33A5E 100%);color:#FBEFF3}
@@ -1889,6 +1893,7 @@ function informEmails(x) {
   });
   return Array.from(new Set(out));
 }
+COLS.holder = { h: "Sitting with", s: (t, e) => holderOf(t, e), c: (t, e) => '<span class="small"><b>' + esc(holderOf(t, e)) + "</b></span>" };
 COLS.created = { h: "Created", s: (t) => t.created || 0, c: (t) => '<span class="nw">' + esc(fdt(t.created)) + '</span><div class="dim small">' + fmt(ageOf(t)) + " ago</div>" };
 COLS.why = { h: "Why escalate", s: (t) => { const x = ESCM[t.key]; return x ? -escWhy(x).over : 0; }, c: (t) => { const x = ESCM[t.key]; if (!x) return ""; const w = escWhy(x); return '<div style="min-width:240px"><b class="ewh">' + esc(w.head) + '</b><div class="small">' + esc(w.line) + "</div></div>"; } };
 COLS.lrpsfull = { h: "LRPS (assignee, status)", s: (t) => lrpsNames(t), c: (t) => t.lrps.length ? t.lrps.map((k) => { const x = LRPS[k]; return '<div class="nw"><a class="key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a> " + (x ? (x.gone ? '<span class="dim small">not found</span>' : esc(x.a || "Unassigned") + (x.s ? ' <span class="st">' + esc(x.s) + "</span>" : "")) : '<span class="dim small">not read yet</span>') + "</div>"; }).join("") : '<span class="dim">no LRPS ticket</span>' };
@@ -1977,6 +1982,10 @@ function openEscalate(list) {
 document.addEventListener("click", (e) => {
   const one = e.target.closest && e.target.closest("[data-escone]"); if (one) { e.preventDefault(); e.stopPropagation(); const x = ESCM[one.dataset.escone]; if (x) openEscalate([x]); return; }
   const all = e.target.closest && e.target.closest("[data-escall]"); if (all) { e.preventDefault(); e.stopPropagation(); const L0 = LISTS[all.dataset.escall]; if (L0) openEscalate(L0.idx.map((i) => ESCM[T[i].key]).filter(Boolean)); return; }
+  const stp = e.target.closest && e.target.closest("[data-shstep]");
+  if (stp) { e.preventDefault(); e.stopPropagation(); const st = +stp.dataset.shstep; UI.shDay = st === 0 ? null : HC.dayKey(HC.dateMs(UI.shDay) + st * DAY + 12 * 3600e3); render(); const hd = el("shDayHead"); if (hd) hd.scrollIntoView({ block: "start" }); return; }
+  const pk = e.target.closest && e.target.closest("[data-shpick]");
+  if (pk) { e.preventDefault(); e.stopPropagation(); UI.shDay = pk.dataset.shpick; render(); const hd = el("shDayHead"); if (hd) hd.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   const go = e.target.closest && e.target.closest("[data-escgo]"); if (go) { e.preventDefault(); e.stopPropagation(); const sec = el("esc-" + go.dataset.escgo); if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" }); }
 }, true);
 
@@ -2119,20 +2128,41 @@ function viewMove() {
     keys.slice().reverse().map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : []; const sv = v("hd").length + v("engg").length, net = v("created").length - sv - v("unk").length;
       return "<tr><td>" + esc(labelOf(k)) + "</td>" + cols.map(([x, n]) => '<td class="num">' + (v(x).length ? dl(v(x), labelOf(k) + ", " + n.toLowerCase()) : '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + (sv ? Math.round(v("hd").length / sv * 100) + "%" : "—") + '</td><td class="num" style="color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") +
     "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">Net change is created minus solved: above zero the backlog grew, below zero it shrank.</p></div>";
-  /* ── shift by shift: how many came in and went out in each team shift (1st 06:00–15:00, 2nd 12:30–21:30, Night 21:00–06:00) ── */
-  const sFrom = Math.max(rg.from != null ? rg.from : 0, NOW - 14 * DAY), sTo = Math.min(rg.to != null ? rg.to : NOW, NOW);
-  const shifts = HC.shiftInstances(CFG, sFrom, sTo).filter((x) => x.start <= NOW && x.end > sFrom).slice(-42).reverse();
-  const inS = (x, k) => Array.from(new Set(ev[k].filter((v) => v.t >= x.start && v.t < Math.min(x.end, NOW)).map((v) => v.i)));
-  const SR = shifts.map((x) => { const r = { x }; ["created", "hd", "engg", "unk", "toEngg", "toClient", "fromClient", "reopen"].forEach((k) => { r[k] = inS(x, k); }); r.solved = Array.from(new Set(r.hd.concat(r.engg, r.unk))); return r; });
-  const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], sl = (x) => { const d0 = HC.ist(x.start); return x.name + ", " + d0.d + " " + MN3[d0.mo] + (x.end > NOW ? " (now)" : ""); };
-  const avg = (id, k) => { const l = SR.filter((r) => r.x.id === id && r.x.end <= NOW); return l.length ? (l.reduce((a, r) => a + r[k].length, 0) / l.length) : null; };
-  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">last ' + Math.round((sTo - sFrom) / DAY) + " days. A ticket in an overlap (12:30–15:00, 21:00–21:30) counts in both shifts, as in the handover.</span></div>" +
-    '<div class="tiles six" style="margin-bottom:12px">' + (CFG.shifts || []).map((sh) => { const ai = avg(sh.id, "created"), ao = avg(sh.id, "solved"), n = SR.filter((r) => r.x.id === sh.id && r.x.end <= NOW).length;
-      return '<div class="tile t-ink" style="cursor:default"><span class="ic">' + ICON.clock + '</span><span class="nm">' + (ai == null ? "—" : ai.toFixed(1)) + '</span><span class="tt">' + esc(sh.name) + " in / shift</span><span class=\"ds\">" + (ao == null ? "" : ao.toFixed(1) + " solved per shift, " + n + " shifts (" + esc(sh.from) + "–" + esc(sh.to) + ")") + '</span><span class="mt"><span style="width:' + (ai && ao != null ? Math.min(100, ao / Math.max(ai, ao) * 100) : 0) + '%"></span></span></div>'; }).join("") + "</div>" +
-    (SR.length ? '<div class="tw" data-xlname="move-by-shift"><table><thead><tr><th>Shift</th><th>Came in</th><th>Went out (solved)</th><th>by HD</th><th>by Engg</th><th>Sent to Engg</th><th>Sent to Swire</th><th>Back from Swire</th><th>Reopened</th><th>Net</th></tr></thead><tbody>' +
-      SR.map((r) => { const net = r.created.length - r.solved.length, c = (l, t) => '<td class="num">' + (l.length ? dl(l, sl(r.x) + ", " + t) : '<span class="dim">·</span>') + "</td>";
-        return "<tr><td class=\"nw\"><b>" + esc(sl(r.x)) + '</b><div class="dim small">' + esc(r.x.from) + "–" + esc(r.x.to) + "</div></td>" + c(r.created, "came in") + c(r.solved, "solved") + c(r.hd, "solved by Help Desk") + c(r.engg, "solved by Engineering") + c(r.toEngg, "sent to Engineering") + c(r.toClient, "sent to Swire") + c(r.fromClient, "back from Swire") + c(r.reopen, "reopened") +
-          '<td class="num" style="font-weight:700;color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="dim small">No shifts in this period.</p>') + "</div>";
+  /* ── by shift: every ticket counted ONCE, in the shift that owns that time (a shift owns from its start until the
+     next shift starts: 1st 06:00–12:30, 2nd 12:30–21:00, Night 21:00–06:00, the night belonging to the day it starts) ── */
+  const SH = (CFG.shifts || []).map((x) => { const [hh, mm] = String(x.from).split(":").map(Number); return { id: x.id, name: x.name, start: hh * 60 + (mm || 0), from: x.from }; }).sort((a, b) => a.start - b.start);
+  SH.forEach((x, k) => { const nx = SH[(k + 1) % SH.length]; x.own = x.from + "–" + nx.from; });
+  const SHC = { "1st": "#C77D97", "2nd": "#9C3358", night: "#5C1730" }, shc = (x) => SHC[x.id] || "#9A8AA3";
+  const primShift = (ms) => { const p0 = HC.ist(ms), m = p0.min; let sh = SH[SH.length - 1]; SH.forEach((x) => { if (m >= x.start) sh = x; });
+    const day = m < SH[0].start ? HC.dayKey(ms - DAY) : HC.dayKey(ms); return { sh, day }; };
+  const dFrom = rg.from != null ? rg.from : NOW - 30 * DAY, dTo = Math.min(rg.to != null ? rg.to : NOW, NOW), inD = (ms) => ms >= dFrom && ms < dTo;
+  const tally = {}; SH.forEach((x) => { tally[x.id] = { created: new Set(), solved: new Set(), toEngg: new Set(), toClient: new Set() }; });
+  const perDay = {};
+  const put = (k, x) => { if (!inD(x.t)) return; const ps = primShift(x.t); tally[ps.sh.id][k].add(x.i); if (k === "created") { const d0 = (perDay[ps.day] = perDay[ps.day] || {}); (d0[ps.sh.id] = d0[ps.sh.id] || []).push(x.i); } };
+  ev.created.forEach((x) => put("created", x)); ev.hd.concat(ev.engg, ev.unk).forEach((x) => put("solved", x)); ev.toEngg.forEach((x) => put("toEngg", x)); ev.toClient.forEach((x) => put("toClient", x));
+  const nDays = Math.max(1, Math.round((dTo - dFrom) / DAY)), totC = SH.reduce((a, x) => a + tally[x.id].created.size, 0) || 1;
+  const days = []; for (let d = HC.istMidnight(dFrom); d < dTo && days.length < 400; d += DAY) days.push(HC.dayKey(d));
+  const mxD = Math.max(1, ...days.map((k) => SH.reduce((a, x) => a + ((perDay[k] || {})[x.id] || []).length, 0)));
+  const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], dlab = (k) => { const d0 = HC.ist(HC.dateMs(k)); return d0.d + " " + MN3[d0.mo]; };
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">' + esc(fday(dFrom)) + " to " + esc(fday(dTo)) + " (" + nDays + " days" + (rg.from == null ? ", the last 30" : "") + "). Each ticket counts once, in the shift that owns that time: " + esc(SH.map((x) => x.name + " " + x.own).join(", ")) + ". The shift handover lists overlap tickets in both shifts.</span></div>" +
+    '<div class="tiles">' + SH.map((x) => { const T0 = tally[x.id];
+      return '<div class="tile t-ink" style="cursor:default;--ac:' + shc(x) + '"><span class="ic">' + ICON.clock + '</span><span class="nm">' + dl(Array.from(T0.created), x.name + ", created") + '</span><span class="tt">' + esc(x.name) + " created <span class=\"dim small\">" + esc(x.own) + '</span></span><span class="ds">' + Math.round(T0.created.size / totC * 100) + "% of all, " + (T0.created.size / nDays).toFixed(1) + "/day · solved " + dl(Array.from(T0.solved), x.name + ", solved") + " · to Engg " + dl(Array.from(T0.toEngg), x.name + ", sent to Engineering") + " · to Swire " + dl(Array.from(T0.toClient), x.name + ", sent to Swire") + '</span><span class="mt"><span style="width:' + Math.round(T0.created.size / totC * 100) + '%;background:' + shc(x) + '"></span></span></div>'; }).join("") + "</div>" +
+    '<div class="sec-h">Created per day, by shift</div>' + (days.length ? '<div class="wbars" style="height:160px;gap:3px">' + days.map((k) => { const d0 = perDay[k] || {}, tot = SH.reduce((a, x) => a + (d0[x.id] || []).length, 0);
+      return '<div class="wcol" data-shpick="' + k + '" title="' + esc(dlab(k)) + ": " + SH.map((x) => x.name + " " + (d0[x.id] || []).length).join(", ") + '"><span class="wv">' + (tot || "") + '</span><div class="wst" style="height:' + (tot / mxD * 100) + '%">' + SH.map((x) => { const n = (d0[x.id] || []).length; return n ? '<i style="flex:' + n + " 1 0;background:" + shc(x) + '"></i>' : ""; }).join("") + '</div><span class="wl">' + (days.length <= 31 ? esc(dlab(k)).replace(" ", "<br>") : "") + "</span></div>"; }).join("") + "</div>" +
+      '<div class="wlg">' + SH.map((x) => '<span><i style="background:' + shc(x) + '"></i>' + esc(x.name) + "</span>").join("") + '<span class="dim">Click a day to see its shifts below.</span></div>' : '<p class="dim small">No days in this period.</p>');
+  /* one day: its 1st, 2nd and Night shift, and the tickets created in each */
+  const today = HC.dayKey(NOW);
+  if (!UI.shDay) UI.shDay = today;
+  const dayK = UI.shDay, dayC = {}; SH.forEach((x) => { dayC[x.id] = { created: [], solved: [], toEngg: [], toClient: [] }; });
+  const putDay = (k, x) => { const ps = primShift(x.t); if (ps.day === dayK && dayC[ps.sh.id][k].indexOf(x.i) < 0) dayC[ps.sh.id][k].push(x.i); };
+  ev.created.forEach((x) => putDay("created", x)); ev.hd.concat(ev.engg, ev.unk).forEach((x) => putDay("solved", x)); ev.toEngg.forEach((x) => putDay("toEngg", x)); ev.toClient.forEach((x) => putDay("toClient", x));
+  const dayTot = SH.reduce((a, x) => a + dayC[x.id].created.length, 0), dd = HC.ist(HC.dateMs(dayK)), DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  h += '<div class="sec-h" id="shDayHead">One day, shift by shift</div><div class="bar" style="margin-bottom:8px"><button type="button" class="btn" data-shstep="-1" aria-label="Previous day">◀</button><input type="date" class="inp" id="shDay" value="' + esc(dayK) + '" max="' + esc(today) + '"><button type="button" class="btn" data-shstep="1" aria-label="Next day"' + (dayK >= today ? " disabled" : "") + '>▶</button>' +
+    '<button type="button" class="lnk sm" data-shstep="0">Today</button><span class="dim small">' + esc(DN[dd.dow] + ", " + dd.d + " " + MN3[dd.mo] + " " + dd.y) + ": <b>" + dayTot + "</b> created</span></div>" +
+    SH.map((x) => { const c = dayC[x.id], list = c.created.slice().sort((a, b) => (T[a].created || 0) - (T[b].created || 0));
+      return '<div class="shday" style="--sc:' + shc(x) + '"><div class="shday-h"><b>' + esc(x.name) + '</b> <span class="dim small">' + esc(x.own) + (x.id === "night" ? " (into the next morning)" : "") + "</span>" +
+        '<span class="shday-n">created <b>' + dl(c.created, dlab(dayK) + ", " + x.name + ", created") + "</b> · solved <b>" + dl(c.solved, dlab(dayK) + ", " + x.name + ", solved") + "</b> · to Engg <b>" + dl(c.toEngg, dlab(dayK) + ", " + x.name + ", sent to Engineering") + "</b> · to Swire <b>" + dl(c.toClient, dlab(dayK) + ", " + x.name + ", sent to Swire") + "</b></span></div>" +
+        (list.length ? '<div data-xlname="shday-' + x.id + '">' + table(list, ["key", "type", "pri", "sum", "status", "created", "holder", "po", "svm", "cw", "rem"], { sortable: false }) + "</div>" : '<p class="dim small" style="margin:6px 2px 4px">No tickets created in this shift.</p>') + "</div>"; }).join("") + "</div>";
   return h;
 }
 
@@ -2264,6 +2294,7 @@ function wire() {
   on("qStage", "change", (e) => { UI.stage = e.target.value; render(); });
   on("qCsv", "click", () => csv(queueIdx(), "open tickets"));
   on("withUsPdf", "click", printWithUs);
+  on("shDay", "change", (e) => { if (e.target.value) { UI.shDay = e.target.value; render(); } });
   on("usersAll", "click", () => { UI.allUsers = !UI.allUsers; render(); });
   on("btnHist", "click", (e) => { const rows = histNeed(); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
   document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => { UI.shift = b.dataset.shift; render(); }));
