@@ -320,6 +320,7 @@ table.steps{table-layout:auto}table.steps th,table.steps td{font-size:12px;paddi
 table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;min-width:120px}table.steps td.num{white-space:nowrap}table.steps tr.inst td{color:var(--faint)}table.steps tr.inst td b{font-weight:500}
 .nw{white-space:nowrap}.ncl{white-space:nowrap}
 .tiles.six{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.tiles.shift4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .sla{display:inline-block;border-radius:6px;padding:1px 7px;font-size:.74rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
 .sla.red{background:#FDECEE;color:#B4182D;border-color:#F6C9CF}.sla.orange{background:#FEF0E4;color:#B5520A;border-color:#F8D3B4}
 .sla.amber{background:#FEF7E6;color:#946405;border-color:#F3DFA9}.sla.green{background:#EAF7EF;color:#1F7A45;border-color:#BFE6CD}.sla.grey{background:#F4F1F5;color:#7D7287;border-color:#E3DCE6}
@@ -1098,7 +1099,7 @@ function exitPanel() {
 }
 
 /* ══ Shift handover (Step 10) ══ */
-/* team shifts (Setup): 1st 06:00–15:00, 2nd 12:30–21:30, Night 21:00–06:00. They overlap, so a ticket created in an
+/* team shifts (Master data): 1st 06:00–15:00, 2nd 15:00–21:00, Night 21:00–06:00. If they are ever set to overlap, a ticket created in an
    overlap belongs to both shifts. UI.shift is "id|start" of the chosen shift; by default the shift running now
    (in an overlap, the one that ends first, since it is the one handing over). */
 function recentShifts() {
@@ -2128,13 +2129,25 @@ function viewMove() {
     keys.slice().reverse().map((k) => { const v = (x) => B[k][x] ? Array.from(B[k][x]) : []; const sv = v("hd").length + v("engg").length, net = v("created").length - sv - v("unk").length;
       return "<tr><td>" + esc(labelOf(k)) + "</td>" + cols.map(([x, n]) => '<td class="num">' + (v(x).length ? dl(v(x), labelOf(k) + ", " + n.toLowerCase()) : '<span class="dim">·</span>') + "</td>").join("") + '<td class="num">' + (sv ? Math.round(v("hd").length / sv * 100) + "%" : "—") + '</td><td class="num" style="color:' + (net > 0 ? "var(--ss)" : net < 0 ? "var(--ok)" : "inherit") + '">' + (net > 0 ? "+" : "") + net + "</td></tr>"; }).join("") +
     "</tbody></table></div><p class=\"sub\" style=\"margin:8px 0 0\">Net change is created minus solved: above zero the backlog grew, below zero it shrank.</p></div>";
-  /* ── by shift: every ticket counted ONCE, in the shift that owns that time (a shift owns from its start until the
-     next shift starts: 1st 06:00–12:30, 2nd 12:30–21:00, Night 21:00–06:00, the night belonging to the day it starts) ── */
-  const SH = (CFG.shifts || []).map((x) => { const [hh, mm] = String(x.from).split(":").map(Number); return { id: x.id, name: x.name, start: hh * 60 + (mm || 0), from: x.from }; }).sort((a, b) => a.start - b.start);
-  SH.forEach((x, k) => { const nx = SH[(k + 1) % SH.length]; x.own = x.from + "–" + nx.from; });
-  const SHC = { "1st": "#C77D97", "2nd": "#9C3358", night: "#5C1730" }, shc = (x) => SHC[x.id] || "#9A8AA3";
-  const primShift = (ms) => { const p0 = HC.ist(ms), m = p0.min; let sh = SH[SH.length - 1]; SH.forEach((x) => { if (m >= x.start) sh = x; });
-    const day = m < SH[0].start ? HC.dayKey(ms - DAY) : HC.dayKey(ms); return { sh, day }; };
+  /* ── by shift: every ticket counted ONCE, in its shift: 1st 06:00–15:00, 2nd 15:00–21:00, Night 21:00–06:00 (the night
+     belongs to the day it starts). Times come from Master data; if shifts are ever set to overlap, each keeps its full
+     time up to its own end and the next takes over after that. ── */
+  const hm = (x) => { const [hh, mm] = String(x).split(":").map(Number); return hh * 60 + (mm || 0); };
+  const SHF = (CFG.shifts || []).map((x) => ({ id: x.id, name: x.name, from: x.from, to: x.to, a: hm(x.from), b: hm(x.to) })).sort((p0, q0) => p0.a - q0.a);
+  const covers = (x, m) => x.a <= x.b ? m >= x.a && m < x.b : m >= x.a || m < x.b;
+  const bounds = Array.from(new Set([].concat(...SHF.map((x) => [x.a, x.b])))).sort((p0, q0) => p0 - q0);
+  const dayStart = SHF.length ? SHF[0].a : 360;                                    // the day starts with the first shift (06:00)
+  const fmtHM = (m) => String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  /* blocks in time order from the day start, each covered by one shift or by two (an overlap) */
+  const SH = []; bounds.map((m, k) => [m, bounds[(k + 1) % bounds.length]]).sort((p0, q0) => ((p0[0] - dayStart + 1440) % 1440) - ((q0[0] - dayStart + 1440) % 1440)).forEach(([m0, m1]) => {
+    const who = SHF.filter((x) => covers(x, m0)); if (!who.length) return;
+    const id = who.map((x) => x.id).join("+"), ov = who.length > 1;
+    SH.push({ id, ov, who, name: ov ? "Overlap, " + who.map((x) => x.name.replace(/ shift$/i, "")).join(" + ") : who[0].name, start: m0, end: m1, own: fmtHM(m0) + "–" + fmtHM(m1) });
+  });
+  const inWin = (m, a0, b0) => a0 <= b0 ? m >= a0 && m < b0 : m >= a0 || m < b0;
+  const primShift = (ms) => { const m = HC.ist(ms).min; const sh = SH.find((x) => inWin(m, x.start, x.end)) || SH[SH.length - 1];
+    const day = m < dayStart ? HC.dayKey(ms - DAY) : HC.dayKey(ms); return { sh, day }; };
+  const SHC = { "1st": "#C77D97", "2nd": "#9C3358", night: "#5C1730" }, shc = (x) => x.ov ? "#D9A35B" : SHC[x.id] || "#9A8AA3";
   const firstEv = ev.created.reduce((m, x) => Math.min(m, x.t), NOW);
   const dFrom = rg.from != null ? rg.from : HC.istMidnight(firstEv), dTo = Math.min(rg.to != null ? rg.to : NOW, NOW), inD = (ms) => ms >= dFrom && ms < dTo;
   /* chart buckets: days up to ~2 months, weeks up to ~15 months, months beyond */
@@ -2148,9 +2161,11 @@ function viewMove() {
   const days = []; for (let d = HC.istMidnight(dFrom); d < dTo && days.length < 800; d += DAY) { const k = bkey(HC.dayKey(d)); if (days[days.length - 1] !== k) days.push(k); }
   const mxD = Math.max(1, ...days.map((k) => SH.reduce((a, x) => a + ((perDay[k] || {})[x.id] || []).length, 0)));
   const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], dlab = (k) => { const d0 = HC.ist(HC.dateMs(k)); return unitS === "month" ? MN3[d0.mo] + " " + String(d0.y).slice(2) : unitS === "week" ? "wk " + d0.d + " " + MN3[d0.mo] : d0.d + " " + MN3[d0.mo]; };
-  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">' + esc(fday(dFrom)) + " to " + esc(fday(dTo)) + " (" + nDays + " days, chart by " + unitS + "). Each ticket counts once, in the shift that owns that time: " + esc(SH.map((x) => x.name + " " + x.own).join(", ")) + ". The shift handover lists overlap tickets in both shifts.</span></div>" +
-    '<div class="tiles">' + SH.map((x) => { const T0 = tally[x.id];
-      return '<div class="tile t-ink" style="cursor:default;--ac:' + shc(x) + '"><span class="ic">' + ICON.clock + '</span><span class="nm">' + dl(Array.from(T0.created), x.name + ", created") + '</span><span class="tt">' + esc(x.name) + " created <span class=\"dim small\">" + esc(x.own) + '</span></span><span class="ds">' + Math.round(T0.created.size / totC * 100) + "% of all, " + (T0.created.size / nDays).toFixed(1) + "/day · solved " + dl(Array.from(T0.solved), x.name + ", solved") + " · to Engg " + dl(Array.from(T0.toEngg), x.name + ", sent to Engineering") + " · to Swire " + dl(Array.from(T0.toClient), x.name + ", sent to Swire") + '</span><span class="mt"><span style="width:' + Math.round(T0.created.size / totC * 100) + '%;background:' + shc(x) + '"></span></span></div>'; }).join("") + "</div>" +
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">' + esc(fday(dFrom)) + " to " + esc(fday(dTo)) + " (" + nDays + " days, chart by " + unitS + "). Each ticket counts once, in its block: " + esc(SH.map((x) => x.name + " " + x.own).join(", ")) + "." + (SH.some((x) => x.ov) ? " A shift in full is its own block plus the overlap; the shift handover lists overlap tickets in both shifts." : "") + "</span></div>" +
+    '<div class="tiles shift4">' + SH.map((x) => { const T0 = tally[x.id];
+      const full = x.ov ? null : SH.filter((y) => y.ov && y.who.some((w) => w.id === x.id)).reduce((acc, y) => acc.concat(Array.from(tally[y.id].created)), Array.from(T0.created));
+      const fullLine = full && full.length !== T0.created.size ? " · in full (" + esc(x.who[0].from) + "–" + esc(x.who[0].to) + ") " + dl(Array.from(new Set(full)), x.name + " in full, created") : "";
+      return '<div class="tile t-ink" style="cursor:default;--ac:' + shc(x) + '"><span class="ic">' + ICON.clock + '</span><span class="nm">' + dl(Array.from(T0.created), x.name + ", created") + '</span><span class="tt">' + esc(x.name) + " created <span class=\"dim small\">" + esc(x.own) + '</span></span><span class="ds">' + Math.round(T0.created.size / totC * 100) + "% of all, " + (T0.created.size / nDays).toFixed(1) + "/day" + fullLine + " · solved " + dl(Array.from(T0.solved), x.name + ", solved") + " · to Engg " + dl(Array.from(T0.toEngg), x.name + ", sent to Engineering") + " · to Swire " + dl(Array.from(T0.toClient), x.name + ", sent to Swire") + '</span><span class="mt"><span style="width:' + Math.round(T0.created.size / totC * 100) + '%;background:' + shc(x) + '"></span></span></div>'; }).join("") + "</div>" +
     '<div class="sec-h">Created per ' + unitS + ', by shift</div>' + (days.length ? '<div class="wbars" style="height:160px;gap:3px">' + days.map((k) => { const d0 = perDay[k] || {}, tot = SH.reduce((a, x) => a + (d0[x.id] || []).length, 0);
       return '<div class="wcol" data-shpick="' + k + '" title="' + esc(dlab(k)) + ": " + SH.map((x) => x.name + " " + (d0[x.id] || []).length).join(", ") + '"><span class="wv">' + (tot || "") + '</span><div class="wst" style="height:' + (tot / mxD * 100) + '%">' + SH.map((x) => { const n = (d0[x.id] || []).length; return n ? '<i style="flex:' + n + " 1 0;background:" + shc(x) + '"></i>' : ""; }).join("") + '</div><span class="wl">' + (days.length <= 36 || days.indexOf(k) % Math.ceil(days.length / 18) === 0 ? esc(dlab(k)).replace(" ", "<br>") : "") + "</span></div>"; }).join("") + "</div>" +
       '<div class="wlg">' + SH.map((x) => '<span><i style="background:' + shc(x) + '"></i>' + esc(x.name) + "</span>").join("") + '<span class="dim">Click a ' + unitS + " to see " + (unitS === "day" ? "its" : "its first day's") + ' shifts below.</span></div>' : '<p class="dim small">No days in this period.</p>');
@@ -2164,7 +2179,7 @@ function viewMove() {
   h += '<div class="sec-h" id="shDayHead">One day, shift by shift</div><div class="bar" style="margin-bottom:8px"><button type="button" class="btn" data-shstep="-1" aria-label="Previous day">◀</button><input type="date" class="inp" id="shDay" value="' + esc(dayK) + '" max="' + esc(today) + '"><button type="button" class="btn" data-shstep="1" aria-label="Next day"' + (dayK >= today ? " disabled" : "") + '>▶</button>' +
     '<button type="button" class="lnk sm" data-shstep="0">Today</button><span class="dim small">' + esc(DN[dd.dow] + ", " + dd.d + " " + MN3[dd.mo] + " " + dd.y) + ": <b>" + dayTot + "</b> created</span></div>" +
     SH.map((x) => { const c = dayC[x.id], list = c.created.slice().sort((a, b) => (T[a].created || 0) - (T[b].created || 0));
-      return '<div class="shday" style="--sc:' + shc(x) + '"><div class="shday-h"><b>' + esc(x.name) + '</b> <span class="dim small">' + esc(x.own) + (x.id === "night" ? " (into the next morning)" : "") + "</span>" +
+      return '<div class="shday" style="--sc:' + shc(x) + '"><div class="shday-h"><b>' + esc(x.name) + '</b> <span class="dim small">' + esc(x.own) + (x.id === "night" ? " (into the next morning)" : x.ov ? " (both shifts on duty)" : "") + "</span>" +
         '<span class="shday-n">created <b>' + dl(c.created, dlab(dayK) + ", " + x.name + ", created") + "</b> · solved <b>" + dl(c.solved, dlab(dayK) + ", " + x.name + ", solved") + "</b> · to Engg <b>" + dl(c.toEngg, dlab(dayK) + ", " + x.name + ", sent to Engineering") + "</b> · to Swire <b>" + dl(c.toClient, dlab(dayK) + ", " + x.name + ", sent to Swire") + "</b></span></div>" +
         (list.length ? '<div data-xlname="shday-' + x.id + '">' + table(list, ["key", "type", "pri", "sum", "status", "created", "holder", "po", "svm", "cw", "rem"], { sortable: false }) + "</div>" : '<p class="dim small" style="margin:6px 2px 4px">No tickets created in this shift.</p>') + "</div>"; }).join("") + "</div>";
   return h;
