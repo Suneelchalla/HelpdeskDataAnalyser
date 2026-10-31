@@ -38,10 +38,12 @@
     /* Section 10.2 — "no progress" = no status change for this long */
     escalate: { critical: 4 * 60, high: 2 * 24 * 60 },
     night: { from: "21:00", to: "06:00" }, callWindow: { from: "06:00", to: "09:00" },
-    /* team shifts for handover (IST). They overlap on purpose: a ticket created in an overlap is in both handovers. */
+    /* team shifts (IST), as in the Hypercare shift roster: Day shift 1 06:00–15:00, Day shift 2 12:00–21:00, Night 21:00–06:00.
+       Day shifts 1 and 2 overlap 12:00–15:00: a ticket created then is in both handovers, and Movement shows it as its
+       own "overlap" block. Edit them in Master data if the rota changes. */
     shifts: [
       { id: "1st", name: "1st shift", from: "06:00", to: "15:00" },
-      { id: "2nd", name: "2nd shift", from: "12:30", to: "21:30" },
+      { id: "2nd", name: "2nd shift", from: "12:00", to: "21:00" },
       { id: "night", name: "Night shift", from: "21:00", to: "06:00" }
     ],
     /* Section 15.3 — component (as written in Jira) → module. Several spellings per module. */
@@ -83,6 +85,9 @@
       else if (k === "escalate" && saved.escalate) c.escalate = Object.assign({}, c.escalate, saved.escalate);
       else c[k] = saved[k];
     });
+    /* shift times saved by earlier versions (2nd 12:30–21:30, or 15:00–21:00) are replaced by the roster times */
+    var old = c.shifts && c.shifts.map(function (x) { return x.id + x.from + x.to; }).join("|");
+    if (old === "1st06:0015:00|2nd12:3021:30|night21:0006:00" || old === "1st06:0015:00|2nd15:0021:00|night21:0006:00") c.shifts = JSON.parse(JSON.stringify(DEFAULTS.shifts));
     return c;
   }
 
