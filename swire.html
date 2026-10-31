@@ -1985,7 +1985,7 @@ document.addEventListener("click", (e) => {
   const stp = e.target.closest && e.target.closest("[data-shstep]");
   if (stp) { e.preventDefault(); e.stopPropagation(); const st = +stp.dataset.shstep; UI.shDay = st === 0 ? null : HC.dayKey(HC.dateMs(UI.shDay) + st * DAY + 12 * 3600e3); render(); const hd = el("shDayHead"); if (hd) hd.scrollIntoView({ block: "start" }); return; }
   const pk = e.target.closest && e.target.closest("[data-shpick]");
-  if (pk) { e.preventDefault(); e.stopPropagation(); UI.shDay = pk.dataset.shpick; render(); const hd = el("shDayHead"); if (hd) hd.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  if (pk) { e.preventDefault(); e.stopPropagation(); UI.shDay = pk.dataset.shpick > HC.dayKey(NOW) ? HC.dayKey(NOW) : pk.dataset.shpick; render(); const hd = el("shDayHead"); if (hd) hd.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   const go = e.target.closest && e.target.closest("[data-escgo]"); if (go) { e.preventDefault(); e.stopPropagation(); const sec = el("esc-" + go.dataset.escgo); if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" }); }
 }, true);
 
@@ -2135,21 +2135,25 @@ function viewMove() {
   const SHC = { "1st": "#C77D97", "2nd": "#9C3358", night: "#5C1730" }, shc = (x) => SHC[x.id] || "#9A8AA3";
   const primShift = (ms) => { const p0 = HC.ist(ms), m = p0.min; let sh = SH[SH.length - 1]; SH.forEach((x) => { if (m >= x.start) sh = x; });
     const day = m < SH[0].start ? HC.dayKey(ms - DAY) : HC.dayKey(ms); return { sh, day }; };
-  const dFrom = rg.from != null ? rg.from : NOW - 30 * DAY, dTo = Math.min(rg.to != null ? rg.to : NOW, NOW), inD = (ms) => ms >= dFrom && ms < dTo;
+  const firstEv = ev.created.reduce((m, x) => Math.min(m, x.t), NOW);
+  const dFrom = rg.from != null ? rg.from : HC.istMidnight(firstEv), dTo = Math.min(rg.to != null ? rg.to : NOW, NOW), inD = (ms) => ms >= dFrom && ms < dTo;
+  /* chart buckets: days up to ~2 months, weeks up to ~15 months, months beyond */
+  const spanD = (dTo - dFrom) / DAY, unitS = spanD <= 62 ? "day" : spanD <= 460 ? "week" : "month";
+  const bkey = (dayK) => { if (unitS === "day") return dayK; const ms = HC.dateMs(dayK); if (unitS === "week") return HC.dayKey(weekStart(ms + 12 * 3600e3)); return dayK.slice(0, 7) + "-01"; };
   const tally = {}; SH.forEach((x) => { tally[x.id] = { created: new Set(), solved: new Set(), toEngg: new Set(), toClient: new Set() }; });
   const perDay = {};
-  const put = (k, x) => { if (!inD(x.t)) return; const ps = primShift(x.t); tally[ps.sh.id][k].add(x.i); if (k === "created") { const d0 = (perDay[ps.day] = perDay[ps.day] || {}); (d0[ps.sh.id] = d0[ps.sh.id] || []).push(x.i); } };
+  const put = (k, x) => { if (!inD(x.t)) return; const ps = primShift(x.t); tally[ps.sh.id][k].add(x.i); if (k === "created") { const d0 = (perDay[bkey(ps.day)] = perDay[bkey(ps.day)] || {}); (d0[ps.sh.id] = d0[ps.sh.id] || []).push(x.i); } };
   ev.created.forEach((x) => put("created", x)); ev.hd.concat(ev.engg, ev.unk).forEach((x) => put("solved", x)); ev.toEngg.forEach((x) => put("toEngg", x)); ev.toClient.forEach((x) => put("toClient", x));
   const nDays = Math.max(1, Math.round((dTo - dFrom) / DAY)), totC = SH.reduce((a, x) => a + tally[x.id].created.size, 0) || 1;
-  const days = []; for (let d = HC.istMidnight(dFrom); d < dTo && days.length < 400; d += DAY) days.push(HC.dayKey(d));
+  const days = []; for (let d = HC.istMidnight(dFrom); d < dTo && days.length < 800; d += DAY) { const k = bkey(HC.dayKey(d)); if (days[days.length - 1] !== k) days.push(k); }
   const mxD = Math.max(1, ...days.map((k) => SH.reduce((a, x) => a + ((perDay[k] || {})[x.id] || []).length, 0)));
-  const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], dlab = (k) => { const d0 = HC.ist(HC.dateMs(k)); return d0.d + " " + MN3[d0.mo]; };
-  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">' + esc(fday(dFrom)) + " to " + esc(fday(dTo)) + " (" + nDays + " days" + (rg.from == null ? ", the last 30" : "") + "). Each ticket counts once, in the shift that owns that time: " + esc(SH.map((x) => x.name + " " + x.own).join(", ")) + ". The shift handover lists overlap tickets in both shifts.</span></div>" +
+  const MN3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], dlab = (k) => { const d0 = HC.ist(HC.dateMs(k)); return unitS === "month" ? MN3[d0.mo] + " " + String(d0.y).slice(2) : unitS === "week" ? "wk " + d0.d + " " + MN3[d0.mo] : d0.d + " " + MN3[d0.mo]; };
+  h += '<div class="panel"><div class="sec-h" style="margin-top:0">By shift <span class="dim small" style="font-weight:500">' + esc(fday(dFrom)) + " to " + esc(fday(dTo)) + " (" + nDays + " days, chart by " + unitS + "). Each ticket counts once, in the shift that owns that time: " + esc(SH.map((x) => x.name + " " + x.own).join(", ")) + ". The shift handover lists overlap tickets in both shifts.</span></div>" +
     '<div class="tiles">' + SH.map((x) => { const T0 = tally[x.id];
       return '<div class="tile t-ink" style="cursor:default;--ac:' + shc(x) + '"><span class="ic">' + ICON.clock + '</span><span class="nm">' + dl(Array.from(T0.created), x.name + ", created") + '</span><span class="tt">' + esc(x.name) + " created <span class=\"dim small\">" + esc(x.own) + '</span></span><span class="ds">' + Math.round(T0.created.size / totC * 100) + "% of all, " + (T0.created.size / nDays).toFixed(1) + "/day · solved " + dl(Array.from(T0.solved), x.name + ", solved") + " · to Engg " + dl(Array.from(T0.toEngg), x.name + ", sent to Engineering") + " · to Swire " + dl(Array.from(T0.toClient), x.name + ", sent to Swire") + '</span><span class="mt"><span style="width:' + Math.round(T0.created.size / totC * 100) + '%;background:' + shc(x) + '"></span></span></div>'; }).join("") + "</div>" +
-    '<div class="sec-h">Created per day, by shift</div>' + (days.length ? '<div class="wbars" style="height:160px;gap:3px">' + days.map((k) => { const d0 = perDay[k] || {}, tot = SH.reduce((a, x) => a + (d0[x.id] || []).length, 0);
-      return '<div class="wcol" data-shpick="' + k + '" title="' + esc(dlab(k)) + ": " + SH.map((x) => x.name + " " + (d0[x.id] || []).length).join(", ") + '"><span class="wv">' + (tot || "") + '</span><div class="wst" style="height:' + (tot / mxD * 100) + '%">' + SH.map((x) => { const n = (d0[x.id] || []).length; return n ? '<i style="flex:' + n + " 1 0;background:" + shc(x) + '"></i>' : ""; }).join("") + '</div><span class="wl">' + (days.length <= 31 ? esc(dlab(k)).replace(" ", "<br>") : "") + "</span></div>"; }).join("") + "</div>" +
-      '<div class="wlg">' + SH.map((x) => '<span><i style="background:' + shc(x) + '"></i>' + esc(x.name) + "</span>").join("") + '<span class="dim">Click a day to see its shifts below.</span></div>' : '<p class="dim small">No days in this period.</p>');
+    '<div class="sec-h">Created per ' + unitS + ', by shift</div>' + (days.length ? '<div class="wbars" style="height:160px;gap:3px">' + days.map((k) => { const d0 = perDay[k] || {}, tot = SH.reduce((a, x) => a + (d0[x.id] || []).length, 0);
+      return '<div class="wcol" data-shpick="' + k + '" title="' + esc(dlab(k)) + ": " + SH.map((x) => x.name + " " + (d0[x.id] || []).length).join(", ") + '"><span class="wv">' + (tot || "") + '</span><div class="wst" style="height:' + (tot / mxD * 100) + '%">' + SH.map((x) => { const n = (d0[x.id] || []).length; return n ? '<i style="flex:' + n + " 1 0;background:" + shc(x) + '"></i>' : ""; }).join("") + '</div><span class="wl">' + (days.length <= 36 || days.indexOf(k) % Math.ceil(days.length / 18) === 0 ? esc(dlab(k)).replace(" ", "<br>") : "") + "</span></div>"; }).join("") + "</div>" +
+      '<div class="wlg">' + SH.map((x) => '<span><i style="background:' + shc(x) + '"></i>' + esc(x.name) + "</span>").join("") + '<span class="dim">Click a ' + unitS + " to see " + (unitS === "day" ? "its" : "its first day's") + ' shifts below.</span></div>' : '<p class="dim small">No days in this period.</p>');
   /* one day: its 1st, 2nd and Night shift, and the tickets created in each */
   const today = HC.dayKey(NOW);
   if (!UI.shDay) UI.shDay = today;
