@@ -205,7 +205,21 @@ td .z{color:var(--faint)}
 .msel-dd .msel-opt.on .msel-chk{background:var(--accent,var(--hd,#0F766E));border-color:var(--accent,var(--hd,#0F766E))}
 .msel-dd .msel-opt .msel-lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .msel-empty{padding:16px;text-align:center;color:var(--faint,#9AA7B8);font-size:11px}
-@media print{.msel-dd{display:none!important}}</style>
+@media print{.msel-dd{display:none!important}}.shgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:6px}
+.shcard{border:1px solid var(--line,#E2E8F0);border-left:5px solid var(--sc);border-radius:12px;padding:12px 14px;background:#fff}
+.shc-h{display:flex;justify-content:space-between;gap:6px;font-size:13px}.shc-h span{color:#64748B;font-size:11.5px}
+.shc-n{font-size:30px;font-weight:800;color:var(--sc);cursor:pointer;line-height:1.15;margin:4px 0 2px;filter:brightness(.85)}
+.shc-s,.shc-r{font-size:12px;color:#475569}.shc-r{margin-top:6px;padding-top:6px;border-top:1px dashed #E2E8F0}
+.dl{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}.dl:hover{color:#2563EB}
+.shbars{display:flex;align-items:stretch;gap:3px;height:170px;margin-top:6px}
+.shcol{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px;cursor:pointer;min-width:0}
+.shcol:hover .shst{filter:brightness(1.1)}.shst{width:min(46px,85%);display:flex;flex-direction:column-reverse;border-radius:4px 4px 0 0;overflow:hidden;min-height:2px}.shst i{display:block;width:100%}
+.shv{font-size:10.5px;font-weight:700;color:#334155}.shl{font-size:10px;color:#64748B;white-space:nowrap}
+.shdot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+.shpick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}.shpick input{border:1px solid #CBD5E1;border-radius:8px;padding:5px 8px;font:inherit}
+.shday{border:1px solid #E2E8F0;border-left:5px solid var(--sc);border-radius:10px;padding:8px 10px;margin-bottom:10px}
+.shday-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}.shday-n{margin-left:auto;font-size:12px;color:#475569}
+</style>
 </head>
 <body>
 <div id="landing" class="landing"><div>
@@ -242,6 +256,7 @@ td .z{color:var(--faint)}
     </div>
     <nav class="tabs" id="tabs">
       <button class="tab on" data-tab="flow">Flow &amp; forecast</button>
+      <button class="tab" data-tab="shifts">Shifts &amp; movement</button>
       <button class="tab" data-tab="clients">Clients <span class="n" id="nCl"></span></button>
       <button class="tab" data-tab="team">Team <span class="n" id="nTm"></span></button>
       <button class="tab" data-tab="risks">Risks <span class="n" id="nRk"></span></button>
@@ -711,6 +726,7 @@ function renderTab() {
   document.querySelectorAll("#tabs .tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === F.tab); });
   var v = el("view");
   if (F.tab === "flow") v.innerHTML = tabFlow(M);
+  else if (F.tab === "shifts") v.innerHTML = tabShifts(M);
   else if (F.tab === "clients") v.innerHTML = tabClients(M);
   else if (F.tab === "team") v.innerHTML = tabTeam(M);
   else if (F.tab === "risks") v.innerHTML = tabRisks(M);
@@ -770,6 +786,96 @@ function tabFlow(m) {
     '<p class="note" style="margin-top:10px">Half are resolved within <b>' + dur(median(rd)) + '</b>; 9 in 10 within <b>' + dur(quant(rd, 0.9)) + '</b>.</p></div></div>';
   return h;
 }
+/* ── Shifts & movement: every client, day and shift wise. Same blocks as the Swire Hypercare module:
+   1st 06:00–12:00, Overlap 1st + 2nd 12:00–15:00, 2nd 15:00–21:00, Night 21:00–06:00 (each ticket counted once;
+   a shift in full = its block + the overlap). Shift times are the roster's, or the ones saved in Swire Master data. ── */
+var SHIFT_DEF = [{ id: "1st", name: "1st shift", from: "06:00", to: "15:00" }, { id: "2nd", name: "2nd shift", from: "12:00", to: "21:00" }, { id: "night", name: "Night shift", from: "21:00", to: "06:00" }];
+function shiftCfg() {
+  try { var c = JSON.parse(localStorage.getItem("hd-swire-cfg") || "null"), sh = c && c.shifts;
+    if (sh && sh.length) { var sig = sh.map(function (x) { return x.id + x.from + x.to; }).join("|");
+      if (sig !== "1st06:0015:00|2nd12:3021:30|night21:0006:00" && sig !== "1st06:0015:00|2nd15:0021:00|night21:0006:00") return sh; } } catch (e) {}
+  return SHIFT_DEF;
+}
+function istMin(ms) { var d = new Date(ms + IST); return d.getUTCHours() * 60 + d.getUTCMinutes(); }
+function dKey(ms) { return new Date(ms + IST).toISOString().slice(0, 10); }
+function dMs(k) { return Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10)) - IST; }
+function shiftBlocks() {
+  var hm = function (x) { var p = String(x).split(":"); return +p[0] * 60 + (+p[1] || 0); };
+  var SHF = shiftCfg().map(function (x) { return { id: x.id, name: x.name, from: x.from, to: x.to, a: hm(x.from), b: hm(x.to) }; }).sort(function (p, q) { return p.a - q.a; });
+  var covers = function (x, m) { return x.a <= x.b ? m >= x.a && m < x.b : m >= x.a || m < x.b; };
+  var bnd = []; SHF.forEach(function (x) { [x.a, x.b].forEach(function (v) { if (bnd.indexOf(v) < 0) bnd.push(v); }); }); bnd.sort(function (p, q) { return p - q; });
+  var start = SHF.length ? SHF[0].a : 360, f2 = function (m) { return ("0" + Math.floor(m / 60) % 24).slice(-2) + ":" + ("0" + m % 60).slice(-2); };
+  var segs = bnd.map(function (m, k) { return [m, bnd[(k + 1) % bnd.length]]; }).sort(function (p, q) { return ((p[0] - start + 1440) % 1440) - ((q[0] - start + 1440) % 1440); });
+  var COL = { "1st": "#60A5FA", "2nd": "#6366F1", night: "#1E3A8A" }, out = [];
+  segs.forEach(function (s) { var who = SHF.filter(function (x) { return covers(x, s[0]); }); if (!who.length) return; var ov = who.length > 1;
+    out.push({ id: who.map(function (x) { return x.id; }).join("+"), ov: ov, who: who, name: ov ? "Overlap, " + who.map(function (x) { return x.name.replace(/ shift$/i, ""); }).join(" + ") : who[0].name,
+      start: s[0], end: s[1], own: f2(s[0]) + "–" + f2(s[1]), color: ov ? "#F59E0B" : COL[who[0].id] || "#94A3B8" }); });
+  return { blocks: out, dayStart: start, shifts: SHF };
+}
+function tabShifts(m) {
+  var R = m.R, a = R.a, b = Math.min(R.b, NOW + 1), SB = shiftBlocks(), BL = SB.blocks;
+  var inWin = function (mm, x, y) { return x <= y ? mm >= x && mm < y : mm >= x || mm < y; };
+  var blockOf = function (ms) { var mm = istMin(ms), bl = BL.filter(function (x) { return inWin(mm, x.start, x.end); })[0] || BL[BL.length - 1]; return { bl: bl, day: mm < SB.dayStart ? dKey(ms - DAY) : dKey(ms) }; };
+  /* events in the period: created, solved (by Help Desk / Engineering / not known), moved to Engineering / to the client */
+  var EV = { created: [], hd: [], engg: [], unk: [], toEngg: [], toClient: [] };
+  m.sc.forEach(function (t) {
+    if (inR(t.created, a, b)) EV.created.push({ t: t, at: t.created });
+    var e = histEntry(t), tr = e ? (e.transitions || []) : null, wasE = false;
+    if (tr) tr.forEach(function (x) { var f = sideOf(x.from), to = sideOf(x.to); if (inR(x.t, a, b)) { if (to === "engg" && f !== "engg") EV.toEngg.push({ t: t, at: x.t }); if (to === "client" && f !== "client") EV.toClient.push({ t: t, at: x.t }); } if (to === "engg" || f === "engg") wasE = true; });
+    if (t.isRes && inR(t.doneAt, a, b)) EV[t.linked || wasE ? "engg" : tr ? "hd" : "unk"].push({ t: t, at: t.doneAt });
+  });
+  var nDays = Math.max(1, Math.round((b - a) / DAY)), unit = nDays <= 62 ? "day" : nDays <= 460 ? "week" : "month";
+  var wk = function (k) { var ms = dMs(k), dw = (new Date(ms + IST).getUTCDay() + 6) % 7; return dKey(ms - dw * DAY + 12 * 3600000); };
+  var bkey = function (k) { return unit === "day" ? k : unit === "week" ? wk(k) : k.slice(0, 7) + "-01"; };
+  var T = {}; BL.forEach(function (x) { T[x.id] = { created: [], solved: [], hd: [], engg: [], toEngg: [], toClient: [] }; });
+  var perB = {}, perC = {};
+  var put = function (k, ev) { var p = blockOf(ev.at), slot = T[p.bl.id][k]; if (slot.indexOf(ev.t) < 0) slot.push(ev.t);
+    if (k === "created") { var bk = bkey(p.day); (perB[bk] = perB[bk] || {}); (perB[bk][p.bl.id] = perB[bk][p.bl.id] || []).push(ev.t);
+      var c = ev.t.project; (perC[c] = perC[c] || {}); (perC[c][p.bl.id] = perC[c][p.bl.id] || []).push(ev.t); } };
+  EV.created.forEach(function (x) { put("created", x); });
+  ["hd", "engg", "unk"].forEach(function (k) { EV[k].forEach(function (x) { put("solved", x); if (k !== "unk") put(k, x); }); });
+  EV.toEngg.forEach(function (x) { put("toEngg", x); }); EV.toClient.forEach(function (x) { put("toClient", x); });
+  var tot = BL.reduce(function (s, x) { return s + T[x.id].created.length; }, 0) || 1;
+  var D = function (list, title, label) { return '<b class="dl" data-drill="' + dreg(list, title) + '">' + num(label != null ? label : list.length) + "</b>"; };
+  var MN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], lab = function (k) { var d = new Date(dMs(k) + IST); return unit === "month" ? MN[d.getUTCMonth()] + " " + String(d.getUTCFullYear()).slice(2) : (unit === "week" ? "wk " : "") + d.getUTCDate() + " " + MN[d.getUTCMonth()]; };
+  var h = '<div class="card pad" style="margin-bottom:16px"><h2 class="sh">Created by shift <span>' + (R.all ? "all time" : rangeTxt(R.a, R.b)) + ", IST · each ticket counts once, in its block: " + esc(BL.map(function (x) { return x.name + " " + x.own; }).join(", ")) + (BL.some(function (x) { return x.ov; }) ? " · a shift in full = its block + the overlap" : "") + "</span></h2>" +
+    '<div class="shgrid">' + BL.map(function (x) { var c = T[x.id];
+      var full = x.ov ? null : BL.filter(function (y) { return y.ov && y.who.some(function (w) { return w.id === x.id; }); }).reduce(function (acc, y) { return acc.concat(T[y.id].created); }, c.created.slice());
+      return '<div class="shcard" style="--sc:' + x.color + '"><div class="shc-h"><b>' + esc(x.name) + "</b><span>" + esc(x.own) + (x.ov ? ", both on duty" : "") + '</span></div><div class="shc-n" data-drill="' + dreg(c.created, x.name + " " + x.own + ", created") + '">' + num(c.created.length) + '</div><div class="shc-s">created · ' + pct(c.created.length, tot) + "% · " + (c.created.length / nDays).toFixed(1) + "/day" +
+        (full && full.length !== c.created.length ? '<br>in full (' + esc(x.who[0].from) + "–" + esc(x.who[0].to) + "): " + D(full, x.who[0].name + " in full, created") : "") + '</div><div class="shc-r">solved ' + D(c.solved, x.name + ", solved") + " (HD " + D(c.hd, x.name + ", solved by Help Desk") + ", Engg " + D(c.engg, x.name + ", solved by Engineering") + ")<br>to Engg " + D(c.toEngg, x.name + ", sent to Engineering") + " · to client " + D(c.toClient, x.name + ", sent to the client") + "</div></div>"; }).join("") + "</div>";
+  /* chart: per day / week / month, stacked by block */
+  var keys = [], seen = {}; for (var d = dMs(dKey(a)); d < b && keys.length < 800; d += DAY) { var k0 = bkey(dKey(d)); if (!seen[k0]) { seen[k0] = 1; keys.push(k0); } }
+  var mx = 1; keys.forEach(function (k) { var s = 0; BL.forEach(function (x) { s += ((perB[k] || {})[x.id] || []).length; }); if (s > mx) mx = s; });
+  var step = Math.ceil(keys.length / 18);
+  h += '<h2 class="sh" style="margin-top:14px">Created per ' + unit + ', by shift <span>click a bar to open that ' + (unit === "day" ? "day" : unit + "’s first day") + ' below</span></h2><div class="shbars">' + keys.map(function (k, i) { var pb = perB[k] || {}, s = 0; BL.forEach(function (x) { s += (pb[x.id] || []).length; });
+      return '<div class="shcol" data-shpick="' + k + '" title="' + esc(lab(k)) + ": " + BL.map(function (x) { return x.name + " " + (pb[x.id] || []).length; }).join(", ") + '"><span class="shv">' + (s || "") + '</span><div class="shst" style="height:' + (s / mx * 100) + '%">' + BL.map(function (x) { var n = (pb[x.id] || []).length; return n ? '<i style="flex:' + n + ' 1 0;background:' + x.color + '"></i>' : ""; }).join("") + '</div><span class="shl">' + (keys.length <= 36 || i % step === 0 ? esc(lab(k)) : "") + "</span></div>"; }).join("") + "</div>" +
+    '<div class="keys">' + BL.map(function (x) { return '<span><i style="background:' + x.color + '"></i>' + esc(x.name) + "</span>"; }).join("") + "</div></div>";
+  /* by client */
+  var cl = Object.keys(perC).sort(function (p, q) { var s = function (c) { return BL.reduce(function (n, x) { return n + ((perC[c][x.id] || []).length); }, 0); }; return s(q) - s(p); });
+  h += '<div class="card pad" style="margin-bottom:16px"><h2 class="sh">By client <span>tickets created in each block · click a number for the tickets</span></h2><div class="tw"><table><thead><tr><th>Client</th>' + BL.map(function (x) { return '<th class="num"><i class="shdot" style="background:' + x.color + '"></i>' + esc(x.name) + '<div class="z">' + esc(x.own) + "</div></th>"; }).join("") + '<th class="num">Total</th></tr></thead><tbody>' +
+    cl.map(function (c) { var all = []; BL.forEach(function (x) { all = all.concat(perC[c][x.id] || []); });
+      return "<tr><td>" + esc(c) + "</td>" + BL.map(function (x) { var l = perC[c][x.id] || []; return '<td class="num">' + (l.length ? D(l, c + ", " + x.name + " " + x.own) : '<span class="z">·</span>') + "</td>"; }).join("") + '<td class="num">' + D(all, c + ", created") + "</td></tr>"; }).join("") + "</tbody></table></div></div>";
+  /* one day */
+  var today = dKey(NOW); if (!F.shDay || F.shDay > today) F.shDay = today;
+  var dayK = F.shDay, DC = {}; BL.forEach(function (x) { DC[x.id] = { created: [], solved: [], toEngg: [], toClient: [] }; });
+  var putD = function (k, ev) { var p = blockOf(ev.at); if (p.day === dayK && DC[p.bl.id][k].indexOf(ev.t) < 0) DC[p.bl.id][k].push(ev.t); };
+  m.sc.forEach(function (t) { if (t.created) putD("created", { t: t, at: t.created }); var e = histEntry(t); (e ? e.transitions || [] : []).forEach(function (x) { var f = sideOf(x.from), to = sideOf(x.to); if (to === "engg" && f !== "engg") putD("toEngg", { t: t, at: x.t }); if (to === "client" && f !== "client") putD("toClient", { t: t, at: x.t }); }); if (t.isRes && t.doneAt) putD("solved", { t: t, at: t.doneAt }); });
+  var dd = new Date(dMs(dayK) + IST), DN = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"], dayTot = BL.reduce(function (s, x) { return s + DC[x.id].created.length; }, 0);
+  h += '<div class="card pad" id="shDayCard"><h2 class="sh">One day, block by block <span>every client in the filters</span></h2><div class="shpick"><button class="btn" data-shstep="-1" aria-label="Previous day">◀</button><input type="date" id="shDay" value="' + dayK + '" max="' + today + '"><button class="btn" data-shstep="1"' + (dayK >= today ? " disabled" : "") + ' aria-label="Next day">▶</button><button class="btn" data-shstep="0">Today</button><span class="note" style="margin:0">' + DN[dd.getUTCDay()] + ", " + dd.getUTCDate() + " " + MN[dd.getUTCMonth()] + " " + dd.getUTCFullYear() + ": <b>" + dayTot + "</b> created</span></div>" +
+    BL.map(function (x) { var c = DC[x.id], list = c.created.slice().sort(function (p, q) { return p.created - q.created; });
+      return '<div class="shday" style="--sc:' + x.color + '"><div class="shday-h"><b>' + esc(x.name) + '</b> <span class="z">' + esc(x.own) + (x.id === "night" ? " (into the next morning)" : x.ov ? " (both shifts on duty)" : "") + '</span><span class="shday-n">created ' + D(c.created, dayK + ", " + x.name + ", created") + " · solved " + D(c.solved, dayK + ", " + x.name + ", solved") + " · to Engg " + D(c.toEngg, dayK + ", " + x.name + ", sent to Engineering") + " · to client " + D(c.toClient, dayK + ", " + x.name + ", sent to the client") + "</span></div>" +
+        (list.length ? tList(list, ["key", "ctime", "summary", "project", "side", "pri", "svm", "worker"]) : '<div class="empty" style="padding:8px">No tickets created in this block.</div>') + "</div>"; }).join("") + "</div>";
+  return h;
+}
+document.addEventListener("click", function (e) {
+  var b = e.target.closest && e.target.closest("[data-shstep],[data-shpick]"); if (!b) return;
+  e.preventDefault(); e.stopPropagation();
+  if (b.dataset.shpick) { var k = b.dataset.shpick, td = dKey(NOW); F.shDay = k > td ? td : k; }
+  else { var st = +b.dataset.shstep; F.shDay = st === 0 ? dKey(NOW) : dKey(dMs(F.shDay || dKey(NOW)) + st * DAY + 12 * 3600000); }
+  renderTab(); var c = el("shDayCard"); if (c) c.scrollIntoView({ behavior: "smooth", block: "start" });
+}, true);
+document.addEventListener("change", function (e) { if (e.target && e.target.id === "shDay" && e.target.value) { F.shDay = e.target.value; renderTab(); } });
+
 /* sortable tables */
 function th(tab, k, label, num_) { var s = F.sort[tab] || {}, arr = s.k === k ? (s.d > 0 ? " ▲" : " ▼") : ""; return '<th class="s' + (num_ ? " num" : "") + '" data-sort="' + tab + '|' + k + '">' + label + arr + '</th>'; }
 function sortRows(tab, rows, defK) { var s = F.sort[tab] || { k: defK, d: -1 }; return rows.sort(function (a, b) { var x = a[s.k], y = b[s.k]; if (typeof x === "string") return s.d * x.localeCompare(y); return s.d * ((x == null ? -1e9 : x) - (y == null ? -1e9 : y)); }); }
@@ -845,12 +951,13 @@ function tabTeam(m) {
 function tList(list, cols) {
   if (!list.length) return '<div class="empty">Nothing here with the current filters.</div>';
   cols = cols || ["key", "summary", "project", "svm", "side", "pri", "age", "upd", "sla"];
-  var HD = { key: "Key", summary: "Summary", project: "Client", svm: "SVM in charge", worker: "Worker", side: "Held by", pri: "Priority", age: "Age", upd: "Last update", sla: "SLA", back: "Came back", res: "Resolved in", rc: "Root cause", fix: "Fix", com: "Comments" };
+  var HD = { key: "Key", ctime: "Created", summary: "Summary", project: "Client", svm: "SVM in charge", worker: "Worker", side: "Held by", pri: "Priority", age: "Age", upd: "Last update", sla: "SLA", back: "Came back", res: "Resolved in", rc: "Root cause", fix: "Fix", com: "Comments" };
   var h = '<div class="tw"><table><thead><tr>' + cols.map(function (c) { return '<th' + (/age|upd|res|com/.test(c) ? ' class="num"' : '') + '>' + HD[c] + '</th>'; }).join("") + '</tr></thead><tbody>';
   list.forEach(function (t) {
     h += '<tr>' + cols.map(function (c) {
       switch (c) {
         case "key": return '<td><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a></td>';
+        case "ctime": return '<td class="num" style="white-space:nowrap">' + esc(new Date(t.created + IST).toISOString().slice(11, 16)) + '<div class="z">' + esc(fd(t.created)) + '</div></td>';
         case "summary": return '<td class="trunc" title="' + esc(t.summary) + '">' + esc(t.summary) + '</td>';
         case "project": return '<td>' + esc(t.project) + '</td>';
         case "svm": return '<td>' + esc(t.svm || "—") + '</td>';
