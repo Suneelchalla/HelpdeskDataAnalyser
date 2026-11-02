@@ -433,6 +433,12 @@ table.xl th{white-space:nowrap}
   #hoPreview tr{break-inside:avoid}
 }
 .lgpdf{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:7px 12px;border-radius:999px;background:#fff;border:1px dashed var(--line2);font-size:12px;font-weight:700;color:var(--maroon)}
+.lgmis{display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:7px 12px;border-radius:999px;background:#fff;border:1px solid var(--line2);font-size:12px;font-weight:700;color:var(--muted)}
+.lgmis.bad{border-color:#F3B8C3;background:#FDECEE;color:var(--ss)}
+.lgmis:hover{border-color:var(--maroon)}
+.lgmis b{font-variant-numeric:tabular-nums}
+.lgmis + .lgpdf{margin-left:8px}
+@media print{.lgmis{display:none!important}}
 .lgpdf:hover{border-style:solid;border-color:var(--maroon);background:var(--blush)}
 @media print{.lgpdf{display:none!important}}
 .shday{border:1px solid var(--line2);border-left:5px solid var(--sc);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff}
@@ -694,7 +700,7 @@ function sigL(cls, idx, k, h, title) {
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-list]"); if (!b) return;
   const x = LISTS[b.dataset.list]; if (!x) return;
-  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else openList(x.title, x.idx, x.extra, x.mail);
+  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else if (x.kind === "chk") openCheck(x.extra.cid, x.title, x.idx); else openList(x.title, x.idx, x.extra, x.mail);
 }, true);
 /* Escape closes only the overlay on top (list, ticket details, Engineering window, reminder) */
 function isTop(ov) { const all = document.querySelectorAll(".ov"); return all.length && all[all.length - 1] === ov; }
@@ -907,7 +913,7 @@ function viewNow() {
   const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length).toLocaleString() + " with us (" + box.length + " in the open box), " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
     '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
-    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + '<button type="button" class="lgpdf" id="withUsPdf" title="PDF of the open box, Help Desk and Engineering tickets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>PDF</button></div></section>';
+    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + misPill() + '<button type="button" class="lgpdf" id="withUsPdf" title="PDF of the open box, Help Desk and Engineering tickets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>PDF</button></div></section>';
   const w1 = Math.max(1, withUs.length);
   return hero + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
@@ -991,14 +997,134 @@ const MIS_FRONT = [
         '<a class="key small" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a>" +
         (x && x.src === "export" ? ' <span class="dim small" title="From the export’s Linked Ticket status. Refresh LRPS assignees to read it live from Jira.">export</span>' : "") + "</div>"; }).join(""); } }
 ];
+/* ── Rule check window, three steps for EVERY check:
+     1. where the ticket is now (SWIPHX status): with SVM (Help Desk) · with Engineering · with the client · closed
+     2. the unique values of what that check is about (missing field, ME ID, status pair, priority, PO …), each once with
+        its count. A ticket with several values (e.g. two missing fields) is under each of them, once.
+     3. the tickets of one value, with that value's columns first ──
+   If only one side has tickets, step 1 is skipped. */
+const MIS_SIDES = [
+  ["hd", "With SVM (Help Desk)", "SWIPHX status is on the Help Desk side", "t-ink", '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.2 3.2 0 0 1 0 6.3M18 14c2 .8 3 3 3 6"/></svg>'],
+  ["engg", "With Engineering", "SWIPHX status is on the Engineering side", "t-cr", ICON.toEngg],
+  ["client", "With client (Swire)", "SWIPHX status is waiting on Swire or billing", "t-ok", ICON.toSwire],
+  ["closed", "Closed", "SWIPHX closed", "zero", ICON.check]
+];
+function misSide(i) { const x = sideOf(i); return x === "billing" ? "client" : x; }
+const RED_ST = "background:#FDE8EC;color:var(--ss);font-weight:600";
+/* per check: gh = headers of the step-2 table, vals(i) = the ticket's values (array of rows, one cell per header),
+   norm = how two values are treated as the same, chip = which step-2 cells show as status chips (css), order, front, cols */
+function chkDef(c) {
+  const d = c.detail || {}, one = (f) => (i) => [[f(i)]], po = (i) => (E[i].po && E[i].po.po) || "(no PO)";
+  const STD = ["key", "type", "pri", "sum", "status", "age", "po", "svm", "cw", "lrps", "rem"];
+  const col1 = (h, f) => [{ h, s: (i) => f(i), c: (i) => esc(f(i)) }];
+  switch (c.id) {
+    case "mandatory": return { gh: ["Missing field"], vals: (i) => (d[T[i].key] || []).map((f) => [f]), front: col1("Missing fields", (i) => (d[T[i].key] || []).join(", ")), cols: STD,
+      note: "Each missing field once. A ticket missing several fields is under each of them." };
+    case "meid": return { gh: ["Logged by (reporter)"], vals: one((i) => T[i].reporter || "(no reporter)"), front: col1("Reporter", (i) => T[i].reporter || "—"), cols: STD };
+    case "dup": return { gh: ["ME ID", "Tickets with this ME ID"], vals: (i) => { const x = d[T[i].key]; return x ? [[x.me, [T[i].key].concat(x.with).sort().join(", ")]] : []; },
+      front: [{ h: "ME ID", s: (i) => (d[T[i].key] || {}).me, c: (i) => '<span class="mono">' + esc((d[T[i].key] || {}).me || "") + "</span>" },
+              { h: "Also on", s: (i) => ((d[T[i].key] || {}).with || []).join(" "), c: (i) => ((d[T[i].key] || {}).with || []).map((k) => '<a class="key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a>").join("<br>") }],
+      cols: ["key", "type", "pri", "sum", "status", "age", "po", "rem"], note: "Each ME ID once, with every ticket that carries it." };
+    case "triage": return { gh: ["Status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: ["key", "type", "pri", "sum", "status", "age", "cw", "po", "rem"] };
+    case "lrps": return { gh: ["SWIPHX status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: STD };
+    case "lrpsmis": return { gh: ["SWIPHX status", "LRPS status"], norm: stKey, chip: ["", RED_ST], front: MIS_FRONT, cols: ["key", "type", "pri", "sum", "age", "prog", "lrps", "po", "rem"],
+      vals: (i) => { const t = T[i]; return t.lrps.map((k) => lrpsSt(t, k)).filter((x) => x && stKey(x.s) !== stKey(t.status)).map((x) => [t.status, x.s]); },
+      note: "Each status pair once. A ticket whose LRPS tickets share the same status counts once." };
+    case "nosvm": return { gh: ["Module (component)"], vals: one((i) => (E[i].po && E[i].po.module) || T[i].components.join(", ") || "(no component)"), front: col1("Module", (i) => (E[i].po && E[i].po.module) || T[i].components.join(", ") || "—"), cols: ["key", "type", "pri", "sum", "status", "age", "cw", "lrps", "rem"] };
+    case "fr": return { gh: ["Priority"], vals: one((i) => T[i].priority || "(none)"), order: (x) => HC.sevRank(HC.sevOf(x.v[0])), cols: ["key", "type", "pri", "sum", "status", "age", "fr", "po", "cw", "rem"] };
+    case "upd": return { gh: ["PO"], vals: one(po), cols: ["key", "type", "pri", "sum", "status", "age", "prog", "lrps", "cw", "rem"] };
+    case "notes": return { gh: ["Missing note"], vals: (i) => (d[T[i].key] || []).map((f) => [f]), front: col1("Missing", (i) => (d[T[i].key] || []).join(", ")), cols: ["key", "type", "pri", "sum", "status", "age", "po", "svm", "cw", "rem"],
+      note: "A ticket missing both notes is under each." };
+    case "reopen": return { gh: ["PO"], vals: one(po), front: [{ h: "Reopened", s: (i) => E[i].reopens, c: (i) => E[i].reopens + "×" }], cols: STD };
+    default: return { gh: ["SWIPHX status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: STD };
+  }
+}
+function chkGroups(def, list) {
+  const g = {}, nm = def.norm || ((x) => x);
+  list.forEach((i) => { const seen = {};
+    def.vals(i).forEach((v) => { const id = v.map(nm).join("|"); if (seen[id]) return; seen[id] = 1;          // a ticket counts once per value
+      (g[id] = g[id] || { v, idx: [] }).idx.push(i); }); });
+  return Object.keys(g).map((k) => g[k]).sort((x, y) => (def.order ? def.order(x) - def.order(y) : 0) || y.idx.length - x.idx.length || x.v.join().localeCompare(y.v.join()));
+}
+function openCheck(cid, title, idxAll) {
+  const c = allChecks().find((x) => x.id === cid) || { id: cid }, def = chkDef(c);
+  const S = { side: null, grp: null };
+  const nonEmpty = MIS_SIDES.filter(([k]) => idxAll.some((i) => misSide(i) === k));
+  if (nonEmpty.length === 1) S.side = nonEmpty[0][0];
+  const ov = document.createElement("div"); ov.className = "ov lst";
+  ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"></div>';
+  const box = ov.querySelector(".lbox");
+  let cur = idxAll, groups = [];
+  const cellOf = (n, v) => def.chip && def.chip[n] != null ? '<span class="st" style="' + def.chip[n] + '">' + esc(v) + "</span>" : esc(v);
+  const gLabel = (x) => x.v.join(def.id === "lrpsmis" || c.id === "lrpsmis" ? " ≠ " : " · ");
+  function paint() {
+    const bySide = {}; MIS_SIDES.forEach(([k]) => { bySide[k] = idxAll.filter((i) => misSide(i) === k); });
+    const side = S.side && MIS_SIDES.find((x) => x[0] === S.side);
+    groups = side ? chkGroups(def, bySide[S.side]) : [];
+    const grp = side && S.grp != null ? groups[S.grp] : null;
+    cur = grp ? grp.idx.slice().sort(bySevAge) : side ? bySide[S.side] : idxAll;
+    const crumb = (nonEmpty.length > 1 ? '<button type="button" class="lnk sm" data-m="home">All sides</button> › ' : "") + (side ? (grp ? '<button type="button" class="lnk sm" data-m="side">' + esc(side[1]) + "</button>" : "<b>" + esc(side[1]) + "</b>") : "") +
+      (grp ? " › <b>" + esc(gLabel(grp)) + "</b>" : "");
+    let body;
+    if (!side) {
+      body = '<p class="sub" style="margin:4px 0 12px">Where each ticket is now, by its SWIPHX status. Pick a side.</p><div class="tiles">' +
+        MIS_SIDES.filter(([k]) => k !== "closed" || bySide.closed.length).map(([k, n, d, cls, ic]) => { const l = bySide[k];
+          return '<button type="button" class="tile ' + (l.length ? cls : "zero") + '" data-mside="' + k + '"' + (l.length ? "" : " disabled") + '><span class="ic">' + ic + '</span><span class="nm">' + l.length.toLocaleString() +
+            '</span><span class="tt">' + esc(n) + '</span><span class="ds">' + esc(d) + '</span><span class="mt"><span style="width:' + Math.round(l.length / Math.max(1, idxAll.length) * 100) + '%"></span></span></button>'; }).join("") + "</div>";
+    } else if (!grp) {
+      body = '<p class="sub" style="margin:4px 0 10px">' + esc(def.note || "Each value once, with how many tickets have it.") + " Click a row to see its tickets.</p>" +
+        (groups.length ? '<div class="tw"><table><thead><tr>' + def.gh.map((h) => "<th>" + esc(h) + "</th>").join("") + "<th>Tickets</th><th>Oldest</th></tr></thead><tbody>" +
+          groups.map((x, n) => '<tr data-mgrp="' + n + '" style="cursor:pointer">' + x.v.map((v, k) => "<td>" + cellOf(k, v) + "</td>").join("") + '<td class="num"><span class="dl">' + x.idx.length +
+            '</span></td><td class="num">' + fmt(x.idx.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0)) + "</td></tr>").join("") + "</tbody></table></div>"
+          : '<div class="tw"><div class="empty">No tickets.</div></div>');
+    } else {
+      body = table(cur, def.cols, { sortable: false, limit: 2000, empty: "No tickets.", front: def.front });
+    }
+    box.innerHTML = '<div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + cur.length.toLocaleString() + "</span></h3>" +
+      (grp || (side && nonEmpty.length > 1) ? '<button type="button" class="btn" data-m="back">Back</button>' : "") + '<button type="button" class="btn" data-m="csv">Download CSV</button><button type="button" class="btn" data-m="close">Close</button></div>' +
+      (crumb ? '<div class="small" style="margin:-2px 0 6px">' + crumb + "</div>" : "") + body;
+  }
+  const prev = document.activeElement;
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
+  const canBack = () => S.grp != null || (S.side && nonEmpty.length > 1);
+  const back = () => { if (S.grp != null) S.grp = null; else S.side = null; paint(); };
+  const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); if (canBack()) back(); else close(); } };
+  ov.addEventListener("click", (ev) => {
+    if (ev.target === ov) return close();
+    const b = ev.target.closest("[data-m],[data-mside],[data-mgrp]");
+    if (b) {
+      if (b.dataset.mside) { S.side = b.dataset.mside; S.grp = null; return paint(); }
+      if (b.dataset.mgrp != null) { S.grp = +b.dataset.mgrp; return paint(); }
+      const m = b.dataset.m;
+      if (m === "close") return close();
+      if (m === "back") return back();
+      if (m === "home") { S.side = null; S.grp = null; return paint(); }
+      if (m === "side") { S.grp = null; return paint(); }
+      if (m === "csv") { const side = S.side && MIS_SIDES.find((x) => x[0] === S.side), g = S.grp != null ? groups[S.grp] : null;
+        return csv(cur, title + (side ? " " + side[1] : "") + (g ? " " + gLabel(g) : "")); }
+      return;
+    }
+    const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
+  });
+  document.body.appendChild(ov); document.addEventListener("keydown", key); paint();
+  ov.querySelector('[data-m="close"]').focus();
+}
+/* Now page: small shortcut to the SWIPHX ↔ LRPS status check (watched often) */
+function misPill() {
+  const c = mismatchCheck(), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
+  const idx = c.keys.map((k) => idxOf[k]).filter((i) => i != null), n = idx.length;
+  const ic = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h13l-3-3M17 17H4l3 3"/></svg>';
+  return '<button type="button" class="lgmis' + (n ? " bad" : "") + '"' + (n ? ' data-list="' + reg(idx, c.title, { cid: "lrpsmis" }, "chk") + '"' : " disabled") +
+    ' title="' + esc(n ? n + " tickets where the SWIPHX and LRPS statuses differ. Click to open." : "SWIPHX and LRPS statuses agree for every checked ticket.") + '">' + ic +
+    (n ? "<b>" + n.toLocaleString() + "</b> status mismatch" : "Status in sync") + "</button>";
+}
 function viewRules() {
   const C = allChecks(), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
   const mand = C.find((c) => c.id === "mandatory");
-  const detailCol = (c) => c.detail ? { h: "Detail", c: (i) => { const d = c.detail[T[i].key]; if (!d) return ""; if (Array.isArray(d)) return '<span class="small">' + esc((c.id === "mandatory" ? "Missing: " : "") + d.join(", ")) + "</span>"; return '<span class="small">ME ID ' + esc(d.me) + " also on " + d.with.map((k) => '<span class="key">' + esc(k) + "</span>").join(", ") + "</span>"; } } : null;
   let h = "<h2>Rule checks</h2><p class=\"sub\">What the data shows against the runbook. Open tickets are checked for logging and triage rules; closed tickets for closure notes. Click a check or its number to see the tickets.</p>";
   if (mand && mand.notCarried.length) h += '<div class="note">Not checked, because no Swire ticket has a value for them in this data: <b>' + esc(mand.notCarried.join(", ")) + "</b>. They are either not filled in Jira or not mapped in the launcher’s Jira settings (Refresh data after mapping).</div>";
   h += '<div class="panel" style="padding:0">' + C.map((c) => { const idx = c.keys.map((k) => idxOf[k]).filter((i) => i != null);
-    const k = idx.length ? reg(idx, c.title, c.id === "lrpsmis" ? { front: MIS_FRONT } : detailCol(c)) : "";
+    const k = idx.length ? reg(idx, c.title, { cid: c.id }, "chk") : "";
     return '<div class="chk"' + (k ? ' data-list="' + k + '"' : "") + ' role="button" tabindex="0" aria-label="' + esc(c.title + ", " + idx.length + " tickets") + '"><span class="ref">' + esc(c.ref) + '</span><div><div class="t">' + esc(c.title) + '</div><div class="w">' + esc(c.why) + " " + esc(c.who) + '.</div></div><span class="c ' + (idx.length ? "bad" : "ok") + '">' + (idx.length ? '<span class="dl">' + idx.length.toLocaleString() + "</span>" : "✓") + "</span></div>"; }).join("") + "</div>";
   return h;
 }
@@ -1681,8 +1807,8 @@ function personMail(list, info, hi, note) {
   const ageD = (i) => (ageOf(T[i]) || 0) / 1440, updD = (i) => T[i].updated != null ? (NOW - T[i].updated) / DAY : null;
   const bucket = (d) => AGEB.find(([a, b]) => d >= a && d < b) || AGEB[0];
   const oldest = list.reduce((m, i) => (m == null || ageD(i) > ageD(m) ? i : m), null);
-  const stale = list.filter((i) => updD(i) != null && updD(i) >= 7).length, still = list.filter((i) => E[i].sinceMoveMin != null && E[i].sinceMoveMin >= 3 * 1440).length;
-  const name = (hi || "").trim() || (pmReal(info) ? info.name : "team"), role = info && info.by === "svm" ? "where you are SVM In Charge" : "pending with you in Engineering (linked LRPS ticket)";
+  const stale = list.filter((i) => updD(i) != null && updD(i) >= 7).length;
+  const name = (hi || "").trim() || (pmReal(info) ? info.name : "team");
   const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
   const td = (h, x) => '<td style="' + TD + (x || "") + '">' + h + "</td>";
   const sub = (h) => '<br><span style="color:#8A7380;font-size:11px">' + h + "</span>";
@@ -1690,26 +1816,26 @@ function personMail(list, info, hi, note) {
   const bk = AGEB.map(([a, b, l, c]) => ({ l, c, n: list.filter((i) => ageD(i) >= a && ageD(i) < b).length }));
   const summary = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 6px;' + F + '"><tr>' + bk.map((x) => th(x.l)).join("") + th("Total") + "</tr><tr>" +
     bk.map((x) => td(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;font-size:13px;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : ""))).join("") + td("<b>" + list.length + "</b>", "text-align:center;font-size:13px") + "</tr></table>";
-  const facts = [oldest != null ? "Oldest: <b>" + esc(T[oldest].key) + "</b>, open " + esc(fmt(ageOf(T[oldest]))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : "", still ? "<b>" + still + "</b> with no status change for 3 days or more" : ""].filter(Boolean);
+  const facts = [oldest != null ? "Oldest: <b>" + esc(T[oldest].key) + "</b>, open " + esc(fmt(ageOf(T[oldest]))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
   const rows = list.map((i, k) => { const t = T[i], e = E[i], d = ageD(i), b = bucket(d), u = updD(i);
-    const lr = t.lrps.length ? t.lrps.map((x) => esc(x) + (LRPS[x] && LRPS[x].s ? " (" + esc(LRPS[x].s) + ")" : "")).join("<br>") + (info && info.by === "svm" && lrpsWho(i) && !/^\(/.test(lrpsWho(i)) ? sub(esc(lrpsWho(i))) : "") : "—";
+    const lr = t.lrps.length ? t.lrps.map((x) => esc(x) + (LRPS[x] && LRPS[x].s ? " (" + esc(LRPS[x].s) + ")" : "")).join("<br>") : "—";
+    const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
     return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
-      td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>" + sub(esc(typeTxt(t))), "white-space:nowrap") +
-      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + td(lr, "white-space:nowrap") +
+      td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
+      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + td(lr, "white-space:nowrap") + td(la, "white-space:nowrap") +
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
-      td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) +
-      td(e.sinceMoveMin != null ? esc(fmt(e.sinceMoveMin)) : "—", "white-space:nowrap") + "</tr>"; }).join("");
+      td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
   const nt = (note || "").trim();
-  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is " : "s are ") + esc(role) + ". The ageing is below.</p>" +
+  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.</p>" +
     "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr>' +
-    ["Ticket", "Priority", "Summary", "Status", "LRPS", "Age (created)", "Last updated", "No status change"].map(th).join("") + "</tr>" + rows + "</table>" +
-    "<p " + P + "><b>Please update each ticket on its SWIPHX ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
-  const text = "Hi " + name + ",\n\nSwire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is " : "s are ") + role + ".\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
+    ["Ticket", "Type", "Priority", "Summary", "Status", "LRPS", "LRPS assignee", "Age (created)", "Last updated"].map(th).join("") + "</tr>" + rows + "</table>" +
+    "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+  const text = "Hi " + name + ",\n\nSwire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
-    list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.join(", ") : ""); }).join("\n") +
-    "\n\nPlease update each ticket on its SWIPHX ticket with the next step and an ETR.\n\nRegards,\n" + rmSign();
+    list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
+    "\n\nPlease update each ticket with the next step and an ETR.\n\nRegards,\n" + rmSign();
   const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
   return { html, text, subject };
 }
