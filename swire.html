@@ -704,7 +704,8 @@ function openList(title, idx, extra, mail) {
   ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + idx.length.toLocaleString() + "</span></h3>" +
     (mail ? '<button type="button" class="btn pri" data-x="mail" title="Email these tickets with their ageing to ' + esc(mail.name) + '">Mail reminder</button>' : "") +
     '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
-    table(idx, extra ? ["key", "type", "pri", "sum", "status", "age", "po", "rem"] : ["key", "type", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra }) + "</div>";
+    (extra && extra.front ? table(idx, ["key", "type", "pri", "sum", "age", "prog", "lrps", "po", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", front: extra.front }) :
+    table(idx, extra ? ["key", "type", "pri", "sum", "status", "age", "po", "rem"] : ["key", "type", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra })) + "</div>";
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
   const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
@@ -872,8 +873,9 @@ function table(idx, cols, opts) {
   if (!idx.length) return '<div class="tw"><div class="empty">' + esc(opts.empty || "Nothing here.") + "</div></div>";
   const lim = opts.limit || 3000, more = idx.length - lim;
   const dv = (c, i) => { if (c === "rem") return ""; try { const v = COLS[c].s(T[i], E[i]); return ' data-v="' + esc(typeof v === "number" && isFinite(v) ? "n:" + v : "s:" + String(v == null ? "" : v).toLowerCase()) + '"'; } catch (x) { return ""; } };
-  return '<div class="tw"><table><thead><tr>' + cols.map((c) => "<th>" + esc(COLS[c].h) + "</th>").join("") + (opts.extra ? "<th>" + esc(opts.extra.h) + "</th>" : "") +
-    "</tr></thead><tbody>" + idx.slice(0, lim).map((i) => '<tr class="row" data-i="' + i + '">' + cols.map((c) => "<td" + dv(c, i) + ">" + COLS[c].c(T[i], E[i]) + "</td>").join("") + (opts.extra ? "<td>" + opts.extra.c(i) + "</td>" : "") + "</tr>").join("") +
+  const fr = opts.front || [], fv = (f, i) => { try { return ' data-v="' + esc("s:" + String(f.s(i) == null ? "" : f.s(i)).toLowerCase()) + '"'; } catch (x) { return ""; } };
+  return '<div class="tw"><table><thead><tr>' + fr.map((f) => "<th>" + esc(f.h) + "</th>").join("") + cols.map((c) => "<th>" + esc(COLS[c].h) + "</th>").join("") + (opts.extra ? "<th>" + esc(opts.extra.h) + "</th>" : "") +
+    "</tr></thead><tbody>" + idx.slice(0, lim).map((i) => '<tr class="row" data-i="' + i + '">' + fr.map((f) => "<td" + fv(f, i) + ">" + f.c(i) + "</td>").join("") + cols.map((c) => "<td" + dv(c, i) + ">" + COLS[c].c(T[i], E[i]) + "</td>").join("") + (opts.extra ? "<td>" + opts.extra.c(i) + "</td>" : "") + "</tr>").join("") +
     "</tbody></table>" + (more > 0 ? '<div class="empty small">' + more + " more not shown. Narrow the filters to see them.</div>" : "") + "</div>";
 }
 el("view").addEventListener("click", (e) => {
@@ -952,14 +954,51 @@ function viewOpenBox() {
 }
 
 /* ══ Rule checks ══ */
+/* ── SWIPHX ↔ LRPS status check ──
+   The client ticket (SWIPHX) and its linked engineering ticket (LRPS) should be in the same status. The LRPS status is
+   the one read from Jira by "Refresh LRPS assignees" when available, otherwise the export's "Linked Ticket status".
+   Checked: open tickets and tickets closed since counting started. A ticket whose LRPS status is not known yet is not
+   counted (the check says how many). Names are compared ignoring case, spaces and "&" / "and". */
+const stKey = (s) => String(s || "").toLowerCase().replace(/&/g, " and ").replace(/\s+/g, " ").trim();
+function lrpsSt(t, k) {
+  const x = LRPS[k]; if (x && !x.gone && x.s) return { s: x.s, src: "jira" };
+  return t.lrpsStatus && t.lrpsStatus[k] ? { s: t.lrpsStatus[k], src: "export" } : null;
+}
+function mismatchCheck() {
+  const from = HC.dateMs(CFG.start) || 0, keys = [];
+  let unk = 0;
+  T.forEach((t, i) => {
+    const e = E[i]; if (!t.lrps.length || (e.stage === "closed" && (e.closedAt || 0) < from)) return;
+    const st = t.lrps.map((k) => lrpsSt(t, k)).filter(Boolean);
+    if (!st.length) { unk++; return; }
+    if (st.some((x) => stKey(x.s) !== stKey(t.status))) keys.push(t.key);
+  });
+  return { id: "lrpsmis", ref: "LRPS", title: "Status mismatch between SWIPHX and LRPS", who: "Shadow team / General Support",
+    why: "The client ticket and its linked LRPS ticket are in different statuses. Bring them in line in Jira. Open tickets and tickets closed since counting started." +
+      (unk ? " " + unk + " linked ticket" + (unk === 1 ? " is" : "s are") + " not checked yet because the LRPS status is not read (Refresh LRPS assignees)." : ""), keys };
+}
+function allChecks() {
+  const C = HC.checks(T, E, NOW, CFG), at = C.findIndex((c) => c.id === "lrps");
+  C.splice(at < 0 ? C.length : at + 1, 0, mismatchCheck());
+  return C;
+}
+/* the two status columns shown first in the mismatch list */
+const MIS_FRONT = [
+  { h: "SWIPHX status", s: (i) => T[i].status, c: (i) => stChip(T[i], E[i]) },
+  { h: "LRPS status", s: (i) => T[i].lrps.map((k) => (lrpsSt(T[i], k) || {}).s || "").join(" "), c: (i) => { const t = T[i];
+    return t.lrps.map((k) => { const x = lrpsSt(t, k), off = x && stKey(x.s) !== stKey(t.status);
+      return '<div style="white-space:nowrap"><span class="st" style="' + (off ? "background:#FDE8EC;color:var(--ss);font-weight:600" : "") + '">' + esc(x ? x.s : "not read") + "</span> " +
+        '<a class="key small" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a>" +
+        (x && x.src === "export" ? ' <span class="dim small" title="From the export’s Linked Ticket status. Refresh LRPS assignees to read it live from Jira.">export</span>' : "") + "</div>"; }).join(""); } }
+];
 function viewRules() {
-  const C = HC.checks(T, E, NOW, CFG), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
+  const C = allChecks(), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
   const mand = C.find((c) => c.id === "mandatory");
   const detailCol = (c) => c.detail ? { h: "Detail", c: (i) => { const d = c.detail[T[i].key]; if (!d) return ""; if (Array.isArray(d)) return '<span class="small">' + esc((c.id === "mandatory" ? "Missing: " : "") + d.join(", ")) + "</span>"; return '<span class="small">ME ID ' + esc(d.me) + " also on " + d.with.map((k) => '<span class="key">' + esc(k) + "</span>").join(", ") + "</span>"; } } : null;
   let h = "<h2>Rule checks</h2><p class=\"sub\">What the data shows against the runbook. Open tickets are checked for logging and triage rules; closed tickets for closure notes. Click a check or its number to see the tickets.</p>";
   if (mand && mand.notCarried.length) h += '<div class="note">Not checked, because no Swire ticket has a value for them in this data: <b>' + esc(mand.notCarried.join(", ")) + "</b>. They are either not filled in Jira or not mapped in the launcher’s Jira settings (Refresh data after mapping).</div>";
   h += '<div class="panel" style="padding:0">' + C.map((c) => { const idx = c.keys.map((k) => idxOf[k]).filter((i) => i != null);
-    const k = idx.length ? reg(idx, c.title, detailCol(c)) : "";
+    const k = idx.length ? reg(idx, c.title, c.id === "lrpsmis" ? { front: MIS_FRONT } : detailCol(c)) : "";
     return '<div class="chk"' + (k ? ' data-list="' + k + '"' : "") + ' role="button" tabindex="0" aria-label="' + esc(c.title + ", " + idx.length + " tickets") + '"><span class="ref">' + esc(c.ref) + '</span><div><div class="t">' + esc(c.title) + '</div><div class="w">' + esc(c.why) + " " + esc(c.who) + '.</div></div><span class="c ' + (idx.length ? "bad" : "ok") + '">' + (idx.length ? '<span class="dl">' + idx.length.toLocaleString() + "</span>" : "✓") + "</span></div>"; }).join("") + "</div>";
   return h;
 }
@@ -984,11 +1023,11 @@ function viewQueue() {
     table(idx, ["key", "type", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { empty: "No open tickets match." });
 }
 function csv(idx, title) {
-  const head = ["Key", "Type", "Priority", "Summary", "ME ID", "Status", "Stage", "Created", "Age", "First response", "Since last move", "Our time", "Benchmark", "PO", "Module", "SVM In Charge", "Current Worker", "LRPS", "LRPS assignee", "Next action", "Components"];
+  const head = ["Key", "Type", "Priority", "Summary", "ME ID", "Status", "Stage", "Created", "Age", "First response", "Since last move", "Our time", "Benchmark", "PO", "Module", "SVM In Charge", "Current Worker", "LRPS", "LRPS assignee", "LRPS status", "Next action", "Components"];
   const q = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
   const lines = [head.map(q).join(",")].concat(idx.map((i) => { const t = T[i], e = E[i];
     return [t.key, t.type, t.priority, t.summary, t.meId, t.status, STAGE_TXT[e.stage], fdt(t.created), fmt(ageOf(t)), e.frState === "met" || e.frState === "missed" ? fmt(e.fr.min) + " (" + e.frState + ")" : e.frState || "",
-      fmt(e.sinceMoveMin), fmt(e.oursMin), e.target ? fmt(e.target.res) : "", e.po.po, e.po.module, t.svm, t.cw, t.lrps.join(" "), lrpsNames(t), t.nextAction, t.components.join("; ")].map(q).join(","); }));
+      fmt(e.sinceMoveMin), fmt(e.oursMin), e.target ? fmt(e.target.res) : "", e.po.po, e.po.module, t.svm, t.cw, t.lrps.join(" "), lrpsNames(t), t.lrps.map((k) => { const x = lrpsSt(t, k); return x ? k + ": " + x.s : ""; }).filter(Boolean).join("; "), t.nextAction, t.components.join("; ")].map(q).join(","); }));
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv" }));
   a.download = "Swire-" + String(title || "open tickets").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") + "-" + HC.dayKey(NOW) + ".csv"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
@@ -2369,7 +2408,7 @@ function render() {
   LISTS = {}; LSEQ = 0;
   rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters();
   writeStats();
-  const open = openIdx(), C = HC.checks(T, E, NOW, CFG), escN = HC.escalations(T, E, NOW, CFG).length;
+  const open = openIdx(), C = allChecks(), escN = HC.escalations(T, E, NOW, CFG).length;
   const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
   paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, sla: (() => { const n = open.filter((i) => slaB(i) === "breached").length; return { n, hot: n > 0 }; })(), esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
   const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, sla: viewSla, move: viewMove, rel: viewRel, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
