@@ -665,8 +665,8 @@ function wireFilters() {
 
 /* ── every number opens its tickets: dl() registers a list for this render and returns a clickable count ── */
 let LISTS = {}, LSEQ = 0;
-function reg(idx, title, extra, kind) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title, extra, kind }; return k; }
-function dl(idx, title, label) { return '<button type="button" class="dl" data-list="' + reg(idx, title) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
+function reg(idx, title, extra, kind, mail) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title, extra, kind, mail }; return k; }
+function dl(idx, title, label, mail) { return '<button type="button" class="dl" data-list="' + reg(idx, title, null, null, mail) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
 const ICON = {
   siren: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5z"/><path d="M12 3v1M4.2 6.2l.8.8M19.8 6.2l-.8.8"/></svg>',
   flame: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.4-2.4-5.6-4-8.4-.6 2-1.8 3-3 3 .4-3-1-6-4-8 .3 3.4-3 6.3-3 10.6C5 19.3 8 22 12 22z"/></svg>',
@@ -694,14 +694,15 @@ function sigL(cls, idx, k, h, title) {
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-list]"); if (!b) return;
   const x = LISTS[b.dataset.list]; if (!x) return;
-  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else openList(x.title, x.idx, x.extra);
+  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else openList(x.title, x.idx, x.extra, x.mail);
 }, true);
 /* Escape closes only the overlay on top (list, ticket details, Engineering window, reminder) */
 function isTop(ov) { const all = document.querySelectorAll(".ov"); return all.length && all[all.length - 1] === ov; }
-function openList(title, idx, extra) {
+function openList(title, idx, extra, mail) {
   idx = idx.slice().sort(bySevAge);
   const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"><div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + idx.length.toLocaleString() + "</span></h3>" +
+    (mail ? '<button type="button" class="btn pri" data-x="mail" title="Email these tickets with their ageing to ' + esc(mail.name) + '">Mail reminder</button>' : "") +
     '<button type="button" class="btn" data-x="csv">Download CSV</button><button type="button" class="btn" data-x="close">Close</button></div>' +
     table(idx, extra ? ["key", "type", "pri", "sum", "status", "age", "po", "rem"] : ["key", "type", "pri", "sum", "status", "age", "fr", "prog", "res", "po", "svm", "cw", "lrps", "next", "rem"], { sortable: false, limit: 2000, empty: "No tickets.", extra: extra }) + "</div>";
   const prev = document.activeElement;
@@ -709,7 +710,7 @@ function openList(title, idx, extra) {
   const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); close(); } };
   ov.addEventListener("click", (ev) => {
     if (ev.target === ov) return close();
-    const b = ev.target.closest("[data-x]"); if (b) { if (b.dataset.x === "close") close(); else csv(idx, title); return; }
+    const b = ev.target.closest("[data-x]"); if (b) { if (b.dataset.x === "close") close(); else if (b.dataset.x === "mail") openPersonMail(idx, mail, title); else csv(idx, title); return; }
     const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
   });
   document.body.appendChild(ov); ov.querySelector('[data-x="close"]').focus(); document.addEventListener("keydown", key);
@@ -756,7 +757,7 @@ function fetchLrps(force) {
     return call("/rest/api/3/search/jql?jql=" + encodeURIComponent(jql) + "&fields=assignee,status,updated&maxResults=100").then((d) => {
       const seen = {}, at = Date.now();
       (d.issues || []).forEach((is) => { const f = is.fields || {}; seen[is.key] = 1;
-        LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", id: f.assignee ? (f.assignee.accountId || "") : "", s: f.status ? f.status.name : "", at }; });
+        LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", id: f.assignee ? (f.assignee.accountId || "") : "", e: f.assignee ? (f.assignee.emailAddress || "") : "", s: f.status ? f.status.name : "", at }; });
       ch.forEach((k) => { if (!seen[k]) LRPS[k] = { a: "", s: "", at, gone: true }; });
       done += ch.length; paintChips("Reading LRPS tickets " + done + " / " + keys.length + "…");
     });
@@ -1572,9 +1573,9 @@ function openEngg(idxAll) {
       list.forEach((i) => { const k = key(i); (g[k] = g[k] || []).push(i); });
       const names = Object.keys(g).sort((a, b) => g[b].length - g[a].length);
       body += '<div class="tw" style="margin-bottom:10px"><table><thead><tr><th>' + (S.tab === "svm" ? "SVM In Charge" : "Engineering assignee (LRPS)") + "</th><th>Total</th><th>Breached</th><th>Due soon / at risk</th>" + HC.SEVS.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th></tr></thead><tbody>" +
-        names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0), who = (S.tab === "svm" ? "SVM In Charge " : "Engineering, ") + n;
-          const cell = (q, t, cls) => '<td class="num"' + (cls ? ' style="' + cls + '"' : "") + ">" + (q.length ? dl(q, who + (t ? ", " + t : "")) : '<span class="dim">·</span>') + "</td>";
-          return "<tr><td>" + '<button type="button" class="lnk sm" data-list="' + reg(l, who) + '">' + esc(n) + "</button></td>" + cell(l, "", "font-weight:700") +
+        names.map((n) => { const l = g[n], old = l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0), who = (S.tab === "svm" ? "SVM In Charge " : "Engineering, ") + n, pm = { name: n, by: S.tab };
+          const cell = (q, t, cls) => '<td class="num"' + (cls ? ' style="' + cls + '"' : "") + ">" + (q.length ? dl(q, who + (t ? ", " + t : ""), null, pm) : '<span class="dim">·</span>') + "</td>";
+          return "<tr><td>" + '<button type="button" class="lnk sm" data-list="' + reg(l, who, null, null, pm) + '">' + esc(n) + "</button></td>" + cell(l, "", "font-weight:700") +
             cell(l.filter((i) => eSla(i) === "breached"), "SLA breached", "color:var(--ss)") + cell(l.filter((i) => eSla(i) === "due" || eSla(i) === "risk"), "due soon or at risk") +
             HC.SEVS.map((x) => cell(l.filter((i) => T[i].sev === x.id), x.name)).join("") + '<td class="num">' + fmt(old) + "</td></tr>"; }).join("") + "</tbody></table></div>";
       rows = [];
@@ -1620,6 +1621,76 @@ function openEnggMail(list) {
   q("emCopy").onclick = (e) => { const x = cur(); copyRich(x.html, x.text, e.target, "Copy email"); };
   q("emEml").onclick = () => { const x = cur(); emlDownload(x.subject, x.html, "Swire-engineering-followup-" + HC.dayKey(NOW) + ".eml"); };
   paint();
+}
+/* ── Mail reminder to ONE person (Engineering follow-up → Engg Assignee / SVM In Charge → a number): their tickets with
+   ageing, no SLA. The address is remembered per person in this browser; first time it is taken from the LRPS assignee
+   (when Jira shares it) or the PO list in Master data. ── */
+const PM_KEY = "hd-swire-mailto";
+function pmBook() { try { return JSON.parse(localStorage.getItem(PM_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function pmReal(info) { return !!(info && info.name && !/^\(/.test(info.name)); }
+function pmEmail(info, list) {
+  if (!pmReal(info)) return "";
+  const saved = pmBook()[info.by + ":" + info.name]; if (saved != null) return saved;
+  const nk = (s) => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (info.by === "asg") for (const i of list) for (const k of T[i].lrps) { const x = LRPS[k]; if (x && x.a === info.name && x.e) return x.e; }
+  const m = (CFG.modules || []).find((x) => nk(x.po) === nk(info.name)); return m ? m.email || "" : "";
+}
+function pmSaveEmail(info, v) { if (!pmReal(info)) return; const b = pmBook(); b[info.by + ":" + info.name] = v.trim(); try { localStorage.setItem(PM_KEY, JSON.stringify(b)); } catch (e) {} }
+function personMail(list, info, hi, note) {
+  list = list.slice().sort(bySevAge);
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 6px"';
+  const ageD = (i) => (ageOf(T[i]) || 0) / 1440, updD = (i) => T[i].updated != null ? (NOW - T[i].updated) / DAY : null;
+  const bucket = (d) => AGEB.find(([a, b]) => d >= a && d < b) || AGEB[0];
+  const oldest = list.reduce((m, i) => (m == null || ageD(i) > ageD(m) ? i : m), null);
+  const stale = list.filter((i) => updD(i) != null && updD(i) >= 7).length, still = list.filter((i) => E[i].sinceMoveMin != null && E[i].sinceMoveMin >= 3 * 1440).length;
+  const name = (hi || "").trim() || (pmReal(info) ? info.name : "team"), role = info && info.by === "svm" ? "where you are SVM In Charge" : "pending with you in Engineering (linked LRPS ticket)";
+  const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
+  const td = (h, x) => '<td style="' + TD + (x || "") + '">' + h + "</td>";
+  const sub = (h) => '<br><span style="color:#8A7380;font-size:11px">' + h + "</span>";
+  /* ageing summary: one row of buckets */
+  const bk = AGEB.map(([a, b, l, c]) => ({ l, c, n: list.filter((i) => ageD(i) >= a && ageD(i) < b).length }));
+  const summary = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 6px;' + F + '"><tr>' + bk.map((x) => th(x.l)).join("") + th("Total") + "</tr><tr>" +
+    bk.map((x) => td(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;font-size:13px;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : ""))).join("") + td("<b>" + list.length + "</b>", "text-align:center;font-size:13px") + "</tr></table>";
+  const facts = [oldest != null ? "Oldest: <b>" + esc(T[oldest].key) + "</b>, open " + esc(fmt(ageOf(T[oldest]))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : "", still ? "<b>" + still + "</b> with no status change for 3 days or more" : ""].filter(Boolean);
+  const rows = list.map((i, k) => { const t = T[i], e = E[i], d = ageD(i), b = bucket(d), u = updD(i);
+    const lr = t.lrps.length ? t.lrps.map((x) => esc(x) + (LRPS[x] && LRPS[x].s ? " (" + esc(LRPS[x].s) + ")" : "")).join("<br>") + (info && info.by === "svm" && lrpsWho(i) && !/^\(/.test(lrpsWho(i)) ? sub(esc(lrpsWho(i))) : "") : "—";
+    return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
+      td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>" + sub(esc(typeTxt(t))), "white-space:nowrap") +
+      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + td(lr, "white-space:nowrap") +
+      td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
+      td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) +
+      td(e.sinceMoveMin != null ? esc(fmt(e.sinceMoveMin)) : "—", "white-space:nowrap") + "</tr>"; }).join("");
+  const nt = (note || "").trim();
+  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is " : "s are ") + esc(role) + ". The ageing is below.</p>" +
+    "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
+    (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
+    "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr>' +
+    ["Ticket", "Priority", "Summary", "Status", "LRPS", "Age (created)", "Last updated", "No status change"].map(th).join("") + "</tr>" + rows + "</table>" +
+    "<p " + P + "><b>Please update each ticket on its SWIPHX ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+  const text = "Hi " + name + ",\n\nSwire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is " : "s are ") + role + ".\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
+    (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
+    list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.join(", ") : ""); }).join("\n") +
+    "\n\nPlease update each ticket on its SWIPHX ticket with the next step and an ETR.\n\nRegards,\n" + rmSign();
+  const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
+  return { html, text, subject };
+}
+function openPersonMail(list, info, title) {
+  const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(title) + '</span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="pmTo">To</label><input class="inp" id="pmTo" placeholder="name@solverminds.com" style="flex:1;min-width:240px">' +
+    '<label class="rmlbl" for="pmHi">Hi</label><input class="inp" id="pmHi" style="width:200px"></div>' +
+    '<label class="rmlbl" for="pmNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="pmNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
+    '<p class="dim small" id="pmSubj" style="margin:10px 0 6px"></p><div class="rmprev" id="pmPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
+    '<div class="rmrow"><span class="dim small">The address is remembered for ' + esc(pmReal(info) ? info.name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="btn" id="pmEml">Download email draft</button><button type="button" class="btn pri" id="pmCopy">Copy email</button></div>', "wide");
+  const q = (id) => m.ov.querySelector("#" + id);
+  q("pmTo").value = pmEmail(info, list); q("pmHi").value = pmReal(info) ? info.name : "team";
+  const cur = () => personMail(list, info, q("pmHi").value, q("pmNote").value);
+  const paint = () => { const x = cur(); q("pmSubj").textContent = "Subject: " + x.subject; q("pmPrev").innerHTML = x.html; };
+  q("pmHi").addEventListener("input", paint); q("pmNote").addEventListener("input", paint);
+  q("pmTo").addEventListener("change", () => pmSaveEmail(info, q("pmTo").value));
+  q("pmCopy").onclick = (e) => { pmSaveEmail(info, q("pmTo").value); const x = cur(); copyRich(x.html, x.text, e.target, "Copy email"); };
+  q("pmEml").onclick = () => { pmSaveEmail(info, q("pmTo").value); const x = cur(); const who = (pmReal(info) ? info.name : "team").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    emlDownload(x.subject, x.html, "Swire-reminder-" + who + "-" + HC.dayKey(NOW) + ".eml", q("pmTo").value.trim()); };
+  paint(); q("pmTo").focus();
 }
 /* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
 function printWithUs() {
