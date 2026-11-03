@@ -1601,18 +1601,15 @@ async function hoWorkbook(d) {
   const rows = [];
   const push = (r) => { rows.push(r); return rows.length; };
   push([{ v: "Swire Phoenix Hypercare, " + (d.w.general ? "general handover" : d.w.label), s: S.title }]);
-  push([{ v: "Position at " + fdt(NOW) + " IST. Every count is a formula on the “All open” or “Escalations” sheet; filter those sheets for the tickets.", s: S.sub }]);
+  push([{ v: "Position at " + fdt(NOW) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” and “Escalations” sheets.", s: S.sub }]);
   function pivot(title, note, src, rowField, rowVals, colField, colVals, extra, rowTest, colTest) {
-    const R = (h) => XL.qs(src.name) + "!$" + src.C[h] + "$2:$" + src.C[h] + "$" + src.n;
     push([]); push([{ v: title, s: S.title }]); if (note) push([{ v: note, s: S.sub }]);
     push([{ v: rowField, s: S.phead }].concat(colVals.map((c) => ({ v: c, s: S.phead })), [{ v: "Total", s: S.phead }]));
-    const first = rows.length + 1, ex = extra || [];
+    const first = rows.length + 1;
     rowVals.forEach((rv) => {
       const r = rows.length + 1, cells = [{ v: rv, s: S.lbl }];
       colVals.forEach((cv, k) => {
-        const crit = (alt) => R(rowField) + ',"="&$A' + r + "," + R(colField) + ',"="&' + XL.col(k + 1) + "$" + (first - 1) + alt.map((a) => "," + R(a[0]) + ',"' + a[1] + '"').join("");
-        const f = ex.length ? ex.map((alt) => "COUNTIFS(" + crit(alt) + ")").join("+") : "COUNTIFS(" + crit([]) + ")";
-        cells.push({ f, v: src.idx.filter((i) => rowTest(i, rv) && colTest(i, cv)).length, s: S.cellInt });
+        cells.push({ v: src.idx.filter((i) => rowTest(i, rv) && colTest(i, cv)).length, s: S.cellInt });
       });
       cells.push({ f: "SUM(B" + r + ":" + XL.col(colVals.length) + r + ")", v: cells.slice(1).reduce((m, c) => m + c.v, 0), s: S.totInt });
       push(cells);
@@ -1635,7 +1632,7 @@ async function hoWorkbook(d) {
   pivot("6. Open tickets by age × where they are", "Age since the ticket was created.", SRC.open, "Ageing", AGEB.map((x) => x[2]), "Where", SIDES, null, (i, v) => ageLbl(T[i]) === v, (i, v) => side(i) === v);
   if (escIdx.length) pivot("7. Escalations to raise by engineering assignee × priority", "Details on the “Escalations” sheet.", SRC.esc, "Engineering assignee", uniq(escIdx, ew), "Priority", SEV, null, (i, v) => ew(i) === v, pr);
   const summary = { name: "Summary", rows, cols: [40].concat(SEV.map(() => 13), [11]), first: true };
-  const sheets = [summary, listSheet("Pending with SVM", pending), escSheet, listSheet("All open", open)];
+  const sheets = [summary, listSheet("Pending with SVM", pending), escSheet];
   if (!d.w.general) sheets.splice(1, 0, listSheet("Created this shift", d.created), listSheet("Closed this shift", d.closed.slice().sort(bySevAge)));
   return { bytes: await XL.build(sheets), file: hoFileBase(d) + ".xlsx", sheets: sheets.map((s) => s.name + (s.name === "Summary" ? "" : " (" + (s.rows.length - 1) + ")")) };
 }
@@ -1652,41 +1649,61 @@ function emlWithAttachment(subject, html, att, file) {
     "--" + B + "--", ""].join("\r\n");
   saveBlob(new Blob([eml], { type: "message/rfc822" }), file);
 }
-/* ── brief general handover mail: counts by priority, escalations in one paragraph, details in the Excel ── */
+/* ── brief general handover mail: what is pending with SVM by priority, by engineering assignee, the oldest and the
+   stale ones; the Showstopper/Critical tickets by name; details in the Excel ── */
+function hoBriefFacts(d) {
+  const pend = d.hd.concat(d.engg), cnt = (list, s) => list.filter((i) => T[i].sev === s).length;
+  const by = {}; d.engg.forEach((i) => { const w = enggWho(T[i]); (by[w] = by[w] || []).push(i); });
+  const who = Object.keys(by).map((w) => ({ w, idx: by[w], old: by[w].reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0) }))
+    .sort((x, y) => y.idx.length - x.idx.length || y.old - x.old || x.w.localeCompare(y.w));
+  const oldest = pend.slice().sort((a, b) => (ageOf(T[b]) || 0) - (ageOf(T[a]) || 0)).slice(0, 5);
+  const stale = pend.filter((i) => T[i].updated != null && NOW - T[i].updated >= 3 * DAY);
+  const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical");
+  return { pend, cnt, who, oldest, stale, hot };
+}
 function mailHTMLBrief(d, ppl) {
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"', H2 = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 4px"';
   const th = (h, x) => '<th style="' + TD + 'background:#0E2A47;color:#fff;font-weight:600;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>";
-  const cnt = (list, s) => list.filter((i) => T[i].sev === s).length;
-  const line = (lbl, list, c, listed) => '<tr><td style="' + TD + 'font-size:13px;white-space:nowrap"><b style="color:' + c + '">' + esc(lbl) + "</b>" + (listed ? "" : ' <span style="color:#8A97A6">(counted only)</span>') + "</td>" +
-    HC.SEVS.map((s) => { const n = cnt(list, s.id); return '<td style="' + TD + 'font-size:13px;text-align:center;' + (n ? "color:" + s.color + ";font-weight:600" : "color:#B8C2CF") + '">' + n + "</td>"; }).join("") +
-    '<td style="' + TD + 'font-size:13px;text-align:center;font-weight:700">' + list.length + "</td></tr>";
-  const allOpen = d.hd.concat(d.engg, d.client, d.billing);
-  const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical"), high = d.esc.filter((x) => x.sev === "high"), rest = d.esc.length - hot.length - high.length;
-  const lk = (i) => '<a href="' + jiraUrl(T[i].key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(T[i].key) + "</a>";
-  const note = (ppl.note || "").trim();
+  const tdc = (v, x) => '<td style="' + TD + 'font-size:13px;' + (x || "") + '">' + v + "</td>";
+  const tbl = 'cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;' + F + '"';
+  const f = hoBriefFacts(d), SV = HC.SEVS;
+  const sevCells = (list, bg) => SV.map((s) => { const n = f.cnt(list, s.id); return tdc(n, "text-align:center;" + (bg || "") + (n ? "color:" + s.color + ";font-weight:600" : "color:#B8C2CF")); }).join("") + tdc("<b>" + list.length + "</b>", "text-align:center;" + (bg || ""));
+  const lk = (i) => '<a href="' + jiraUrl(T[i].key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(T[i].key) + "</a>";
+  const nm = (i) => esc(holderOf(T[i], E[i]).replace(/^Engineering: |^Help Desk: /, ""));
+  const note = (ppl.note || "").trim(), MAXW = 10;
+  /* 1. pending with SVM by priority (Help Desk only when it has tickets) */
+  const prio = "<table " + tbl + "><tr>" + th("Pending with SVM", "text-align:left") + SV.map((s) => th(s.name)).join("") + th("Total") + "</tr>" +
+    (d.hd.length ? "<tr>" + tdc('<b style="color:#0E7C86">Help Desk</b>', "white-space:nowrap") + sevCells(d.hd) + "</tr>" : "") +
+    "<tr>" + tdc('<b style="color:#24507C">Engineering</b>', "white-space:nowrap") + sevCells(d.engg) + "</tr>" +
+    (d.hd.length ? "<tr>" + tdc("<b>Total</b>", "background:#EEF3F7") + sevCells(f.pend, "background:#EEF3F7;") + "</tr>" : "") + "</table>";
+  /* 2. engineering by assignee (who to chase), with the oldest ticket's age */
+  const SHOW = SV.filter((s) => d.engg.some((i) => T[i].sev === s.id));
+  const who = f.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl + "><tr>" + th("Engineering assignee", "text-align:left") + SHOW.map((s) => th(s.name)).join("") + th("Total") + th("Oldest") + "</tr>" +
+    f.who.slice(0, MAXW).map((x) => "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map((s) => { const n = f.cnt(x.idx, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
+      tdc("<b>" + x.idx.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>").join("") + "</table>" +
+    (f.who.length > MAXW ? "<p " + P + ">and " + (f.who.length - MAXW) + " more assignees, see the Excel.</p>" : "") : "";
+  /* 3. oldest pending + not updated for 3+ days */
+  const old = f.oldest.length ? "<h3 " + H2 + ">Oldest pending</h3><p " + P + ">" + f.oldest.map((i) => lk(i) + " " + esc(T[i].priority || "") + ", open " + esc(fmt(ageOf(T[i]))) + " (" + nm(i) + ")").join("<br>") + "</p>" : "";
+  const stale = f.stale.length ? "<p " + P + "><b>" + f.stale.length + "</b> of the " + f.pend.length + " pending ticket" + (f.pend.length === 1 ? "" : "s") + " not updated in Jira for 3 days or more; they are marked in the Excel (Not updated, days).</p>" : "";
+  const hot = f.hot.length ? "<p " + P + '><b style="color:#C8102E">Showstopper/Critical to escalate:</b> ' + f.hot.map((x) => lk(x.i) + " (" + nm(x.i) + ")").join(", ") + ".</p>" : "";
   return '<div style="' + F + 'color:#0F1E2E">' +
     "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
-    "<p " + P + ">Handing over everything pending on Swire Phoenix Hypercare, position at " + esc(fdt(NOW)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
-    '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;' + F + '"><tr>' + th("Open tickets", "text-align:left") + HC.SEVS.map((s) => th(s.name)).join("") + th("Total") + "</tr>" +
-    line("Pending with SVM, Help Desk", d.hd, "#0E7C86", true) + line("Pending with SVM, Engineering", d.engg, "#24507C", true) +
-    line("With the client", d.client, "#B45309") + line("Delivered, with Receivables", d.billing, "#6D28D9") +
-    '<tr><td style="' + TD + 'font-size:13px;background:#EEF3F7"><b>Total open</b></td>' + HC.SEVS.map((s) => '<td style="' + TD + 'font-size:13px;text-align:center;background:#EEF3F7;font-weight:700">' + cnt(allOpen, s.id) + "</td>").join("") +
-    '<td style="' + TD + 'font-size:13px;text-align:center;background:#EEF3F7;font-weight:700">' + allOpen.length + "</td></tr></table>" +
-    (d.esc.length ? "<p " + P + "><b style=\"color:#C8102E\">Escalations to raise (Section 10.2): " + d.esc.length + "</b> (" +
-      [hot.length ? hot.length + " Showstopper/Critical" : "", high.length ? high.length + " High" : "", rest ? rest + " Medium/Low past the resolution benchmark" : ""].filter(Boolean).join(", ") + "). Details on the Escalations sheet.</p>" +
-      (hot.length ? "<p " + P + ">Showstopper/Critical: " + hot.map((x) => lk(x.i) + " (" + esc(holderOf(T[x.i], E[x.i]).replace(/^Engineering: |^Help Desk: /, "")) + ")").join(", ") + ".</p>" : "") : "<p " + P + ">No escalations to raise.</p>") +
+    "<p " + P + ">Handing over the pending on Swire Phoenix Hypercare, position at " + esc(fdt(NOW)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
+    prio + hot + who + old + stale +
     (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
-    "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + (d.hd.length + d.engg.length) + "), Escalations (" + d.esc.length + ") and All open (" + allOpen.length + ").</p>" +
-    "<p " + P + ">Every open ticket must have a named owner (R8). Please acknowledge on this thread.</p>" +
+    "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + f.pend.length + ") and Escalations (" + d.esc.length + ").</p>" +
     "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
 }
 function mailTextBrief(d, ppl) {
-  const allOpen = d.hd.concat(d.engg, d.client, d.billing), sl = (l) => sevLine((() => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = l.filter((i) => T[i].sev === s.id).length; }); return o; })());
-  const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical"), note = (ppl.note || "").trim();
-  return "Hi " + (ppl.to || "team") + ",\n\nHanding over everything pending on Swire Phoenix Hypercare, position at " + fdt(NOW) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
-    "Pending with SVM, Help Desk: " + d.hd.length + " (" + sl(d.hd) + ")\nPending with SVM, Engineering: " + d.engg.length + " (" + sl(d.engg) + ")\nWith the client: " + d.client.length + " (counted only)\nDelivered, with Receivables: " + d.billing.length + " (counted only)\nTotal open: " + allOpen.length + "\n\n" +
-    (d.esc.length ? "Escalations to raise (Section 10.2): " + d.esc.length + (hot.length ? ". Showstopper/Critical: " + hot.map((x) => T[x.i].key).join(", ") : "") + ".\n\n" : "No escalations to raise.\n\n") +
-    (note ? "Notes:\n" + note + "\n\n" : "") + "Attached: " + hoFileBase(d) + ".xlsx\n\nEvery open ticket must have a named owner (R8). Please acknowledge on this thread.\n\nRegards,\n" + (ppl.from || "");
+  const f = hoBriefFacts(d), note = (ppl.note || "").trim(), sl = (l) => sevLine((() => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = f.cnt(l, s.id); }); return o; })());
+  const nm = (i) => holderOf(T[i], E[i]).replace(/^Engineering: |^Help Desk: /, "");
+  return "Hi " + (ppl.to || "team") + ",\n\nHanding over the pending on Swire Phoenix Hypercare, position at " + fdt(NOW) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
+    (d.hd.length ? "Pending with SVM, Help Desk: " + d.hd.length + " (" + sl(d.hd) + ")\n" : "") + "Pending with SVM, Engineering: " + d.engg.length + " (" + sl(d.engg) + ")\n\n" +
+    (f.hot.length ? "Showstopper/Critical to escalate: " + f.hot.map((x) => T[x.i].key + " (" + nm(x.i) + ")").join(", ") + "\n\n" : "") +
+    (f.who.length ? "Engineering by assignee:\n" + f.who.slice(0, 10).map((x) => "- " + x.w + ": " + x.idx.length + " (" + sl(x.idx) + "), oldest " + fmt(x.old)).join("\n") + "\n\n" : "") +
+    (f.oldest.length ? "Oldest pending:\n" + f.oldest.map((i) => "- " + T[i].key + " " + (T[i].priority || "") + ", open " + fmt(ageOf(T[i])) + " (" + nm(i) + ")").join("\n") + "\n\n" : "") +
+    (f.stale.length ? f.stale.length + " of the " + f.pend.length + " pending tickets not updated in Jira for 3 days or more.\n\n" : "") +
+    (note ? "Notes:\n" + note + "\n\n" : "") + "Attached: " + hoFileBase(d) + ".xlsx\n\nRegards,\n" + (ppl.from || "");
 }
 function viewHandover() {
   if (!UI.shift || UI.shift === "current" || UI.shift === "last") UI.shift = currentShiftKey();
@@ -1698,7 +1715,7 @@ function viewHandover() {
   const gen = d.w.general;
   return '<div class="bar noprint"><span class="lbl">Handover</span><button class="pill" data-shift="general" aria-pressed="' + gen + '">General (all pending)</button><span class="lbl" style="margin-left:6px">Shift</span>' + pills +
     '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoXlsx" title="Summary with pivots, Pending with SVM, Escalations, All open">Download Excel</button><button class="btn" id="hoEml" title="Opens in Outlook as a new draft with the Excel already attached">Email draft + Excel</button><button class="btn" id="hoPrint">Print / Save PDF</button></div>' +
-    (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). The email is brief: counts by priority and the escalations; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>"
+    (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). The email is brief: what is pending with SVM by priority and by engineering assignee, the oldest tickets and the Showstopper/Critical ones to escalate; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>"
       : "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>") +
     '<div class="signals noprint">' + (gen ? "" : sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift")) +
     sigL("teal", d.hd, "Pending with Help Desk", sevLine(d.hdBySev), "Pending with Help Desk") + sigL("eng", d.engg, "Pending with Engineering", sevLine(d.enggBySev), "Pending with Engineering") +
