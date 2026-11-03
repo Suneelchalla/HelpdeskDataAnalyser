@@ -118,7 +118,7 @@
 
   /* ── status pairs that differ in name but are correct together: [client ticket status, LRPS status] ── */
   var stKey = function (s) { return String(s || "").toLowerCase().replace(/&/g, " and ").replace(/\s+/g, " ").trim(); };
-  var MIS_OK = [["Technical Analysis", "Open"], ["Client Hotfix Testing", "Client UAT Testing"], ["Invoice Yet to Raise", "DB Script Delivered"]];
+  var MIS_OK = [["Technical Analysis", "Open"], ["Client Hotfix Testing", "Client UAT Testing"], ["Invoice Yet to Raise", "DB Script Delivered"], ["SVM Hotfix Testing", "SVM UAT Testing"]];
   var MIS_OK_SET = new Set(MIS_OK.map(function (p) { return stKey(p[0]) + "|" + stKey(p[1]); }));
   function misOff(a, b) { a = stKey(a); b = stKey(b); return a !== b && !MIS_OK_SET.has(a + "|" + b); }
   /* scope: the open tickets in view + tickets closed in the last 30 days (from all tickets in view) */
@@ -274,7 +274,9 @@
     ".hdx-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}@media(max-width:900px){.hdx-grid{grid-template-columns:1fr}}" +
     ".hdx-side{border:1px solid #E2E8F0;border-radius:12px;padding:12px;align-self:start}.hdx-side h4{font-size:12px;margin:0 0 8px;color:#334155}" +
     ".hdx-who{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:12px}.hdx-who span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
-    ".hdx-note{font-size:11.5px;color:#64748B}";
+    ".hdx-note{font-size:11.5px;color:#64748B}" +
+    ".hdx-edit{outline:none;min-height:40px}.hdx-edit:focus{box-shadow:inset 0 0 0 2px rgba(37,99,235,.18);border-radius:8px}" +
+    ".hdx-x{width:22px;height:22px;border-radius:6px;border:1px solid #FECDD3;background:#FFF1F2;color:#BE123C;font-size:11px;font-weight:800;cursor:pointer;line-height:1;padding:0}.hdx-x:hover{background:#BE123C;color:#fff}";
   function injectCss() { if (document.getElementById("hdx-css")) return; var s = document.createElement("style"); s.id = "hdx-css"; s.textContent = CSS; document.head.appendChild(s); }
   var STACK = [];
   function modal(cls) {
@@ -427,6 +429,11 @@
     var cli = d.clients.length ? "<h3 " + H2 + ">Pending with SVM by client</h3><table " + tbl(260 + 90 * 3 + 90) + "><tr>" + th("Client", "text-align:left", 260) + (d.hd.length ? th("Help Desk", null, 90) : "") + th("Engineering", null, 90) + th("Total", null, 90) + th("Oldest", null, 90) + "</tr>" +
       d.clients.map(function (c) { return "<tr>" + tdc(esc(c.c), "white-space:nowrap") + (d.hd.length ? tdc(c.hd || "", "text-align:center") : "") + tdc((c.ts.length - c.hd) || "", "text-align:center") + tdc("<b>" + c.ts.length + "</b>", "text-align:center") +
         tdc(esc(fmt(c.old)), "white-space:nowrap;" + (c.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>"; }).join("") + "</table>" : "";
+    var svmT = d.svms.length ? "<h3 " + H2 + ">Pending with SVM by SVM In Charge</h3><table " + tbl(240 + (d.hd.length ? 90 : 0) + 100 + 150 + 70 + 90) + "><tr>" + th("SVM In Charge", "text-align:left", 240) + (d.hd.length ? th("Help Desk", null, 90) : "") +
+      th("Engineering", null, 100) + th("Show Stopper/Critical", null, 150) + th("Total", null, 70) + th("Oldest", null, 90) + "</tr>" +
+      d.svms.map(function (x) { var h = x.ts.filter(function (t) { return side(t) === "hd"; }).length, hot = x.ts.filter(function (t) { return t.sev === "showstopper" || t.sev === "critical"; }).length;
+        return "<tr>" + tdc(esc(x.w), "white-space:nowrap") + (d.hd.length ? tdc(h || "", "text-align:center") : "") + tdc((x.ts.length - h) || "", "text-align:center") + tdc(hot ? '<b style="color:#C2680A">' + hot + "</b>" : "", "text-align:center") +
+          tdc("<b>" + x.ts.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>"; }).join("") + "</table>" : "";
     var SHOW = SEVS.filter(function (s) { return d.engg.some(function (t) { return t.sev === s.id; }); });
     var who = d.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl(240 + SHOW.length * 85 + 70 + 90) + "><tr>" + th("Engineering assignee", "text-align:left", 240) + SHOW.map(function (s) { return th(s.name, null, 85); }).join("") + th("Total", null, 70) + th("Oldest", null, 90) + "</tr>" +
       d.who.map(function (x) { return "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map(function (s) { var n = cnt(x.ts, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
@@ -436,7 +443,7 @@
     var note = (ppl.note || "").trim();
     return '<div style="' + F + 'color:#0F1E2E">' + "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
       "<p " + P + ">Handing over the pending on the Help Desk, position at " + esc(fdt(d.now)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
-      prio + gap() + hot + (hot ? gap(4) : "") + cli + (cli ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
+      prio + gap() + hot + (hot ? gap(4) : "") + svmT + (svmT ? gap(4) : "") + cli + (cli ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
       (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
       "<p " + P + ">Attached: <b>" + esc(hoBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + d.pend.length + ") and Show Stopper-Critical (" + d.hot.length + ").</p>" +
       "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
@@ -445,6 +452,7 @@
     return "Hi " + (ppl.to || "team") + ",\n\nHanding over the pending on the Help Desk, position at " + fdt(d.now) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
       (d.hd.length ? "Pending with SVM, Help Desk: " + d.hd.length + " (" + sevLine(d.hd) + ")\n" : "") + "Pending with SVM, Engineering: " + d.engg.length + " (" + sevLine(d.engg) + ")\n\n" +
       (d.hot.length ? "Show Stopper / Critical pending (" + d.hot.length + "): " + d.hot.slice(0, 12).map(function (t) { return t.key + " " + t.project + " (" + holder(t) + ")"; }).join(", ") + "\n\n" : "") +
+      (d.svms.length ? "Pending with SVM by SVM In Charge:\n" + d.svms.map(function (x) { return "- " + x.w + ": " + x.ts.length + ", oldest " + fmt(x.old); }).join("\n") + "\n\n" : "") +
       (d.clients.length ? "By client:\n" + d.clients.map(function (c) { return "- " + c.c + ": " + c.ts.length + ", oldest " + fmt(c.old); }).join("\n") + "\n\n" : "") +
       (d.who.length ? "Engineering by assignee:\n" + d.who.map(function (x) { return "- " + x.w + ": " + x.ts.length + " (" + sevLine(x.ts) + "), oldest " + fmt(x.old); }).join("\n") + "\n\n" : "") +
       (d.oldest.length ? "Oldest pending:\n" + d.oldest.map(function (t) { return "- " + t.key + " " + t.project + ", " + (t.priority || "") + ", open " + fmt(ageMin(t)) + " (" + holder(t) + ")"; }).join("\n") + "\n\n" : "") +
@@ -555,38 +563,73 @@
       var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
       var ls = t.lrps.length ? t.lrps.map(function (x) { var y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
       var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
-      return "<tr>" + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(side(t) === "hd" ? '<b style="color:#0E7C86">Help Desk</b>' : '<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
+      return '<tr data-k="' + esc(t.key) + '">' + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(side(t) === "hd" ? '<b style="color:#0E7C86">Help Desk</b>' : '<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
         tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") + tdc(la, "white-space:nowrap;font-weight:600") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
         tdc(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdate(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
     var nHd = ts.filter(function (t) { return side(t) === "hd"; }).length, nEn = ts.length - nHd;
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
     var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + "><b>" + ts.length + "</b> ticket" + (ts.length === 1 ? " is" : "s are") + " pending with SVM where you are SVM In Charge (" + nHd + " with the Help Desk, " + nEn + " with Engineering). Each row shows the LRPS ticket and its engineering assignee; the ageing is below.</p>" +
       "<h3 " + H + ">Ageing</h3>" + summary + gap(6) + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + "><tr>" + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
+      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
       "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
     var text = "Hi " + nm + ",\n\n" + ts.length + " ticket" + (ts.length === 1 ? " is" : "s are") + " pending with SVM where you are SVM In Charge (" + nHd + " Help Desk, " + nEn + " Engineering).\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
       ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
       "\n\nPlease update each ticket with the next step and an ETR.\n\nRegards,\n" + (hoPeople().from || "");
     return { html: html, text: text, subject: "Help Desk follow-up: " + (real ? name + ", " : "") + ts.length + " ticket" + (ts.length === 1 ? "" : "s") + (oldest ? ", oldest " + fmt(ageMin(oldest)) : "") };
   }
-  function openPersonMail(ts, name) {
-    var m = modal(), real = realWho(name), key = "svm:" + name;
+  /* ── editable mail preview: every ticket row gets a ✕ to leave it out, and the text can be edited in place.
+     The ✕ buttons and the editing outline never go into the copied / downloaded mail. ── */
+  function mailEditor(host, onRemove) {
+    var ed = { edited: false };
+    ed.render = function (html) {
+      ed.edited = false;
+      host.innerHTML = '<div class="hdx-edit" contenteditable="true" spellcheck="true">' + html + "</div>";
+      host.querySelectorAll("tr[data-hdr]").forEach(function (tr) { var c = document.createElement("th"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "background:#fff;border:none;width:28px"; tr.insertBefore(c, tr.firstChild); });
+      host.querySelectorAll("tr[data-k]").forEach(function (tr) { var c = document.createElement("td"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "border:none;padding:0 4px;vertical-align:middle;background:#fff";
+        c.innerHTML = '<button type="button" class="hdx-x" title="Leave this ticket out of the mail" data-rm="' + esc(tr.getAttribute("data-k")) + '">✕</button>'; tr.insertBefore(c, tr.firstChild); });
+    };
+    host.addEventListener("input", function () { ed.edited = true; if (ed.onEdit) ed.onEdit(); });
+    host.addEventListener("click", function (e) { var b = e.target.closest("[data-rm]"); if (!b) return; e.preventDefault();
+      var k = b.getAttribute("data-rm");
+      if (ed.edited) { var tr = b.closest("tr"); if (tr) tr.remove(); }                        // keep the text edits: drop just this row
+      onRemove(k, ed.edited); });
+    ed.clean = function () { var c = host.querySelector(".hdx-edit").cloneNode(true); c.querySelectorAll("[data-ui]").forEach(function (x) { x.remove(); });
+      c.querySelectorAll("[data-k],[data-hdr]").forEach(function (x) { x.removeAttribute("data-k"); x.removeAttribute("data-hdr"); }); return c; };
+    ed.html = function () { return ed.clean().innerHTML; };
+    ed.text = function () { var c = ed.clean(); c.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(c); var t = c.innerText; c.remove(); return t; };
+    return ed;
+  }
+  function openPersonMail(tsAll, name) {
+    var m = modal(), real = realWho(name), key = "svm:" + name, out = {};
     var guess = function () { var b = pmBook(); return b[key] != null ? b[key] : ""; };
-    m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder <span class="n">' + esc(name) + " · " + ts.length + '</span></h3><button type="button" class="hdx-btn" data-p="close">Cancel</button></div>' +
+    m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder <span class="n" id="pmN"></span></h3><button type="button" class="hdx-btn" data-p="close">Cancel</button></div>' +
       '<div class="hdx-row"><label for="pmTo">To</label><input class="hdx-inp" id="pmTo" style="flex:1;min-width:240px" placeholder="name@solverminds.com"><label for="pmHi">Hi</label><input class="hdx-inp" id="pmHi" style="width:200px"></div>' +
+      '<div class="hdx-row"><label for="pmSubj">Subject</label><input class="hdx-inp" id="pmSubj" style="flex:1"></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="pmNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="pmNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown above the tickets"></textarea></div>' +
-      '<p class="hdx-note" id="pmSubj" style="margin:6px 0"></p><div class="hdx-prev" id="pmPrev"></div>' +
+      '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts at the top are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
+        '<button type="button" class="hdx-btn sm" data-p="restore" id="pmRestore" style="display:none"></button><button type="button" class="hdx-btn sm" data-p="reset" id="pmReset" style="display:none">Undo text edits</button></div>' +
+      '<div class="hdx-prev" id="pmPrev"></div>' +
       '<div class="hdx-row" style="margin-top:10px"><span class="hdx-note">The address is remembered for ' + esc(real ? name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="hdx-btn" data-p="eml">Download email draft</button><button type="button" class="hdx-btn pri" data-p="copy">Copy email</button></div>';
-    var q = function (id) { return m.box.querySelector("#" + id); };
+    var q = function (id) { return m.box.querySelector("#" + id); }, subjEdited = false;
     q("pmTo").value = guess(); q("pmHi").value = real ? name : "team";
-    var cur = function () { return personMail(ts, name, q("pmHi").value, q("pmNote").value); };
-    var paint = function () { var x = cur(); q("pmSubj").textContent = "Subject: " + x.subject; q("pmPrev").innerHTML = x.html; };
+    var ts = function () { return tsAll.filter(function (t) { return !out[t.key]; }); };
+    var cur = function () { return personMail(ts(), name, q("pmHi").value, q("pmNote").value); };
+    var ed = mailEditor(q("pmPrev"), function (k, keepEdits) { out[k] = 1; if (keepEdits) counts(); else paint(); });
+    ed.onEdit = function () { q("pmReset").style.display = ""; };
+    function counts() { var n = Object.keys(out).length; q("pmN").textContent = name + " · " + ts().length + (n ? " of " + tsAll.length : "");
+      q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
+    function paint() { var x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
     var saveTo = function () { if (!real) return; var b = pmBook(); b[key] = q("pmTo").value.trim(); try { localStorage.setItem(PM_KEY, JSON.stringify(b)); } catch (e) {} };
-    q("pmHi").addEventListener("input", paint); q("pmNote").addEventListener("input", paint); q("pmTo").addEventListener("change", saveTo);
+    var reb = function () { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return false; paint(); return true; };
+    q("pmHi").addEventListener("change", reb); q("pmNote").addEventListener("change", reb); q("pmTo").addEventListener("change", saveTo);
+    q("pmSubj").addEventListener("input", function () { subjEdited = true; });
     m.box.addEventListener("click", function (e) { var b = e.target.closest("[data-p]"); if (!b) return; var p = b.dataset.p;
-      if (p === "close") return m.close(); saveTo(); var x = cur();
-      if (p === "copy") return copyRich(x.html, x.text, b, "Copy email");
-      if (p === "eml") return eml(x.subject, x.html, "HD-reminder-" + (real ? name : "team").replace(/[^A-Za-z0-9]+/g, "-") + "-" + dayKey(Date.now()) + ".eml", q("pmTo").value.trim()); });
+      if (p === "close") return m.close();
+      if (p === "restore") { if (ed.edited && !confirm("Putting the tickets back rebuilds the mail and undoes your text edits. Continue?")) return; out = {}; return paint(); }
+      if (p === "reset") return paint();
+      saveTo(); var subj = q("pmSubj").value.trim() || cur().subject;
+      if (p === "copy") return copyRich(ed.html(), ed.text(), b, "Copy email");
+      if (p === "eml") return eml(subj, ed.html(), "HD-reminder-" + (real ? name : "team").replace(/[^A-Za-z0-9]+/g, "-") + "-" + dayKey(Date.now()) + ".eml", q("pmTo").value.trim()); });
     paint(); q("pmTo").focus();
   }
 
