@@ -1670,7 +1670,7 @@ function mailHTMLBrief(d, ppl) {
   const sevCells = (list, bg) => SV.map((s) => { const n = f.cnt(list, s.id); return tdc(n, "text-align:center;" + (bg || "") + (n ? "color:" + s.color + ";font-weight:600" : "color:#B8C2CF")); }).join("") + tdc("<b>" + list.length + "</b>", "text-align:center;" + (bg || ""));
   const lk = (i) => '<a href="' + jiraUrl(T[i].key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(T[i].key) + "</a>";
   const nm = (i) => esc(holderOf(T[i], E[i]).replace(/^Engineering: |^Help Desk: /, ""));
-  const note = (ppl.note || "").trim(), MAXW = 10;
+  const note = (ppl.note || "").trim();
   /* 1. pending with SVM by priority (Help Desk only when it has tickets) */
   const prio = "<table " + tbl + "><tr>" + th("Pending with SVM", "text-align:left") + SV.map((s) => th(s.name)).join("") + th("Total") + "</tr>" +
     (d.hd.length ? "<tr>" + tdc('<b style="color:#0E7C86">Help Desk</b>', "white-space:nowrap") + sevCells(d.hd) + "</tr>" : "") +
@@ -1679,9 +1679,8 @@ function mailHTMLBrief(d, ppl) {
   /* 2. engineering by assignee (who to chase), with the oldest ticket's age */
   const SHOW = SV.filter((s) => d.engg.some((i) => T[i].sev === s.id));
   const who = f.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl + "><tr>" + th("Engineering assignee", "text-align:left") + SHOW.map((s) => th(s.name)).join("") + th("Total") + th("Oldest") + "</tr>" +
-    f.who.slice(0, MAXW).map((x) => "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map((s) => { const n = f.cnt(x.idx, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
-      tdc("<b>" + x.idx.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>").join("") + "</table>" +
-    (f.who.length > MAXW ? "<p " + P + ">and " + (f.who.length - MAXW) + " more assignees, see the Excel.</p>" : "") : "";
+    f.who.map((x) => "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map((s) => { const n = f.cnt(x.idx, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
+      tdc("<b>" + x.idx.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>").join("") + "</table>" : "";
   /* 3. oldest pending + not updated for 3+ days */
   const old = f.oldest.length ? "<h3 " + H2 + ">Oldest pending</h3><p " + P + ">" + f.oldest.map((i) => lk(i) + " " + esc(T[i].priority || "") + ", open " + esc(fmt(ageOf(T[i]))) + " (" + nm(i) + ")").join("<br>") + "</p>" : "";
   const stale = f.stale.length ? "<p " + P + "><b>" + f.stale.length + "</b> of the " + f.pend.length + " pending ticket" + (f.pend.length === 1 ? "" : "s") + " not updated in Jira for 3 days or more; they are marked in the Excel (Not updated, days).</p>" : "";
@@ -1700,7 +1699,7 @@ function mailTextBrief(d, ppl) {
   return "Hi " + (ppl.to || "team") + ",\n\nHanding over the pending on Swire Phoenix Hypercare, position at " + fdt(NOW) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
     (d.hd.length ? "Pending with SVM, Help Desk: " + d.hd.length + " (" + sl(d.hd) + ")\n" : "") + "Pending with SVM, Engineering: " + d.engg.length + " (" + sl(d.engg) + ")\n\n" +
     (f.hot.length ? "Showstopper/Critical to escalate: " + f.hot.map((x) => T[x.i].key + " (" + nm(x.i) + ")").join(", ") + "\n\n" : "") +
-    (f.who.length ? "Engineering by assignee:\n" + f.who.slice(0, 10).map((x) => "- " + x.w + ": " + x.idx.length + " (" + sl(x.idx) + "), oldest " + fmt(x.old)).join("\n") + "\n\n" : "") +
+    (f.who.length ? "Engineering by assignee:\n" + f.who.map((x) => "- " + x.w + ": " + x.idx.length + " (" + sl(x.idx) + "), oldest " + fmt(x.old)).join("\n") + "\n\n" : "") +
     (f.oldest.length ? "Oldest pending:\n" + f.oldest.map((i) => "- " + T[i].key + " " + (T[i].priority || "") + ", open " + fmt(ageOf(T[i])) + " (" + nm(i) + ")").join("\n") + "\n\n" : "") +
     (f.stale.length ? f.stale.length + " of the " + f.pend.length + " pending tickets not updated in Jira for 3 days or more.\n\n" : "") +
     (note ? "Notes:\n" + note + "\n\n" : "") + "Attached: " + hoFileBase(d) + ".xlsx\n\nRegards,\n" + (ppl.from || "");
