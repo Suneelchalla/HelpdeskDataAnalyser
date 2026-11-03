@@ -1327,7 +1327,7 @@ function hoData(which) {
 const HO_KEY = "hd-swire-ho";
 function hoPeople() { try { return JSON.parse(localStorage.getItem(HO_KEY) || "{}") || {}; } catch (e) { return {}; } }
 function hoSavePeople(o) { try { localStorage.setItem(HO_KEY, JSON.stringify(o)); } catch (e) {} }
-function hoSubject(d) { return d.w.general ? "Swire Hypercare general handover: everything pending, " + fdt(NOW) + " IST" : "Swire Hypercare shift handover: " + d.w.label; }
+function hoSubject(d) { return d.w.general ? "Swire Hypercare handover: " + fdt(NOW) + " IST" : "Swire Hypercare shift handover: " + d.w.label; }
 
 /* the columns every list in the mail carries */
 /* where a ticket sits right now and with whom: Help Desk / Engineering (with the person), open box, Swire, billing */
@@ -1600,7 +1600,7 @@ async function hoWorkbook(d) {
   const SRC = { open: { name: "All open", C, n: Math.max(2, open.length + 1), idx: open }, esc: { name: "Escalations", C: EC, n: Math.max(2, escIdx.length + 1), idx: escIdx } };
   const rows = [];
   const push = (r) => { rows.push(r); return rows.length; };
-  push([{ v: "Swire Phoenix Hypercare, " + (d.w.general ? "general handover" : d.w.label), s: S.title }]);
+  push([{ v: "Swire Phoenix Hypercare handover" + (d.w.general ? "" : ", " + d.w.label), s: S.title }]);
   push([{ v: "Position at " + fdt(NOW) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” and “Escalations” sheets.", s: S.sub }]);
   function pivot(title, note, src, rowField, rowVals, colField, colVals, extra, rowTest, colTest) {
     push([]); push([{ v: title, s: S.title }]); if (note) push([{ v: note, s: S.sub }]);
@@ -1658,22 +1658,26 @@ function hoBriefFacts(d) {
 }
 function mailHTMLBrief(d, ppl) {
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"', H2 = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 4px"';
-  const th = (h, x) => '<th style="' + TD + 'background:#0E2A47;color:#fff;font-weight:600;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>";
-  const tdc = (v, x) => '<td style="' + TD + 'font-size:13px;' + (x || "") + '">' + v + "</td>";
-  const tbl = 'cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;' + F + '"';
+  /* Outlook keeps only per-cell borders and explicit widths, and drops table margins: so every cell has its own border,
+     every column a width, and fixed-height spacers separate the blocks */
+  const BD = "border:1px solid #C9D3DD;padding:6px 10px;vertical-align:middle;" + F;
+  const th = (h, x, w) => '<th width="' + (w || 78) + '" style="' + BD + 'width:' + (w || 78) + 'px;background:#0E2A47;color:#ffffff;font-size:12px;font-weight:600;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>";
+  const tdc = (v, x) => '<td style="' + BD + 'font-size:13px;' + (x || "") + '">' + v + "</td>";
+  const tbl = (w) => 'width="' + w + '" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;border:1px solid #C9D3DD;width:' + w + 'px;' + F + '"';
+  const gap = (h) => '<div style="height:' + (h || 12) + 'px;line-height:' + (h || 12) + 'px;font-size:' + (h || 12) + 'px">&nbsp;</div>';
   const f = hoBriefFacts(d), SV = HC.SEVS;
   const sevCells = (list, bg) => SV.map((s) => { const n = f.cnt(list, s.id); return tdc(n, "text-align:center;" + (bg || "") + (n ? "color:" + s.color + ";font-weight:600" : "color:#B8C2CF")); }).join("") + tdc("<b>" + list.length + "</b>", "text-align:center;" + (bg || ""));
   const lk = (i) => '<a href="' + jiraUrl(T[i].key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(T[i].key) + "</a>";
   const nm = (i) => esc(holderOf(T[i], E[i]).replace(/^Engineering: |^Help Desk: /, ""));
   const note = (ppl.note || "").trim();
   /* 1. pending with SVM by priority (Help Desk only when it has tickets) */
-  const prio = "<table " + tbl + "><tr>" + th("Pending with SVM", "text-align:left") + SV.map((s) => th(s.name)).join("") + th("Total") + "</tr>" +
+  const prio = "<table " + tbl(220 + SV.length * 90 + 70) + "><tr>" + th("Pending with SVM", "text-align:left", 220) + SV.map((s) => th(s.name, null, 90)).join("") + th("Total", null, 70) + "</tr>" +
     (d.hd.length ? "<tr>" + tdc('<b style="color:#0E7C86">Help Desk</b>', "white-space:nowrap") + sevCells(d.hd) + "</tr>" : "") +
     "<tr>" + tdc('<b style="color:#24507C">Engineering</b>', "white-space:nowrap") + sevCells(d.engg) + "</tr>" +
     (d.hd.length ? "<tr>" + tdc("<b>Total</b>", "background:#EEF3F7") + sevCells(f.pend, "background:#EEF3F7;") + "</tr>" : "") + "</table>";
   /* 2. engineering by assignee (who to chase), with the oldest ticket's age */
   const SHOW = SV.filter((s) => d.engg.some((i) => T[i].sev === s.id));
-  const who = f.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl + "><tr>" + th("Engineering assignee", "text-align:left") + SHOW.map((s) => th(s.name)).join("") + th("Total") + th("Oldest") + "</tr>" +
+  const who = f.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl(240 + SHOW.length * 80 + 70 + 90) + "><tr>" + th("Engineering assignee", "text-align:left", 240) + SHOW.map((s) => th(s.name, null, 80)).join("") + th("Total", null, 70) + th("Oldest", null, 90) + "</tr>" +
     f.who.map((x) => "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map((s) => { const n = f.cnt(x.idx, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
       tdc("<b>" + x.idx.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>").join("") + "</table>" : "";
   /* 3. oldest pending + not updated for 3+ days */
@@ -1683,7 +1687,7 @@ function mailHTMLBrief(d, ppl) {
   return '<div style="' + F + 'color:#0F1E2E">' +
     "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
     "<p " + P + ">Handing over the pending on Swire Phoenix Hypercare, position at " + esc(fdt(NOW)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
-    prio + hot + who + old + stale +
+    prio + gap() + hot + (hot ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
     (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
     "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + f.pend.length + ") and Escalations (" + d.esc.length + ").</p>" +
     "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
