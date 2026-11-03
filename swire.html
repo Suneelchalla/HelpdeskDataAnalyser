@@ -966,6 +966,15 @@ function viewOpenBox() {
    Checked: open tickets and tickets closed since counting started. A ticket whose LRPS status is not known yet is not
    counted (the check says how many). Names are compared ignoring case, spaces and "&" / "and". */
 const stKey = (s) => String(s || "").toLowerCase().replace(/&/g, " and ").replace(/\s+/g, " ").trim();
+/* Status pairs that differ in name but are correct together: [SWIPHX status, LRPS status].
+   Add more here; case, spaces and "&" / "and" do not matter. */
+const MIS_OK = [
+  ["Technical Analysis", "Open"],
+  ["Client Hotfix Testing", "Client UAT Testing"],
+  ["Invoice Yet to Raise", "DB Script Delivered"]
+];
+const MIS_OK_SET = new Set(MIS_OK.map(([a, b]) => stKey(a) + "|" + stKey(b)));
+function misOff(sw, lr) { const a = stKey(sw), b = stKey(lr); return a !== b && !MIS_OK_SET.has(a + "|" + b); }
 function lrpsSt(t, k) {
   const x = LRPS[k]; if (x && !x.gone && x.s) return { s: x.s, src: "jira" };
   return t.lrpsStatus && t.lrpsStatus[k] ? { s: t.lrpsStatus[k], src: "export" } : null;
@@ -977,7 +986,7 @@ function mismatchCheck() {
     const e = E[i]; if (!t.lrps.length || (e.stage === "closed" && (e.closedAt || 0) < from)) return;
     const st = t.lrps.map((k) => lrpsSt(t, k)).filter(Boolean);
     if (!st.length) { unk++; return; }
-    if (st.some((x) => stKey(x.s) !== stKey(t.status))) keys.push(t.key);
+    if (st.some((x) => misOff(t.status, x.s))) keys.push(t.key);
   });
   return { id: "lrpsmis", ref: "LRPS", title: "Status mismatch between SWIPHX and LRPS", who: "Shadow team / General Support",
     why: "The client ticket and its linked LRPS ticket are in different statuses. Bring them in line in Jira. Open tickets and tickets closed since counting started." +
@@ -992,7 +1001,7 @@ function allChecks() {
 const MIS_FRONT = [
   { h: "SWIPHX status", s: (i) => T[i].status, c: (i) => stChip(T[i], E[i]) },
   { h: "LRPS status", s: (i) => T[i].lrps.map((k) => (lrpsSt(T[i], k) || {}).s || "").join(" "), c: (i) => { const t = T[i];
-    return t.lrps.map((k) => { const x = lrpsSt(t, k), off = x && stKey(x.s) !== stKey(t.status);
+    return t.lrps.map((k) => { const x = lrpsSt(t, k), off = x && misOff(t.status, x.s);
       return '<div style="white-space:nowrap"><span class="st" style="' + (off ? "background:#FDE8EC;color:var(--ss);font-weight:600" : "") + '">' + esc(x ? x.s : "not read") + "</span> " +
         '<a class="key small" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a>" +
         (x && x.src === "export" ? ' <span class="dim small" title="From the export’s Linked Ticket status. Refresh LRPS assignees to read it live from Jira.">export</span>' : "") + "</div>"; }).join(""); } }
@@ -1028,7 +1037,7 @@ function chkDef(c) {
     case "triage": return { gh: ["Status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: ["key", "type", "pri", "sum", "status", "age", "cw", "po", "rem"] };
     case "lrps": return { gh: ["SWIPHX status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: STD };
     case "lrpsmis": return { gh: ["SWIPHX status", "LRPS status"], norm: stKey, chip: ["", RED_ST], front: MIS_FRONT, cols: ["key", "type", "pri", "sum", "age", "prog", "lrps", "po", "rem"],
-      vals: (i) => { const t = T[i]; return t.lrps.map((k) => lrpsSt(t, k)).filter((x) => x && stKey(x.s) !== stKey(t.status)).map((x) => [t.status, x.s]); },
+      vals: (i) => { const t = T[i]; return t.lrps.map((k) => lrpsSt(t, k)).filter((x) => x && misOff(t.status, x.s)).map((x) => [t.status, x.s]); },
       note: "Each status pair once. A ticket whose LRPS tickets share the same status counts once." };
     case "nosvm": return { gh: ["Module (component)"], vals: one((i) => (E[i].po && E[i].po.module) || T[i].components.join(", ") || "(no component)"), front: col1("Module", (i) => (E[i].po && E[i].po.module) || T[i].components.join(", ") || "—"), cols: ["key", "type", "pri", "sum", "status", "age", "cw", "lrps", "rem"] };
     case "fr": return { gh: ["Priority"], vals: one((i) => T[i].priority || "(none)"), order: (x) => HC.sevRank(HC.sevOf(x.v[0])), cols: ["key", "type", "pri", "sum", "status", "age", "fr", "po", "cw", "rem"] };
