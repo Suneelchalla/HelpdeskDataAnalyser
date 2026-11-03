@@ -1090,7 +1090,7 @@ function openCheck(cid, title, idxAll) {
       body = table(cur, def.cols, { sortable: false, limit: 2000, empty: "No tickets.", front: def.front });
     }
     box.innerHTML = '<div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + cur.length.toLocaleString() + "</span></h3>" +
-      (grp || (side && nonEmpty.length > 1) ? '<button type="button" class="btn" data-m="back">Back</button>' : "") + '<button type="button" class="btn" data-m="csv">Download CSV</button><button type="button" class="btn" data-m="close">Close</button></div>' +
+      (grp || (side && nonEmpty.length > 1) ? '<button type="button" class="btn" data-m="back">Back</button>' : "") + '<button type="button" class="btn" data-m="csv" title="Excel: a summary pivot and the tickets with the columns that matter">Download Excel</button><button type="button" class="btn" data-m="close">Close</button></div>' +
       (crumb ? '<div class="small" style="margin:-2px 0 6px">' + crumb + "</div>" : "") + body;
   }
   const prev = document.activeElement;
@@ -1110,7 +1110,9 @@ function openCheck(cid, title, idxAll) {
       if (m === "home") { S.side = null; S.grp = null; return paint(); }
       if (m === "side") { S.grp = null; return paint(); }
       if (m === "csv") { const side = S.side && MIS_SIDES.find((x) => x[0] === S.side), g = S.grp != null ? groups[S.grp] : null;
-        return csv(cur, title + (side ? " " + side[1] : "") + (g ? " " + gLabel(g) : "")); }
+        const nm = title + (side ? " " + side[1] : "") + (g ? " " + gLabel(g) : ""), btn = b;
+        btn.disabled = true; btn.textContent = "Building…";
+        return chkExcel(c, def, nm, cur).then(() => { btn.textContent = "Download Excel"; }, (x) => { btn.textContent = "Failed: " + ((x && x.message) || x); }).finally(() => { btn.disabled = false; }); }
       return;
     }
     const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
@@ -1126,6 +1128,52 @@ function misPill() {
   return '<button type="button" class="lgmis' + (n ? " bad" : "") + '"' + (n ? ' data-list="' + reg(idx, c.title, { cid: "lrpsmis" }, "chk") + '"' : " disabled") +
     ' title="' + esc(n ? n + " tickets where the SWIPHX and LRPS statuses differ. Click to open." : "SWIPHX and LRPS statuses agree for every checked ticket.") + '">' + ic +
     (n ? "<b>" + n.toLocaleString() + "</b> status mismatch" : "Status in sync") + "</button>";
+}
+/* ── Rule check Excel: "Summary" = the step-2 pivot for what is being viewed (by side, then each value once with its
+   ticket count and the oldest), "Tickets" = only the columns that matter, sorted by priority then age ── */
+const lrStatOf = (t) => t.lrps.length ? (t.lrps.map((k) => (lrpsSt(t, k) || {}).s).filter(Boolean).join(", ") || "(not read)") : "(no LRPS)";
+async function chkExcel(c, def, title, list) {
+  const S = XL.S, D = XL.date, mis = c.id === "lrpsmis";
+  const head = (h) => h.map((x) => ({ v: x, s: S.head })), ph = (h) => h.map((x) => ({ v: x, s: S.phead }));
+  /* Summary */
+  const sides = MIS_SIDES.filter(([k]) => list.some((i) => misSide(i) === k));
+  const many = sides.length > 1, rows = [];
+  rows.push([{ v: title, s: S.title }]);
+  rows.push([{ v: "Swire Phoenix Hypercare, as at " + fdt(NOW) + " IST. " + (def.note || "Each value once, with how many tickets have it.") + " The tickets are on the “Tickets” sheet.", s: S.sub }]);
+  rows.push([]);
+  rows.push(ph((many ? ["Where"] : []).concat(def.gh, ["Tickets", "Oldest", "Oldest (days)"])));
+  const first = rows.length + 1, tc = XL.col((many ? 1 : 0) + def.gh.length);
+  sides.forEach(([k, lbl]) => chkGroups(def, list.filter((i) => misSide(i) === k)).forEach((g) => {
+    const old = g.idx.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
+    rows.push((many ? [{ v: lbl, s: S.lbl }] : []).concat(g.v.map((v, n) => (n === 0 && !many ? { v, s: S.lbl } : (mis && n === 1 ? { v, s: S.bad } : v))),
+      [{ v: g.idx.length, s: S.cellInt }, fmt(old), { v: Math.round(old / 144) / 10, s: S.num }]));
+  }));
+  const last = rows.length;
+  rows.push([{ v: "Total", s: S.totLbl }].concat(Array((many ? 1 : 0) + def.gh.length - 1).fill({ v: "", s: S.totLbl }),
+    [{ f: last >= first ? "SUM(" + tc + first + ":" + tc + last + ")" : "0", v: rows.slice(first - 1, last).reduce((m, r) => m + r[(many ? 1 : 0) + def.gh.length].v, 0), s: S.totInt }]));
+  if (rows.slice(first - 1, last).reduce((m, r) => m + r[(many ? 1 : 0) + def.gh.length].v, 0) > list.length) rows.push([{ v: "A ticket with several values is counted under each, so the rows can add up to more than the number of tickets (" + list.length + ").", s: S.sub }]);
+  const sw = (many ? [18] : []).concat(def.gh.map(() => 34), [10, 12, 12]);
+  /* Tickets: the important columns only */
+  const det = mis ? [] : [[def.gh.join(" / "), (i) => def.vals(i).map((v) => v.join(" · ")).join("; "), 30]];
+  const COLS = [
+    ["Ticket", (i) => ({ f: 'HYPERLINK("' + jiraUrl(T[i].key) + '","' + T[i].key + '")', v: T[i].key, s: S.link }), 15],
+    ["Type", (i) => typeTxt(T[i]), 11], ["Priority", (i) => sevName(T[i]), 11], ["Summary", (i) => ({ v: T[i].summary || "", s: S.wrap }), 52],
+    ["SWIPHX status", (i) => T[i].status || "(blank)", 24],
+    ["LRPS", (i) => T[i].lrps.join(", ") || "(none)", 14],
+    ["LRPS status", (i) => mis ? { v: lrStatOf(T[i]), s: S.bad } : lrStatOf(T[i]), 24],
+    ["LRPS assignee", (i) => enggWho(T[i]), 24]
+  ].concat(det, [
+    ["Where", (i) => (MIS_SIDES.find(([k]) => k === misSide(i)) || [0, HO_SIDE[sideOf(i)] || sideOf(i)])[1], 20], ["PO", (i) => (E[i].po && E[i].po.po) || "(no PO)", 18], ["Module", (i) => (E[i].po && E[i].po.module) || "", 18],
+    ["ME ID", (i) => T[i].meId || "", 10], ["Created", (i) => D(T[i].created), 17], ["Updated", (i) => D(T[i].updated), 17],
+    ["Age (days)", (i) => ({ v: Math.round((ageOf(T[i]) || 0) / 144) / 10, s: S.num }), 9],
+    ["Not updated (days)", (i) => T[i].updated != null ? { v: Math.round((NOW - T[i].updated) / DAY * 10) / 10, s: S.num } : "", 11]
+  ]);
+  const sideRank = (i) => MIS_SIDES.findIndex(([k]) => k === misSide(i));
+  const ord = list.slice().sort((x, y) => sideRank(x) - sideRank(y) || bySevAge(x, y));     // by side (as on the cards), then priority, oldest first
+  const tickets = { name: "Tickets", cols: COLS.map((x) => x[2]), freeze: 1, filter: "A1:" + XL.col(COLS.length - 1) + Math.max(2, ord.length + 1),
+    rows: [head(COLS.map((x) => x[0]))].concat(ord.map((i) => COLS.map((x) => x[1](i)))) };
+  const bytes = await XL.build([{ name: "Summary", rows, cols: sw, first: true }, tickets]);
+  saveBlob(new Blob([bytes], { type: XLSX_MIME }), "Swire-" + title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) + "-" + HC.dayKey(NOW) + ".xlsx");
 }
 function viewRules() {
   const C = allChecks(), idxOf = {}; T.forEach((t, i) => { idxOf[t.key] = i; });
