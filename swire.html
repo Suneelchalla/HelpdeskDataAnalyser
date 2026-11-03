@@ -971,7 +971,8 @@ const stKey = (s) => String(s || "").toLowerCase().replace(/&/g, " and ").replac
 const MIS_OK = [
   ["Technical Analysis", "Open"],
   ["Client Hotfix Testing", "Client UAT Testing"],
-  ["Invoice Yet to Raise", "DB Script Delivered"]
+  ["Invoice Yet to Raise", "DB Script Delivered"],
+  ["SVM Hotfix Testing", "SVM UAT Testing"]
 ];
 const MIS_OK_SET = new Set(MIS_OK.map(([a, b]) => stKey(a) + "|" + stKey(b)));
 function misOff(sw, lr) { const a = stKey(sw), b = stKey(lr); return a !== b && !MIS_OK_SET.has(a + "|" + b); }
@@ -1715,7 +1716,10 @@ function hoBriefFacts(d) {
   const oldest = pend.slice().sort((a, b) => (ageOf(T[b]) || 0) - (ageOf(T[a]) || 0)).slice(0, 5);
   const stale = pend.filter((i) => T[i].updated != null && NOW - T[i].updated >= 3 * DAY);
   const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical");
-  return { pend, cnt, who, oldest, stale, hot };
+  const sv = {}; pend.forEach((i) => { const k = T[i].svm || "(no SVM In Charge)"; (sv[k] = sv[k] || []).push(i); });
+  const svms = Object.keys(sv).map((w) => ({ w, idx: sv[w], hd: sv[w].filter((i) => d.hd.indexOf(i) > -1).length, hot: sv[w].filter((i) => T[i].sev === "showstopper" || T[i].sev === "critical").length,
+    old: sv[w].reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0) })).sort((x, y) => y.idx.length - x.idx.length || y.old - x.old || x.w.localeCompare(y.w));
+  return { pend, cnt, who, oldest, stale, hot, svms };
 }
 function mailHTMLBrief(d, ppl) {
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"', H2 = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 4px"';
@@ -1741,6 +1745,13 @@ function mailHTMLBrief(d, ppl) {
   const who = f.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl(240 + SHOW.length * 80 + 70 + 90) + "><tr>" + th("Engineering assignee", "text-align:left", 240) + SHOW.map((s) => th(s.name, null, 80)).join("") + th("Total", null, 70) + th("Oldest", null, 90) + "</tr>" +
     f.who.map((x) => "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map((s) => { const n = f.cnt(x.idx, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
       tdc("<b>" + x.idx.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>").join("") + "</table>" : "";
+  /* 2b. pending with SVM by SVM In Charge (who owns each ticket) */
+  const anyHd = d.hd.length > 0;
+  const svmT = f.svms.length ? "<h3 " + H2 + ">Pending with SVM by SVM In Charge</h3><table " + tbl(240 + (anyHd ? 90 : 0) + 100 + 130 + 70 + 90) + "><tr>" + th("SVM In Charge", "text-align:left", 240) + (anyHd ? th("Help Desk", null, 90) : "") +
+    th("Engineering", null, 100) + th("Showstopper/Critical", null, 130) + th("Total", null, 70) + th("Oldest", null, 90) + "</tr>" +
+    f.svms.map((x) => "<tr>" + tdc(esc(x.w), "white-space:nowrap") + (anyHd ? tdc(x.hd || "", "text-align:center") : "") + tdc((x.idx.length - x.hd) || "", "text-align:center") +
+      tdc(x.hot ? '<b style="color:#C2680A">' + x.hot + "</b>" : "", "text-align:center") + tdc("<b>" + x.idx.length + "</b>", "text-align:center") +
+      tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>").join("") + "</table>" : "";
   /* 3. oldest pending + not updated for 3+ days */
   const old = f.oldest.length ? "<h3 " + H2 + ">Oldest pending</h3><p " + P + ">" + f.oldest.map((i) => lk(i) + " " + esc(T[i].priority || "") + ", open " + esc(fmt(ageOf(T[i]))) + " (" + nm(i) + ")").join("<br>") + "</p>" : "";
   const stale = f.stale.length ? "<p " + P + "><b>" + f.stale.length + "</b> of the " + f.pend.length + " pending ticket" + (f.pend.length === 1 ? "" : "s") + " not updated in Jira for 3 days or more; they are marked in the Excel (Not updated, days).</p>" : "";
@@ -1748,7 +1759,7 @@ function mailHTMLBrief(d, ppl) {
   return '<div style="' + F + 'color:#0F1E2E">' +
     "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
     "<p " + P + ">Handing over the pending on Swire Phoenix Hypercare, position at " + esc(fdt(NOW)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
-    prio + gap() + hot + (hot ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
+    prio + gap() + hot + (hot ? gap(4) : "") + svmT + (svmT ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
     (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
     "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + f.pend.length + ") and Escalations (" + d.esc.length + ").</p>" +
     "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
@@ -1759,6 +1770,7 @@ function mailTextBrief(d, ppl) {
   return "Hi " + (ppl.to || "team") + ",\n\nHanding over the pending on Swire Phoenix Hypercare, position at " + fdt(NOW) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
     (d.hd.length ? "Pending with SVM, Help Desk: " + d.hd.length + " (" + sl(d.hd) + ")\n" : "") + "Pending with SVM, Engineering: " + d.engg.length + " (" + sl(d.engg) + ")\n\n" +
     (f.hot.length ? "Showstopper/Critical to escalate: " + f.hot.map((x) => T[x.i].key + " (" + nm(x.i) + ")").join(", ") + "\n\n" : "") +
+    (f.svms.length ? "Pending with SVM by SVM In Charge:\n" + f.svms.map((x) => "- " + x.w + ": " + x.idx.length + (x.hd ? " (" + x.hd + " Help Desk, " + (x.idx.length - x.hd) + " Engineering)" : "") + (x.hot ? ", " + x.hot + " Showstopper/Critical" : "") + ", oldest " + fmt(x.old)).join("\n") + "\n\n" : "") +
     (f.who.length ? "Engineering by assignee:\n" + f.who.map((x) => "- " + x.w + ": " + x.idx.length + " (" + sl(x.idx) + "), oldest " + fmt(x.old)).join("\n") + "\n\n" : "") +
     (f.oldest.length ? "Oldest pending:\n" + f.oldest.map((i) => "- " + T[i].key + " " + (T[i].priority || "") + ", open " + fmt(ageOf(T[i])) + " (" + nm(i) + ")").join("\n") + "\n\n" : "") +
     (f.stale.length ? f.stale.length + " of the " + f.pend.length + " pending tickets not updated in Jira for 3 days or more.\n\n" : "") +
