@@ -1408,6 +1408,7 @@ function escMailTable(list) {
         '<td style="' + TD + 'min-width:220px">' + informNames(x).map(esc).join("<br>") + "</td></tr>"; }).join("") + "</table>";
 }
 function mailHTML(d, ppl) {
+  if (d.w.general) return mailHTMLBrief(d, ppl);          // general handover: brief, the lists go in the Excel
   const H2 = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:15px;color:#0E2A47;margin:18px 0 4px"';
   const P = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"';
   const cell = (k, v, c) => '<td style="' + TD + 'font-size:13px">' + esc(k) + '</td><td style="' + TD + 'font-size:13px;font-weight:700;' + (c ? "color:" + c : "") + '">' + v + "</td>";
@@ -1439,6 +1440,7 @@ function mailHTML(d, ppl) {
     "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
 }
 function mailText(d, ppl) {
+  if (d.w.general) return mailTextBrief(d, ppl);
   const row = (i) => "- " + HO_COLS.map((c) => c[0] + ": " + (c[1](T[i], E[i]) || "-")).join(" | ");
   const sec = (title, list, line) => title + "\n" + (list.length ? list.map(row).join("\n") : "- none") + "\n";
   const note = (ppl.note || "").trim();
@@ -1449,6 +1451,243 @@ function mailText(d, ppl) {
     (d.w.general ? sec("1. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("2. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" + "3. WITH THE CLIENT: "
       : sec("1. CREATED THIS SHIFT (" + d.created.length + ")", d.created) + "\n" + sec("2. PENDING WITH SVM, HELP DESK (" + d.hd.length + ")", d.hd) + "\n" + sec("3. PENDING WITH SVM, ENGINEERING (" + d.engg.length + ")", d.engg) + "\n" + "4. WITH THE CLIENT: ") + + d.client.length + " (" + sevLine(d.clientBySev) + "), not listed.\n\nEvery open ticket must have a named owner on the next shift (R8).\n\nRegards,\n" + (ppl.from || "");
 }
+/* ── Minimal .xlsx writer (no library): inline strings, styles, formulas with cached values, frozen header,
+   auto-filter, column widths. Zipped with the browser's own deflate (CompressionStream) when it has one. ── */
+const XL = (function () {
+  const xe = (s) => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const col = (n) => { let s = ""; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+  /* style ids (cellXfs order below) */
+  const S = { txt: 0, head: 1, title: 2, sub: 3, link: 4, date: 5, num: 6, int: 7, totLbl: 8, totInt: 9, lbl: 10, wrap: 11, bad: 12, cellInt: 13, phead: 14 };
+  const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd mmm yyyy hh:mm"/><numFmt numFmtId="165" formatCode="0.0"/></numFmts>' +
+    '<fonts count="7">' +
+      '<font><sz val="10"/><name val="Arial"/></font>' +
+      '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>' +
+      '<font><b/><sz val="13"/><color rgb="FF5C1730"/><name val="Arial"/></font>' +
+      '<font><sz val="9"/><color rgb="FF6B5A63"/><name val="Arial"/></font>' +
+      '<font><u/><sz val="10"/><color rgb="FF7A1F3D"/><name val="Arial"/></font>' +
+      '<font><b/><sz val="10"/><name val="Arial"/></font>' +
+      '<font><b/><sz val="10"/><color rgb="FFC8102E"/><name val="Arial"/></font>' +
+    "</fonts>" +
+    '<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF7A1F3D"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFF6E9EE"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFBF6F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+      '<border><left style="thin"><color rgb="FFE3D3DA"/></left><right style="thin"><color rgb="FFE3D3DA"/></right><top style="thin"><color rgb="FFE3D3DA"/></top><bottom style="thin"><color rgb="FFE3D3DA"/></bottom><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="15">' +
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"><alignment vertical="top"/></xf>' +                                   // 0 txt
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>' + // 1 head
+      '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" applyFont="1"/>' +                                                                     // 2 title
+      '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" applyFont="1"/>' +                                                                     // 3 sub
+      '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" applyFont="1" applyBorder="1"><alignment vertical="top"/></xf>' +                     // 4 link
+      '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +          // 5 date
+      '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +          // 6 num 0.0
+      '<xf numFmtId="1" fontId="5" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center"/></xf>' + // 7 row total
+      '<xf numFmtId="0" fontId="5" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>' +                                      // 8 total label
+      '<xf numFmtId="1" fontId="5" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center"/></xf>' + // 9 total int
+      '<xf numFmtId="0" fontId="5" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>' +                                      // 10 row label
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>' +                     // 11 wrap
+      '<xf numFmtId="0" fontId="6" fillId="0" borderId="1" applyFont="1" applyBorder="1"><alignment vertical="top"/></xf>' +                     // 12 bad (red bold)
+      '<xf numFmtId="1" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"><alignment horizontal="center"/></xf>' +       // 13 pivot cell
+      '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' + // 14 pivot head
+    "</cellXfs>" +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+  /* Excel date serial of an epoch-ms instant, shown in IST */
+  const date = (ms) => ms == null ? null : { v: (ms + 330 * 60000) / 86400000 + 25569, s: S.date };
+  function cellXml(c, r, k) {
+    if (c == null || c === "") return "";
+    const ref = col(k) + r;
+    if (typeof c !== "object") c = { v: c };
+    const st = c.s != null ? ' s="' + c.s + '"' : typeof c.v === "number" ? ' s="' + S.cellInt + '"' : ' s="0"';
+    if (c.f) return "<c r=\"" + ref + "\"" + st + (typeof c.v === "number" ? "" : ' t="str"') + "><f>" + xe(c.f) + "</f>" + (c.v != null ? "<v>" + xe(c.v) + "</v>" : "") + "</c>";
+    if (typeof c.v === "number") return "<c r=\"" + ref + "\"" + st + "><v>" + (isFinite(c.v) ? c.v : 0) + "</v></c>";
+    return "<c r=\"" + ref + "\"" + st + ' t="inlineStr"><is><t xml:space="preserve">' + xe(c.v) + "</t></is></c>";
+  }
+  function sheetXml(sh) {
+    const rows = sh.rows.map((row, ri) => { const r = ri + 1, cells = (row || []).map((c, k) => cellXml(c, r, k)).join("");
+      return "<row r=\"" + r + "\"" + (sh.heights && sh.heights[ri] ? ' ht="' + sh.heights[ri] + '" customHeight="1"' : "") + ">" + cells + "</row>"; }).join("");
+    const view = sh.freeze ? '<sheetViews><sheetView workbookViewId="0"' + (sh.first ? ' tabSelected="1"' : "") + '><pane ySplit="' + sh.freeze + '" topLeftCell="A' + (sh.freeze + 1) + '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' + (sh.freeze + 1) + '" sqref="A' + (sh.freeze + 1) + '"/></sheetView></sheetViews>'
+      : '<sheetViews><sheetView workbookViewId="0"' + (sh.first ? ' tabSelected="1"' : "") + ' showGridLines="0"/></sheetViews>';
+    const cols = sh.cols ? "<cols>" + sh.cols.map((w, k) => '<col min="' + (k + 1) + '" max="' + (k + 1) + '" width="' + w + '" customWidth="1"/>').join("") + "</cols>" : "";
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      view + '<sheetFormatPr defaultRowHeight="15"/>' + cols + "<sheetData>" + rows + "</sheetData>" + (sh.filter ? '<autoFilter ref="' + sh.filter + '"/>' : "") +
+      (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map((m) => '<mergeCell ref="' + m + '"/>').join("") + "</mergeCells>" : "") +
+      '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+  }
+  const qs = (n) => "'" + String(n).replace(/'/g, "''") + "'";
+  function parts(sheets) {
+    const f = {};
+    f["[Content_Types].xml"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      sheets.map((s, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("") + "</Types>";
+    f["_rels/.rels"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+    const dn = sheets.map((s, i) => s.filter ? '<definedName name="_xlnm._FilterDatabase" localSheetId="' + i + '" hidden="1">' + qs(s.name) + "!" + s.filter.split(":").map((x) => x.replace(/([A-Z]+)(\d+)/, "$$$1$$$2")).join(":") + "</definedName>" : "").join("");
+    f["xl/workbook.xml"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>' +
+      sheets.map((s, i) => '<sheet name="' + xe(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join("") + "</sheets>" + (dn ? "<definedNames>" + dn + "</definedNames>" : "") + '<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>';
+    f["xl/_rels/workbook.xml.rels"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map((s, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join("") +
+      '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+    f["xl/styles.xml"] = STYLES;
+    sheets.forEach((s, i) => { f["xl/worksheets/sheet" + (i + 1) + ".xml"] = sheetXml(s); });
+    return f;
+  }
+  /* zip */
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (u) => { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  async function deflate(u) {
+    if (typeof CompressionStream === "undefined") return null;
+    try { const s = new Blob([u]).stream().pipeThrough(new CompressionStream("deflate-raw")); return new Uint8Array(await new Response(s).arrayBuffer()); } catch (e) { return null; }
+  }
+  async function zip(files) {
+    const enc = new TextEncoder(), out = [], cen = []; let off = 0;
+    for (const name of Object.keys(files)) {
+      const nm = enc.encode(name), raw = enc.encode(files[name]), crc = crc32(raw), z = await deflate(raw), data = z && z.length < raw.length ? z : raw, method = data === raw ? 0 : 8;
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, method, true); h.setUint16(10, 0, true); h.setUint16(12, 0x21, true);
+      h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, raw.length, true); h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
+      out.push(new Uint8Array(h.buffer), nm, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, method, true); c.setUint16(12, 0, true); c.setUint16(14, 0x21, true);
+      c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, raw.length, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+      cen.push(new Uint8Array(c.buffer), nm);
+      off += 30 + nm.length + data.length;
+    }
+    const cenLen = cen.reduce((m, x) => m + x.length, 0), e = new DataView(new ArrayBuffer(22)), n = Object.keys(files).length;
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, n, true); e.setUint16(10, n, true); e.setUint32(12, cenLen, true); e.setUint32(16, off, true);
+    const all = out.concat(cen, [new Uint8Array(e.buffer)]), u = new Uint8Array(all.reduce((m, x) => m + x.length, 0)); let p = 0; all.forEach((x) => { u.set(x, p); p += x.length; });
+    return u;
+  }
+  return { S, col, date, qs, build: (sheets) => zip(parts(sheets)) };
+})();
+/* ── Handover Excel: Summary (pivots as live COUNTIFS on the "All open" sheet), Pending with SVM, Escalations,
+   All open (the data the pivots count), and for a shift handover Created / Closed this shift. ── */
+const HO_SIDE = { hd: "Help Desk", engg: "Engineering", client: "With client", billing: "Billing", closed: "Closed" };
+const sevName = (t) => { const s = HC.SEVS.find((x) => x.id === t.sev); return s ? s.name : t.priority || "(none)"; };
+const ageLbl = (t) => { const d = (ageOf(t) || 0) / 1440; return (AGEB.find(([a, b]) => d >= a && d < b) || AGEB[0])[2]; };
+const enggWho = (t) => { const n = t.lrps.map((k) => LRPS[k] && !LRPS[k].gone && LRPS[k].a).filter(Boolean); return n[0] || (t.lrps.length ? "(LRPS not read / unassigned)" : "(no LRPS ticket)"); };
+function hoFileBase(d) { const p = HC.ist(NOW), hm = String(Math.floor(p.min / 60)).padStart(2, "0") + String(p.min % 60).padStart(2, "0");
+  return "Swire-Hypercare-" + (d.w.general ? "handover-" + HC.dayKey(NOW) + "-" + hm : "shift-handover-" + HC.dayKey(d.w.start) + "-" + d.w.key.split("|")[0]); }
+async function hoWorkbook(d) {
+  const S = XL.S, D = XL.date, SEV = HC.SEVS.map((s) => s.name);
+  /* one row per ticket; the same columns on every list sheet. No SLA / first-response columns. */
+  const lrpsWithWho = (t) => t.lrps.map((k) => k + (LRPS[k] && !LRPS[k].gone && LRPS[k].a ? " (" + LRPS[k].a + ")" : "")).join(", ");
+  const lrStat = (t) => t.lrps.length ? (t.lrps.map((k) => (lrpsSt(t, k) || {}).s).filter(Boolean).join(", ") || "(not read)") : "(no LRPS)";
+  const updDays = (t) => t.updated != null ? Math.round((NOW - t.updated) / DAY * 10) / 10 : "";
+  const HEAD = ["Ticket", "Type", "Priority", "Summary", "ME ID", "Status", "LRPS", "LRPS status", "Engineering assignee", "LRPS / assignee (all)", "Where", "Sitting with", "PO", "Module", "SVM In Charge", "Current worker", "Created", "Updated", "Age (days)", "Not updated (days)", "Ageing", "Next action"];
+  const WID = [15, 11, 11, 52, 10, 24, 14, 20, 24, 34, 13, 30, 18, 18, 18, 20, 17, 17, 9, 11, 11, 30];
+  const C = {}; HEAD.forEach((h, k) => { C[h] = XL.col(k); });
+  const link = (t) => ({ f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: S.link });
+  const row = (i) => { const t = T[i], e = E[i];
+    return [link(t), typeTxt(t), sevName(t), { v: t.summary || "", s: S.wrap }, t.meId ? t.meId : { v: "missing", s: S.bad }, t.status || "(blank)",
+      t.lrps.join(", ") || "(none)", lrStat(t), enggWho(t), { v: lrpsWithWho(t), s: S.wrap },
+      HO_SIDE[sideOf(i)] || sideOf(i), holderOf(t, e), (e.po && e.po.po) || "(no PO)", (e.po && e.po.module) || "", t.svm || "", t.cw || "",
+      D(t.created), D(t.updated), { v: Math.round((ageOf(t) || 0) / 144) / 10, s: S.num }, updDays(t) === "" ? "" : { v: updDays(t), s: S.num }, ageLbl(t), t.nextAction || ""]; };
+  const listSheet = (name, idx) => ({ name, rows: [HEAD.map((h) => ({ v: h, s: S.head }))].concat(idx.map(row)), cols: WID, freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, idx.length + 1) });
+  const pending = d.hd.concat(d.engg).sort(bySevAge), open = d.hd.concat(d.engg, d.client.slice().sort(bySevAge), d.billing.slice().sort(bySevAge));
+  /* escalations list: the ticket, where it sits and its LRPS / engineering assignee */
+  const escIdx = d.esc.map((x) => x.i);
+  const EH = ["Ticket", "Type", "Priority", "Summary", "Status", "LRPS", "LRPS status", "Engineering assignee", "LRPS / assignee (all)", "Sitting with", "PO", "Module", "Created", "Updated", "Age (days)", "Not updated (days)"];
+  const EC = {}; EH.forEach((h, k) => { EC[h] = XL.col(k); });
+  const escSheet = { name: "Escalations", cols: [15, 11, 11, 52, 24, 14, 20, 24, 34, 30, 18, 18, 17, 17, 9, 11], freeze: 1, filter: "A1:" + XL.col(EH.length - 1) + Math.max(2, escIdx.length + 1),
+    rows: [EH.map((h) => ({ v: h, s: S.head }))].concat(escIdx.map((i) => { const t = T[i], e = E[i];
+      return [link(t), typeTxt(t), sevName(t), { v: t.summary || "", s: S.wrap }, t.status || "(blank)", t.lrps.join(", ") || "(none)", lrStat(t),
+        enggWho(t), { v: lrpsWithWho(t), s: S.wrap }, holderOf(t, e), (e.po && e.po.po) || "(no PO)", (e.po && e.po.module) || "", D(t.created), D(t.updated),
+        { v: Math.round((ageOf(t) || 0) / 144) / 10, s: S.num }, updDays(t) === "" ? "" : { v: updDays(t), s: S.num }]; })) };
+  /* ── pivots: row labels × column labels, every count a COUNTIFS on a list sheet (cached value filled in too) ── */
+  const SRC = { open: { name: "All open", C, n: Math.max(2, open.length + 1), idx: open }, esc: { name: "Escalations", C: EC, n: Math.max(2, escIdx.length + 1), idx: escIdx } };
+  const rows = [];
+  const push = (r) => { rows.push(r); return rows.length; };
+  push([{ v: "Swire Phoenix Hypercare, " + (d.w.general ? "general handover" : d.w.label), s: S.title }]);
+  push([{ v: "Position at " + fdt(NOW) + " IST. Every count is a formula on the “All open” or “Escalations” sheet; filter those sheets for the tickets.", s: S.sub }]);
+  function pivot(title, note, src, rowField, rowVals, colField, colVals, extra, rowTest, colTest) {
+    const R = (h) => XL.qs(src.name) + "!$" + src.C[h] + "$2:$" + src.C[h] + "$" + src.n;
+    push([]); push([{ v: title, s: S.title }]); if (note) push([{ v: note, s: S.sub }]);
+    push([{ v: rowField, s: S.phead }].concat(colVals.map((c) => ({ v: c, s: S.phead })), [{ v: "Total", s: S.phead }]));
+    const first = rows.length + 1, ex = extra || [];
+    rowVals.forEach((rv) => {
+      const r = rows.length + 1, cells = [{ v: rv, s: S.lbl }];
+      colVals.forEach((cv, k) => {
+        const crit = (alt) => R(rowField) + ',"="&$A' + r + "," + R(colField) + ',"="&' + XL.col(k + 1) + "$" + (first - 1) + alt.map((a) => "," + R(a[0]) + ',"' + a[1] + '"').join("");
+        const f = ex.length ? ex.map((alt) => "COUNTIFS(" + crit(alt) + ")").join("+") : "COUNTIFS(" + crit([]) + ")";
+        cells.push({ f, v: src.idx.filter((i) => rowTest(i, rv) && colTest(i, cv)).length, s: S.cellInt });
+      });
+      cells.push({ f: "SUM(B" + r + ":" + XL.col(colVals.length) + r + ")", v: cells.slice(1).reduce((m, c) => m + c.v, 0), s: S.totInt });
+      push(cells);
+    });
+    const last = rows.length, tr = [{ v: "Total", s: S.totLbl }];
+    for (let k = 1; k <= colVals.length + 1; k++) { const L = XL.col(k); tr.push({ f: rowVals.length ? "SUM(" + L + first + ":" + L + last + ")" : "0", v: rows.slice(first - 1, last).reduce((m, r) => m + (r[k] ? r[k].v : 0), 0), s: S.totInt }); }
+    push(tr);
+  }
+  const uniq = (idx, f) => { const c = {}; idx.forEach((i) => { const v = f(i); c[v] = (c[v] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a] || a.localeCompare(b)); };
+  const SIDES = ["Help Desk", "Engineering", "With client", "Billing"], side = (i) => HO_SIDE[sideOf(i)], svm = (i) => side(i) === "Help Desk" || side(i) === "Engineering";
+  const poOf = (i) => (E[i].po && E[i].po.po) || "(no PO)", stOf = (i) => T[i].status || "(blank)", ew = (i) => enggWho(T[i]), pr = (i, v) => sevName(T[i]) === v;
+  const BOTH = [[["Where", "Help Desk"]], [["Where", "Engineering"]]];
+  pivot("1. Open tickets: where they are × priority", "", SRC.open, "Where", SIDES, "Priority", SEV, null, (i, v) => side(i) === v, pr);
+  pivot("2. Pending with SVM (Help Desk + Engineering) by PO × priority", "", SRC.open, "PO", uniq(pending, poOf), "Priority", SEV, BOTH, (i, v) => svm(i) && poOf(i) === v, pr);
+  pivot("3. Pending with Engineering by engineering assignee × priority", "Engineering assignee = the assignee of the linked LRPS ticket.", SRC.open, "Engineering assignee", uniq(d.engg, ew), "Priority", SEV, [[["Where", "Engineering"]]],
+    (i, v) => side(i) === "Engineering" && ew(i) === v, pr);
+  pivot("4. Pending with SVM by status × priority", "", SRC.open, "Status", uniq(pending, stOf), "Priority", SEV, BOTH, (i, v) => svm(i) && stOf(i) === v, pr);
+  pivot("5. Pending with SVM by LRPS status × priority", "The status of the linked LRPS ticket, as read from Jira.", SRC.open, "LRPS status", uniq(pending, (i) => lrStat(T[i])), "Priority", SEV, BOTH,
+    (i, v) => svm(i) && (lrStat(T[i])) === v, pr);
+  pivot("6. Open tickets by age × where they are", "Age since the ticket was created.", SRC.open, "Ageing", AGEB.map((x) => x[2]), "Where", SIDES, null, (i, v) => ageLbl(T[i]) === v, (i, v) => side(i) === v);
+  if (escIdx.length) pivot("7. Escalations to raise by engineering assignee × priority", "Details on the “Escalations” sheet.", SRC.esc, "Engineering assignee", uniq(escIdx, ew), "Priority", SEV, null, (i, v) => ew(i) === v, pr);
+  const summary = { name: "Summary", rows, cols: [40].concat(SEV.map(() => 13), [11]), first: true };
+  const sheets = [summary, listSheet("Pending with SVM", pending), escSheet, listSheet("All open", open)];
+  if (!d.w.general) sheets.splice(1, 0, listSheet("Created this shift", d.created), listSheet("Closed this shift", d.closed.slice().sort(bySevAge)));
+  return { bytes: await XL.build(sheets), file: hoFileBase(d) + ".xlsx", sheets: sheets.map((s) => s.name + (s.name === "Summary" ? "" : " (" + (s.rows.length - 1) + ")")) };
+}
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+function u8b64(u) { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+function saveBlob(blob, file) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800); }
+/* an unsent .eml (opens in Outlook as a draft) with the HTML body and the Excel attached */
+function emlWithAttachment(subject, html, att, file) {
+  const b64 = (s) => btoa(unescape(encodeURIComponent(s))), wrap = (s) => s.replace(/.{76}/g, "$&\r\n"), B = "=_hd_" + Date.now().toString(36);
+  const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
+  const eml = ["X-Unsent: 1", "Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", 'Content-Type: multipart/mixed; boundary="' + B + '"', "",
+    "--" + B, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap(b64(body)), "",
+    "--" + B, "Content-Type: " + XLSX_MIME + '; name="' + att.file + '"', 'Content-Disposition: attachment; filename="' + att.file + '"', "Content-Transfer-Encoding: base64", "", wrap(u8b64(att.bytes)), "",
+    "--" + B + "--", ""].join("\r\n");
+  saveBlob(new Blob([eml], { type: "message/rfc822" }), file);
+}
+/* ── brief general handover mail: counts by priority, escalations in one paragraph, details in the Excel ── */
+function mailHTMLBrief(d, ppl) {
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"', H2 = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 4px"';
+  const th = (h, x) => '<th style="' + TD + 'background:#0E2A47;color:#fff;font-weight:600;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>";
+  const cnt = (list, s) => list.filter((i) => T[i].sev === s).length;
+  const line = (lbl, list, c, listed) => '<tr><td style="' + TD + 'font-size:13px;white-space:nowrap"><b style="color:' + c + '">' + esc(lbl) + "</b>" + (listed ? "" : ' <span style="color:#8A97A6">(counted only)</span>') + "</td>" +
+    HC.SEVS.map((s) => { const n = cnt(list, s.id); return '<td style="' + TD + 'font-size:13px;text-align:center;' + (n ? "color:" + s.color + ";font-weight:600" : "color:#B8C2CF") + '">' + n + "</td>"; }).join("") +
+    '<td style="' + TD + 'font-size:13px;text-align:center;font-weight:700">' + list.length + "</td></tr>";
+  const allOpen = d.hd.concat(d.engg, d.client, d.billing);
+  const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical"), high = d.esc.filter((x) => x.sev === "high"), rest = d.esc.length - hot.length - high.length;
+  const lk = (i) => '<a href="' + jiraUrl(T[i].key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(T[i].key) + "</a>";
+  const note = (ppl.note || "").trim();
+  return '<div style="' + F + 'color:#0F1E2E">' +
+    "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
+    "<p " + P + ">Handing over everything pending on Swire Phoenix Hypercare, position at " + esc(fdt(NOW)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
+    '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0 10px;' + F + '"><tr>' + th("Open tickets", "text-align:left") + HC.SEVS.map((s) => th(s.name)).join("") + th("Total") + "</tr>" +
+    line("Pending with SVM, Help Desk", d.hd, "#0E7C86", true) + line("Pending with SVM, Engineering", d.engg, "#24507C", true) +
+    line("With the client", d.client, "#B45309") + line("Delivered, with Receivables", d.billing, "#6D28D9") +
+    '<tr><td style="' + TD + 'font-size:13px;background:#EEF3F7"><b>Total open</b></td>' + HC.SEVS.map((s) => '<td style="' + TD + 'font-size:13px;text-align:center;background:#EEF3F7;font-weight:700">' + cnt(allOpen, s.id) + "</td>").join("") +
+    '<td style="' + TD + 'font-size:13px;text-align:center;background:#EEF3F7;font-weight:700">' + allOpen.length + "</td></tr></table>" +
+    (d.esc.length ? "<p " + P + "><b style=\"color:#C8102E\">Escalations to raise (Section 10.2): " + d.esc.length + "</b> (" +
+      [hot.length ? hot.length + " Showstopper/Critical" : "", high.length ? high.length + " High" : "", rest ? rest + " Medium/Low past the resolution benchmark" : ""].filter(Boolean).join(", ") + "). Details on the Escalations sheet.</p>" +
+      (hot.length ? "<p " + P + ">Showstopper/Critical: " + hot.map((x) => lk(x.i) + " (" + esc(holderOf(T[x.i], E[x.i]).replace(/^Engineering: |^Help Desk: /, "")) + ")").join(", ") + ".</p>" : "") : "<p " + P + ">No escalations to raise.</p>") +
+    (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
+    "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + (d.hd.length + d.engg.length) + "), Escalations (" + d.esc.length + ") and All open (" + allOpen.length + ").</p>" +
+    "<p " + P + ">Every open ticket must have a named owner (R8). Please acknowledge on this thread.</p>" +
+    "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
+}
+function mailTextBrief(d, ppl) {
+  const allOpen = d.hd.concat(d.engg, d.client, d.billing), sl = (l) => sevLine((() => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = l.filter((i) => T[i].sev === s.id).length; }); return o; })());
+  const hot = d.esc.filter((x) => x.sev === "showstopper" || x.sev === "critical"), note = (ppl.note || "").trim();
+  return "Hi " + (ppl.to || "team") + ",\n\nHanding over everything pending on Swire Phoenix Hypercare, position at " + fdt(NOW) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
+    "Pending with SVM, Help Desk: " + d.hd.length + " (" + sl(d.hd) + ")\nPending with SVM, Engineering: " + d.engg.length + " (" + sl(d.engg) + ")\nWith the client: " + d.client.length + " (counted only)\nDelivered, with Receivables: " + d.billing.length + " (counted only)\nTotal open: " + allOpen.length + "\n\n" +
+    (d.esc.length ? "Escalations to raise (Section 10.2): " + d.esc.length + (hot.length ? ". Showstopper/Critical: " + hot.map((x) => T[x.i].key).join(", ") : "") + ".\n\n" : "No escalations to raise.\n\n") +
+    (note ? "Notes:\n" + note + "\n\n" : "") + "Attached: " + hoFileBase(d) + ".xlsx\n\nEvery open ticket must have a named owner (R8). Please acknowledge on this thread.\n\nRegards,\n" + (ppl.from || "");
+}
 function viewHandover() {
   if (!UI.shift || UI.shift === "current" || UI.shift === "last") UI.shift = currentShiftKey();
   const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" });
@@ -1458,8 +1697,8 @@ function viewHandover() {
     return '<button class="pill" data-shift="' + esc(k) + '" aria-pressed="' + (d.w.key === k) + '">' + esc(x.name) + " " + d0.d + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d0.mo] + (live ? " (now)" : "") + "</button>"; }).join("");
   const gen = d.w.general;
   return '<div class="bar noprint"><span class="lbl">Handover</span><button class="pill" data-shift="general" aria-pressed="' + gen + '">General (all pending)</button><span class="lbl" style="margin-left:6px">Shift</span>' + pills +
-    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoPrint">Print / Save PDF</button></div>' +
-    (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). Tickets with the client are counted, not listed.</p>"
+    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoXlsx" title="Summary with pivots, Pending with SVM, Escalations, All open">Download Excel</button><button class="btn" id="hoEml" title="Opens in Outlook as a new draft with the Excel already attached">Email draft + Excel</button><button class="btn" id="hoPrint">Print / Save PDF</button></div>' +
+    (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). The email is brief: counts by priority and the escalations; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>"
       : "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>") +
     '<div class="signals noprint">' + (gen ? "" : sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift")) +
     sigL("teal", d.hd, "Pending with Help Desk", sevLine(d.hdBySev), "Pending with Help Desk") + sigL("eng", d.engg, "Pending with Engineering", sevLine(d.enggBySev), "Pending with Engineering") +
@@ -2579,15 +2818,12 @@ function wire() {
     if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), fallback);
     else fallback();
   });
-  on("hoEml", "click", () => {
-    /* an unsent .eml opens in Outlook as a new draft (X-Unsent), ready to address and send */
-    const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" });
-    const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
-    const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + mailHTML(d, ppl) + "</body></html>";
-    const eml = ["X-Unsent: 1", "Subject: =?UTF-8?B?" + b64(hoSubject(d)) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")].join("\r\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" }));
-    a.download = "Swire-handover-" + HC.dayKey(d.w.start) + "-" + d.w.key.split("|")[0] + "-shift.eml"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-  });
+  /* Excel attachment: Download, or an Outlook draft (.eml) with it attached */
+  const hoBusy = (b, msg, label, fn) => { b.disabled = true; b.textContent = msg; return Promise.resolve().then(fn).then(() => { b.textContent = label; }, (x) => { b.textContent = "Failed: " + ((x && x.message) || x); setTimeout(() => { b.textContent = label; }, 4000); }).finally(() => { b.disabled = false; }); };
+  on("hoXlsx", "click", (e) => hoBusy(e.target, "Building…", "Download Excel", async () => { const d = hoData(UI.shift), x = await hoWorkbook(d); saveBlob(new Blob([x.bytes], { type: XLSX_MIME }), x.file); }));
+  on("hoEml", "click", (e) => hoBusy(e.target, "Building…", "Email draft + Excel", async () => {
+    const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" }), x = await hoWorkbook(d);
+    emlWithAttachment(hoSubject(d), mailHTML(d, ppl), x, hoFileBase(d) + ".eml"); }));
   on("hoPrint", "click", () => {
     /* landscape pages only for the handover print, so every column fits */
     const st = document.createElement("style"); st.id = "hoPage"; st.textContent = "@page{size:A4 landscape;margin:9mm}"; document.head.appendChild(st);
