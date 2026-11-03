@@ -1622,15 +1622,10 @@ async function hoWorkbook(d) {
   const SIDES = ["Help Desk", "Engineering", "With client", "Billing"], side = (i) => HO_SIDE[sideOf(i)], svm = (i) => side(i) === "Help Desk" || side(i) === "Engineering";
   const poOf = (i) => (E[i].po && E[i].po.po) || "(no PO)", stOf = (i) => T[i].status || "(blank)", ew = (i) => enggWho(T[i]), pr = (i, v) => sevName(T[i]) === v;
   const BOTH = [[["Where", "Help Desk"]], [["Where", "Engineering"]]];
-  pivot("1. Open tickets: where they are × priority", "", SRC.open, "Where", SIDES, "Priority", SEV, null, (i, v) => side(i) === v, pr);
-  pivot("2. Pending with SVM (Help Desk + Engineering) by PO × priority", "", SRC.open, "PO", uniq(pending, poOf), "Priority", SEV, BOTH, (i, v) => svm(i) && poOf(i) === v, pr);
-  pivot("3. Pending with Engineering by engineering assignee × priority", "Engineering assignee = the assignee of the linked LRPS ticket.", SRC.open, "Engineering assignee", uniq(d.engg, ew), "Priority", SEV, [[["Where", "Engineering"]]],
+  pivot("1. Pending with SVM (Help Desk + Engineering) by PO × priority", "", SRC.open, "PO", uniq(pending, poOf), "Priority", SEV, BOTH, (i, v) => svm(i) && poOf(i) === v, pr);
+  pivot("2. Pending with Engineering by engineering assignee × priority", "Engineering assignee = the assignee of the linked LRPS ticket.", SRC.open, "Engineering assignee", uniq(d.engg, ew), "Priority", SEV, [[["Where", "Engineering"]]],
     (i, v) => side(i) === "Engineering" && ew(i) === v, pr);
-  pivot("4. Pending with SVM by status × priority", "", SRC.open, "Status", uniq(pending, stOf), "Priority", SEV, BOTH, (i, v) => svm(i) && stOf(i) === v, pr);
-  pivot("5. Pending with SVM by LRPS status × priority", "The status of the linked LRPS ticket, as read from Jira.", SRC.open, "LRPS status", uniq(pending, (i) => lrStat(T[i])), "Priority", SEV, BOTH,
-    (i, v) => svm(i) && (lrStat(T[i])) === v, pr);
-  pivot("6. Open tickets by age × where they are", "Age since the ticket was created.", SRC.open, "Ageing", AGEB.map((x) => x[2]), "Where", SIDES, null, (i, v) => ageLbl(T[i]) === v, (i, v) => side(i) === v);
-  if (escIdx.length) pivot("7. Escalations to raise by engineering assignee × priority", "Details on the “Escalations” sheet.", SRC.esc, "Engineering assignee", uniq(escIdx, ew), "Priority", SEV, null, (i, v) => ew(i) === v, pr);
+  pivot("3. Pending with SVM by status × priority", "", SRC.open, "Status", uniq(pending, stOf), "Priority", SEV, BOTH, (i, v) => svm(i) && stOf(i) === v, pr);
   const summary = { name: "Summary", rows, cols: [40].concat(SEV.map(() => 13), [11]), first: true };
   const sheets = [summary, listSheet("Pending with SVM", pending), escSheet];
   if (!d.w.general) sheets.splice(1, 0, listSheet("Created this shift", d.created), listSheet("Closed this shift", d.closed.slice().sort(bySevAge)));
