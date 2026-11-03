@@ -439,6 +439,8 @@ table.xl th{white-space:nowrap}
 .lgmis b{font-variant-numeric:tabular-nums}
 .lgmis + .lgpdf{margin-left:8px}
 @media print{.lgmis{display:none!important}}
+.pm-edit{outline:none;min-height:40px}.pm-edit:focus{box-shadow:inset 0 0 0 2px rgba(122,31,61,.18);border-radius:8px}
+.pm-x{width:22px;height:22px;border-radius:6px;border:1px solid #F3B8C3;background:#FDECEE;color:#C8102E;font-size:11px;font-weight:800;cursor:pointer;line-height:1;padding:0}.pm-x:hover{background:#C8102E;color:#fff}
 .lgpdf:hover{border-style:solid;border-color:var(--maroon);background:var(--blush)}
 @media print{.lgpdf{display:none!important}}
 .shday{border:1px solid var(--line2);border-left:5px solid var(--sc);border-radius:12px;padding:10px 12px;margin-bottom:10px;background:#fff}
@@ -2156,7 +2158,7 @@ function personMail(list, info, hi, note) {
   const rows = list.map((i, k) => { const t = T[i], e = E[i], d = ageD(i), b = bucket(d), u = updD(i);
     const lr = t.lrps.length ? t.lrps.map((x) => esc(x) + (LRPS[x] && LRPS[x].s ? " (" + esc(LRPS[x].s) + ")" : "")).join("<br>") : "—";
     const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
-    return "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
+    return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
       td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
       td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + td(lr, "white-space:nowrap") + td(la, "white-space:nowrap") +
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
@@ -2165,7 +2167,7 @@ function personMail(list, info, hi, note) {
   const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.</p>" +
     "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-    "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr>' +
+    "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
     ["Ticket", "Type", "Priority", "Summary", "Status", "LRPS", "LRPS assignee", "Age (created)", "Last updated"].map(th).join("") + "</tr>" + rows + "</table>" +
     "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Hi " + name + ",\n\nSwire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
@@ -2175,22 +2177,56 @@ function personMail(list, info, hi, note) {
   const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
   return { html, text, subject };
 }
-function openPersonMail(list, info, title) {
-  const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(title) + '</span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+/* editable mail preview: ✕ on every ticket row leaves it out; the text can be edited in place. The ✕ cells never go into
+   the copied / downloaded mail. */
+function mailEditor(host, onRemove) {
+  const ed = { edited: false };
+  ed.render = (html) => {
+    ed.edited = false;
+    host.innerHTML = '<div class="pm-edit" contenteditable="true" spellcheck="true">' + html + "</div>";
+    host.querySelectorAll("tr[data-hdr]").forEach((tr) => { const c = document.createElement("th"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "background:#fff;border:none;width:28px"; tr.insertBefore(c, tr.firstChild); });
+    host.querySelectorAll("tr[data-k]").forEach((tr) => { const c = document.createElement("td"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "border:none;padding:0 4px;vertical-align:middle;background:#fff";
+      c.innerHTML = '<button type="button" class="pm-x" title="Leave this ticket out of the mail" data-rm="' + esc(tr.getAttribute("data-k")) + '">✕</button>'; tr.insertBefore(c, tr.firstChild); });
+  };
+  host.addEventListener("input", () => { ed.edited = true; if (ed.onEdit) ed.onEdit(); });
+  host.addEventListener("click", (e) => { const b = e.target.closest("[data-rm]"); if (!b) return; e.preventDefault();
+    if (ed.edited) { const tr = b.closest("tr"); if (tr) tr.remove(); }
+    onRemove(b.getAttribute("data-rm"), ed.edited); });
+  ed.clean = () => { const c = host.querySelector(".pm-edit").cloneNode(true); c.querySelectorAll("[data-ui]").forEach((x) => x.remove());
+    c.querySelectorAll("[data-k],[data-hdr]").forEach((x) => { x.removeAttribute("data-k"); x.removeAttribute("data-hdr"); }); return c; };
+  ed.html = () => ed.clean().innerHTML;
+  ed.text = () => { const c = ed.clean(); c.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(c); const t = c.innerText; c.remove(); return t; };
+  return ed;
+}
+function openPersonMail(listAll, info, title) {
+  const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(title) + ' <span id="pmN"></span></span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="pmTo">To</label><input class="inp" id="pmTo" placeholder="name@solverminds.com" style="flex:1;min-width:240px">' +
     '<label class="rmlbl" for="pmHi">Hi</label><input class="inp" id="pmHi" style="width:200px"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmSubj">Subject</label><input class="inp" id="pmSubj" style="flex:1"></div>' +
     '<label class="rmlbl" for="pmNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="pmNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
-    '<p class="dim small" id="pmSubj" style="margin:10px 0 6px"></p><div class="rmprev" id="pmPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts at the top are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
+      '<button type="button" class="btn" id="pmRestore" style="display:none"></button><button type="button" class="btn" id="pmReset" style="display:none">Undo text edits</button></div>' +
+    '<div class="rmprev" id="pmPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
     '<div class="rmrow"><span class="dim small">The address is remembered for ' + esc(pmReal(info) ? info.name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="btn" id="pmEml">Download email draft</button><button type="button" class="btn pri" id="pmCopy">Copy email</button></div>', "wide");
   const q = (id) => m.ov.querySelector("#" + id);
-  q("pmTo").value = pmEmail(info, list); q("pmHi").value = pmReal(info) ? info.name : "team";
-  const cur = () => personMail(list, info, q("pmHi").value, q("pmNote").value);
-  const paint = () => { const x = cur(); q("pmSubj").textContent = "Subject: " + x.subject; q("pmPrev").innerHTML = x.html; };
-  q("pmHi").addEventListener("input", paint); q("pmNote").addEventListener("input", paint);
+  let out = {}, subjEdited = false;
+  q("pmTo").value = pmEmail(info, listAll); q("pmHi").value = pmReal(info) ? info.name : "team";
+  const list = () => listAll.filter((i) => !out[T[i].key]);
+  const cur = () => personMail(list(), info, q("pmHi").value, q("pmNote").value);
+  const ed = mailEditor(q("pmPrev"), (k, keep) => { out[k] = 1; if (keep) counts(); else paint(); });
+  ed.onEdit = () => { q("pmReset").style.display = ""; };
+  function counts() { const n = Object.keys(out).length; q("pmN").textContent = n ? "· " + list().length + " of " + listAll.length : "";
+    q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
+  function paint() { const x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
+  const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
+  q("pmHi").addEventListener("change", reb); q("pmNote").addEventListener("change", reb);
+  q("pmSubj").addEventListener("input", () => { subjEdited = true; });
   q("pmTo").addEventListener("change", () => pmSaveEmail(info, q("pmTo").value));
-  q("pmCopy").onclick = (e) => { pmSaveEmail(info, q("pmTo").value); const x = cur(); copyRich(x.html, x.text, e.target, "Copy email"); };
-  q("pmEml").onclick = () => { pmSaveEmail(info, q("pmTo").value); const x = cur(); const who = (pmReal(info) ? info.name : "team").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    emlDownload(x.subject, x.html, "Swire-reminder-" + who + "-" + HC.dayKey(NOW) + ".eml", q("pmTo").value.trim()); };
+  q("pmRestore").onclick = () => { if (ed.edited && !confirm("Putting the tickets back rebuilds the mail and undoes your text edits. Continue?")) return; out = {}; paint(); };
+  q("pmReset").onclick = () => paint();
+  q("pmCopy").onclick = (e) => { pmSaveEmail(info, q("pmTo").value); copyRich(ed.html(), ed.text(), e.target, "Copy email"); };
+  q("pmEml").onclick = () => { pmSaveEmail(info, q("pmTo").value); const who = (pmReal(info) ? info.name : "team").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    emlDownload(q("pmSubj").value.trim() || cur().subject, ed.html(), "Swire-reminder-" + who + "-" + HC.dayKey(NOW) + ".eml", q("pmTo").value.trim()); };
   paint(); q("pmTo").focus();
 }
 /* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
