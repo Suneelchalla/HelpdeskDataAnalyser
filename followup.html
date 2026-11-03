@@ -93,7 +93,8 @@
   function lrpsRefresh(rows, force, onProgress) {
     if (lrpsBusy) return lrpsBusy;
     var keys = {}; rows.forEach(function (r) { var t = T(r); if (side(t) !== "closed") t.lrps.forEach(function (k) { keys[k] = 1; }); });
-    var ks = Object.keys(keys).filter(function (k) { return force || !LRPS[k] || Date.now() - (LRPS[k].at || 0) > 30 * MIN; });
+    var touched = {}; rows.forEach(function (r) { var t = T(r); if (t.updated != null) t.lrps.forEach(function (k) { if (LRPS[k] && (LRPS[k].at || 0) < t.updated) touched[k] = 1; }); });
+    var ks = Object.keys(keys).filter(function (k) { return force || !LRPS[k] || touched[k] || Date.now() - (LRPS[k].at || 0) > 30 * MIN; });
     if (!ks.length) return Promise.resolve(0);
     var ch = []; for (var i = 0; i < ks.length; i += 80) ch.push(ks.slice(i, i + 80));
     var done = 0;
@@ -120,6 +121,20 @@
   var stKey = function (s) { return String(s || "").toLowerCase().replace(/&/g, " and ").replace(/\s+/g, " ").trim(); };
   var MIS_OK = [["Technical Analysis", "Open"], ["Client Hotfix Testing", "Client UAT Testing"], ["Invoice Yet to Raise", "DB Script Delivered"], ["SVM Hotfix Testing", "SVM UAT Testing"]];
   var MIS_OK_SET = new Set(MIS_OK.map(function (p) { return stKey(p[0]) + "|" + stKey(p[1]); }));
+  /* client-ticket status read live from Jira by the mismatch re-check (the loaded data may be hours old) */
+  var LIVE = {}, stNow = function (t) { return (LIVE[t.key] && LIVE[t.key].s) || t.status; };
+  function recheck(ts) {
+    var keys = [], seenK = {}; ts.forEach(function (t) { [t.key].concat(t.lrps).forEach(function (k) { if (!seenK[k]) { seenK[k] = 1; keys.push(k); } }); });
+    var ch = []; for (var i = 0; i < keys.length; i += 80) ch.push(keys.slice(i, i + 80));
+    return ch.reduce(function (p, c) { return p.then(function () {
+      return call("/rest/api/3/search/jql?jql=" + encodeURIComponent("key in (" + c.map(function (k) { return '"' + k + '"'; }).join(",") + ")") + "&fields=assignee,status&maxResults=100").then(function (d) {
+        var at = Date.now(), seen = {};
+        (d.issues || []).forEach(function (is) { var f = is.fields || {}, st = f.status ? f.status.name : ""; seen[is.key] = 1;
+          if (/^LRPS-/i.test(is.key)) LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", id: f.assignee ? f.assignee.accountId || "" : "", e: f.assignee ? f.assignee.emailAddress || "" : "", s: st, at: at };
+          else LIVE[is.key] = { s: st, at: at }; });
+        c.forEach(function (k) { if (!seen[k] && /^LRPS-/i.test(k)) LRPS[k] = { a: "", s: "", at: at, gone: true }; });
+      }); }); }, Promise.resolve()).then(function () { lrpsSave(); bump(); return ts.filter(function (t) { return LIVE[t.key] && LIVE[t.key].s !== t.status; }).length; });
+  }
   function misOff(a, b) { a = stKey(a); b = stKey(b); return a !== b && !MIS_OK_SET.has(a + "|" + b); }
   /* scope: the open tickets in view + tickets closed in the last 30 days (from all tickets in view) */
   function misList(open, all) {
@@ -127,7 +142,7 @@
     function test(r) { var t = T(r); if (!t.key || seen.has(t.key) || !t.lrps.length) return; seen.add(t.key);
       var st = t.lrps.map(function (k) { return lrpsSt(t, k); }).filter(Boolean);
       if (!st.length) { unk++; return; }
-      if (st.some(function (x) { return misOff(t.status, x.s); })) out.push(t); }
+      if (st.some(function (x) { return misOff(stNow(t), x.s); })) out.push(t); }
     (open || []).forEach(test);
     (all || []).forEach(function (r) { var t = T(r); if (side(t) === "closed" && (t.updated || 0) >= from) test(r); });
     return { list: out, unknown: unk };
@@ -135,8 +150,8 @@
   function misPairs(ts) {
     var g = {};
     ts.forEach(function (t) { var seen = {};
-      t.lrps.forEach(function (k) { var x = lrpsSt(t, k); if (!x || !misOff(t.status, x.s)) return; var id = stKey(t.status) + "|" + stKey(x.s); if (seen[id]) return; seen[id] = 1;
-        (g[id] = g[id] || { a: t.status, b: x.s, ts: [] }).ts.push(t); }); });
+      var sn = stNow(t); t.lrps.forEach(function (k) { var x = lrpsSt(t, k); if (!x || !misOff(sn, x.s)) return; var id = stKey(sn) + "|" + stKey(x.s); if (seen[id]) return; seen[id] = 1;
+        (g[id] = g[id] || { a: sn, b: x.s, ts: [] }).ts.push(t); }); });
     return Object.keys(g).map(function (k) { return g[k]; }).sort(function (x, y) { return y.ts.length - x.ts.length || x.a.localeCompare(y.a) || x.b.localeCompare(y.b); });
   }
   var oldestOf = function (ts) { return ts.reduce(function (m, t) { return Math.max(m, ageMin(t) || 0); }, 0); };
@@ -303,8 +318,8 @@
 
   /* ═══ Status mismatch window: side → unique status pairs → tickets ═══ */
   var MIS_TCOLS = function (pair) { return [
-    ["Client status", function (t) { return '<span class="hdx-st">' + esc(t.status) + "</span>"; }],
-    ["LRPS status", function (t) { return t.lrps.map(function (k) { var x = lrpsSt(t, k), off = x && misOff(t.status, x.s);
+    ["Client status", function (t) { return '<span class="hdx-st">' + esc(stNow(t)) + "</span>" + (stNow(t) !== t.status ? ' <span class="hdx-dim" title="Read live from Jira; the loaded data still says ' + esc(t.status) + '">live</span>' : ""); }],
+    ["LRPS status", function (t) { return t.lrps.map(function (k) { var x = lrpsSt(t, k), off = x && misOff(stNow(t), x.s);
       return '<div style="white-space:nowrap"><span class="hdx-st' + (off ? " bad" : "") + '">' + esc(x ? x.s : "not read") + '</span> <a class="hdx-key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener">' + esc(k) + "</a>" +
         (x && x.src === "export" ? ' <span class="hdx-dim" title="From the export. Refresh LRPS from Jira to read it live.">export</span>' : "") + "</div>"; }).join(""); }],
     ["Ticket", function (t) { return '<a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a>"; }],
@@ -312,7 +327,7 @@
     ["Summary", function (t) { return '<span style="display:inline-block;min-width:240px">' + esc(t.summary) + "</span>"; }], ["Age", function (t) { return esc(fmt(ageMin(t))); }],
     ["LRPS assignee", function (t) { return esc(enggWho(t)); }], ["SVM In Charge", function (t) { return esc(t.svm || "—"); }]]; };
   function openMismatch(open, all) {
-    var m = modal(), S = { side: null, pair: null }, scope, data, sides, pairs, cur;
+    var m = modal(), S = { side: null, pair: null }, scope, data, sides, pairs, cur, RC = { busy: false, msg: "" };
     function compute() { scope = misList(open, all); data = scope.list; sides = SIDES.filter(function (s) { return data.some(function (t) { return side(t) === s[0]; }); }); }
     compute(); if (sides.length === 1) S.side = sides[0][0];
     function paint() {
@@ -333,10 +348,11 @@
           : '<tr><td colspan="5" class="hdx-dim">No tickets.</td></tr>') + "</tbody></table></div>";
       else { var C = MIS_TCOLS(pr); body = '<div class="hdx-tw"><table><thead><tr>' + C.map(function (c) { return "<th>" + c[0] + "</th>"; }).join("") + "</tr></thead><tbody>" +
         cur.map(function (t) { return "<tr>" + C.map(function (c) { return "<td>" + c[1](t) + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>"; }
-      m.box.innerHTML = '<div class="hdx-hd"><h3>Status mismatch between client ticket and LRPS<span class="n">' + cur.length.toLocaleString() + "</span></h3>" + lrpsBtnHtml() +
+      m.box.innerHTML = '<div class="hdx-hd"><h3>Status mismatch between client ticket and LRPS<span class="n">' + cur.length.toLocaleString() + "</span></h3>" +
+        '<button type="button" class="hdx-btn" data-m="recheck"' + (RC.busy ? " disabled" : "") + ' title="Read the client-ticket and LRPS statuses of these tickets from Jira now">' + (RC.busy ? "Checking…" : "Re-check in Jira") + "</button>" + lrpsBtnHtml() +
         (S.pair != null || (S.side && sides.length > 1) ? '<button type="button" class="hdx-btn" data-m="back">Back</button>' : "") +
         '<button type="button" class="hdx-btn" data-m="xlsx" title="A summary pivot and the tickets with the columns that matter">Download Excel</button><button type="button" class="hdx-btn" data-m="close">Close</button></div>' +
-        '<div class="hdx-crumb">' + crumb + "</div>" + body;
+        '<div class="hdx-crumb">' + crumb + "</div>" + (RC.msg ? '<div class="hdx-note" style="margin:0 0 8px;color:' + (RC.busy ? "#64748B" : "#1D4ED8") + '">' + esc(RC.msg) + "</div>" : "") + body;
       wireLrps(m, open.concat(all || []), function () { compute(); paint(); });
     }
     function back() { if (S.pair != null) S.pair = null; else S.side = null; paint(); }
@@ -346,13 +362,23 @@
       if (b.dataset.mside) { S.side = b.dataset.mside; S.pair = null; return paint(); }
       if (b.dataset.mpair != null) { S.pair = +b.dataset.mpair; return paint(); }
       var x = b.dataset.m;
-      if (x === "close") return m.close(); if (x === "back") return back();
+      if (x === "close") return m.close(); if (x === "back") return back(); if (x === "recheck") return doRecheck();
       if (x === "home") { S.side = null; S.pair = null; return paint(); } if (x === "side") { S.pair = null; return paint(); }
       if (x === "xlsx") { var sd = S.side && SIDES.find(function (s) { return s[0] === S.side; }), pr = S.pair != null ? pairs[S.pair] : null;
         busy(b, "Download Excel", function () { return misExcel(cur, "Status mismatch" + (sd ? " " + sd[1] : "") + (pr ? " " + pr.a + " vs " + pr.b : "")); }); }
     });
-    m._chg = function () { compute(); paint(); }; window.addEventListener("hdx-change", m._chg);
+    function doRecheck() {
+      if (RC.busy || !data.length) return;
+      if (!bridgeOn()) { RC.msg = "Not checked live: the HD Jira Bridge is not connected, so the statuses may be old."; return paint(); }
+      RC.busy = true; RC.msg = "Checking the " + data.length + " tickets and their LRPS tickets in Jira…"; paint();
+      var before = data.length;
+      recheck(data).then(function (diff) { RC.busy = false; compute(); if (S.side && !sides.some(function (s) { return s[0] === S.side; })) { S.side = sides.length === 1 ? sides[0][0] : null; } S.pair = null;
+        RC.msg = "Checked live in Jira at " + fdt(Date.now()) + ". " + (before - data.length > 0 ? (before - data.length) + " no longer mismatched. " : "") + (diff ? diff + " client-ticket status" + (diff === 1 ? " differs" : "es differ") + " from the loaded data (marked live); Refresh data to update the rest of the page." : "");
+        paint(); }, function (e) { RC.busy = false; RC.msg = "Could not check in Jira: " + e.message; paint(); });
+    }
+    m._chg = function () { if (!RC.busy) { compute(); paint(); } }; window.addEventListener("hdx-change", m._chg);
     paint();
+    doRecheck();                              // always compare against Jira as it is now, not the saved copy
   }
   function misExcel(ts, title) {
     var S = XL.S, D = XL.date, rows = [], ph = function (h) { return h.map(function (x) { return { v: x, s: S.phead }; }); };
@@ -377,7 +403,7 @@
     rows.push(tr);
     var C = [["Ticket", function (t) { return { f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: S.link }; }, 15], ["Client", function (t) { return t.project; }, 18],
       ["Type", function (t) { return typeTxt(t); }, 11], ["Priority", function (t) { return sevName(t); }, 12], ["Summary", function (t) { return { v: t.summary, s: S.wrap }; }, 52],
-      ["Client status", function (t) { return t.status; }, 24], ["LRPS", function (t) { return t.lrps.join(", "); }, 14], ["LRPS status", function (t) { return { v: lrStat(t), s: S.bad }; }, 24],
+      ["Client status", function (t) { return stNow(t); }, 24], ["LRPS", function (t) { return t.lrps.join(", "); }, 14], ["LRPS status", function (t) { return { v: lrStat(t), s: S.bad }; }, 24],
       ["LRPS assignee", function (t) { return enggWho(t); }, 24], ["Where", function (t) { return sideName(side(t)); }, 20], ["SVM In Charge", function (t) { return t.svm; }, 18],
       ["Created", function (t) { return D(t.created); }, 17], ["Updated", function (t) { return D(t.updated); }, 17], ["Age (days)", function (t) { return { v: Math.round((ageMin(t) || 0) / 144) / 10, s: S.num }; }, 9],
       ["Not updated (days)", function (t) { return t.updated != null ? { v: Math.round((Date.now() - t.updated) / DAY * 10) / 10, s: S.num } : ""; }, 11]];
