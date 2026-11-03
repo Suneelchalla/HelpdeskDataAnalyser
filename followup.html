@@ -397,7 +397,9 @@
     var who = Object.keys(by).map(function (w) { return { w: w, ts: by[w], old: oldestOf(by[w]) }; }).sort(function (x, y) { return y.ts.length - x.ts.length || y.old - x.old || x.w.localeCompare(y.w); });
     var cl = {}; pend.forEach(function (t) { (cl[t.project] = cl[t.project] || []).push(t); });
     var clients = Object.keys(cl).map(function (c) { return { c: c, ts: cl[c], hd: cl[c].filter(function (t) { return side(t) === "hd"; }).length, old: oldestOf(cl[c]) }; }).sort(function (x, y) { return y.ts.length - x.ts.length || y.old - x.old || x.c.localeCompare(y.c); });
-    return { now: Date.now(), hd: hd, engg: engg, pend: pend, who: who, clients: clients,
+    var sv = {}; pend.forEach(function (t) { var k = t.svm || "(no SVM In Charge)"; (sv[k] = sv[k] || []).push(t); });
+    var svms = Object.keys(sv).map(function (k) { return { w: k, ts: sv[k], old: oldestOf(sv[k]) }; }).sort(function (x, y) { return y.ts.length - x.ts.length || x.w.localeCompare(y.w); });
+    return { now: Date.now(), hd: hd, engg: engg, pend: pend, who: who, clients: clients, svms: svms,
       hot: pend.filter(function (t) { return t.sev === "showstopper" || t.sev === "critical"; }),
       oldest: pend.slice().sort(function (a, b) { return (ageMin(b) || 0) - (ageMin(a) || 0); }).slice(0, 5),
       stale: pend.filter(function (t) { return t.updated != null && Date.now() - t.updated >= 3 * DAY; }) };
@@ -458,6 +460,12 @@
       { v: Math.round((ageMin(t) || 0) / 144) / 10, s: S.num }, t.updated != null ? { v: Math.round((d.now - t.updated) / DAY * 10) / 10, s: S.num } : "", ageLbl(t)]; };
     var listSheet = function (name, ts) { return { name: name, cols: HEAD.map(function (h) { return h[1]; }), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, ts.length + 1),
       rows: [HEAD.map(function (h) { return { v: h[0], s: S.head }; })].concat(ts.map(row)) }; };
+    /* one block per SVM In Charge: title row (name also in the SVM In Charge column, so a filter on it keeps the title), tickets, blank row */
+    var bySvm = function (name, groups) { var svmCol = HEAD.findIndex(function (h) { return h[0] === "SVM In Charge"; }), out = [HEAD.map(function (h) { return { v: h[0], s: S.head }; })];
+      groups.forEach(function (g, k) { if (k) out.push([]);
+        out.push(HEAD.map(function (h, c) { return { v: c === 0 ? "SVM In Charge: " + g.w + " · " + g.ts.length + " ticket" + (g.ts.length === 1 ? "" : "s") : c === svmCol ? g.w : "", s: S.totLbl }; }));
+        g.ts.slice().sort(bySevAge).forEach(function (t) { out.push(row(t)); }); });
+      return { name: name, cols: HEAD.map(function (h) { return h[1]; }), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, out.length), rows: out }; };
     var rows = [];
     rows.push([{ v: "Help Desk handover", s: S.title }]);
     rows.push([{ v: "Position at " + fdt(d.now) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” sheet.", s: S.sub }]);
@@ -476,7 +484,7 @@
     pivot("1. Pending with SVM (Help Desk + Engineering) by client × priority", "", "Client", uniq(d.pend, function (t) { return t.project; }), d.pend, function (t, v) { return t.project === v; });
     pivot("2. Pending with Engineering by engineering assignee × priority", "Engineering assignee = the assignee of the linked LRPS ticket.", "Engineering assignee", uniq(d.engg, enggWho), d.engg, function (t, v) { return enggWho(t) === v; });
     pivot("3. Pending with SVM by status × priority", "", "Status", uniq(d.pend, function (t) { return t.status || "(blank)"; }), d.pend, function (t, v) { return (t.status || "(blank)") === v; });
-    var sheets = [{ name: "Summary", rows: rows, cols: [40].concat(SEV.map(function () { return 13; }), [11]), first: true }, listSheet("Pending with SVM", d.pend), listSheet("Show Stopper-Critical", d.hot)];
+    var sheets = [{ name: "Summary", rows: rows, cols: [40].concat(SEV.map(function () { return 13; }), [11]), first: true }, bySvm("Pending with SVM", d.svms), listSheet("Show Stopper-Critical", d.hot)];
     return XL.build(sheets).then(function (u) { return { bytes: u, file: hoBase(d) + ".xlsx" }; });
   }
   function u8b64(u) { var s = ""; for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
@@ -508,7 +516,7 @@
         '<p class="hdx-sub">Everything pending with SVM (Help Desk and Engineering) for the tickets in view, across all clients; the header filters (workers, projects, in-charge, types, dates) apply. The email is brief; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>' +
         '<div class="hdx-row"><label for="hdxFrom">Handed over by</label><input class="hdx-inp" id="hdxFrom" style="width:200px" placeholder="Your name"><label for="hdxTo">Hi</label><input class="hdx-inp" id="hdxTo" style="width:220px" placeholder="team"></div>' +
         '<div class="hdx-row" style="align-items:flex-start"><label for="hdxNote" style="padding-top:7px">Notes</label><textarea class="hdx-inp" id="hdxNote" rows="2" style="flex:1;min-width:280px;resize:vertical" placeholder="Anything promised to a client, calls in progress, things to watch"></textarea></div>' +
-        '<div class="hdx-grid"><div class="hdx-prev" id="hdxPrev">' + prev + '</div><div class="hdx-side"><h4>Mail an engineering assignee</h4><p class="hdx-note" style="margin:0 0 8px">Their tickets with the ageing, no SLA. One mail per person.</p><div id="hdxWho"></div></div></div>';
+        '<div class="hdx-grid"><div class="hdx-prev" id="hdxPrev">' + prev + '</div><div class="hdx-side"><h4>Mail an SVM In Charge</h4><p class="hdx-note" style="margin:0 0 8px">Their pending tickets (Help Desk and Engineering) with the LRPS ticket, the engineering assignee and the ageing, no SLA. One mail per person.</p><div id="hdxWho"></div></div></div>';
       var q = function (id) { return m.box.querySelector("#" + id); };
       q("hdxFrom").value = ppl.from || ""; q("hdxTo").value = ppl.to || ""; q("hdxNote").value = ppl.note || "";
       ["hdxFrom", "hdxTo", "hdxNote"].forEach(function (id) { q(id).addEventListener("input", function () { ppl.from = q("hdxFrom").value; ppl.to = q("hdxTo").value; ppl.note = q("hdxNote").value; hoSave({ from: ppl.from, to: ppl.to }); paint(true); }); });
@@ -516,10 +524,10 @@
       paintWho();
     }
     function paintWho() { var w = m.box.querySelector("#hdxWho"); if (!w) return;
-      w.innerHTML = d.who.length ? d.who.map(function (x, n) { return '<div class="hdx-who"><span title="' + esc(x.w) + '">' + esc(x.w) + ' <b>' + x.ts.length + '</b></span><button type="button" class="hdx-btn sm" data-who="' + n + '">Mail</button></div>'; }).join("") : '<p class="hdx-note">Nothing pending with Engineering.</p>'; }
+      w.innerHTML = d.svms.length ? d.svms.map(function (x, n) { return '<div class="hdx-who"><span title="' + esc(x.w) + '">' + esc(x.w) + ' <b>' + x.ts.length + '</b></span><button type="button" class="hdx-btn sm" data-who="' + n + '">Mail</button></div>'; }).join("") : '<p class="hdx-note">Nothing pending with SVM.</p>'; }
     m.box.addEventListener("click", function (e) {
       var b = e.target.closest("[data-h],[data-who]"); if (!b) return;
-      if (b.dataset.who != null) { var x = d.who[+b.dataset.who]; return openPersonMail(x.ts, x.w); }
+      if (b.dataset.who != null) { var x = d.svms[+b.dataset.who]; return openPersonMail(x.ts, x.w); }
       var h = b.dataset.h;
       if (h === "close") return m.close();
       if (h === "copy") return copyRich(hoHTML(d, ppl), hoText(d, ppl), b, "Copy email");
@@ -532,7 +540,8 @@
   /* one person: their tickets with ageing (no SLA) */
   function pmBook() { try { return JSON.parse(localStorage.getItem(PM_KEY) || "{}") || {}; } catch (e) { return {}; } }
   function personMail(ts, name, hi, note) {
-    ts = ts.slice().sort(bySevAge);
+    var sr = function (t) { return side(t) === "hd" ? 0 : 1; };
+    ts = ts.slice().sort(function (a, b) { return sr(a) - sr(b) || bySevAge(a, b); });
     var real = realWho(name), H = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 6px"', ageD = function (t) { return (ageMin(t) || 0) / 1440; }, updD = function (t) { return t.updated != null ? (Date.now() - t.updated) / DAY : null; };
     var bucket = function (dd) { return AGEB.find(function (b) { return dd >= b[0] && dd < b[1]; }) || AGEB[0]; };
     var oldest = ts.reduce(function (mm, t) { return mm == null || ageD(t) > ageD(mm) ? t : mm; }, null), stale = ts.filter(function (t) { return updD(t) != null && updD(t) >= 7; }).length;
@@ -541,26 +550,28 @@
     var summary = "<table " + tbl(bk.length * 100 + 80) + "><tr>" + bk.map(function (x) { return th(x.l, null, 100); }).join("") + th("Total", null, 80) + "</tr><tr>" +
       bk.map(function (x) { return tdc(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : "")); }).join("") + tdc("<b>" + ts.length + "</b>", "text-align:center") + "</tr></table>";
     var facts = [oldest ? "Oldest: <b>" + esc(oldest.key) + "</b>, open " + esc(fmt(ageMin(oldest))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
-    var COLW = [110, 120, 90, 80, 260, 130, 120, 140, 100, 110];
+    var COLW = [110, 110, 95, 85, 80, 240, 130, 110, 130, 150, 100, 110];
     var rows = ts.map(function (t) { var dd = ageD(t), b = bucket(dd), u = updD(t);
-      var lr = t.lrps.length ? t.lrps.map(function (x) { return esc(x) + (LRPS[x] && LRPS[x].s ? " (" + esc(LRPS[x].s) + ")" : t.lrpsStatus[x] ? " (" + esc(t.lrpsStatus[x]) + ")" : ""); }).join("<br>") : "—";
+      var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
+      var ls = t.lrps.length ? t.lrps.map(function (x) { var y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
       var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
-      return "<tr>" + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
-        tdc(lr, "white-space:nowrap") + tdc(la, "white-space:nowrap") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
+      return "<tr>" + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(side(t) === "hd" ? '<b style="color:#0E7C86">Help Desk</b>' : '<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
+        tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") + tdc(la, "white-space:nowrap;font-weight:600") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
         tdc(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdate(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
+    var nHd = ts.filter(function (t) { return side(t) === "hd"; }).length, nEn = ts.length - nHd;
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
-    var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + "><b>" + ts.length + "</b> ticket" + (ts.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.</p>" +
+    var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + "><b>" + ts.length + "</b> ticket" + (ts.length === 1 ? " is" : "s are") + " pending with SVM where you are SVM In Charge (" + nHd + " with the Help Desk, " + nEn + " with Engineering). Each row shows the LRPS ticket and its engineering assignee; the ageing is below.</p>" +
       "<h3 " + H + ">Ageing</h3>" + summary + gap(6) + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + "><tr>" + ["Ticket", "Client", "Type", "Priority", "Summary", "Status", "LRPS", "LRPS assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
+      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + "><tr>" + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
       "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
-    var text = "Hi " + nm + ",\n\n" + ts.length + " ticket" + (ts.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
-      ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.join(", ") : ""); }).join("\n") +
+    var text = "Hi " + nm + ",\n\n" + ts.length + " ticket" + (ts.length === 1 ? " is" : "s are") + " pending with SVM where you are SVM In Charge (" + nHd + " Help Desk, " + nEn + " Engineering).\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
+      ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
       "\n\nPlease update each ticket with the next step and an ETR.\n\nRegards,\n" + (hoPeople().from || "");
     return { html: html, text: text, subject: "Help Desk follow-up: " + (real ? name + ", " : "") + ts.length + " ticket" + (ts.length === 1 ? "" : "s") + (oldest ? ", oldest " + fmt(ageMin(oldest)) : "") };
   }
   function openPersonMail(ts, name) {
-    var m = modal("narrow"), real = realWho(name), key = "engg:" + name;
-    var guess = function () { var b = pmBook(); if (b[key] != null) return b[key]; if (!real) return ""; for (var i = 0; i < ts.length; i++) for (var j = 0; j < ts[i].lrps.length; j++) { var x = LRPS[ts[i].lrps[j]]; if (x && x.a === name && x.e) return x.e; } return ""; };
+    var m = modal(), real = realWho(name), key = "svm:" + name;
+    var guess = function () { var b = pmBook(); return b[key] != null ? b[key] : ""; };
     m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder <span class="n">' + esc(name) + " · " + ts.length + '</span></h3><button type="button" class="hdx-btn" data-p="close">Cancel</button></div>' +
       '<div class="hdx-row"><label for="pmTo">To</label><input class="hdx-inp" id="pmTo" style="flex:1;min-width:240px" placeholder="name@solverminds.com"><label for="pmHi">Hi</label><input class="hdx-inp" id="pmHi" style="width:200px"></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="pmNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="pmNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown above the tickets"></textarea></div>' +
