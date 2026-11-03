@@ -15,6 +15,582 @@
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
 <script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   HDX: Status mismatch (client ticket ↔ LRPS) and Handover for the Follow-up
+   Tracker, across every client (Project). Self-contained: its own windows, CSS,
+   Excel writer and mails. The existing Follow-up features are not touched; the
+   React app only calls HDX.openMismatch / HDX.openHandover / HDX.misCount.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  "use strict";
+  var MIN = 60000, DAY = 86400000, IST = 330 * MIN;
+  var esc = function (s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
+  function jiraHost() { try { var c = JSON.parse(localStorage.getItem("hd-jira-cfg") || "{}"); if (c.jiraHost) return c.jiraHost; } catch (e) {} return "svmhelpdesk.atlassian.net"; }
+  var jiraUrl = function (k) { return "https://" + jiraHost() + "/browse/" + encodeURIComponent(k); };
+  function ms(v) { if (v == null || v === "") return null; var d = v instanceof Date ? v : new Date(v); var t = d.getTime(); return isNaN(t) ? null : t; }
+  function fdt(t) { if (t == null) return "—"; var d = new Date(t + IST), M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return String(d.getUTCDate()).padStart(2, "0") + " " + M[d.getUTCMonth()] + " " + String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0"); }
+  function fdate(t) { if (t == null) return "—"; var d = new Date(t + IST), M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return String(d.getUTCDate()).padStart(2, "0") + " " + M[d.getUTCMonth()] + " " + String(d.getUTCFullYear()).slice(2); }
+  function dayKey(t) { return new Date(t + IST).toISOString().slice(0, 10); }
+  function fmt(min) { if (min == null || isNaN(min)) return "—"; min = Math.max(0, Math.round(min)); var d = Math.floor(min / 1440), h = Math.floor((min % 1440) / 60), m = min % 60;
+    return d ? d + "d" + (h ? " " + h + "h" : "") : h ? h + "h" + (m ? " " + m + "m" : "") : m + "m"; }
+  var SEVS = [{ id: "showstopper", name: "Show Stopper", color: "#C8102E" }, { id: "critical", name: "Critical", color: "#C2680A" }, { id: "high", name: "High", color: "#A16207" }, { id: "medium", name: "Medium", color: "#2563EB" }, { id: "low", name: "Low", color: "#64748B" }];
+  function sevOf(p) { var s = String(p || "").toLowerCase().replace(/\s+/g, ""); if (s.indexOf("showstopper") > -1) return "showstopper"; if (s.indexOf("critical") > -1) return "critical"; if (s.indexOf("high") > -1) return "high"; if (s.indexOf("low") > -1) return "low"; return "medium"; }
+  var sevRank = function (s) { var i = SEVS.findIndex(function (x) { return x.id === s; }); return i < 0 ? 9 : i; };
+  var sevName = function (t) { var s = SEVS.find(function (x) { return x.id === t.sev; }); return s ? s.name : t.priority || "(none)"; };
+  var AGEB = [[0, 7, "< 7 days", "#E7A3B9"], [7, 30, "7–30 days", "#C2680A"], [30, 60, "31–60 days", "#D7263D"], [60, 90, "61–90 days", "#A61B3A"], [90, 1e9, "90+ days", "#5C1730"]];
+  var list = function (v) { var s = String(v == null ? "" : v).trim(); if (!s || s.toLowerCase() === "nan") return []; return s.split(/[;,]/).map(function (x) { return x.trim(); }).filter(Boolean); };
+  var clean = function (v) { var s = String(v == null ? "" : v).trim(); return s.toLowerCase() === "nan" ? "" : s; };
+
+  /* ── tickets: the Follow-up rows in one shape ── */
+  var cache = new WeakMap();
+  function T(r) {
+    var x = cache.get(r); if (x) return x;
+    var links = list(r["Linked Issues"]), lst = list(r["Linked Ticket status"]), lrps = [], ls = {};
+    links.forEach(function (k, i) { if (/^LRPS-\d+$/i.test(k)) { k = k.toUpperCase(); lrps.push(k); if (lst[i]) ls[k] = lst[i]; } });
+    x = { r: r, key: clean(r.Key), status: clean(r.Status), priority: clean(r.Priority), sev: sevOf(r.Priority), type: clean(r["Issue Type"]), summary: clean(r.Summary), project: clean(r.Project) || "(no project)",
+      svm: clean(r["SVM In Charge"]), cw: clean(r["Current Worker"]), created: ms(r.Created), updated: ms(r.Updated || r.Created), lrps: lrps, lrpsStatus: ls,
+      meId: clean(r["Client Reference"]), comps: clean(r.Components) };
+    cache.set(r, x); return x;
+  }
+  var typeTxt = function (t) { return /incident/i.test(t.type) ? "Incident" : /service/i.test(t.type) ? "Service Req" : t.type || "—"; };
+  var ageMin = function (t) { return t.created == null ? null : (Date.now() - t.created) / MIN; };
+  function side(t) {
+    if (/^closed$/i.test(t.status) || (window.HDClass && HDClass.isTerminal && HDClass.isTerminal(t.status))) return "closed";
+    if (t.status === "On-Hold" || t.status === "Invoice Yet to Raise") return "hold";
+    var c = window.HDClass && HDClass.classify3 ? HDClass.classify3(t.status) : "hd";
+    return c === "engg" ? "engg" : c === "client" ? "client" : "hd";
+  }
+  var SIDES = [
+    ["hd", "With SVM (Help Desk)", "Status is on the Help Desk side", "#0891B2"],
+    ["engg", "With Engineering", "Status is on the Engineering side", "#7C3AED"],
+    ["client", "With client", "Status is waiting on the client", "#D97706"],
+    ["hold", "On-Hold / Invoice", "On-Hold or Invoice Yet to Raise", "#64748B"],
+    ["closed", "Closed", "Closed in the last 30 days", "#94A3B8"]
+  ];
+  var sideName = function (k) { var s = SIDES.find(function (x) { return x[0] === k; }); return s ? s[1] : k; };
+  var bySevAge = function (a, b) { return sevRank(a.sev) - sevRank(b.sev) || (a.created || 0) - (b.created || 0); };
+
+  /* ── LRPS: shared cache with the Swire module (same browser storage), read from Jira through the HD Jira Bridge ── */
+  var LKEY = "hd-swire-lrps", LRPS = {};
+  function lrpsLoad() { try { LRPS = JSON.parse(localStorage.getItem(LKEY) || "{}") || {}; } catch (e) { LRPS = {}; } }
+  function lrpsSave() { try { localStorage.setItem(LKEY, JSON.stringify(LRPS)); } catch (e) {} }
+  lrpsLoad();
+  window.addEventListener("storage", function (e) { if (e.key === LKEY) { lrpsLoad(); bump(); } });
+  function bump() { try { window.dispatchEvent(new Event("hdx-change")); } catch (e) {} }
+  var BRG = { seq: 0, pend: {}, ready: false };
+  window.addEventListener("message", function (e) { var d = e.data; if (!d || e.source !== window) return;
+    if (d.type === "HD_BRIDGE_READY") { BRG.ready = true; return; }
+    if (d.type !== "HD_BRIDGE_RESULT") return; var p = BRG.pend[d.id]; if (!p) return; delete BRG.pend[d.id]; d.ok ? p.res(d.data) : p.rej(new Error(d.error || "Bridge error")); });
+  function bridgeOn() { return BRG.ready || !!window._rmBridge; }
+  function call(path) {
+    if (!bridgeOn()) return Promise.reject(new Error("The HD Jira Bridge extension is not connected."));
+    return new Promise(function (res, rej) { var id = "hdx" + (++BRG.seq) + "_" + Date.now(); BRG.pend[id] = { res: res, rej: rej };
+      window.postMessage({ type: "HD_BRIDGE_CALL", id: id, host: jiraHost(), path: path, method: "GET", body: null }, "*");
+      setTimeout(function () { if (BRG.pend[id]) { delete BRG.pend[id]; rej(new Error("Jira did not answer in time.")); } }, 60000); });
+  }
+  var lrpsBusy = null;
+  function lrpsRefresh(rows, force, onProgress) {
+    if (lrpsBusy) return lrpsBusy;
+    var keys = {}; rows.forEach(function (r) { var t = T(r); if (side(t) !== "closed") t.lrps.forEach(function (k) { keys[k] = 1; }); });
+    var ks = Object.keys(keys).filter(function (k) { return force || !LRPS[k] || Date.now() - (LRPS[k].at || 0) > 30 * MIN; });
+    if (!ks.length) return Promise.resolve(0);
+    var ch = []; for (var i = 0; i < ks.length; i += 80) ch.push(ks.slice(i, i + 80));
+    var done = 0;
+    lrpsBusy = ch.reduce(function (p, c) { return p.then(function () {
+      var jql = "key in (" + c.map(function (k) { return '"' + k + '"'; }).join(",") + ")";
+      return call("/rest/api/3/search/jql?jql=" + encodeURIComponent(jql) + "&fields=assignee,status&maxResults=100").then(function (d) {
+        var seen = {}, at = Date.now();
+        (d.issues || []).forEach(function (is) { var f = is.fields || {}; seen[is.key] = 1;
+          LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", id: f.assignee ? f.assignee.accountId || "" : "", e: f.assignee ? f.assignee.emailAddress || "" : "", s: f.status ? f.status.name : "", at: at }; });
+        c.forEach(function (k) { if (!seen[k]) LRPS[k] = { a: "", s: "", at: at, gone: true }; });
+        done += c.length; if (onProgress) onProgress(done, ks.length);
+      }); }); }, Promise.resolve())
+      .then(function () { lrpsSave(); lrpsBusy = null; bump(); return ks.length; }, function (e) { lrpsSave(); lrpsBusy = null; bump(); throw e; });
+    return lrpsBusy;
+  }
+  function lrpsSt(t, k) { var x = LRPS[k]; if (x && !x.gone && x.s) return { s: x.s, src: "jira" }; return t.lrpsStatus[k] ? { s: t.lrpsStatus[k], src: "export" } : null; }
+  function enggWho(t) { var n = t.lrps.map(function (k) { return LRPS[k] && !LRPS[k].gone && LRPS[k].a; }).filter(Boolean); return n[0] || (t.lrps.length ? (t.lrps.some(function (k) { return LRPS[k]; }) ? "(LRPS unassigned)" : "(LRPS not read)") : "(no LRPS ticket)"); }
+  var realWho = function (w) { return !/^\(/.test(w); };
+  function lrStat(t) { return t.lrps.length ? (t.lrps.map(function (k) { return (lrpsSt(t, k) || {}).s; }).filter(Boolean).join(", ") || "(not read)") : "(no LRPS)"; }
+  function lrpsWithWho(t) { return t.lrps.map(function (k) { return k + (LRPS[k] && !LRPS[k].gone && LRPS[k].a ? " (" + LRPS[k].a + ")" : ""); }).join(", "); }
+  function holder(t) { var s = side(t); if (s === "engg") { var w = enggWho(t); return realWho(w) ? w : (t.cw || w); } return t.cw || t.svm || "not assigned"; }
+
+  /* ── status pairs that differ in name but are correct together: [client ticket status, LRPS status] ── */
+  var stKey = function (s) { return String(s || "").toLowerCase().replace(/&/g, " and ").replace(/\s+/g, " ").trim(); };
+  var MIS_OK = [["Technical Analysis", "Open"], ["Client Hotfix Testing", "Client UAT Testing"], ["Invoice Yet to Raise", "DB Script Delivered"]];
+  var MIS_OK_SET = new Set(MIS_OK.map(function (p) { return stKey(p[0]) + "|" + stKey(p[1]); }));
+  function misOff(a, b) { a = stKey(a); b = stKey(b); return a !== b && !MIS_OK_SET.has(a + "|" + b); }
+  /* scope: the open tickets in view + tickets closed in the last 30 days (from all tickets in view) */
+  function misList(open, all) {
+    var seen = new Set(), out = [], from = Date.now() - 30 * DAY, unk = 0;
+    function test(r) { var t = T(r); if (!t.key || seen.has(t.key) || !t.lrps.length) return; seen.add(t.key);
+      var st = t.lrps.map(function (k) { return lrpsSt(t, k); }).filter(Boolean);
+      if (!st.length) { unk++; return; }
+      if (st.some(function (x) { return misOff(t.status, x.s); })) out.push(t); }
+    (open || []).forEach(test);
+    (all || []).forEach(function (r) { var t = T(r); if (side(t) === "closed" && (t.updated || 0) >= from) test(r); });
+    return { list: out, unknown: unk };
+  }
+  function misPairs(ts) {
+    var g = {};
+    ts.forEach(function (t) { var seen = {};
+      t.lrps.forEach(function (k) { var x = lrpsSt(t, k); if (!x || !misOff(t.status, x.s)) return; var id = stKey(t.status) + "|" + stKey(x.s); if (seen[id]) return; seen[id] = 1;
+        (g[id] = g[id] || { a: t.status, b: x.s, ts: [] }).ts.push(t); }); });
+    return Object.keys(g).map(function (k) { return g[k]; }).sort(function (x, y) { return y.ts.length - x.ts.length || x.a.localeCompare(y.a) || x.b.localeCompare(y.b); });
+  }
+  var oldestOf = function (ts) { return ts.reduce(function (m, t) { return Math.max(m, ageMin(t) || 0); }, 0); };
+  var uniqClients = function (ts) { var c = {}; ts.forEach(function (t) { c[t.project] = (c[t.project] || 0) + 1; }); return Object.keys(c).sort(function (a, b) { return c[b] - c[a] || a.localeCompare(b); }).map(function (k) { return [k, c[k]]; }); };
+  /* ── Minimal .xlsx writer (no library): inline strings, styles, formulas with cached values, frozen header,
+     auto-filter, column widths. Zipped with the browser's own deflate (CompressionStream) when it has one. ── */
+  var XL = (function () {
+    const xe = (s) => String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const col = (n) => { let s = ""; n++; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+    /* style ids (cellXfs order below) */
+    const S = { txt: 0, head: 1, title: 2, sub: 3, link: 4, date: 5, num: 6, int: 7, totLbl: 8, totInt: 9, lbl: 10, wrap: 11, bad: 12, cellInt: 13, phead: 14 };
+    const STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd mmm yyyy hh:mm"/><numFmt numFmtId="165" formatCode="0.0"/></numFmts>' +
+      '<fonts count="7">' +
+        '<font><sz val="10"/><name val="Arial"/></font>' +
+        '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>' +
+        '<font><b/><sz val="13"/><color rgb="FF5C1730"/><name val="Arial"/></font>' +
+        '<font><sz val="9"/><color rgb="FF6B5A63"/><name val="Arial"/></font>' +
+        '<font><u/><sz val="10"/><color rgb="FF7A1F3D"/><name val="Arial"/></font>' +
+        '<font><b/><sz val="10"/><name val="Arial"/></font>' +
+        '<font><b/><sz val="10"/><color rgb="FFC8102E"/><name val="Arial"/></font>' +
+      "</fonts>" +
+      '<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+        '<fill><patternFill patternType="solid"><fgColor rgb="FF7A1F3D"/><bgColor indexed="64"/></patternFill></fill>' +
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFF6E9EE"/><bgColor indexed="64"/></patternFill></fill>' +
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFFBF6F8"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+      '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' +
+        '<border><left style="thin"><color rgb="FFE3D3DA"/></left><right style="thin"><color rgb="FFE3D3DA"/></right><top style="thin"><color rgb="FFE3D3DA"/></top><bottom style="thin"><color rgb="FFE3D3DA"/></bottom><diagonal/></border></borders>' +
+      '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+      '<cellXfs count="15">' +
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"><alignment vertical="top"/></xf>' +                                   // 0 txt
+        '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>' + // 1 head
+        '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" applyFont="1"/>' +                                                                     // 2 title
+        '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" applyFont="1"/>' +                                                                     // 3 sub
+        '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" applyFont="1" applyBorder="1"><alignment vertical="top"/></xf>' +                     // 4 link
+        '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +          // 5 date
+        '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"><alignment vertical="top"/></xf>' +          // 6 num 0.0
+        '<xf numFmtId="1" fontId="5" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center"/></xf>' + // 7 row total
+        '<xf numFmtId="0" fontId="5" fillId="3" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>' +                                      // 8 total label
+        '<xf numFmtId="1" fontId="5" fillId="3" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center"/></xf>' + // 9 total int
+        '<xf numFmtId="0" fontId="5" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>' +                                      // 10 row label
+        '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"><alignment vertical="top" wrapText="1"/></xf>' +                     // 11 wrap
+        '<xf numFmtId="0" fontId="6" fillId="0" borderId="1" applyFont="1" applyBorder="1"><alignment vertical="top"/></xf>' +                     // 12 bad (red bold)
+        '<xf numFmtId="1" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyBorder="1"><alignment horizontal="center"/></xf>' +       // 13 pivot cell
+        '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' + // 14 pivot head
+      "</cellXfs>" +
+      '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    /* Excel date serial of an epoch-ms instant, shown in IST */
+    const date = (ms) => ms == null ? null : { v: (ms + 330 * 60000) / 86400000 + 25569, s: S.date };
+    function cellXml(c, r, k) {
+      if (c == null || c === "") return "";
+      const ref = col(k) + r;
+      if (typeof c !== "object") c = { v: c };
+      const st = c.s != null ? ' s="' + c.s + '"' : typeof c.v === "number" ? ' s="' + S.cellInt + '"' : ' s="0"';
+      if (c.f) return "<c r=\"" + ref + "\"" + st + (typeof c.v === "number" ? "" : ' t="str"') + "><f>" + xe(c.f) + "</f>" + (c.v != null ? "<v>" + xe(c.v) + "</v>" : "") + "</c>";
+      if (typeof c.v === "number") return "<c r=\"" + ref + "\"" + st + "><v>" + (isFinite(c.v) ? c.v : 0) + "</v></c>";
+      return "<c r=\"" + ref + "\"" + st + ' t="inlineStr"><is><t xml:space="preserve">' + xe(c.v) + "</t></is></c>";
+    }
+    function sheetXml(sh) {
+      const rows = sh.rows.map((row, ri) => { const r = ri + 1, cells = (row || []).map((c, k) => cellXml(c, r, k)).join("");
+        return "<row r=\"" + r + "\"" + (sh.heights && sh.heights[ri] ? ' ht="' + sh.heights[ri] + '" customHeight="1"' : "") + ">" + cells + "</row>"; }).join("");
+      const view = sh.freeze ? '<sheetViews><sheetView workbookViewId="0"' + (sh.first ? ' tabSelected="1"' : "") + '><pane ySplit="' + sh.freeze + '" topLeftCell="A' + (sh.freeze + 1) + '" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A' + (sh.freeze + 1) + '" sqref="A' + (sh.freeze + 1) + '"/></sheetView></sheetViews>'
+        : '<sheetViews><sheetView workbookViewId="0"' + (sh.first ? ' tabSelected="1"' : "") + ' showGridLines="0"/></sheetViews>';
+      const cols = sh.cols ? "<cols>" + sh.cols.map((w, k) => '<col min="' + (k + 1) + '" max="' + (k + 1) + '" width="' + w + '" customWidth="1"/>').join("") + "</cols>" : "";
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        view + '<sheetFormatPr defaultRowHeight="15"/>' + cols + "<sheetData>" + rows + "</sheetData>" + (sh.filter ? '<autoFilter ref="' + sh.filter + '"/>' : "") +
+        (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map((m) => '<mergeCell ref="' + m + '"/>').join("") + "</mergeCells>" : "") +
+        '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+    }
+    const qs = (n) => "'" + String(n).replace(/'/g, "''") + "'";
+    function parts(sheets) {
+      const f = {};
+      f["[Content_Types].xml"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+        sheets.map((s, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("") + "</Types>";
+      f["_rels/.rels"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+      const dn = sheets.map((s, i) => s.filter ? '<definedName name="_xlnm._FilterDatabase" localSheetId="' + i + '" hidden="1">' + qs(s.name) + "!" + s.filter.split(":").map((x) => x.replace(/([A-Z]+)(\d+)/, "$$$1$$$2")).join(":") + "</definedName>" : "").join("");
+      f["xl/workbook.xml"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>' +
+        sheets.map((s, i) => '<sheet name="' + xe(s.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>').join("") + "</sheets>" + (dn ? "<definedNames>" + dn + "</definedNames>" : "") + '<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>';
+      f["xl/_rels/workbook.xml.rels"] = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        sheets.map((s, i) => '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>').join("") +
+        '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+      f["xl/styles.xml"] = STYLES;
+      sheets.forEach((s, i) => { f["xl/worksheets/sheet" + (i + 1) + ".xml"] = sheetXml(s); });
+      return f;
+    }
+    /* zip */
+    const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+    const crc32 = (u) => { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+    async function deflate(u) {
+      if (typeof CompressionStream === "undefined") return null;
+      try { const s = new Blob([u]).stream().pipeThrough(new CompressionStream("deflate-raw")); return new Uint8Array(await new Response(s).arrayBuffer()); } catch (e) { return null; }
+    }
+    async function zip(files) {
+      const enc = new TextEncoder(), out = [], cen = []; let off = 0;
+      for (const name of Object.keys(files)) {
+        const nm = enc.encode(name), raw = enc.encode(files[name]), crc = crc32(raw), z = await deflate(raw), data = z && z.length < raw.length ? z : raw, method = data === raw ? 0 : 8;
+        const h = new DataView(new ArrayBuffer(30));
+        h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, method, true); h.setUint16(10, 0, true); h.setUint16(12, 0x21, true);
+        h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, raw.length, true); h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
+        out.push(new Uint8Array(h.buffer), nm, data);
+        const c = new DataView(new ArrayBuffer(46));
+        c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, method, true); c.setUint16(12, 0, true); c.setUint16(14, 0x21, true);
+        c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, raw.length, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+        cen.push(new Uint8Array(c.buffer), nm);
+        off += 30 + nm.length + data.length;
+      }
+      const cenLen = cen.reduce((m, x) => m + x.length, 0), e = new DataView(new ArrayBuffer(22)), n = Object.keys(files).length;
+      e.setUint32(0, 0x06054b50, true); e.setUint16(8, n, true); e.setUint16(10, n, true); e.setUint32(12, cenLen, true); e.setUint32(16, off, true);
+      const all = out.concat(cen, [new Uint8Array(e.buffer)]), u = new Uint8Array(all.reduce((m, x) => m + x.length, 0)); let p = 0; all.forEach((x) => { u.set(x, p); p += x.length; });
+      return u;
+    }
+    return { S, col, date, qs, build: (sheets) => zip(parts(sheets)) };
+  })();
+  /* ── window infrastructure ── */
+  var CSS = ".hdx-ov{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;font-family:Inter,-apple-system,Segoe UI,sans-serif}" +
+    ".hdx-box{background:#fff;border-radius:16px;width:min(1280px,100%);padding:18px 20px 20px;box-shadow:0 24px 60px rgba(15,23,42,.25);color:#0F172A}" +
+    ".hdx-box.narrow{width:min(1000px,100%)}" +
+    ".hdx-hd{display:flex;align-items:center;gap:8px;border-bottom:1px solid #E2E8F0;padding-bottom:10px;margin-bottom:10px}.hdx-hd h3{flex:1;font-size:16px;font-weight:800;margin:0}.hdx-hd h3 .n{color:#94A3B8;font-weight:700;margin-left:6px}" +
+    ".hdx-btn{background:#fff;border:1px solid #CBD5E1;color:#334155;padding:7px 12px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}.hdx-btn:hover{border-color:#2563EB;color:#2563EB}.hdx-btn:disabled{opacity:.6;cursor:default}" +
+    ".hdx-btn.pri{background:#2563EB;border-color:#2563EB;color:#fff}.hdx-btn.pri:hover{background:#1D4ED8;color:#fff}.hdx-btn.sm{padding:4px 9px;font-size:11px}" +
+    ".hdx-sub{font-size:12px;color:#64748B;margin:2px 0 10px;line-height:1.5}.hdx-crumb{font-size:12px;margin:0 0 6px;color:#475569}.hdx-lnk{background:none;border:1px solid #CBD5E1;border-radius:7px;padding:2px 9px;font-size:11.5px;font-weight:700;color:#2563EB;cursor:pointer}" +
+    ".hdx-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:6px 0 4px}" +
+    ".hdx-card{text-align:left;border:1px solid #E2E8F0;border-radius:14px;padding:14px 16px;background:#fff;cursor:pointer;border-left:4px solid var(--c)}.hdx-card:hover{box-shadow:0 6px 18px rgba(15,23,42,.08)}.hdx-card:disabled{opacity:.45;cursor:default;box-shadow:none}" +
+    ".hdx-card .v{font-size:26px;font-weight:800;color:var(--c);line-height:1.1}.hdx-card .t{font-size:13px;font-weight:700;margin-top:2px}.hdx-card .d{font-size:11px;color:#64748B;margin-top:4px}" +
+    ".hdx-tw{border:1px solid #E2E8F0;border-radius:12px;overflow:auto;max-height:62vh}.hdx-tw table{border-collapse:collapse;width:100%;font-size:12px}" +
+    ".hdx-tw th{position:sticky;top:0;background:#F8FAFC;text-align:left;font-size:11px;color:#475569;font-weight:700;padding:8px 10px;border-bottom:1px solid #E2E8F0;white-space:nowrap}" +
+    ".hdx-tw td{padding:7px 10px;border-bottom:1px solid #F1F5F9;vertical-align:top}.hdx-tw tr.clk{cursor:pointer}.hdx-tw tr.clk:hover td{background:#EFF6FF}" +
+    ".hdx-st{display:inline-block;background:#F1F5F9;color:#334155;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap}.hdx-st.bad{background:#FFE4E6;color:#BE123C}" +
+    ".hdx-key{color:#2563EB;font-weight:700;text-decoration:none;white-space:nowrap}.hdx-dim{color:#94A3B8}.hdx-num{text-align:right;font-variant-numeric:tabular-nums}" +
+    ".hdx-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}.hdx-row label{font-size:12px;font-weight:700;color:#475569}" +
+    ".hdx-inp{border:1px solid #CBD5E1;border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit;outline:none}.hdx-inp:focus{border-color:#2563EB;box-shadow:0 0 0 3px rgba(37,99,235,.12)}" +
+    ".hdx-prev{border:1px solid #E2E8F0;border-radius:12px;padding:16px;max-height:56vh;overflow:auto;background:#fff}" +
+    ".hdx-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px}@media(max-width:900px){.hdx-grid{grid-template-columns:1fr}}" +
+    ".hdx-side{border:1px solid #E2E8F0;border-radius:12px;padding:12px;align-self:start}.hdx-side h4{font-size:12px;margin:0 0 8px;color:#334155}" +
+    ".hdx-who{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:12px}.hdx-who span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".hdx-note{font-size:11.5px;color:#64748B}";
+  function injectCss() { if (document.getElementById("hdx-css")) return; var s = document.createElement("style"); s.id = "hdx-css"; s.textContent = CSS; document.head.appendChild(s); }
+  var STACK = [];
+  function modal(cls) {
+    injectCss();
+    var ov = document.createElement("div"); ov.className = "hdx-ov"; ov.innerHTML = '<div class="hdx-box ' + (cls || "") + '" role="dialog" aria-modal="true"></div>';
+    var box = ov.querySelector(".hdx-box"), m = { ov: ov, box: box, onEsc: null };
+    m.close = function () { ov.remove(); var i = STACK.indexOf(m); if (i > -1) STACK.splice(i, 1); window.removeEventListener("hdx-change", m._chg); };
+    ov.addEventListener("mousedown", function (e) { if (e.target === ov) m.close(); });
+    document.body.appendChild(ov); STACK.push(m);
+    return m;
+  }
+  document.addEventListener("keydown", function (e) { if (e.key !== "Escape" || !STACK.length) return; var m = STACK[STACK.length - 1]; e.stopImmediatePropagation(); e.preventDefault(); if (m.onEsc && m.onEsc() === true) return; m.close(); }, true);
+  function saveBlob(blob, file) { var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800); }
+  var XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  function busy(btn, label, fn) { btn.disabled = true; btn.textContent = "Building…";
+    return Promise.resolve().then(fn).then(function () { btn.textContent = label; }, function (x) { btn.textContent = "Failed: " + ((x && x.message) || x); setTimeout(function () { btn.textContent = label; }, 4000); }).then(function () { btn.disabled = false; }); }
+  function lrpsBtnHtml() { return '<button type="button" class="hdx-btn" data-x="lrps" title="Read the linked LRPS tickets’ status and assignee from Jira (HD Jira Bridge)">Refresh LRPS from Jira</button>'; }
+  function wireLrps(m, rows, repaint) {
+    var b = m.box.querySelector('[data-x="lrps"]'); if (!b) return;
+    b.onclick = function () { b.disabled = true; b.textContent = "Reading…";
+      lrpsRefresh(rows, true, function (d, n) { b.textContent = "Reading " + d + " / " + n + "…"; }).then(function (n) { b.disabled = false; b.textContent = n ? "Refreshed " + n : "Up to date"; repaint(); },
+        function (e) { b.disabled = false; b.textContent = e.message; }); };
+  }
+
+  /* ═══ Status mismatch window: side → unique status pairs → tickets ═══ */
+  var MIS_TCOLS = function (pair) { return [
+    ["Client status", function (t) { return '<span class="hdx-st">' + esc(t.status) + "</span>"; }],
+    ["LRPS status", function (t) { return t.lrps.map(function (k) { var x = lrpsSt(t, k), off = x && misOff(t.status, x.s);
+      return '<div style="white-space:nowrap"><span class="hdx-st' + (off ? " bad" : "") + '">' + esc(x ? x.s : "not read") + '</span> <a class="hdx-key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener">' + esc(k) + "</a>" +
+        (x && x.src === "export" ? ' <span class="hdx-dim" title="From the export. Refresh LRPS from Jira to read it live.">export</span>' : "") + "</div>"; }).join(""); }],
+    ["Ticket", function (t) { return '<a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a>"; }],
+    ["Client", function (t) { return esc(t.project); }], ["Type", function (t) { return esc(typeTxt(t)); }], ["Priority", function (t) { return esc(t.priority || "—"); }],
+    ["Summary", function (t) { return '<span style="display:inline-block;min-width:240px">' + esc(t.summary) + "</span>"; }], ["Age", function (t) { return esc(fmt(ageMin(t))); }],
+    ["LRPS assignee", function (t) { return esc(enggWho(t)); }], ["SVM In Charge", function (t) { return esc(t.svm || "—"); }]]; };
+  function openMismatch(open, all) {
+    var m = modal(), S = { side: null, pair: null }, scope, data, sides, pairs, cur;
+    function compute() { scope = misList(open, all); data = scope.list; sides = SIDES.filter(function (s) { return data.some(function (t) { return side(t) === s[0]; }); }); }
+    compute(); if (sides.length === 1) S.side = sides[0][0];
+    function paint() {
+      var bySide = {}; SIDES.forEach(function (s) { bySide[s[0]] = data.filter(function (t) { return side(t) === s[0]; }); });
+      var sd = S.side && SIDES.find(function (x) { return x[0] === S.side; });
+      pairs = sd ? misPairs(bySide[S.side]) : []; var pr = sd && S.pair != null ? pairs[S.pair] : null;
+      cur = pr ? pr.ts.slice().sort(bySevAge) : sd ? bySide[S.side] : data;
+      var crumb = (sides.length > 1 || !sd ? '<button type="button" class="hdx-lnk" data-m="home">All sides</button>' : "") + (sd ? " › " + (pr ? '<button type="button" class="hdx-lnk" data-m="side">' + esc(sd[1]) + "</button> › <b>" + esc(pr.a) + " ≠ " + esc(pr.b) + "</b>" : "<b>" + esc(sd[1]) + "</b>") : "");
+      var body;
+      if (!sd) body = '<p class="hdx-sub">Where each mismatched ticket is now, by its client-ticket status. Pick a side.' + (scope.unknown ? " " + scope.unknown + " linked ticket" + (scope.unknown === 1 ? " is" : "s are") + " not checked yet because the LRPS status is not known (Refresh LRPS from Jira)." : "") + "</p>" +
+        '<div class="hdx-cards">' + SIDES.filter(function (s) { return s[0] !== "closed" || bySide.closed.length; }).map(function (s) { var n = bySide[s[0]].length;
+          return '<button type="button" class="hdx-card" style="--c:' + s[3] + '" data-mside="' + s[0] + '"' + (n ? "" : " disabled") + '><div class="v">' + n.toLocaleString() + '</div><div class="t">' + esc(s[1]) + '</div><div class="d">' + esc(s[2]) + "</div></button>"; }).join("") + "</div>";
+      else if (!pr) body = '<p class="hdx-sub">Each status pair once, with its ticket count, how many clients it touches and the oldest. Click a row for its tickets.</p>' +
+        '<div class="hdx-tw"><table><thead><tr><th>Client status</th><th>LRPS status</th><th class="hdx-num">Tickets</th><th>Clients</th><th class="hdx-num">Oldest</th></tr></thead><tbody>' +
+        (pairs.length ? pairs.map(function (x, n) { var uc = uniqClients(x.ts);
+          return '<tr class="clk" data-mpair="' + n + '"><td><span class="hdx-st">' + esc(x.a) + '</span></td><td><span class="hdx-st bad">' + esc(x.b) + '</span></td><td class="hdx-num"><b>' + x.ts.length + "</b></td><td>" +
+            esc(uc.slice(0, 3).map(function (c) { return c[0] + " (" + c[1] + ")"; }).join(", ") + (uc.length > 3 ? " +" + (uc.length - 3) + " more" : "")) + '</td><td class="hdx-num">' + esc(fmt(oldestOf(x.ts))) + "</td></tr>"; }).join("")
+          : '<tr><td colspan="5" class="hdx-dim">No tickets.</td></tr>') + "</tbody></table></div>";
+      else { var C = MIS_TCOLS(pr); body = '<div class="hdx-tw"><table><thead><tr>' + C.map(function (c) { return "<th>" + c[0] + "</th>"; }).join("") + "</tr></thead><tbody>" +
+        cur.map(function (t) { return "<tr>" + C.map(function (c) { return "<td>" + c[1](t) + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>"; }
+      m.box.innerHTML = '<div class="hdx-hd"><h3>Status mismatch between client ticket and LRPS<span class="n">' + cur.length.toLocaleString() + "</span></h3>" + lrpsBtnHtml() +
+        (S.pair != null || (S.side && sides.length > 1) ? '<button type="button" class="hdx-btn" data-m="back">Back</button>' : "") +
+        '<button type="button" class="hdx-btn" data-m="xlsx" title="A summary pivot and the tickets with the columns that matter">Download Excel</button><button type="button" class="hdx-btn" data-m="close">Close</button></div>' +
+        '<div class="hdx-crumb">' + crumb + "</div>" + body;
+      wireLrps(m, open.concat(all || []), function () { compute(); paint(); });
+    }
+    function back() { if (S.pair != null) S.pair = null; else S.side = null; paint(); }
+    m.onEsc = function () { if (S.pair != null || (S.side && sides.length > 1)) { back(); return true; } return false; };
+    m.box.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-m],[data-mside],[data-mpair]"); if (!b) return;
+      if (b.dataset.mside) { S.side = b.dataset.mside; S.pair = null; return paint(); }
+      if (b.dataset.mpair != null) { S.pair = +b.dataset.mpair; return paint(); }
+      var x = b.dataset.m;
+      if (x === "close") return m.close(); if (x === "back") return back();
+      if (x === "home") { S.side = null; S.pair = null; return paint(); } if (x === "side") { S.pair = null; return paint(); }
+      if (x === "xlsx") { var sd = S.side && SIDES.find(function (s) { return s[0] === S.side; }), pr = S.pair != null ? pairs[S.pair] : null;
+        busy(b, "Download Excel", function () { return misExcel(cur, "Status mismatch" + (sd ? " " + sd[1] : "") + (pr ? " " + pr.a + " vs " + pr.b : "")); }); }
+    });
+    m._chg = function () { compute(); paint(); }; window.addEventListener("hdx-change", m._chg);
+    paint();
+  }
+  function misExcel(ts, title) {
+    var S = XL.S, D = XL.date, rows = [], ph = function (h) { return h.map(function (x) { return { v: x, s: S.phead }; }); };
+    var sides = SIDES.filter(function (s) { return ts.some(function (t) { return side(t) === s[0]; }); });
+    rows.push([{ v: title, s: S.title }]);
+    rows.push([{ v: "As at " + fdt(Date.now()) + " IST. Each status pair once per side, with its ticket count and the oldest. The tickets are on the “Tickets” sheet.", s: S.sub }]);
+    rows.push([]); rows.push(ph(["Where", "Client status", "LRPS status", "Tickets", "Clients", "Oldest", "Oldest (days)"]));
+    var first = rows.length + 1;
+    sides.forEach(function (s) { misPairs(ts.filter(function (t) { return side(t) === s[0]; })).forEach(function (p) { var o = oldestOf(p.ts);
+      rows.push([{ v: s[1], s: S.lbl }, p.a, { v: p.b, s: S.bad }, { v: p.ts.length, s: S.cellInt }, uniqClients(p.ts).map(function (c) { return c[0] + " (" + c[1] + ")"; }).join(", "), fmt(o), { v: Math.round(o / 144) / 10, s: S.num }]); }); });
+    var last = rows.length, tot = rows.slice(first - 1, last).reduce(function (m, r) { return m + r[3].v; }, 0);
+    rows.push([{ v: "Total", s: S.totLbl }, { v: "", s: S.totLbl }, { v: "", s: S.totLbl }, { f: last >= first ? "SUM(D" + first + ":D" + last + ")" : "0", v: tot, s: S.totInt }]);
+    if (tot > ts.length) rows.push([{ v: "A ticket whose LRPS tickets are in different statuses is counted under each pair (" + ts.length + " tickets).", s: S.sub }]);
+    /* by client × side */
+    rows.push([]); rows.push([{ v: "By client", s: S.title }]); rows.push(ph(["Client"].concat(sides.map(function (s) { return s[1]; }), ["Total"])));
+    var f2 = rows.length + 1;
+    uniqClients(ts).forEach(function (c) { var r = rows.length + 1, cells = [{ v: c[0], s: S.lbl }];
+      sides.forEach(function (s) { cells.push({ v: ts.filter(function (t) { return t.project === c[0] && side(t) === s[0]; }).length, s: S.cellInt }); });
+      cells.push({ f: "SUM(B" + r + ":" + XL.col(sides.length) + r + ")", v: c[1], s: S.totInt }); rows.push(cells); });
+    var l2 = rows.length, tr = [{ v: "Total", s: S.totLbl }];
+    for (var k = 1; k <= sides.length + 1; k++) { var L = XL.col(k); tr.push({ f: l2 >= f2 ? "SUM(" + L + f2 + ":" + L + l2 + ")" : "0", v: rows.slice(f2 - 1, l2).reduce(function (m, r) { return m + (r[k] ? r[k].v : 0); }, 0), s: S.totInt }); }
+    rows.push(tr);
+    var C = [["Ticket", function (t) { return { f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: S.link }; }, 15], ["Client", function (t) { return t.project; }, 18],
+      ["Type", function (t) { return typeTxt(t); }, 11], ["Priority", function (t) { return sevName(t); }, 12], ["Summary", function (t) { return { v: t.summary, s: S.wrap }; }, 52],
+      ["Client status", function (t) { return t.status; }, 24], ["LRPS", function (t) { return t.lrps.join(", "); }, 14], ["LRPS status", function (t) { return { v: lrStat(t), s: S.bad }; }, 24],
+      ["LRPS assignee", function (t) { return enggWho(t); }, 24], ["Where", function (t) { return sideName(side(t)); }, 20], ["SVM In Charge", function (t) { return t.svm; }, 18],
+      ["Created", function (t) { return D(t.created); }, 17], ["Updated", function (t) { return D(t.updated); }, 17], ["Age (days)", function (t) { return { v: Math.round((ageMin(t) || 0) / 144) / 10, s: S.num }; }, 9],
+      ["Not updated (days)", function (t) { return t.updated != null ? { v: Math.round((Date.now() - t.updated) / DAY * 10) / 10, s: S.num } : ""; }, 11]];
+    var sr = function (t) { return SIDES.findIndex(function (s) { return s[0] === side(t); }); };
+    var ord = ts.slice().sort(function (a, b) { return sr(a) - sr(b) || bySevAge(a, b); });
+    var sheet = { name: "Tickets", cols: C.map(function (c) { return c[2]; }), freeze: 1, filter: "A1:" + XL.col(C.length - 1) + Math.max(2, ord.length + 1),
+      rows: [C.map(function (c) { return { v: c[0], s: S.head }; })].concat(ord.map(function (t) { return C.map(function (c) { return c[1](t); }); })) };
+    return XL.build([{ name: "Summary", rows: rows, cols: [24, 30, 30, 10, 40, 12, 12], first: true }, sheet]).then(function (u) {
+      saveBlob(new Blob([u], { type: XLSX_MIME }), "HD-" + title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) + "-" + dayKey(Date.now()) + ".xlsx"); });
+  }
+  /* ═══ Handover: brief mail (Outlook-safe tables) + Excel attachment; mail one engineering assignee ═══ */
+  var HO_KEY = "hd-fu-ho", PM_KEY = "hd-fu-mailto";
+  function hoPeople() { try { return JSON.parse(localStorage.getItem(HO_KEY) || "{}") || {}; } catch (e) { return {}; } }
+  function hoSave(o) { try { localStorage.setItem(HO_KEY, JSON.stringify(o)); } catch (e) {} }
+  function hoData(open) {
+    var ts = open.map(T), hd = ts.filter(function (t) { return side(t) === "hd"; }).sort(bySevAge), engg = ts.filter(function (t) { return side(t) === "engg"; }).sort(bySevAge);
+    var pend = hd.concat(engg).sort(bySevAge), by = {};
+    engg.forEach(function (t) { var w = enggWho(t); (by[w] = by[w] || []).push(t); });
+    var who = Object.keys(by).map(function (w) { return { w: w, ts: by[w], old: oldestOf(by[w]) }; }).sort(function (x, y) { return y.ts.length - x.ts.length || y.old - x.old || x.w.localeCompare(y.w); });
+    var cl = {}; pend.forEach(function (t) { (cl[t.project] = cl[t.project] || []).push(t); });
+    var clients = Object.keys(cl).map(function (c) { return { c: c, ts: cl[c], hd: cl[c].filter(function (t) { return side(t) === "hd"; }).length, old: oldestOf(cl[c]) }; }).sort(function (x, y) { return y.ts.length - x.ts.length || y.old - x.old || x.c.localeCompare(y.c); });
+    return { now: Date.now(), hd: hd, engg: engg, pend: pend, who: who, clients: clients,
+      hot: pend.filter(function (t) { return t.sev === "showstopper" || t.sev === "critical"; }),
+      oldest: pend.slice().sort(function (a, b) { return (ageMin(b) || 0) - (ageMin(a) || 0); }).slice(0, 5),
+      stale: pend.filter(function (t) { return t.updated != null && Date.now() - t.updated >= 3 * DAY; }) };
+  }
+  function hoBase(d) { var p = new Date(d.now + IST); return "HD-handover-" + dayKey(d.now) + "-" + String(p.getUTCHours()).padStart(2, "0") + String(p.getUTCMinutes()).padStart(2, "0"); }
+  var hoSubject = function (d) { return "Help Desk handover: " + fdt(d.now) + " IST"; };
+  /* mail building blocks that Outlook keeps: a border on every cell, a width on every column, fixed-height spacers */
+  var F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#0F1E2E;margin:0 0 8px;line-height:1.5"', H2 = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 6px"';
+  var BD = "border:1px solid #C9D3DD;padding:6px 10px;vertical-align:middle;" + F;
+  var th = function (h, x, w) { return '<th width="' + (w || 80) + '" style="' + BD + "width:" + (w || 80) + 'px;background:#0E2A47;color:#ffffff;font-size:12px;font-weight:600;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>"; };
+  var tdc = function (v, x) { return '<td style="' + BD + "font-size:13px;" + (x || "") + '">' + v + "</td>"; };
+  var tbl = function (w) { return 'width="' + w + '" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;border:1px solid #C9D3DD;width:' + w + "px;" + F + '"'; };
+  var gap = function (h) { h = h || 12; return '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>'; };
+  var lk = function (t) { return '<a href="' + jiraUrl(t.key) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>"; };
+  var cnt = function (ts, s) { return ts.filter(function (t) { return t.sev === s; }).length; };
+  var sevLine = function (ts) { return SEVS.filter(function (s) { return cnt(ts, s.id); }).map(function (s) { return cnt(ts, s.id) + " " + s.name; }).join(", ") || "none"; };
+  function hoHTML(d, ppl) {
+    var sevCells = function (ts, bg) { return SEVS.map(function (s) { var n = cnt(ts, s.id); return tdc(n, "text-align:center;" + (bg || "") + (n ? "color:" + s.color + ";font-weight:600" : "color:#B8C2CF")); }).join("") + tdc("<b>" + ts.length + "</b>", "text-align:center;" + (bg || "")); };
+    var prio = "<table " + tbl(220 + SEVS.length * 95 + 70) + "><tr>" + th("Pending with SVM", "text-align:left", 220) + SEVS.map(function (s) { return th(s.name, null, 95); }).join("") + th("Total", null, 70) + "</tr>" +
+      (d.hd.length ? "<tr>" + tdc('<b style="color:#0E7C86">Help Desk</b>', "white-space:nowrap") + sevCells(d.hd) + "</tr>" : "") +
+      "<tr>" + tdc('<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") + sevCells(d.engg) + "</tr>" +
+      (d.hd.length ? "<tr>" + tdc("<b>Total</b>", "background:#EEF3F7") + sevCells(d.pend, "background:#EEF3F7;") + "</tr>" : "") + "</table>";
+    var HOTN = 12, hot = d.hot.length ? "<p " + P + '><b style="color:#C8102E">Show Stopper / Critical pending (' + d.hot.length + "):</b> " + d.hot.slice(0, HOTN).map(function (t) { return lk(t) + " " + esc(t.project) + " (" + esc(holder(t)) + ")"; }).join(", ") +
+      (d.hot.length > HOTN ? " and " + (d.hot.length - HOTN) + " more on the “Show Stopper-Critical” sheet" : "") + ".</p>" : "";
+    var cli = d.clients.length ? "<h3 " + H2 + ">Pending with SVM by client</h3><table " + tbl(260 + 90 * 3 + 90) + "><tr>" + th("Client", "text-align:left", 260) + (d.hd.length ? th("Help Desk", null, 90) : "") + th("Engineering", null, 90) + th("Total", null, 90) + th("Oldest", null, 90) + "</tr>" +
+      d.clients.map(function (c) { return "<tr>" + tdc(esc(c.c), "white-space:nowrap") + (d.hd.length ? tdc(c.hd || "", "text-align:center") : "") + tdc((c.ts.length - c.hd) || "", "text-align:center") + tdc("<b>" + c.ts.length + "</b>", "text-align:center") +
+        tdc(esc(fmt(c.old)), "white-space:nowrap;" + (c.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>"; }).join("") + "</table>" : "";
+    var SHOW = SEVS.filter(function (s) { return d.engg.some(function (t) { return t.sev === s.id; }); });
+    var who = d.who.length ? "<h3 " + H2 + ">Engineering by assignee</h3><table " + tbl(240 + SHOW.length * 85 + 70 + 90) + "><tr>" + th("Engineering assignee", "text-align:left", 240) + SHOW.map(function (s) { return th(s.name, null, 85); }).join("") + th("Total", null, 70) + th("Oldest", null, 90) + "</tr>" +
+      d.who.map(function (x) { return "<tr>" + tdc(esc(x.w), "white-space:nowrap") + SHOW.map(function (s) { var n = cnt(x.ts, s.id); return tdc(n || "", "text-align:center;" + (n ? "color:" + s.color + ";font-weight:600" : "")); }).join("") +
+        tdc("<b>" + x.ts.length + "</b>", "text-align:center") + tdc(esc(fmt(x.old)), "white-space:nowrap;" + (x.old >= 30 * 1440 ? "color:#C8102E;font-weight:600" : "")) + "</tr>"; }).join("") + "</table>" : "";
+    var old = d.oldest.length ? "<h3 " + H2 + ">Oldest pending</h3><p " + P + ">" + d.oldest.map(function (t) { return lk(t) + " " + esc(t.project) + ", " + esc(t.priority || "") + ", open " + esc(fmt(ageMin(t))) + " (" + esc(holder(t)) + ")"; }).join("<br>") + "</p>" : "";
+    var stale = d.stale.length ? "<p " + P + "><b>" + d.stale.length + "</b> of the " + d.pend.length + " pending ticket" + (d.pend.length === 1 ? "" : "s") + " not updated in Jira for 3 days or more; they are marked in the Excel (Not updated, days).</p>" : "";
+    var note = (ppl.note || "").trim();
+    return '<div style="' + F + 'color:#0F1E2E">' + "<p " + P + ">Hi " + esc(ppl.to || "team") + ",</p>" +
+      "<p " + P + ">Handing over the pending on the Help Desk, position at " + esc(fdt(d.now)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
+      prio + gap() + hot + (hot ? gap(4) : "") + cli + (cli ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
+      (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
+      "<p " + P + ">Attached: <b>" + esc(hoBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + d.pend.length + ") and Show Stopper-Critical (" + d.hot.length + ").</p>" +
+      "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
+  }
+  function hoText(d, ppl) { var note = (ppl.note || "").trim();
+    return "Hi " + (ppl.to || "team") + ",\n\nHanding over the pending on the Help Desk, position at " + fdt(d.now) + " IST. The full ticket lists and pivots are in the attached Excel.\n\n" +
+      (d.hd.length ? "Pending with SVM, Help Desk: " + d.hd.length + " (" + sevLine(d.hd) + ")\n" : "") + "Pending with SVM, Engineering: " + d.engg.length + " (" + sevLine(d.engg) + ")\n\n" +
+      (d.hot.length ? "Show Stopper / Critical pending (" + d.hot.length + "): " + d.hot.slice(0, 12).map(function (t) { return t.key + " " + t.project + " (" + holder(t) + ")"; }).join(", ") + "\n\n" : "") +
+      (d.clients.length ? "By client:\n" + d.clients.map(function (c) { return "- " + c.c + ": " + c.ts.length + ", oldest " + fmt(c.old); }).join("\n") + "\n\n" : "") +
+      (d.who.length ? "Engineering by assignee:\n" + d.who.map(function (x) { return "- " + x.w + ": " + x.ts.length + " (" + sevLine(x.ts) + "), oldest " + fmt(x.old); }).join("\n") + "\n\n" : "") +
+      (d.oldest.length ? "Oldest pending:\n" + d.oldest.map(function (t) { return "- " + t.key + " " + t.project + ", " + (t.priority || "") + ", open " + fmt(ageMin(t)) + " (" + holder(t) + ")"; }).join("\n") + "\n\n" : "") +
+      (d.stale.length ? d.stale.length + " of the " + d.pend.length + " pending tickets not updated in Jira for 3 days or more.\n\n" : "") +
+      (note ? "Notes:\n" + note + "\n\n" : "") + "Attached: " + hoBase(d) + ".xlsx\n\nRegards,\n" + (ppl.from || ""); }
+  function hoExcel(d) {
+    var S = XL.S, D = XL.date, SEV = SEVS.map(function (s) { return s.name; });
+    var HEAD = [["Ticket", 15], ["Client", 18], ["Type", 11], ["Priority", 12], ["Summary", 52], ["ME ID", 10], ["Status", 24], ["LRPS", 14], ["LRPS status", 20], ["Engineering assignee", 24], ["LRPS / assignee (all)", 34],
+      ["Where", 18], ["Sitting with", 24], ["SVM In Charge", 18], ["Current worker", 20], ["Components", 18], ["Created", 17], ["Updated", 17], ["Age (days)", 9], ["Not updated (days)", 11], ["Ageing", 11]];
+    var ageLbl = function (t) { var dd = (ageMin(t) || 0) / 1440; return (AGEB.find(function (b) { return dd >= b[0] && dd < b[1]; }) || AGEB[0])[2]; };
+    var row = function (t) { return [{ f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: S.link }, t.project, typeTxt(t), sevName(t), { v: t.summary, s: S.wrap }, t.meId, t.status || "(blank)",
+      t.lrps.join(", ") || "(none)", lrStat(t), enggWho(t), { v: lrpsWithWho(t), s: S.wrap }, sideName(side(t)), holder(t), t.svm, t.cw, t.comps, D(t.created), D(t.updated),
+      { v: Math.round((ageMin(t) || 0) / 144) / 10, s: S.num }, t.updated != null ? { v: Math.round((d.now - t.updated) / DAY * 10) / 10, s: S.num } : "", ageLbl(t)]; };
+    var listSheet = function (name, ts) { return { name: name, cols: HEAD.map(function (h) { return h[1]; }), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, ts.length + 1),
+      rows: [HEAD.map(function (h) { return { v: h[0], s: S.head }; })].concat(ts.map(row)) }; };
+    var rows = [];
+    rows.push([{ v: "Help Desk handover", s: S.title }]);
+    rows.push([{ v: "Position at " + fdt(d.now) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” sheet.", s: S.sub }]);
+    function pivot(title, note, label, vals, ts, test) {
+      rows.push([]); rows.push([{ v: title, s: S.title }]); if (note) rows.push([{ v: note, s: S.sub }]);
+      rows.push([{ v: label, s: S.phead }].concat(SEV.map(function (c) { return { v: c, s: S.phead }; }), [{ v: "Total", s: S.phead }]));
+      var first = rows.length + 1;
+      vals.forEach(function (v) { var r = rows.length + 1, cells = [{ v: v, s: S.lbl }];
+        SEVS.forEach(function (s) { cells.push({ v: ts.filter(function (t) { return test(t, v) && t.sev === s.id; }).length, s: S.cellInt }); });
+        cells.push({ f: "SUM(B" + r + ":" + XL.col(SEV.length) + r + ")", v: cells.slice(1).reduce(function (m, c) { return m + c.v; }, 0), s: S.totInt }); rows.push(cells); });
+      var last = rows.length, tr = [{ v: "Total", s: S.totLbl }];
+      for (var k = 1; k <= SEV.length + 1; k++) { var L = XL.col(k); tr.push({ f: vals.length ? "SUM(" + L + first + ":" + L + last + ")" : "0", v: rows.slice(first - 1, last).reduce(function (m, r) { return m + (r[k] ? r[k].v : 0); }, 0), s: S.totInt }); }
+      rows.push(tr);
+    }
+    var uniq = function (ts, f) { var c = {}; ts.forEach(function (t) { var v = f(t); c[v] = (c[v] || 0) + 1; }); return Object.keys(c).sort(function (a, b) { return c[b] - c[a] || a.localeCompare(b); }); };
+    pivot("1. Pending with SVM (Help Desk + Engineering) by client × priority", "", "Client", uniq(d.pend, function (t) { return t.project; }), d.pend, function (t, v) { return t.project === v; });
+    pivot("2. Pending with Engineering by engineering assignee × priority", "Engineering assignee = the assignee of the linked LRPS ticket.", "Engineering assignee", uniq(d.engg, enggWho), d.engg, function (t, v) { return enggWho(t) === v; });
+    pivot("3. Pending with SVM by status × priority", "", "Status", uniq(d.pend, function (t) { return t.status || "(blank)"; }), d.pend, function (t, v) { return (t.status || "(blank)") === v; });
+    var sheets = [{ name: "Summary", rows: rows, cols: [40].concat(SEV.map(function () { return 13; }), [11]), first: true }, listSheet("Pending with SVM", d.pend), listSheet("Show Stopper-Critical", d.hot)];
+    return XL.build(sheets).then(function (u) { return { bytes: u, file: hoBase(d) + ".xlsx" }; });
+  }
+  function u8b64(u) { var s = ""; for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+  var b64 = function (s) { return btoa(unescape(encodeURIComponent(s))); }, wrap76 = function (s) { return s.replace(/.{76}/g, "$&\r\n"); };
+  function eml(subject, html, file, to, att) {
+    var body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>", H = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], ["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0"]), out;
+    if (att) { var B = "=_hdx_" + Date.now().toString(36);
+      out = H.concat(['Content-Type: multipart/mixed; boundary="' + B + '"', "", "--" + B, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64(body)), "",
+        "--" + B, "Content-Type: " + XLSX_MIME + '; name="' + att.file + '"', 'Content-Disposition: attachment; filename="' + att.file + '"', "Content-Transfer-Encoding: base64", "", wrap76(u8b64(att.bytes)), "", "--" + B + "--", ""]); }
+    else out = H.concat(["Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64(body))]);
+    saveBlob(new Blob([out.join("\r\n")], { type: "message/rfc822" }), file);
+  }
+  function copyRich(html, text, btn, label) {
+    var done = function (msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = label; }, 1800); };
+    var fallback = function () { var box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff"; box.innerHTML = html; document.body.appendChild(box);
+      var r = document.createRange(); r.selectNodeContents(box); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); var ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove(); done(ok ? "Copied, paste into Outlook" : "Copy blocked by the browser"); };
+    if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(function () { done("Copied, paste into Outlook"); }, fallback);
+    else fallback();
+  }
+  function openHandover(open) {
+    var m = modal(), ppl = hoPeople(), d;
+    function paint(keepInputs) {
+      d = hoData(open);
+      var prev = '<p class="hdx-dim" style="font-size:12px;margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + hoHTML(d, ppl);
+      if (keepInputs && m.box.querySelector("#hdxPrev")) { m.box.querySelector("#hdxPrev").innerHTML = prev; paintWho(); return; }
+      m.box.innerHTML = '<div class="hdx-hd"><h3>Handover<span class="n">' + d.pend.length + " pending with SVM</span></h3>" + lrpsBtnHtml() +
+        '<button type="button" class="hdx-btn pri" data-h="copy">Copy email</button><button type="button" class="hdx-btn" data-h="xlsx" title="Summary pivots, Pending with SVM, Show Stopper-Critical">Download Excel</button>' +
+        '<button type="button" class="hdx-btn" data-h="eml" title="Opens in Outlook as a new draft with the Excel already attached">Email draft + Excel</button><button type="button" class="hdx-btn" data-h="close">Close</button></div>' +
+        '<p class="hdx-sub">Everything pending with SVM (Help Desk and Engineering) for the tickets in view, across all clients; the header filters (workers, projects, in-charge, types, dates) apply. The email is brief; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>' +
+        '<div class="hdx-row"><label for="hdxFrom">Handed over by</label><input class="hdx-inp" id="hdxFrom" style="width:200px" placeholder="Your name"><label for="hdxTo">Hi</label><input class="hdx-inp" id="hdxTo" style="width:220px" placeholder="team"></div>' +
+        '<div class="hdx-row" style="align-items:flex-start"><label for="hdxNote" style="padding-top:7px">Notes</label><textarea class="hdx-inp" id="hdxNote" rows="2" style="flex:1;min-width:280px;resize:vertical" placeholder="Anything promised to a client, calls in progress, things to watch"></textarea></div>' +
+        '<div class="hdx-grid"><div class="hdx-prev" id="hdxPrev">' + prev + '</div><div class="hdx-side"><h4>Mail an engineering assignee</h4><p class="hdx-note" style="margin:0 0 8px">Their tickets with the ageing, no SLA. One mail per person.</p><div id="hdxWho"></div></div></div>';
+      var q = function (id) { return m.box.querySelector("#" + id); };
+      q("hdxFrom").value = ppl.from || ""; q("hdxTo").value = ppl.to || ""; q("hdxNote").value = ppl.note || "";
+      ["hdxFrom", "hdxTo", "hdxNote"].forEach(function (id) { q(id).addEventListener("input", function () { ppl.from = q("hdxFrom").value; ppl.to = q("hdxTo").value; ppl.note = q("hdxNote").value; hoSave({ from: ppl.from, to: ppl.to }); paint(true); }); });
+      wireLrps(m, open, function () { paint(true); });
+      paintWho();
+    }
+    function paintWho() { var w = m.box.querySelector("#hdxWho"); if (!w) return;
+      w.innerHTML = d.who.length ? d.who.map(function (x, n) { return '<div class="hdx-who"><span title="' + esc(x.w) + '">' + esc(x.w) + ' <b>' + x.ts.length + '</b></span><button type="button" class="hdx-btn sm" data-who="' + n + '">Mail</button></div>'; }).join("") : '<p class="hdx-note">Nothing pending with Engineering.</p>'; }
+    m.box.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-h],[data-who]"); if (!b) return;
+      if (b.dataset.who != null) { var x = d.who[+b.dataset.who]; return openPersonMail(x.ts, x.w); }
+      var h = b.dataset.h;
+      if (h === "close") return m.close();
+      if (h === "copy") return copyRich(hoHTML(d, ppl), hoText(d, ppl), b, "Copy email");
+      if (h === "xlsx") return busy(b, "Download Excel", function () { return hoExcel(d).then(function (x) { saveBlob(new Blob([x.bytes], { type: XLSX_MIME }), x.file); }); });
+      if (h === "eml") return busy(b, "Email draft + Excel", function () { return hoExcel(d).then(function (x) { eml(hoSubject(d), hoHTML(d, ppl), hoBase(d) + ".eml", "", x); }); });
+    });
+    m._chg = function () { paint(true); }; window.addEventListener("hdx-change", m._chg);
+    paint();
+  }
+  /* one person: their tickets with ageing (no SLA) */
+  function pmBook() { try { return JSON.parse(localStorage.getItem(PM_KEY) || "{}") || {}; } catch (e) { return {}; } }
+  function personMail(ts, name, hi, note) {
+    ts = ts.slice().sort(bySevAge);
+    var real = realWho(name), H = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 6px"', ageD = function (t) { return (ageMin(t) || 0) / 1440; }, updD = function (t) { return t.updated != null ? (Date.now() - t.updated) / DAY : null; };
+    var bucket = function (dd) { return AGEB.find(function (b) { return dd >= b[0] && dd < b[1]; }) || AGEB[0]; };
+    var oldest = ts.reduce(function (mm, t) { return mm == null || ageD(t) > ageD(mm) ? t : mm; }, null), stale = ts.filter(function (t) { return updD(t) != null && updD(t) >= 7; }).length;
+    var sub = function (h) { return '<br><span style="color:#8A7380;font-size:11px">' + h + "</span>"; };
+    var bk = AGEB.map(function (b) { return { l: b[2], c: b[3], n: ts.filter(function (t) { return ageD(t) >= b[0] && ageD(t) < b[1]; }).length }; });
+    var summary = "<table " + tbl(bk.length * 100 + 80) + "><tr>" + bk.map(function (x) { return th(x.l, null, 100); }).join("") + th("Total", null, 80) + "</tr><tr>" +
+      bk.map(function (x) { return tdc(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : "")); }).join("") + tdc("<b>" + ts.length + "</b>", "text-align:center") + "</tr></table>";
+    var facts = [oldest ? "Oldest: <b>" + esc(oldest.key) + "</b>, open " + esc(fmt(ageMin(oldest))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
+    var COLW = [110, 120, 90, 80, 260, 130, 120, 140, 100, 110];
+    var rows = ts.map(function (t) { var dd = ageD(t), b = bucket(dd), u = updD(t);
+      var lr = t.lrps.length ? t.lrps.map(function (x) { return esc(x) + (LRPS[x] && LRPS[x].s ? " (" + esc(LRPS[x].s) + ")" : t.lrpsStatus[x] ? " (" + esc(t.lrpsStatus[x]) + ")" : ""); }).join("<br>") : "—";
+      var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
+      return "<tr>" + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
+        tdc(lr, "white-space:nowrap") + tdc(la, "white-space:nowrap") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
+        tdc(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdate(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
+    var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
+    var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + "><b>" + ts.length + "</b> ticket" + (ts.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.</p>" +
+      "<h3 " + H + ">Ageing</h3>" + summary + gap(6) + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
+      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + "><tr>" + ["Ticket", "Client", "Type", "Priority", "Summary", "Status", "LRPS", "LRPS assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
+      "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
+    var text = "Hi " + nm + ",\n\n" + ts.length + " ticket" + (ts.length === 1 ? " is" : "s are") + " pending with you. The ageing is below.\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
+      ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.join(", ") : ""); }).join("\n") +
+      "\n\nPlease update each ticket with the next step and an ETR.\n\nRegards,\n" + (hoPeople().from || "");
+    return { html: html, text: text, subject: "Help Desk follow-up: " + (real ? name + ", " : "") + ts.length + " ticket" + (ts.length === 1 ? "" : "s") + (oldest ? ", oldest " + fmt(ageMin(oldest)) : "") };
+  }
+  function openPersonMail(ts, name) {
+    var m = modal("narrow"), real = realWho(name), key = "engg:" + name;
+    var guess = function () { var b = pmBook(); if (b[key] != null) return b[key]; if (!real) return ""; for (var i = 0; i < ts.length; i++) for (var j = 0; j < ts[i].lrps.length; j++) { var x = LRPS[ts[i].lrps[j]]; if (x && x.a === name && x.e) return x.e; } return ""; };
+    m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder <span class="n">' + esc(name) + " · " + ts.length + '</span></h3><button type="button" class="hdx-btn" data-p="close">Cancel</button></div>' +
+      '<div class="hdx-row"><label for="pmTo">To</label><input class="hdx-inp" id="pmTo" style="flex:1;min-width:240px" placeholder="name@solverminds.com"><label for="pmHi">Hi</label><input class="hdx-inp" id="pmHi" style="width:200px"></div>' +
+      '<div class="hdx-row" style="align-items:flex-start"><label for="pmNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="pmNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown above the tickets"></textarea></div>' +
+      '<p class="hdx-note" id="pmSubj" style="margin:6px 0"></p><div class="hdx-prev" id="pmPrev"></div>' +
+      '<div class="hdx-row" style="margin-top:10px"><span class="hdx-note">The address is remembered for ' + esc(real ? name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="hdx-btn" data-p="eml">Download email draft</button><button type="button" class="hdx-btn pri" data-p="copy">Copy email</button></div>';
+    var q = function (id) { return m.box.querySelector("#" + id); };
+    q("pmTo").value = guess(); q("pmHi").value = real ? name : "team";
+    var cur = function () { return personMail(ts, name, q("pmHi").value, q("pmNote").value); };
+    var paint = function () { var x = cur(); q("pmSubj").textContent = "Subject: " + x.subject; q("pmPrev").innerHTML = x.html; };
+    var saveTo = function () { if (!real) return; var b = pmBook(); b[key] = q("pmTo").value.trim(); try { localStorage.setItem(PM_KEY, JSON.stringify(b)); } catch (e) {} };
+    q("pmHi").addEventListener("input", paint); q("pmNote").addEventListener("input", paint); q("pmTo").addEventListener("change", saveTo);
+    m.box.addEventListener("click", function (e) { var b = e.target.closest("[data-p]"); if (!b) return; var p = b.dataset.p;
+      if (p === "close") return m.close(); saveTo(); var x = cur();
+      if (p === "copy") return copyRich(x.html, x.text, b, "Copy email");
+      if (p === "eml") return eml(x.subject, x.html, "HD-reminder-" + (real ? name : "team").replace(/[^A-Za-z0-9]+/g, "-") + "-" + dayKey(Date.now()) + ".eml", q("pmTo").value.trim()); });
+    paint(); q("pmTo").focus();
+  }
+
+  window.HDX = {
+    openMismatch: function (open, all) { openMismatch(open || [], all || []); },
+    openHandover: function (open) { openHandover(open || []); },
+    misCount: function (open, all) { return misList(open || [], all || []).list.length; },
+    refreshLrps: function (rows) { return lrpsRefresh(rows || [], false); },
+    bridgeOn: bridgeOn,
+    _t: { T: T, misList: misList, misPairs: misPairs, hoData: hoData, hoHTML: hoHTML, hoText: hoText, hoExcel: hoExcel, misExcel: misExcel, personMail: personMail, setLrps: function (o) { LRPS = o; }, XL: XL, side: side }
+  };
+})();
+
+</script>
+<script>
 /* Bridge detection for Jira reminders — runs immediately before Babel */
 window._rmBridge=false;
 window.addEventListener("message",function(e){if(e.data&&e.data.type==="HD_BRIDGE_READY")window._rmBridge=true;});
@@ -2362,6 +2938,8 @@ function App(){
   const[reminderData,setReminderData]=useState(null); // {ticket, mode}
   const[globalSearchOpen,setGlobalSearchOpen]=useState(false); // Global ticket search (Ctrl+K)
   const[slaVer,setSlaVer]=useState(0); // bumps when SLA Tracker data (re)loads
+  const[hdxVer,setHdxVer]=useState(0); // bumps when the HDX module (mismatch / handover) reads LRPS from Jira
+  useEffect(function(){function f(){setHdxVer(function(v){return v+1;});}window.addEventListener("hdx-change",f);return function(){window.removeEventListener("hdx-change",f);};},[]);
   useEffect(function(){if(!window.HDSlaLink)return;return window.HDSlaLink.subscribe(function(){setSlaVer(window.HDSlaLink.version());});},[]);
   const fRef=useRef();
   const blobRef=useRef(null); // original uploaded file, kept for "revert"
@@ -2532,6 +3110,10 @@ function App(){
     if(itF.length)l=l.filter(function(t){return itF.indexOf(t["Issue Type"]||"(None)")>-1;});
     return l;
   },[dateFiltered,w,pf,svmF,itF]);
+
+  /* HDX: status mismatch count for the header pill (client ticket ↔ LRPS), and a one-off LRPS read from Jira */
+  var hdxMis=useMemo(function(){return window.HDX?window.HDX.misCount(flt,allFiltered):0;},[flt,allFiltered,hdxVer]);
+  useEffect(function(){if(!window.HDX||!op||!op.length)return;var t=setTimeout(function(){if(window.HDX.bridgeOn())window.HDX.refreshLrps(op).catch(function(){});},4000);return function(){clearTimeout(t);};},[op]);
 
   /* SLA — from the SLA Tracker. open = open tickets in view; range = all tickets in the date range (for "% met"). */
   var slaData=useMemo(function(){
@@ -2751,6 +3333,16 @@ function App(){
         <MultiSelect allLabel="All In-Charge" options={svms.map(function(x){return [x[0],x[1]];})} selected={svmF} onChange={function(v){setSvmF(v);clr();}} minWidth={120}/>
         <MultiSelect allLabel="All Types" options={itypes.map(function(x){return [x[0],x[1]];})} selected={itF} onChange={function(v){setItF(v);clr();}} minWidth={110}/>
         <div style={{flex:1,minWidth:4}}/>
+
+        {/* HDX: status mismatch (client ticket ↔ LRPS) and handover */}
+        {window.HDX&&<button onClick={function(){window.HDX.openMismatch(flt,allFiltered);}} title={hdxMis?hdxMis+" tickets where the client ticket and its LRPS ticket are in different statuses":"Client tickets and LRPS tickets agree"}
+          style={{background:hdxMis?"#FFF1F2":"var(--bg)",border:"1px solid "+(hdxMis?"#FECDD3":"var(--border)"),color:hdxMis?"#BE123C":"var(--t3)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{fontSize:13}}>⇄</span>{hdxMis?<><b>{hdxMis.toLocaleString()}</b> mismatch</>:"Status in sync"}
+        </button>}
+        {window.HDX&&<button onClick={function(){window.HDX.openHandover(flt);}} title="Handover email + Excel for everything pending with SVM"
+          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{fontSize:13}}>📨</span> Handover
+        </button>}
 
         {/* Global search trigger — compact */}
         <button onClick={function(){setGlobalSearchOpen(true);}} title="Search tickets (Ctrl+K)"
