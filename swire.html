@@ -754,8 +754,9 @@ function call(path, method, body) {
 let lrpsBusy = false;
 function lrpsKeys(onlyStale) {
   const keys = new Set();
-  ALLT.forEach((t, i) => { if (ALLE[i].stage !== "closed") t.lrps.forEach((k) => keys.add(k)); });
-  return Array.from(keys).filter((k) => !onlyStale || !LRPS[k] || NOW - (LRPS[k].at || 0) > 30 * MIN);
+  const touched = {};                        // LRPS read before its SWIPHX ticket last changed: likely out of date
+  ALLT.forEach((t, i) => { if (ALLE[i].stage !== "closed") t.lrps.forEach((k) => { keys.add(k); if (t.updated != null && LRPS[k] && (LRPS[k].at || 0) < t.updated) touched[k] = 1; }); });
+  return Array.from(keys).filter((k) => !onlyStale || !LRPS[k] || touched[k] || NOW - (LRPS[k].at || 0) > 30 * MIN);
 }
 function fetchLrps(force) {
   if (lrpsBusy) return Promise.resolve();
@@ -984,6 +985,21 @@ function lrpsSt(t, k) {
   const x = LRPS[k]; if (x && !x.gone && x.s) return { s: x.s, src: "jira" };
   return t.lrpsStatus && t.lrpsStatus[k] ? { s: t.lrpsStatus[k], src: "export" } : null;
 }
+const LIVE = {};                                   // SWIPHX key → { s, at }: status read live from Jira for the mismatch check
+const stNow = (t) => (LIVE[t.key] && LIVE[t.key].s) || t.status;
+/* Re-read from Jira the statuses the mismatch check compares: the SWIPHX tickets and their LRPS tickets. Cheap (only these keys),
+   so it runs every time the mismatch window opens; the export / loaded data may be hours old. */
+function recheckStatuses(idx) {
+  const sw = Array.from(new Set(idx.map((i) => T[i].key))), lr = Array.from(new Set([].concat.apply([], idx.map((i) => T[i].lrps))));
+  const all = sw.concat(lr), ch = []; for (let i = 0; i < all.length; i += 80) ch.push(all.slice(i, i + 80));
+  return ch.reduce((p, c) => p.then(() => call("/rest/api/3/search/jql?jql=" + encodeURIComponent("key in (" + c.map((k) => '"' + k + '"').join(",") + ")") + "&fields=assignee,status&maxResults=100").then((d) => {
+    const at = Date.now(), seen = {};
+    (d.issues || []).forEach((is) => { const f = is.fields || {}, st = f.status ? f.status.name : ""; seen[is.key] = 1;
+      if (/^LRPS-/i.test(is.key)) LRPS[is.key] = { a: f.assignee ? (f.assignee.displayName || f.assignee.emailAddress || "") : "", id: f.assignee ? f.assignee.accountId || "" : "", e: f.assignee ? f.assignee.emailAddress || "" : "", s: st, at };
+      else LIVE[is.key] = { s: st, at }; });
+    c.forEach((k) => { if (!seen[k] && /^LRPS-/i.test(k)) LRPS[k] = { a: "", s: "", at, gone: true }; });
+  })), Promise.resolve()).then(() => { saveLrps(); return sw.filter((k) => { const i = T.findIndex((t) => t.key === k); return i > -1 && LIVE[k] && LIVE[k].s !== T[i].status; }).length; });
+}
 function mismatchCheck() {
   const from = HC.dateMs(CFG.start) || 0, keys = [];
   let unk = 0;
@@ -991,7 +1007,7 @@ function mismatchCheck() {
     const e = E[i]; if (!t.lrps.length || (e.stage === "closed" && (e.closedAt || 0) < from)) return;
     const st = t.lrps.map((k) => lrpsSt(t, k)).filter(Boolean);
     if (!st.length) { unk++; return; }
-    if (st.some((x) => misOff(t.status, x.s))) keys.push(t.key);
+    if (st.some((x) => misOff(stNow(t), x.s))) keys.push(t.key);
   });
   return { id: "lrpsmis", ref: "LRPS", title: "Status mismatch between SWIPHX and LRPS", who: "Shadow team / General Support",
     why: "The client ticket and its linked LRPS ticket are in different statuses. Bring them in line in Jira. Open tickets and tickets closed since counting started." +
@@ -1004,9 +1020,9 @@ function allChecks() {
 }
 /* the two status columns shown first in the mismatch list */
 const MIS_FRONT = [
-  { h: "SWIPHX status", s: (i) => T[i].status, c: (i) => stChip(T[i], E[i]) },
+  { h: "SWIPHX status", s: (i) => stNow(T[i]), c: (i) => stNow(T[i]) !== T[i].status ? '<span class="st">' + esc(stNow(T[i])) + '</span> <span class="dim small" title="Read live from Jira; the loaded data still says ' + esc(T[i].status) + '. Refresh data to update the rest of the page.">live</span>' : stChip(T[i], E[i]) },
   { h: "LRPS status", s: (i) => T[i].lrps.map((k) => (lrpsSt(T[i], k) || {}).s || "").join(" "), c: (i) => { const t = T[i];
-    return t.lrps.map((k) => { const x = lrpsSt(t, k), off = x && misOff(t.status, x.s);
+    return t.lrps.map((k) => { const x = lrpsSt(t, k), off = x && misOff(stNow(t), x.s);
       return '<div style="white-space:nowrap"><span class="st" style="' + (off ? "background:#FDE8EC;color:var(--ss);font-weight:600" : "") + '">' + esc(x ? x.s : "not read") + "</span> " +
         '<a class="key small" href="' + jiraUrl(k) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(k) + "</a>" +
         (x && x.src === "export" ? ' <span class="dim small" title="From the export’s Linked Ticket status. Refresh LRPS assignees to read it live from Jira.">export</span>' : "") + "</div>"; }).join(""); } }
@@ -1042,7 +1058,7 @@ function chkDef(c) {
     case "triage": return { gh: ["Status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: ["key", "type", "pri", "sum", "status", "age", "cw", "po", "rem"] };
     case "lrps": return { gh: ["SWIPHX status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: STD };
     case "lrpsmis": return { gh: ["SWIPHX status", "LRPS status"], norm: stKey, chip: ["", RED_ST], front: MIS_FRONT, cols: ["key", "type", "pri", "sum", "age", "prog", "lrps", "po", "rem"],
-      vals: (i) => { const t = T[i]; return t.lrps.map((k) => lrpsSt(t, k)).filter((x) => x && misOff(t.status, x.s)).map((x) => [t.status, x.s]); },
+      vals: (i) => { const t = T[i], sn = stNow(t); return t.lrps.map((k) => lrpsSt(t, k)).filter((x) => x && misOff(sn, x.s)).map((x) => [sn, x.s]); },
       note: "Each status pair once. A ticket whose LRPS tickets share the same status counts once." };
     case "nosvm": return { gh: ["Module (component)"], vals: one((i) => (E[i].po && E[i].po.module) || T[i].components.join(", ") || "(no component)"), front: col1("Module", (i) => (E[i].po && E[i].po.module) || T[i].components.join(", ") || "—"), cols: ["key", "type", "pri", "sum", "status", "age", "cw", "lrps", "rem"] };
     case "fr": return { gh: ["Priority"], vals: one((i) => T[i].priority || "(none)"), order: (x) => HC.sevRank(HC.sevOf(x.v[0])), cols: ["key", "type", "pri", "sum", "status", "age", "fr", "po", "cw", "rem"] };
@@ -1063,8 +1079,21 @@ function chkGroups(def, list) {
 function openCheck(cid, title, idxAll) {
   const c = allChecks().find((x) => x.id === cid) || { id: cid }, def = chkDef(c);
   const S = { side: null, grp: null };
-  const nonEmpty = MIS_SIDES.filter(([k]) => idxAll.some((i) => misSide(i) === k));
+  let nonEmpty = MIS_SIDES.filter(([k]) => idxAll.some((i) => misSide(i) === k));
   if (nonEmpty.length === 1) S.side = nonEmpty[0][0];
+  const isMis = cid === "lrpsmis", RC = { busy: false, msg: "" };
+  const lrpsAge = () => { let o = 0; idxAll.forEach((i) => T[i].lrps.forEach((k) => { const x = LRPS[k]; if (x && x.at) o = Math.max(o, NOW - x.at, Date.now() - x.at); })); return o; };
+  function recheck() {
+    if (!isMis || RC.busy) return; if (!(BR.ready || window._rmBridge)) { RC.msg = "Not checked live: the HD Jira Bridge is not connected, so the LRPS status may be old (" + fmt(lrpsAge() / MIN) + ")."; return paint(); }
+    RC.busy = true; RC.msg = "Checking the " + idxAll.length + " tickets and their LRPS tickets in Jira…"; paint();
+    const before = idxAll.length;
+    recheckStatuses(idxAll).then((liveDiff) => {
+      const k = new Set(mismatchCheck().keys); idxAll = T.map((t, i) => (k.has(t.key) ? i : -1)).filter((i) => i > -1);
+      nonEmpty = MIS_SIDES.filter(([x]) => idxAll.some((i) => misSide(i) === x)); if (S.side && !nonEmpty.some((x) => x[0] === S.side)) { S.side = nonEmpty.length === 1 ? nonEmpty[0][0] : null; S.grp = null; }
+      S.grp = null; RC.busy = false;
+      RC.msg = "Checked live in Jira at " + fdt(Date.now()) + ". " + (before - idxAll.length > 0 ? (before - idxAll.length) + " no longer mismatched. " : "") + (liveDiff ? liveDiff + " SWIPHX status" + (liveDiff === 1 ? " differs" : "es differ") + " from the loaded data (marked live); Refresh data to update the rest of the page." : "");
+      paint(); render(); }, (e) => { RC.busy = false; RC.msg = "Could not check in Jira: " + e.message; paint(); });
+  }
   const ov = document.createElement("div"); ov.className = "ov lst";
   ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="' + esc(title) + '"></div>';
   const box = ov.querySelector(".lbox");
@@ -1095,8 +1124,9 @@ function openCheck(cid, title, idxAll) {
       body = table(cur, def.cols, { sortable: false, limit: 2000, empty: "No tickets.", front: def.front });
     }
     box.innerHTML = '<div class="lhead"><h3>' + esc(title) + ' <span class="dim num">' + cur.length.toLocaleString() + "</span></h3>" +
+      (isMis ? '<button type="button" class="btn" data-m="recheck"' + (RC.busy ? " disabled" : "") + ' title="Read the SWIPHX and LRPS statuses of these tickets from Jira now">' + (RC.busy ? "Checking…" : "Re-check in Jira") + "</button>" : "") +
       (grp || (side && nonEmpty.length > 1) ? '<button type="button" class="btn" data-m="back">Back</button>' : "") + '<button type="button" class="btn" data-m="csv" title="Excel: a summary pivot and the tickets with the columns that matter">Download Excel</button><button type="button" class="btn" data-m="close">Close</button></div>' +
-      (crumb ? '<div class="small" style="margin:-2px 0 6px">' + crumb + "</div>" : "") + body;
+      (crumb ? '<div class="small" style="margin:-2px 0 6px">' + crumb + "</div>" : "") + (isMis && RC.msg ? '<p class="small" style="margin:0 0 8px;color:var(--muted)">' + esc(RC.msg) + "</p>" : "") + body;
   }
   const prev = document.activeElement;
   const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
@@ -1112,6 +1142,7 @@ function openCheck(cid, title, idxAll) {
       const m = b.dataset.m;
       if (m === "close") return close();
       if (m === "back") return back();
+      if (m === "recheck") return recheck();
       if (m === "home") { S.side = null; S.grp = null; return paint(); }
       if (m === "side") { S.grp = null; return paint(); }
       if (m === "csv") { const side = S.side && MIS_SIDES.find((x) => x[0] === S.side), g = S.grp != null ? groups[S.grp] : null;
@@ -1124,6 +1155,7 @@ function openCheck(cid, title, idxAll) {
   });
   document.body.appendChild(ov); document.addEventListener("keydown", key); paint();
   ov.querySelector('[data-m="close"]').focus();
+  if (isMis && idxAll.length) recheck();                  // always compare against Jira as it is now, not the loaded data
 }
 /* Now page: small shortcut to the SWIPHX ↔ LRPS status check (watched often) */
 function misPill() {
@@ -1163,7 +1195,7 @@ async function chkExcel(c, def, title, list) {
   const COLS = [
     ["Ticket", (i) => ({ f: 'HYPERLINK("' + jiraUrl(T[i].key) + '","' + T[i].key + '")', v: T[i].key, s: S.link }), 15],
     ["Type", (i) => typeTxt(T[i]), 11], ["Priority", (i) => sevName(T[i]), 11], ["Summary", (i) => ({ v: T[i].summary || "", s: S.wrap }), 52],
-    ["SWIPHX status", (i) => T[i].status || "(blank)", 24],
+    ["SWIPHX status", (i) => stNow(T[i]) || "(blank)", 24],
     ["LRPS", (i) => T[i].lrps.join(", ") || "(none)", 14],
     ["LRPS status", (i) => mis ? { v: lrStatOf(T[i]), s: S.bad } : lrStatOf(T[i]), 24],
     ["LRPS assignee", (i) => enggWho(T[i]), 24]
@@ -3052,7 +3084,7 @@ Promise.resolve(HS && HS.loadConfig ? HS.loadConfig().then((c) => { if (window.H
     if (!ALLT.length) { el("landing").innerHTML = '<div><h2>No ' + esc(CFG.prefix) + ' tickets in this data</h2><p class="sub" style="margin:8px auto 0">The loaded data has no tickets whose key starts with ' + esc(CFG.prefix) + '. Check the Jira query on the launcher.</p></div>'; return; }
     el("landing").classList.add("hidden"); el("view").classList.remove("hidden");
     render();
-    if (L) { let pend = null; L.subscribe(() => { DIRTY = true; clearTimeout(pend); pend = setTimeout(render, 400); }); if (L.onProgress) L.onProgress(() => paintChips()); }
+    if (L) { let pend = null; L.subscribe(() => { DIRTY = true; clearTimeout(pend); pend = setTimeout(() => { render(); if (BR.ready || window._rmBridge) fetchLrps(false); }, 400); }); if (L.onProgress) L.onProgress(() => paintChips()); }
     autoHistory();
     setTimeout(() => { if (BR.ready || window._rmBridge) fetchLrps(false); }, 3500);
     setInterval(() => { DIRTY = true; if (!document.hidden && !document.querySelector(".ov") && TAB !== "handover" && TAB !== "setup") render(); else { NOW = Date.now(); paintDuty(); } }, 60000);
