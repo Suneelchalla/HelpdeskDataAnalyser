@@ -1675,7 +1675,20 @@ async function hoWorkbook(d) {
     (i, v) => side(i) === "Engineering" && ew(i) === v, pr);
   pivot("3. Pending with SVM by status × priority", "", SRC.open, "Status", uniq(pending, stOf), "Priority", SEV, BOTH, (i, v) => svm(i) && stOf(i) === v, pr);
   const summary = { name: "Summary", rows, cols: [40].concat(SEV.map(() => 13), [11]), first: true };
-  const sheets = [summary, listSheet("Pending with SVM", pending), escSheet];
+  /* Pending with SVM, one block per SVM In Charge: a title row (the name also in the SVM In Charge column, so filtering
+     on a person keeps their title), the tickets by priority then age, and a blank row before the next person */
+  const bySvm = (name, idx) => {
+    const g = {}; idx.forEach((i) => { const k = T[i].svm || "(no SVM In Charge)"; (g[k] = g[k] || []).push(i); });
+    const names = Object.keys(g).sort((a, b) => g[b].length - g[a].length || a.localeCompare(b)), svmCol = HEAD.indexOf("SVM In Charge");
+    const out = [HEAD.map((h) => ({ v: h, s: S.head }))];
+    names.forEach((n, k) => {
+      if (k) out.push([]);
+      out.push(HEAD.map((h, c) => ({ v: c === 0 ? "SVM In Charge: " + n + " · " + g[n].length + " ticket" + (g[n].length === 1 ? "" : "s") : c === svmCol ? n : "", s: S.totLbl })));
+      g[n].sort(bySevAge).forEach((i) => out.push(row(i)));
+    });
+    return { name, rows: out, cols: WID, freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, out.length) };
+  };
+  const sheets = [summary, bySvm("Pending with SVM", pending), escSheet];
   if (!d.w.general) sheets.splice(1, 0, listSheet("Created this shift", d.created), listSheet("Closed this shift", d.closed.slice().sort(bySevAge)));
   return { bytes: await XL.build(sheets), file: hoFileBase(d) + ".xlsx", sheets: sheets.map((s) => s.name + (s.name === "Summary" ? "" : " (" + (s.rows.length - 1) + ")")) };
 }
