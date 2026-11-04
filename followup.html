@@ -607,15 +607,15 @@
       var extra = [ss ? b(ss) + isAre(ss) + "Show Stopper" : "", cr ? b(cr) + isAre(cr) + "Critical" : "", old30 ? b(old30) + (old30 === 1 ? " has" : " have") + " been open for more than 30 days" : ""].filter(Boolean);
       var list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
       return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " ticket" + (n === 1 ? "" : "s") + (cl > 1 ? " across " + cl + " clients" : "") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
-        (extra.length ? ": " + list3 : "") + ". Each row has the LRPS ticket and its engineering assignee."; };
+        (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it."; };
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
     var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + ">" + svmIntro(true) + "</p>" +
       "<h3 " + H + ">Ageing</h3>" + summary + gap(6) + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
       "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
-      "<p " + P + "><b>Please check on each ticket and make sure the ticket is updated with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
+      "<p " + P + "><b>Please review each ticket today and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
     var text = "Hi " + nm + ",\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
       ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
-      "\n\nPlease check on each ticket and make sure the ticket is updated with the next step and an ETR.\n\nRegards,\n" + (hoPeople().from || "");
+      "\n\nPlease review each ticket today and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
     return { html: html, text: text, subject: "Help Desk follow-up: " + (real ? name + ", " : "") + ts.length + " ticket" + (ts.length === 1 ? "" : "s") + (oldest ? ", oldest " + fmt(ageMin(oldest)) : "") };
   }
   /* ── editable mail preview: every ticket row gets a ✕ to leave it out, and the text can be edited in place.
