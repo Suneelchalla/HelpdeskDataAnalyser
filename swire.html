@@ -368,6 +368,15 @@ table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;
 @media print{body.printing-area > *:not(#printArea){display:none!important}body.printing-area #printArea{display:block}}
 
 .acts{display:inline-flex;gap:4px;white-space:nowrap}
+.gsearch{position:relative;display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:10px;padding:0 10px;background:#fff;color:var(--muted);margin-bottom:8px}
+.gsearch:focus-within{border-color:var(--maroon);box-shadow:0 0 0 3px rgba(122,31,61,.10)}
+.gsearch input{flex:1;min-width:0;border:0;outline:none;background:transparent;font:inherit;font-size:12.5px;padding:8px 0;color:var(--ink)}
+.gres{display:none;position:absolute;left:-1px;right:-1px;top:calc(100% + 4px);background:#fff;border:1px solid var(--line2);border-radius:10px;box-shadow:0 14px 34px rgba(60,14,30,.16);z-index:60;max-height:60vh;overflow:auto;padding:4px}
+.gres.on{display:block}
+.gres button{display:block;width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:7px 9px;cursor:pointer;font:inherit;color:var(--ink)}
+.gres button:hover,.gres button.act{background:var(--blush)}
+.gres .k{font-weight:700;color:var(--maroon);font-size:12.5px}.gres .w{font-size:10.5px;color:var(--muted);margin-left:6px}.gres .s{display:block;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.gres .none{padding:8px 9px;font-size:12px;color:var(--muted)}
 .sidesearch{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:10px;padding:7px 10px;font-size:12.5px;color:var(--muted);background:#fff;text-align:left}
 .sidesearch:hover{border-color:var(--rose);color:var(--maroon)}
 .simbox{width:min(1000px,100%)}
@@ -517,6 +526,7 @@ table.xl th{white-space:nowrap}
   <div class="brand"><svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#7A1F3D"/><path d="M6 20h20l-3 5H9z" fill="#F3C6D4"/><path d="M15 7v12M15 8l7 9h-7" stroke="#fff" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
     <div><div class="bt">Swire Hypercare</div><div class="bs"><span class="cl">SWIPHX</span> Phoenix runbook</div></div></div>
   <div class="duty" id="duty" aria-live="polite"></div>
+  <div class="gsearch"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg><input id="gSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Go to ticket: no., LRPS or ME ID" aria-label="Go to ticket" title="Type a ticket number (15531 or SWIPHX-15531), an LRPS key or an ME ID. Press / to jump here."><div class="gres" id="gRes" role="listbox"></div></div>
   <button type="button" class="sidesearch" data-simkey="" title="Search all tickets like the Similar Ticket Finder"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Find similar tickets</button>
   <nav class="tabs" role="tablist" id="tabs" aria-orientation="vertical"></nav>
   <div class="side-foot">
@@ -2050,18 +2060,75 @@ function slaTimeline(t) {
         '</td><td class="nw">' + (inst ? '<span class="dim">passed through</span>' : sg.counted ? (sg.bizMin >= 0.5 ? "▶ counted" : '<span class="dim">▷ nothing counted</span>') : sg.kind === "client" ? "⏸ paused" : "■ stopped") + '</td><td class="num">' + esc(fb(sg.elapsedAfter)) + "</td></tr>"; }).join("") + "</tbody></table></div>";
   return h;
 }
-function openTicket(i) {
-  const t = T[i], e = E[i]; let tr = null;
+/* SLA from the SLA Tracker for one ticket, in plain words */
+function slaBlock(t) {
+  const x = slaOfT(t) || {}, kv = (k, v) => "<dt>" + esc(k) + "</dt><dd>" + (v || '<span class="dim">—</span>') + "</dd>";
+  if (x.state === "loading") return '<div class="sec-h">SLA</div><p class="dim small">SLA data is loading…</p>';
+  if (!x.label && !x.tip) return '<div class="sec-h">SLA</div><p class="dim small">Not tracked for SLA.</p>';
+  const D = x.fmt || ((m) => fmt(m)), col = x.tone === "red" ? "var(--ss)" : x.tone === "green" ? "#15803D" : x.atRisk ? "#B45309" : "var(--ink)";
+  const rows = x.targetMin != null ? kv("Status", '<b style="color:' + col + '">' + esc(x.label || "") + "</b>") +
+      kv("Target", esc(D(x.targetMin))) + kv("Working time used", esc(D(x.elapsedMin)) + (x.pct != null ? ' <span class="dim small">(' + Math.round(x.pct) + "%)</span>" : "")) +
+      (x.breached ? kv("Over by", '<b style="color:var(--ss)">' + esc(D(x.overByMin)) + "</b>") : !x.isClosed ? kv("Remaining", esc(D(Math.max(0, x.remainingMin || 0)))) : "") +
+      (x.breachedAt ? kv("Breached at", esc(fdt(x.breachedAt)) + " IST") : x.breachAt && !x.isClosed ? kv("Breaches at", esc(fdt(x.breachAt)) + " IST") : "") +
+      (x.pausedMin ? kv("Paused with client", esc(D(x.pausedMin))) : "") + (x.heldBy ? kv("Held by", esc(x.heldBy)) : "") +
+      (x.suspect ? kv("Note", '<span class="dim small">Status history not fully verified</span>') : "")
+    : kv("Status", esc(x.label || "No SLA data"));
+  return '<div class="sec-h">SLA (SLA Tracker)</div><dl class="kv">' + rows + "</dl>" + (x.tip ? '<p class="dim small" style="margin:-4px 0 10px">' + esc(x.tip) + "</p>" : "");
+}
+/* ── Go to ticket: one box that finds any loaded Swire ticket by number, SWIPHX key, LRPS key, ME ID or words in the summary,
+   whatever the filters, and opens its full view ── */
+function gFind(q) {
+  q = String(q || "").trim(); if (!q) return [];
+  const up = q.toUpperCase(), num = (up.match(/^(?:SWIPHX[-\s]?)?(\d{1,7})$/) || [])[1], lr = (up.match(/^LRPS[-\s]?(\d{1,7})$/) || [])[1];
+  const out = [], seen = new Set(), add = (t, why) => { if (!seen.has(t.key)) { seen.add(t.key); out.push({ t, why }); } };
+  if (num) { const k = "SWIPHX-" + num; ALLT.forEach((t) => { if (t.key === k) add(t, "Ticket"); }); }
+  if (lr) { const k = "LRPS-" + lr; ALLT.forEach((t) => { if (t.lrps.indexOf(k) > -1) add(t, "Linked to " + k); }); }
+  if (num) ALLT.forEach((t) => { if (t.meId && String(t.meId).replace(/\D/g, "") === num) add(t, "ME ID " + t.meId); });
+  if (/^swiphx-/i.test(q) || num) ALLT.forEach((t) => { if (out.length < 12 && t.key.indexOf(num ? "-" + num : up) > -1) add(t, "Ticket"); });
+  if (!num && !lr && q.length >= 3) { const w = q.toLowerCase(); ALLT.forEach((t) => { if (out.length < 12 && (t.summary || "").toLowerCase().indexOf(w) > -1) add(t, "Summary"); }); }
+  return out.slice(0, 12);
+}
+function gOpen(t) {
+  const i = T.findIndex((x) => x.key === t.key);
+  if (i > -1) return openTicket(i);
+  const j = ALLT.findIndex((x) => x.key === t.key); if (j > -1) openTicket(-1, ALLT[j], ALLE[j]);
+}
+function wireGSearch() {
+  const inp = document.getElementById("gSearch"), box = document.getElementById("gRes"); if (!inp || inp._w) return; inp._w = 1;
+  let res = [], act = 0;
+  const paint = () => {
+    res = gFind(inp.value); act = 0;
+    if (!inp.value.trim()) { box.classList.remove("on"); box.innerHTML = ""; return; }
+    box.innerHTML = res.length ? res.map((r, n) => { const inV = T.some((x) => x.key === r.t.key);
+      return '<button type="button" role="option" data-g="' + n + '"' + (n ? "" : ' class="act"') + '><span class="k">' + esc(r.t.key) + '</span><span class="w">' + esc(r.why) + " · " + esc(r.t.status || "") + (inV ? "" : " · hidden by filters") + '</span><span class="s">' + esc(r.t.summary || "") + "</span></button>"; }).join("")
+      : '<div class="none">No ticket found for “' + esc(inp.value.trim()) + "”.</div>";
+    box.classList.add("on");
+  };
+  const pick = (n) => { const r = res[n]; if (!r) return; box.classList.remove("on"); inp.blur(); gOpen(r.t); };
+  inp.addEventListener("input", paint);
+  inp.addEventListener("focus", () => { if (inp.value.trim()) paint(); });
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); pick(act); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!res.length) return; act = (act + (e.key === "ArrowDown" ? 1 : res.length - 1)) % res.length; box.querySelectorAll("button").forEach((b, n) => b.classList.toggle("act", n === act)); }
+    else if (e.key === "Escape") { box.classList.remove("on"); inp.blur(); }
+  });
+  box.addEventListener("mousedown", (e) => { const b = e.target.closest("[data-g]"); if (b) { e.preventDefault(); pick(+b.dataset.g); } });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".gsearch")) box.classList.remove("on"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "/" && !/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || "") && !(document.activeElement || {}).isContentEditable && !document.querySelector(".ov")) { e.preventDefault(); inp.focus(); inp.select(); } });
+}
+function openTicket(i, tt, ee) {
+  const t = tt || T[i], e = ee || E[i], inView = !tt; let tr = null;
   if (L && L.ready()) { const d = L.detail(t._row); if (d && d.entry) tr = d.entry.transitions; }
   const kv = (k, v) => "<dt>" + esc(k) + "</dt><dd>" + (v || '<span class="dim">—</span>') + "</dd>";
   const ov = document.createElement("div"); ov.className = "ov";
-  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<span style="margin-left:auto"></span><button class="btn" data-simkey="' + esc(t.key) + '">Find similar</button>' + (canRemind(i) ? '<button class="btn pri" id="dRem">Send reminder</button>' : '<span class="dim small">' + (e.stage === "closed" ? "Closed" : "With Swire: reply from your own mailbox (R10)") + "</span>") + '<button class="btn" id="dClose">Close</button></div>' +
+  ov.innerHTML = '<aside class="drawer" role="dialog" aria-modal="true" aria-label="' + esc(t.key) + '"><div style="display:flex;gap:8px;align-items:center"><a class="key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + " in Jira</a>" + prChip(t) + stChip(t, e) + '<span style="margin-left:auto"></span><button class="btn" data-simkey="' + esc(t.key) + '">Find similar</button>' + (inView && canRemind(i) ? '<button class="btn pri" id="dRem">Send reminder</button>' : !inView ? '<span class="dim small">Hidden by the current filters</span>' : '<span class="dim small">' + (e.stage === "closed" ? "Closed" : "With Swire: reply from your own mailbox (R10)") + "</span>") + '<button class="btn" id="dClose">Close</button></div>' +
     (rmLog()[t.key] ? '<p class="small dim" style="margin-top:6px">Last reminder posted ' + esc(fmt((Date.now() - rmLog()[t.key]) / MIN)) + " ago from this browser.</p>" : "") +
     "<h3>" + esc(t.summary) + "</h3>" +
     (t.description ? '<div class="sec-h" style="margin-top:4px">Description</div><div class="pre desc">' + esc(t.description) + "</div>" : '<p class="dim small" style="margin:4px 0 10px">No description in the data.</p>') +
     '<dl class="kv">' + kv("ME ID", t.meId ? '<span class="mono">' + esc(t.meId) + "</span>" : '<span style="color:var(--ss)">missing</span>') + kv("Request type", esc(t.type)) + kv("Created", esc(fdt(t.created)) + ' <span class="dim">(' + fmt(ageOf(t)) + " ago)</span>") +
     kv("Environment", esc(t.env)) + kv("Components", esc(t.components.join(", "))) + kv("Menu / screen", esc([t.menu, t.screen].filter(Boolean).join(" / "))) + kv("Business user", esc(t.businessUser)) +
     kv("PO", poCell(e)) + kv("SVM In Charge", esc(t.svm)) + kv("Current worker", esc(t.cw)) + kv("LRPS", lrpsCell(t)) + kv("Next action", esc(t.nextAction)) + "</dl>" +
+    slaBlock(t) +
     '<div class="sec-h">Clocks (Section 10.1)</div><dl class="kv">' + kv("First response", frCell(t, e) + (e.target ? ' <span class="dim small">target ' + fmt(e.target.fr) + "</span>" : "")) + kv("Since last move", progCell(t, e)) + kv("Our time", resCell(t, e)) + kv("Time with Swire", e.clientMin != null ? fmt(e.clientMin) : "") + kv("Reopened", e.reopens ? String(e.reopens) : "") + "</dl>" +
     slaTimeline(t) +
     (t.reasonText || t.resolutionDetails ? '<div class="sec-h">Closure notes</div>' + (t.reasonText ? '<div class="small dim">Reason for occurrence</div><div class="pre">' + esc(t.reasonText) + "</div>" : "") + (t.resolutionDetails ? '<div class="small dim" style="margin-top:8px">Resolution details</div><div class="pre">' + esc(t.resolutionDetails) + "</div>" : "") : "") +
@@ -3069,7 +3136,7 @@ function render() {
   /* lists behind clickable numbers: never renumber (an open window may still point at its own), and drop only the ones
      no longer on screen, after this redraw */
   setTimeout(() => { const live = new Set(Array.from(document.querySelectorAll("[data-list]"), (x) => x.dataset.list)); Object.keys(LISTS).forEach((k) => { if (!live.has(k)) delete LISTS[k]; }); }, 0);
-  rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters();
+  rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters(); wireGSearch();
   writeStats();
   const open = openIdx(), C = allChecks(), escN = HC.escalations(T, E, NOW, CFG).length;
   const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
