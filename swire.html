@@ -69,6 +69,12 @@ body{display:grid;grid-template-columns:var(--sideW) minmax(0,1fr);background:va
   .duty{flex:1 1 260px}.tabs{flex-direction:row;overflow-x:auto;flex-basis:100%}.tab .n{margin-left:4px}.side-foot{display:none}
 }
 
+.tbrow{max-width:1500px;margin:0 auto;display:flex;align-items:flex-start;gap:10px;padding-right:22px}
+.tbrow .fbar{flex:1;min-width:0;max-width:none;margin:0}
+.tsearch{display:flex;align-items:center;gap:8px;padding-top:10px;flex-shrink:0}
+.tsearch .gsearch{margin:0;width:270px}
+.tsearch .sidesearch.top{white-space:nowrap;padding:7px 11px}
+@media(max-width:1100px){.tbrow{flex-wrap:wrap;padding-left:22px}.tsearch{width:100%;padding-top:0;padding-bottom:6px}.tsearch .gsearch{flex:1;width:auto}}
 .fbar{max-width:1500px;margin:0 auto;padding:10px 22px;display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center}
 .segc{display:inline-flex;gap:2px;background:#fff;border:1px solid var(--line2);border-radius:11px;padding:3px}
 .segc button{border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:500;color:var(--ink2);white-space:nowrap;transition:background .15s,color .15s}
@@ -526,8 +532,6 @@ table.xl th{white-space:nowrap}
   <div class="brand"><svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#7A1F3D"/><path d="M6 20h20l-3 5H9z" fill="#F3C6D4"/><path d="M15 7v12M15 8l7 9h-7" stroke="#fff" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>
     <div><div class="bt">Swire Hypercare</div><div class="bs"><span class="cl">SWIPHX</span> Phoenix runbook</div></div></div>
   <div class="duty" id="duty" aria-live="polite"></div>
-  <div class="gsearch"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg><input id="gSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Go to ticket: no., LRPS or ME ID" aria-label="Go to ticket" title="Type a ticket number (15531 or SWIPHX-15531), an LRPS key or an ME ID. Press / to jump here."><div class="gres" id="gRes" role="listbox"></div></div>
-  <button type="button" class="sidesearch" data-simkey="" title="Search all tickets like the Similar Ticket Finder"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Find similar tickets</button>
   <nav class="tabs" role="tablist" id="tabs" aria-orientation="vertical"></nav>
   <div class="side-foot">
     <span id="phaseChip">Loading…</span>
@@ -537,7 +541,7 @@ table.xl th{white-space:nowrap}
   </div>
 </aside>
 <div class="mainc">
-<div class="toolbar"><div class="fbar" id="fbar"></div><div class="fpanel hidden" id="fpanel"></div></div>
+<div class="toolbar"><div class="tbrow"><div class="fbar" id="fbar"></div><div class="tsearch"><div class="gsearch"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg><input id="gSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Go to ticket: no., LRPS or ME ID" aria-label="Go to ticket" title="Type a ticket number (15531 or SWIPHX-15531), an LRPS key or an ME ID. Press / to jump here."><div class="gres" id="gRes" role="listbox"></div></div><button type="button" class="sidesearch top" data-simkey="" title="Search all tickets like the Similar Ticket Finder"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>Find similar</button></div></div><div class="fpanel hidden" id="fpanel"></div></div>
 
 <main class="wrap">
   <div id="landing" class="landing"><div><h2>Loading Swire tickets…</h2><p class="sub" style="margin:8px auto 0">Load a Jira export or fetch from Jira on the launcher first.</p></div></div>
@@ -561,6 +565,7 @@ const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: ""
 /* filters at the top, shared by every tab (kept in this browser) */
 const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", type: "isr", sev: "", po: "", svm: "", cw: "", comp: "", env: "" };
 let GF = (() => { try { return Object.assign({}, GF_DEF, JSON.parse(localStorage.getItem(GF_KEY) || "{}")); } catch (e) { return Object.assign({}, GF_DEF); } })();
+if (["start", "7", "30"].indexOf(GF.range) > -1) GF.range = "all";      // date options no longer offered
 function saveGF() { try { localStorage.setItem(GF_KEY, JSON.stringify(GF)); } catch (e) {} }
 function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
 function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); DIRTY = true; }
@@ -645,7 +650,8 @@ function paintFilters() {
   const opts = (id) => id === "sev" ? HC.SEVS.map((x) => [x.id, x.name]) : uniq(vals[id]).map((v) => [v, v]);
   const sel = (id) => '<label>' + esc(GF_LBL[id]) + '<select class="fsel' + (GF[id] ? " on" : "") + '" data-gf="' + id + '"><option value="">All</option>' + opts(id).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF[id] ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
   const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"], ["all", "All request types"]].concat(ALLTYPES.map((x) => [x, x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
-  const R = [["all", "All time"], ["start", "Since " + fday(HC.dateMs(CFG.start)).replace(/ \d{4}$/, "")], ["official", "Since 1 Nov"], ["7", "7 days"], ["30", "30 days"], ["month", "This month"], ["lastmonth", "Last month"]];
+  const R = [["all", "All time"], ["today", "Today"], ["official", "Since 1 Nov"], ["month", "This month"], ["lastmonth", "Last month"]];
+  if (GF.range !== "custom" && !R.some(([id]) => id === GF.range)) { GF.range = "all"; saveGF(); }        // a saved choice that is no longer offered
   const cust = GF.range === "custom", act = Object.keys(GF_LBL).filter((k) => GF[k]);
   const chipVal = (k) => k === "sev" ? HC.sevName(GF.sev) : GF[k];
   el("fbar").innerHTML = '<div class="segc" role="group" aria-label="Created">' + R.map(([id, t]) => '<button type="button" data-gfr="' + id + '" aria-pressed="' + (GF.range === id) + '">' + esc(t) + "</button>").join("") + "</div>" +
@@ -1300,6 +1306,7 @@ function rangeMs() {
   switch (GF.range) {
     case "start": return { from: HC.dateMs(CFG.start), to: null, label: "since " + fday(HC.dateMs(CFG.start)) };
     case "official": return { from: HC.dateMs(CFG.officialStart), to: null, label: "since " + fday(HC.dateMs(CFG.officialStart)) };
+    case "today": return { from: today, to: null, label: "today" };
     case "7": return { from: today - 6 * DAY, to: null, label: "last 7 days" };
     case "30": return { from: today - 29 * DAY, to: null, label: "last 30 days" };
     case "month": return { from: Date.UTC(p.y, p.mo, 1) - 330 * MIN, to: null, label: "this month" };
