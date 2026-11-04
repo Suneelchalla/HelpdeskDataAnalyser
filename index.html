@@ -1517,10 +1517,12 @@ if(HS){
       },true);
     }catch(err){}
   }
+  var LAUNCH_ID=Date.now().toString(36);
   function makeFrame(t){
     var f=document.createElement("iframe"); f.className="tframe"; f.title=t.title;
     f.addEventListener("load",function(){ hookFrame(t); });
-    f.src=t.href; framesBox.appendChild(f); t.frame=f;
+    /* a fresh copy of the module each time the launcher loads, so an uploaded update is never hidden by the browser cache */
+    f.src=t.href+(t.href.indexOf("?")<0?"?":"&")+"_="+LAUNCH_ID; framesBox.appendChild(f); t.frame=f;
   }
   function reload(t){
     try{ t.frame.contentWindow.location.reload(); }catch(e){ t.frame.src=t.href; }
