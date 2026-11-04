@@ -2230,15 +2230,22 @@ function pmEmail(info, list) {
   const m = (CFG.modules || []).find((x) => nk(x.po) === nk(info.name)); return m ? m.email || "" : "";
 }
 function pmSaveEmail(info, v) { if (!pmReal(info)) return; const b = pmBook(); b[info.by + ":" + info.name] = v.trim(); try { localStorage.setItem(PM_KEY, JSON.stringify(b)); } catch (e) {} }
-function personMail(list, info, hi, note) {
+function personMail(list, info, hi, note, skip) {
   const svmM = info && info.by === "svm", where = (i) => sideOf(i) === "engg" ? "engg" : "hd";
   list = list.slice().sort((a, b) => (svmM ? (where(a) === "hd" ? 0 : 1) - (where(b) === "hd" ? 0 : 1) : 0) || bySevAge(a, b));
   /* each component with its PO (Master data); a ticket with more than one module is shared, and the other modules' POs go in Cc */
   const nk = (x) => String(x || "").toLowerCase().replace(/[^a-z]/g, ""), me = nk(info && info.name);
-  const isMe = (po) => { const a = nk(po); return !!a && !!me && (a === me || a.indexOf(me) === 0 || me.indexOf(a) === 0); };
+  const sameName = (x, y) => { const a = nk(x), c = nk(y); return !!a && !!c && (a === c || (Math.abs(a.length - c.length) <= 2 && (a.indexOf(c) === 0 || c.indexOf(a) === 0))); };
+  const isMe = (po) => sameName(po, info && info.name);
   const compsOf = (i) => { const seen = {}, out = []; (T[i].components || []).forEach((c) => { const m = HC.moduleOf(c, CFG), k = m ? m.module : c; if (seen[k]) return; seen[k] = 1; out.push(m ? { mod: m.module, po: m.po, email: m.email || "" } : { mod: c, po: "", email: "" }); }); return out; };
   const shared = (i) => compsOf(i).length > 1;
   const ccMap = {}; if (svmM) list.forEach((i) => { if (shared(i)) compsOf(i).forEach((x) => { if (x.email && !isMe(x.po)) ccMap[x.email.toLowerCase()] = x.email; }); });
+  /* tickets owned by another SVM In Charge that also involve this person's module: listed at the end, for information */
+  const inList = new Set(list);
+  const others = !svmM ? [] : T.map((t, i) => i).filter((i) => !inList.has(i) && E[i].stage !== "closed" && (sideOf(i) === "hd" || sideOf(i) === "engg") && !(skip && skip[T[i].key]) &&
+    !isMe(T[i].svm) && shared(i) && compsOf(i).some((x) => isMe(x.po))).sort(bySevAge);
+  const ownerEmail = (n) => { const m = (CFG.modules || []).find((x) => sameName(x.po, n)); return m && m.email ? m.email : ""; };
+  others.forEach((i) => { const e = ownerEmail(T[i].svm); if (e) ccMap[e.toLowerCase()] = e; });
   const cc = Object.keys(ccMap).map((k) => ccMap[k]), nShared = svmM ? list.filter(shared).length : 0;
   const compCell = (i) => { const cs = compsOf(i); if (!cs.length) return "—";
     return cs.map((x) => { const t = esc(x.mod) + (x.po ? " (" + esc(x.po) + ")" : ""); return cs.length > 1 && !isMe(x.po) ? "<b>" + t + "</b>" : t; }).join(" + ") + (cs.length > 1 ? ' <i style="color:#8A7380">· shared</i>' : ""); };
@@ -2249,7 +2256,8 @@ function personMail(list, info, hi, note) {
     const list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
     return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " Swire Phoenix ticket" + (n === 1 ? "" : "s") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
       (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it." +
-      (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : ""); };
+      (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
+      (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); };
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 6px"';
   const ageD = (i) => (ageOf(T[i]) || 0) / 1440, updD = (i) => T[i].updated != null ? (NOW - T[i].updated) / DAY : null;
   const bucket = (d) => AGEB.find(([a, b]) => d >= a && d < b) || AGEB[0];
@@ -2278,12 +2286,30 @@ function personMail(list, info, hi, note) {
     "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
-    ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" +
+    ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" + sharedHtml() +
     "<p " + P + "><b>" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Hi " + name + ",\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
     list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
+    (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map((i) => { const t = T[i];
+      return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " + compsOf(i).map((x) => x.mod + (x.po ? " (" + x.po + ")" : "")).join(" + ") + " | owner " + (t.svm || "-") +
+        (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") : "") +
     "\n\n" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
+  function sharedHtml() {
+    if (!others.length) return "";
+    const H3 = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 4px"';
+    return "<h3 " + H3 + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p>" +
+      '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
+      ["Ticket", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"].map(th).join("") + "</tr>" +
+      others.map((i, k) => { const t = T[i];
+        const lr = t.lrps.length ? t.lrps.map((x) => '<a href="' + jiraUrl(x) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(x) + "</a>").join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
+        const ls = t.lrps.length ? t.lrps.map((x) => { const y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
+        const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
+        return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
+          td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
+          td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary)) + td(esc(t.status), "white-space:nowrap") + td(compCell(i), "white-space:nowrap") + td("<b>" + esc(t.svm || "—") + "</b>", "white-space:nowrap") +
+          td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") + td(esc(fmt(ageOf(t))) + sub(esc(fdt(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>";
+  }
   const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
   return { html, text, subject, cc };
 }
@@ -2332,7 +2358,7 @@ function openPersonMail(listAll, info, title) {
   let out = {}, subjEdited = false, ccEdited = false;
   q("pmTo").value = pmEmail(info, listAll); q("pmHi").value = pmReal(info) ? info.name : "team";
   const list = () => listAll.filter((i) => !out[T[i].key]);
-  const cur = () => personMail(list(), info, q("pmHi").value, q("pmNote").value);
+  const cur = () => personMail(list(), info, q("pmHi").value, q("pmNote").value, out);
   const ed = mailEditor(q("pmPrev"), (k, keep) => { out[k] = 1; if (keep) counts(); else paint(); });
   ed.onEdit = () => { q("pmReset").style.display = ""; };
   function counts() { const n = Object.keys(out).length; q("pmN").textContent = n ? "· " + list().length + " of " + listAll.length : "";
