@@ -2264,12 +2264,13 @@ function personMail(list, info, hi, note, skip) {
   const oldest = list.reduce((m, i) => (m == null || ageD(i) > ageD(m) ? i : m), null);
   const stale = list.filter((i) => updD(i) != null && updD(i) >= 7).length;
   const name = (hi || "").trim() || (pmReal(info) ? info.name : "team");
-  const CELL = "padding:7px 10px;border:1px solid #E7D8DF;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
+  /* clear borders: 1.5 pt, one line per cell edge (no table border attribute, so Outlook does not draw a second line) */
+  const CELL = "padding:7px 10px;border:1.5pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1.5pt;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
   const WMAP = { "Ticket": 110, "Type": 90, "Priority": 75, "Summary": 270, "Status": 140, "Components (PO)": 190, "Owner (SVM In Charge)": 150, "LRPS ticket": 100, "LRPS status": 140, "Engineering assignee": 150, "Assignee": 140, "Age (created)": 105, "Last updated": 110 };
   const th = (h, w) => { w = typeof w === "number" ? w : WMAP[h] || 90; return '<th width="' + w + '" style="' + CELL + "width:" + w + 'px;background:#F7EEF2;color:#5C1730;text-align:left;font-weight:700;white-space:nowrap">' + h + "</th>"; };
   const td = (h, x) => '<td style="' + CELL + (x || "") + '">' + h + "</td>";
   const tblW = (heads) => heads.reduce((m, h) => m + (WMAP[h] || 90), 0);
-  const tbl = (w) => 'width="' + w + '" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;border:1px solid #E7D8DF;width:' + w + "px;" + F + '"';
+  const tbl = (w) => 'width="' + w + '" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:' + w + "px;" + F + '"';
   const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
   const sub = (h) => '<br><span style="color:#8A7380;font-size:11px">' + h + "</span>";
   /* ageing summary: one row of buckets */
