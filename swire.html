@@ -2264,29 +2264,34 @@ function personMail(list, info, hi, note, skip) {
   const oldest = list.reduce((m, i) => (m == null || ageD(i) > ageD(m) ? i : m), null);
   const stale = list.filter((i) => updD(i) != null && updD(i) >= 7).length;
   const name = (hi || "").trim() || (pmReal(info) ? info.name : "team");
-  const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
-  const td = (h, x) => '<td style="' + TD + (x || "") + '">' + h + "</td>";
+  const CELL = "padding:7px 10px;border:1px solid #E7D8DF;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
+  const WMAP = { "Ticket": 110, "Type": 90, "Priority": 75, "Summary": 270, "Status": 140, "Components (PO)": 190, "Owner (SVM In Charge)": 150, "LRPS ticket": 100, "LRPS status": 140, "Engineering assignee": 150, "Assignee": 140, "Age (created)": 105, "Last updated": 110 };
+  const th = (h, w) => { w = typeof w === "number" ? w : WMAP[h] || 90; return '<th width="' + w + '" style="' + CELL + "width:" + w + 'px;background:#F7EEF2;color:#5C1730;text-align:left;font-weight:700;white-space:nowrap">' + h + "</th>"; };
+  const td = (h, x) => '<td style="' + CELL + (x || "") + '">' + h + "</td>";
+  const tblW = (heads) => heads.reduce((m, h) => m + (WMAP[h] || 90), 0);
+  const tbl = (w) => 'width="' + w + '" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;border:1px solid #E7D8DF;width:' + w + "px;" + F + '"';
+  const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
   const sub = (h) => '<br><span style="color:#8A7380;font-size:11px">' + h + "</span>";
   /* ageing summary: one row of buckets */
   const bk = AGEB.map(([a, b, l, c]) => ({ l, c, n: list.filter((i) => ageD(i) >= a && ageD(i) < b).length }));
-  const summary = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 6px;' + F + '"><tr>' + bk.map((x) => th(x.l)).join("") + th("Total") + "</tr><tr>" +
+  const summary = "<table " + tbl(bk.length * 95 + 80) + "><tr>" + bk.map((x) => th(x.l, 95)).join("") + th("Total", 80) + "</tr><tr>" +
     bk.map((x) => td(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;font-size:13px;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : ""))).join("") + td("<b>" + list.length + "</b>", "text-align:center;font-size:13px") + "</tr></table>";
   const facts = [oldest != null ? "Oldest: <b>" + esc(T[oldest].key) + "</b>, open " + esc(fmt(ageOf(T[oldest]))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
   const rows = list.map((i, k) => { const t = T[i], e = E[i], d = ageD(i), b = bucket(d), u = updD(i);
     const lr = t.lrps.length ? t.lrps.map((x) => '<a href="' + jiraUrl(x) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(x) + "</a>").join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
     const ls = t.lrps.length ? t.lrps.map((x) => { const y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
     const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
-    return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
+    return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" +
       td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
       td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + (svmM ? td(compCell(i), "white-space:nowrap") : "") + td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") +
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
       td(u != null ? esc(fdt(t.updated)) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
   const nt = (note || "").trim();
-  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p><p " + P + ">Greetings of the day.</p><p data-slot=\"intro\" " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
-    "<h3 " + H + ">Ageing</h3>" + '<div data-slot="age">' + summary + "</div>" + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" +
+  const HEADS = ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]);
+  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(6) + "<p " + P + ">Greetings of the day.</p>" + gap(6) + "<p data-slot=\"intro\" " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
+    gap(12) + "<h3 " + H + ">Ageing</h3>" + gap(4) + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-    "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
-    ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" + sharedHtml() +
+    gap(12) + "<h3 " + H + ">Tickets</h3>" + gap(4) + "<table " + tbl(tblW(HEADS)) + '><tr data-hdr="1">' + HEADS.map((h) => th(h)).join("") + "</tr>" + rows + "</table>" + sharedHtml() + gap(12) +
     "<p " + P + "><b>" + (svmM ? "Please review each ticket and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
@@ -2298,14 +2303,14 @@ function personMail(list, info, hi, note, skip) {
   function sharedHtml() {
     if (!others.length) return '<div data-slot="shared"></div>';
     const H3 = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 4px"';
-    return '<div data-slot="shared">' + "<h3 " + H3 + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p>" +
-      '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
-      ["Ticket", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"].map(th).join("") + "</tr>" +
+    const SH = ["Ticket", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"];
+    return '<div data-slot="shared">' + gap(12) + "<h3 " + H3 + ">Shared with another module</h3>" + gap(4) + "<p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p>" + gap(4) +
+      "<table " + tbl(tblW(SH)) + '><tr data-hdr="1">' + SH.map((h) => th(h)).join("") + "</tr>" +
       others.map((i, k) => { const t = T[i];
         const lr = t.lrps.length ? t.lrps.map((x) => '<a href="' + jiraUrl(x) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(x) + "</a>").join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
         const ls = t.lrps.length ? t.lrps.map((x) => { const y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
         const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
-        return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
+        return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" +
           td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
           td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary)) + td(esc(t.status), "white-space:nowrap") + td(compCell(i), "white-space:nowrap") + td("<b>" + esc(t.svm || "—") + "</b>", "white-space:nowrap") +
           td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") + td(esc(fmt(ageOf(t))) + sub(esc(fdt(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>";
