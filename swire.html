@@ -97,6 +97,8 @@ body{display:grid;grid-template-columns:var(--sideW) minmax(0,1fr);background:va
 .fpanel{max-width:1500px;margin:0 auto;padding:0 22px 12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
 .fpanel label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:600;color:var(--muted)}
 .fpanel .fsel{max-width:none;width:100%}
+.slahd{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.slahd h2{margin-right:auto}
+.slast{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted)}.slast .fsel{max-width:320px}
 .fcount{margin-left:auto;display:inline-flex;gap:10px;align-items:center;font-size:12px;color:var(--muted)}
 .fcount b{font-family:var(--disp);font-weight:800;font-size:14px;color:var(--maroon)}
 .fhid{font-size:11.5px;color:var(--muted);background:#fff;border:1px dashed var(--line2);border-radius:999px;padding:2px 9px}
@@ -2983,13 +2985,23 @@ function viewRel() {
 }
 
 /* ══ SLA: every ticket, with us and with Swire ══ */
+document.addEventListener("change", (e) => { const x = e.target.closest && e.target.closest("[data-slast]"); if (!x) return; UI.slaSt = x.value; render(); });
+document.addEventListener("click", (e) => { const x = e.target.closest && e.target.closest("[data-slast-x]"); if (!x) return; UI.slaSt = ""; render(); });
 function viewSla() {
-  const all = T.map((t, i) => i), open = openIdx(), closed = all.filter((i) => E[i].stage === "closed");
+  /* status filter for this tab only: every status in the data with its count, "All statuses" first */
+  const stC = {}; T.forEach((t) => { const k = t.status || "(blank)"; stC[k] = (stC[k] || 0) + 1; });
+  const stNames = Object.keys(stC).sort((a, b) => stC[b] - stC[a] || a.localeCompare(b));
+  if (UI.slaSt && !stC[UI.slaSt]) UI.slaSt = "";
+  const stOk = (i) => !UI.slaSt || (T[i].status || "(blank)") === UI.slaSt;
+  const stSel = '<label class="slast"><span>Status</span><select class="fsel' + (UI.slaSt ? " on" : "") + '" data-slast aria-label="Filter the SLA tab by status"><option value="">All statuses (' + T.length.toLocaleString() + ")</option>" +
+    stNames.map((n) => '<option value="' + esc(n) + '"' + (n === UI.slaSt ? " selected" : "") + ">" + esc(n) + " (" + stC[n].toLocaleString() + ")</option>").join("") + "</select>" +
+    (UI.slaSt ? '<button type="button" class="lnk sm" data-slast-x>Clear</button>' : "") + "</label>";
+  const all = T.map((t, i) => i).filter(stOk), open = openIdx().filter(stOk), closed = all.filter((i) => E[i].stage === "closed");
   const cats = [["breached", "Breached", "t-ss"], ["risk", "About to breach", "t-cr"], ["ontrack", "Not yet breached", "t-ok"], ["paused", "Paused, with Swire", "t-ink"], ["nodata", "No SLA data", "zero"]];
   const ob = (k) => open.filter((i) => slaB(i) === k), cm = closed.filter((i) => slaB(i) === "met"), cx = closed.filter((i) => slaB(i) === "missed");
   const o1 = Math.max(1, open.length), dec = cm.length + cx.length;
   const sides = [["With Help Desk", "hd"], ["With Engineering", "engg"], ["With Swire", "client"], ["Delivered, billing", "billing"]];
-  let h = "<h2>SLA</h2><p class=\"sub\">Every ticket in the filters, including those waiting on Swire. Same numbers as the SLA Tracker: its targets and working calendar, and the clock pauses while the client has the ticket. Every number opens its tickets.</p>" +
+  let h = '<div class="slahd"><h2>SLA' + (UI.slaSt ? ' <span class="dim" style="font-weight:600">· ' + esc(UI.slaSt) + "</span>" : "") + "</h2>" + stSel + "</div><p class=\"sub\">Every ticket in the filters" + (UI.slaSt ? " with status “" + esc(UI.slaSt) + "”" : "") + ", including those waiting on Swire. Same numbers as the SLA Tracker: its targets and working calendar, and the clock pauses while the client has the ticket. Every number opens its tickets.</p>" +
     '<div class="grp">Open tickets</div><div class="tiles">' + cats.map(([k, n, c]) => { const l = ob(k); return tile(c, k === "breached" ? "siren" : k === "risk" ? "clock" : k === "ontrack" ? "check" : k === "paused" ? "pause" : "dash", l, n, (l.length / o1 * 100).toFixed(0) + "% of open", l.length / o1, "Open, SLA " + n.toLowerCase()); }).join("") + "</div>" +
     (() => { const nd = closed.filter((i) => slaB(i) === "nodata"), busy = L && L.isFetching && L.isFetching(), pr = L && L.progress ? L.progress() : null;
       return nd.length ? '<div class="note" style="margin-top:2px">SLA for <b>' + (closed.length - nd.length).toLocaleString() + " of " + closed.length.toLocaleString() + "</b> closed tickets so far. The other " + nd.length.toLocaleString() + " need their status history, which " +
