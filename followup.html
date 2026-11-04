@@ -616,7 +616,7 @@
     var text = "Hi " + nm + ",\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
       ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
       "\n\nPlease review each ticket today and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
-    return { html: html, text: text, subject: "Help Desk follow-up: " + (real ? name + ", " : "") + ts.length + " ticket" + (ts.length === 1 ? "" : "s") + (oldest ? ", oldest " + fmt(ageMin(oldest)) : "") };
+    return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up" };
   }
   /* ── editable mail preview: every ticket row gets a ✕ to leave it out, and the text can be edited in place.
      The ✕ buttons and the editing outline never go into the copied / downloaded mail. ── */
