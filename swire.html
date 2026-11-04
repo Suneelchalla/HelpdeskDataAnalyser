@@ -2287,14 +2287,14 @@ function personMail(list, info, hi, note, skip) {
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
     ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" + sharedHtml() +
-    "<p " + P + "><b>" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+    "<p " + P + "><b>" + (svmM ? "Please review each ticket and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
     list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fdt(T[i].updated) : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
     (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map((i) => { const t = T[i];
       return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " + compsOf(i).map((x) => x.mod + (x.po ? " (" + x.po + ")" : "")).join(" + ") + " | owner " + (t.svm || "-") +
         (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") : "") +
-    "\n\n" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
+    "\n\n" + (svmM ? "Please review each ticket and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
   function sharedHtml() {
     if (!others.length) return '<div data-slot="shared"></div>';
     const H3 = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 4px"';
