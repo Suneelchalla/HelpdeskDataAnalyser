@@ -440,6 +440,7 @@ table.xl th{white-space:nowrap}
 .lgmis + .lgpdf{margin-left:8px}
 @media print{.lgmis{display:none!important}}
 .pm-edit{outline:none;min-height:40px}.pm-edit:focus{box-shadow:inset 0 0 0 2px rgba(122,31,61,.18);border-radius:8px}
+[data-ui]{user-select:none;-webkit-user-select:none}
 .pm-x.sm{width:17px;height:17px;font-size:9px;vertical-align:1px}
 @media print{.pm-x,[data-ui]{display:none!important}}
 .pm-x{width:22px;height:22px;border-radius:6px;border:1px solid #F3B8C3;background:#FDECEE;color:#C8102E;font-size:11px;font-weight:800;cursor:pointer;line-height:1;padding:0}.pm-x:hover{background:#C8102E;color:#fff}
@@ -1617,6 +1618,7 @@ const XL = (function () {
     if (c == null || c === "") return "";
     const ref = col(k) + r;
     if (typeof c !== "object") c = { v: c };
+    if (!c.f && (c.v == null || c.v === "")) return c.s != null ? "<c r=\"" + ref + "\" s=\"" + c.s + "\"/>" : "";   // styled but empty: text from the left can run over it
     const st = c.s != null ? ' s="' + c.s + '"' : typeof c.v === "number" ? ' s="' + S.cellInt + '"' : ' s="0"';
     if (c.f) return "<c r=\"" + ref + "\"" + st + (typeof c.v === "number" ? "" : ' t="str"') + "><f>" + xe(c.f) + "</f>" + (c.v != null ? "<v>" + xe(c.v) + "</v>" : "") + "</c>";
     if (typeof c.v === "number") return "<c r=\"" + ref + "\"" + st + "><v>" + (isFinite(c.v) ? c.v : 0) + "</v></c>";
@@ -1631,7 +1633,8 @@ const XL = (function () {
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       view + '<sheetFormatPr defaultRowHeight="15"/>' + cols + "<sheetData>" + rows + "</sheetData>" + (sh.filter ? '<autoFilter ref="' + sh.filter + '"/>' : "") +
       (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map((m) => '<mergeCell ref="' + m + '"/>').join("") + "</mergeCells>" : "") +
-      '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+      '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>' +
+      '<ignoredErrors><ignoredError sqref="A1:XFD1048576" numberStoredAsText="1"/></ignoredErrors></worksheet>';
   }
   const qs = (n) => "'" + String(n).replace(/'/g, "''") + "'";
   function parts(sheets) {
@@ -2072,13 +2075,17 @@ function openTicket(i) {
 }
 
 /* ══ Engineering follow-up: the tickets with Engineering, like the Follow-up Tracker's window ══ */
+/* Copy the mail so Outlook pastes it with its tables. First choice: render it off-screen, select it and copy, exactly
+   like selecting it by hand (Outlook reliably takes that as formatted). Only if the browser refuses, the clipboard API. */
 function copyRich(html, text, btn, label) {
-  const done = (m) => { btn.textContent = m; setTimeout(() => { btn.textContent = label; }, 1800); };
-  const fallback = () => { const box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff"; box.innerHTML = html; document.body.appendChild(box);
-    const r = document.createRange(); r.selectNodeContents(box); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-    let ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove(); done(ok ? "Copied, paste into Outlook" : "Copy blocked by the browser"); };
-  if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), fallback);
-  else fallback();
+  const done = (m) => { if (!btn) return; btn.textContent = m; setTimeout(() => { btn.textContent = label; }, 1800); };
+  const box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;color:#000"; box.innerHTML = html; document.body.appendChild(box);
+  const sel = getSelection(), r = document.createRange(); r.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(r);
+  let ok = false; try { ok = document.execCommand("copy"); } catch (x) {}
+  sel.removeAllRanges(); box.remove();
+  if (ok) return done("Copied, paste into Outlook");
+  if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), () => done("Copy blocked by the browser"));
+  else done("Copy blocked by the browser");
 }
 function emlDownload(subject, html, file, to) {
   const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
@@ -2277,6 +2284,13 @@ function mailEditor(host, onRemove) {
       c.innerHTML = '<button type="button" class="pm-x sm" title="Leave this ticket out of the mail" data-rm="' + esc(x.getAttribute("data-k")) + '">✕</button>'; x.parentNode.insertBefore(c, x); });
   };
   host.addEventListener("input", () => { ed.edited = true; if (ed.onEdit) ed.onEdit(); });
+  host.addEventListener("copy", (e) => {              // selecting by hand and copying: leave the ✕ buttons out
+    const sel = getSelection(); if (!sel.rangeCount || !e.clipboardData) return;
+    const box = document.createElement("div"); box.appendChild(sel.getRangeAt(0).cloneContents());
+    if (!box.querySelector("[data-ui]")) return;
+    box.querySelectorAll("[data-ui]").forEach((x) => x.remove()); box.querySelectorAll("[data-k],[data-hdr]").forEach((x) => { x.removeAttribute("data-k"); x.removeAttribute("data-hdr"); });
+    box.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(box); const txt = box.innerText; box.remove();
+    e.clipboardData.setData("text/html", box.innerHTML); e.clipboardData.setData("text/plain", txt); e.preventDefault(); });
   host.addEventListener("click", (e) => { const b = e.target.closest("[data-rm]"); if (!b) return; e.preventDefault();
     if (ed.edited) { const ui = b.closest("[data-ui]"), tr = b.closest("tr"); if (tr) tr.remove(); else if (ui) { const nx = ui.nextElementSibling; if (nx && nx.hasAttribute("data-k")) nx.remove(); ui.remove(); } }
     onRemove(b.getAttribute("data-rm"), ed.edited); });
@@ -3030,14 +3044,7 @@ function wire() {
   on("hoCopy", "click", (e) => {
     const d = hoData(UI.shift), ppl = Object.assign(hoPeople(), { note: UI.hoNote || "" }), b = e.target;
     const html = hoEd ? hoEd.html() : mailHTML(d, ppl), text = hoEd && hoEd.edited ? hoEd.text() : mailText(d, ppl);
-    const done = (msg) => { b.textContent = msg; setTimeout(() => { b.textContent = "Copy email"; }, 1800); };
-    const fallback = () => {           /* select the rendered mail and copy it: keeps the tables when pasted into Outlook */
-      const box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff"; box.innerHTML = html; document.body.appendChild(box);
-      const r = document.createRange(); r.selectNodeContents(box); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-      let ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove(); done(ok ? "Copied, paste into Outlook" : "Copy blocked by the browser");
-    };
-    if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), fallback);
-    else fallback();
+    copyRich(html, text, b, "Copy email");
   });
   /* Excel attachment: Download, or an Outlook draft (.eml) with it attached */
   const hoBusy = (b, msg, label, fn) => { b.disabled = true; b.textContent = msg; return Promise.resolve().then(fn).then(() => { b.textContent = label; }, (x) => { b.textContent = "Failed: " + ((x && x.message) || x); setTimeout(() => { b.textContent = label; }, 4000); }).finally(() => { b.disabled = false; }); };
