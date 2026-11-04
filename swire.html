@@ -2254,6 +2254,9 @@ function personMail(list, info, hi, note, skip) {
     const isAre = (k) => (k === 1 ? " is " : " are ");
     const extra = [ss ? b(ss) + isAre(ss) + "Showstopper" : "", cr ? b(cr) + isAre(cr) + "Critical" : "", old30 ? b(old30) + (old30 === 1 ? " has" : " have") + " been open for more than 30 days" : ""].filter(Boolean);
     const list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
+    if (n === 1) { const t = T[list[0]], sv = t.sev === "showstopper" ? "Showstopper" : t.sev === "critical" ? "Critical" : "";
+      return "There is " + b(1) + " Swire Phoenix ticket in your area that is still open: " + (sv ? "it is " + b(sv) + " and has" : "it has") + " been open for " + b(fmt(ageOf(t))) + ". Below are its LRPS reference and the assignee working on it." +
+        (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); }
     return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " Swire Phoenix ticket" + (n === 1 ? "" : "s") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
       (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it." +
       (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
@@ -2277,7 +2280,7 @@ function personMail(list, info, hi, note, skip) {
   const bk = AGEB.map(([a, b, l, c]) => ({ l, c, n: list.filter((i) => ageD(i) >= a && ageD(i) < b).length }));
   const summary = "<table " + tbl(bk.length * 95 + 80) + "><tr>" + bk.map((x) => th(x.l, 95)).join("") + th("Total", 80) + "</tr><tr>" +
     bk.map((x) => td(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;font-size:13px;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : ""))).join("") + td("<b>" + list.length + "</b>", "text-align:center;font-size:13px") + "</tr></table>";
-  const facts = [oldest != null ? "Oldest: <b>" + esc(T[oldest].key) + "</b>, open " + esc(fmt(ageOf(T[oldest]))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
+  const facts = [oldest != null && list.length > 1 ? "Oldest: <b>" + esc(T[oldest].key) + "</b>, open " + esc(fmt(ageOf(T[oldest]))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
   const rows = list.map((i, k) => { const t = T[i], e = E[i], d = ageD(i), b = bucket(d), u = updD(i);
     const lr = t.lrps.length ? t.lrps.map((x) => '<a href="' + jiraUrl(x) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none">' + esc(x) + "</a>").join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
     const ls = t.lrps.length ? t.lrps.map((x) => { const y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
@@ -2293,14 +2296,14 @@ function personMail(list, info, hi, note, skip) {
     gap(12) + "<h3 " + H + ">Ageing</h3>" + gap(4) + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     gap(12) + "<h3 " + H + ">Tickets</h3>" + gap(4) + "<table " + tbl(tblW(HEADS)) + '><tr data-hdr="1">' + HEADS.map((h) => th(h)).join("") + "</tr>" + rows + "</table>" + sharedHtml() + gap(12) +
-    "<p " + P + "><b>" + (svmM ? "Please review each ticket and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+    "<p " + P + "><b>" + (svmM ? (list.length === 1 ? "Please review the ticket and update it with a clear next step and a committed ETR." : "Please review each ticket and update it with a clear next step and a committed ETR.") : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
     list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fdt(T[i].updated) : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
     (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map((i) => { const t = T[i];
       return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " + compsOf(i).map((x) => x.mod + (x.po ? " (" + x.po + ")" : "")).join(" + ") + " | owner " + (t.svm || "-") +
         (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") : "") +
-    "\n\n" + (svmM ? "Please review each ticket and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
+    "\n\n" + (svmM ? (list.length === 1 ? "Please review the ticket and update it with a clear next step and a committed ETR." : "Please review each ticket and update it with a clear next step and a committed ETR.") : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
   function sharedHtml() {
     if (!others.length) return '<div data-slot="shared"></div>';
     const H3 = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 4px"';
