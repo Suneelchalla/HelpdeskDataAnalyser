@@ -206,6 +206,7 @@
       if (c == null || c === "") return "";
       const ref = col(k) + r;
       if (typeof c !== "object") c = { v: c };
+    if (!c.f && (c.v == null || c.v === "")) return c.s != null ? "<c r=\"" + ref + "\" s=\"" + c.s + "\"/>" : "";   // styled but empty: text from the left can run over it
       const st = c.s != null ? ' s="' + c.s + '"' : typeof c.v === "number" ? ' s="' + S.cellInt + '"' : ' s="0"';
       if (c.f) return "<c r=\"" + ref + "\"" + st + (typeof c.v === "number" ? "" : ' t="str"') + "><f>" + xe(c.f) + "</f>" + (c.v != null ? "<v>" + xe(c.v) + "</v>" : "") + "</c>";
       if (typeof c.v === "number") return "<c r=\"" + ref + "\"" + st + "><v>" + (isFinite(c.v) ? c.v : 0) + "</v></c>";
@@ -220,7 +221,8 @@
       return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
         view + '<sheetFormatPr defaultRowHeight="15"/>' + cols + "<sheetData>" + rows + "</sheetData>" + (sh.filter ? '<autoFilter ref="' + sh.filter + '"/>' : "") +
         (sh.merges && sh.merges.length ? '<mergeCells count="' + sh.merges.length + '">' + sh.merges.map((m) => '<mergeCell ref="' + m + '"/>').join("") + "</mergeCells>" : "") +
-        '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+        '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>' +
+      '<ignoredErrors><ignoredError sqref="A1:XFD1048576" numberStoredAsText="1"/></ignoredErrors></worksheet>';
     }
     const qs = (n) => "'" + String(n).replace(/'/g, "''") + "'";
     function parts(sheets) {
@@ -290,7 +292,7 @@
     ".hdx-side{border:1px solid #E2E8F0;border-radius:12px;padding:12px;align-self:start}.hdx-side h4{font-size:12px;margin:0 0 8px;color:#334155}" +
     ".hdx-who{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #F1F5F9;font-size:12px}.hdx-who span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     ".hdx-note{font-size:11.5px;color:#64748B}" +
-    ".hdx-edit{outline:none;min-height:40px}.hdx-edit:focus{box-shadow:inset 0 0 0 2px rgba(37,99,235,.18);border-radius:8px}" +
+    ".hdx-ov [data-ui]{user-select:none;-webkit-user-select:none}.hdx-edit{outline:none;min-height:40px}.hdx-edit:focus{box-shadow:inset 0 0 0 2px rgba(37,99,235,.18);border-radius:8px}" +
     ".hdx-x{width:22px;height:22px;border-radius:6px;border:1px solid #FECDD3;background:#FFF1F2;color:#BE123C;font-size:11px;font-weight:800;cursor:pointer;line-height:1;padding:0}.hdx-x:hover{background:#BE123C;color:#fff}";
   function injectCss() { if (document.getElementById("hdx-css")) return; var s = document.createElement("style"); s.id = "hdx-css"; s.textContent = CSS; document.head.appendChild(s); }
   var STACK = [];
@@ -531,12 +533,16 @@
     else out = H.concat(["Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64(body))]);
     saveBlob(new Blob([out.join("\r\n")], { type: "message/rfc822" }), file);
   }
+  /* copy like selecting by hand (Outlook keeps the tables); the clipboard API only if the browser refuses */
   function copyRich(html, text, btn, label) {
     var done = function (msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = label; }, 1800); };
-    var fallback = function () { var box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff"; box.innerHTML = html; document.body.appendChild(box);
-      var r = document.createRange(); r.selectNodeContents(box); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); var ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove(); done(ok ? "Copied, paste into Outlook" : "Copy blocked by the browser"); };
-    if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(function () { done("Copied, paste into Outlook"); }, fallback);
-    else fallback();
+    var box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;color:#000"; box.innerHTML = html; document.body.appendChild(box);
+    var sel = getSelection(), r = document.createRange(); r.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(r);
+    var ok = false; try { ok = document.execCommand("copy"); } catch (x) {}
+    sel.removeAllRanges(); box.remove();
+    if (ok) return done("Copied, paste into Outlook");
+    if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(function () { done("Copied, paste into Outlook"); }, function () { done("Copy blocked by the browser"); });
+    else done("Copy blocked by the browser");
   }
   function openHandover(open) {
     var m = modal(), ppl = hoPeople(), d;
@@ -615,6 +621,12 @@
         c.innerHTML = '<button type="button" class="hdx-x" title="Leave this ticket out of the mail" data-rm="' + esc(tr.getAttribute("data-k")) + '">✕</button>'; tr.insertBefore(c, tr.firstChild); });
     };
     host.addEventListener("input", function () { ed.edited = true; if (ed.onEdit) ed.onEdit(); });
+    host.addEventListener("copy", function (e) {           // a copy made by hand never carries the ✕ buttons
+      var sel = getSelection(); if (!sel.rangeCount || !e.clipboardData) return;
+      var box = document.createElement("div"); box.appendChild(sel.getRangeAt(0).cloneContents()); if (!box.querySelector("[data-ui]")) return;
+      box.querySelectorAll("[data-ui]").forEach(function (x) { x.remove(); }); box.querySelectorAll("[data-k],[data-hdr]").forEach(function (x) { x.removeAttribute("data-k"); x.removeAttribute("data-hdr"); });
+      box.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(box); var txt = box.innerText; box.remove();
+      e.clipboardData.setData("text/html", box.innerHTML); e.clipboardData.setData("text/plain", txt); e.preventDefault(); });
     host.addEventListener("click", function (e) { var b = e.target.closest("[data-rm]"); if (!b) return; e.preventDefault();
       var k = b.getAttribute("data-rm");
       if (ed.edited) { var tr = b.closest("tr"); if (tr) tr.remove(); }                        // keep the text edits: drop just this row
