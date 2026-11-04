@@ -473,7 +473,7 @@
       "<p " + P + ">Handing over the pending on the Help Desk, position at " + esc(fdt(d.now)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
       prio + gap() + hot + (hot ? gap(4) : "") + svmT + (svmT ? gap(4) : "") + cli + (cli ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
       (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
-      "<p " + P + ">Attached: <b>" + esc(hoBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + d.pend.length + ") and Show Stopper-Critical (" + d.hot.length + ").</p>" +
+      "<p " + P + ">Attached: <b>" + esc(hoBase(d)) + ".xlsx</b> with Summary (pivots), Pending with Help Desk (" + d.hd.length + "), Pending with Engineering (" + d.engg.length + ") and Show Stopper-Critical (" + d.hot.length + ").</p>" +
       "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
   }
   function hoText(d, ppl) { var note = (ppl.note || "").trim();
@@ -503,9 +503,11 @@
       groups.forEach(function (g, k) { if (k) out.push([]);
         g.ts.slice().sort(bySevAge).forEach(function (t, j) { out.push([{ v: g.w, s: j ? S.txt : S.lbl }].concat(drop(row(t)))); }); });
       return { name: name, cols: [22].concat(drop(HEAD).map(function (h) { return h[1]; })), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, out.length), rows: out }; };
+    var svmGroups = function (ts) { var g = {}; ts.forEach(function (t) { var k = t.svm || "(no SVM In Charge)"; (g[k] = g[k] || []).push(t); });
+      return Object.keys(g).map(function (k) { return { w: k, ts: g[k] }; }).sort(function (x, y) { return y.ts.length - x.ts.length || x.w.localeCompare(y.w); }); };
     var rows = [];
     rows.push([{ v: "Help Desk handover", s: S.title }]);
-    rows.push([{ v: "Position at " + fdt(d.now) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” sheet.", s: S.sub }]);
+    rows.push([{ v: "Position at " + fdt(d.now) + " IST. Counts as at the handover time. The tickets are on the “Pending with Help Desk” and “Pending with Engineering” sheets.", s: S.sub }]);
     function pivot(title, note, label, vals, ts, test) {
       rows.push([]); rows.push([{ v: title, s: S.title }]); if (note) rows.push([{ v: note, s: S.sub }]);
       rows.push([{ v: label, s: S.phead }].concat(SEV.map(function (c) { return { v: c, s: S.phead }; }), [{ v: "Total", s: S.phead }]));
@@ -521,7 +523,7 @@
     pivot("1. Pending with SVM (Help Desk + Engineering) by client × priority", "", "Client", uniq(d.pend, function (t) { return t.project; }), d.pend, function (t, v) { return t.project === v; });
     pivot("2. Pending with Engineering by engineering assignee × priority", "Engineering assignee = the assignee of the linked LRPS ticket.", "Engineering assignee", uniq(d.engg, enggWho), d.engg, function (t, v) { return enggWho(t) === v; });
     pivot("3. Pending with SVM by status × priority", "", "Status", uniq(d.pend, function (t) { return t.status || "(blank)"; }), d.pend, function (t, v) { return (t.status || "(blank)") === v; });
-    var sheets = [{ name: "Summary", rows: rows, cols: [40].concat(SEV.map(function () { return 13; }), [11]), first: true }, bySvm("Pending with SVM", d.svms), listSheet("Show Stopper-Critical", d.hot)];
+    var sheets = [{ name: "Summary", rows: rows, cols: [40].concat(SEV.map(function () { return 13; }), [11]), first: true }, bySvm("Pending with Help Desk", svmGroups(d.hd)), bySvm("Pending with Engineering", svmGroups(d.engg)), listSheet("Show Stopper-Critical", d.hot)];
     return XL.build(sheets).then(function (u) { return { bytes: u, file: hoBase(d) + ".xlsx" }; });
   }
   function u8b64(u) { var s = ""; for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
@@ -552,7 +554,7 @@
       var prev = '<p class="hdx-dim" style="font-size:12px;margin-bottom:10px">Subject: ' + esc(hoSubject(d)) + "</p>" + hoHTML(d, ppl);
       if (keepInputs && m.box.querySelector("#hdxPrev")) { m.box.querySelector("#hdxPrev").innerHTML = prev; paintWho(); return; }
       m.box.innerHTML = '<div class="hdx-hd"><h3>Handover<span class="n">' + d.pend.length + " pending with SVM</span></h3>" + lrpsBtnHtml() +
-        '<button type="button" class="hdx-btn pri" data-h="copy">Copy email</button><button type="button" class="hdx-btn" data-h="xlsx" title="Summary pivots, Pending with SVM, Show Stopper-Critical">Download Excel</button>' +
+        '<button type="button" class="hdx-btn pri" data-h="copy">Copy email</button><button type="button" class="hdx-btn" data-h="xlsx" title="Summary pivots, Pending with Help Desk, Pending with Engineering, Show Stopper-Critical">Download Excel</button>' +
         '<button type="button" class="hdx-btn" data-h="eml" title="Opens in Outlook as a new draft with the Excel already attached">Email draft + Excel</button><button type="button" class="hdx-btn" data-h="close">Close</button></div>' +
         '<p class="hdx-sub">Everything pending with SVM (Help Desk and Engineering) for the tickets in view, across all clients; the header filters (workers, projects, in-charge, types, dates) apply. The email is brief; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>' +
         '<div class="hdx-row"><label for="hdxFrom">Handed over by</label><input class="hdx-inp" id="hdxFrom" style="width:200px" placeholder="Your name"><label for="hdxTo">Hi</label><input class="hdx-inp" id="hdxTo" style="width:220px" placeholder="team"></div>' +
