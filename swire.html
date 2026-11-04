@@ -2253,7 +2253,7 @@ function personMail(list, info, hi, note) {
     const ls = t.lrps.length ? t.lrps.map((x) => { const y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
     const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
     return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
-      td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + (svmM ? td(where(i) === "hd" ? '<b style="color:#0E7C86">Help Desk</b>' : '<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") : "") + td(esc(typeTxt(t)), "white-space:nowrap") +
+      td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
       td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") +
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
       td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
@@ -2262,7 +2262,7 @@ function personMail(list, info, hi, note) {
     "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
-    ["Ticket"].concat(svmM ? ["With"] : [], ["Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" +
+    ["Ticket"].concat(["Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" +
     "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Hi " + name + ",\n\nSwire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + (svmM ? " pending with SVM where you are SVM In Charge (" + nHd + " Help Desk, " + nEn + " Engineering)." : " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
