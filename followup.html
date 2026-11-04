@@ -619,7 +619,7 @@
       var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
       return '<tr data-k="' + esc(t.key) + '">' + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(side(t) === "hd" ? '<b style="color:#0E7C86">Help Desk</b>' : '<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
         tdc(compCell(t), "white-space:nowrap") + tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") + tdc(la, "white-space:nowrap;font-weight:600") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
-        tdc(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdate(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
+        tdc(u != null ? esc(fdt(t.updated)) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
     var svmIntro = function (h) { var n = ts.length, b = function (x) { return h ? "<b>" + x + "</b>" : String(x); };
       var ss = ts.filter(function (t) { return t.sev === "showstopper"; }).length, cr = ts.filter(function (t) { return t.sev === "critical"; }).length, old30 = ts.filter(function (t) { return (ageMin(t) || 0) >= 30 * 1440; }).length;
       var isAre = function (k) { return k === 1 ? " is " : " are "; }, cl = uniqClients(ts).length;
@@ -630,16 +630,16 @@
         (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
         (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); };
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
-    var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p data-slot=\"intro\" " + P + ">" + svmIntro(true) + "</p>" +
+    var html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(nm) + ",</p><p " + P + ">Greetings of the day.</p><p data-slot=\"intro\" " + P + ">" + svmIntro(true) + "</p>" +
       "<h3 " + H + ">Ageing</h3>" + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
       "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "Components (PO)", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
       sharedHtml() + "<p " + P + "><b>Please review each ticket today and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
-    var text = "Hi " + nm + ",\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
-      ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
+    var text = "Dear " + nm + ",\n\nGreetings of the day.\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
+      ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fdt(t.updated) : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
       (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map(function (t) { return "- " + t.key + " " + t.project + " [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " +
         compsOf(t, MODS).map(function (x) { return x.mod + (x.po ? " (" + x.po + ")" : ""); }).join(" + ") + " | owner " + (t.svm || "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { return x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : ""); }).join("\n") : "") +
       "\n\nPlease review each ticket today and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
-    return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up", cc: cc, poEmail: ownerEmail(name) };
+    return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up, " + (function () { var d = new Date(Date.now() + IST); return String(d.getUTCDate()).padStart(2, "0") + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] + " " + d.getUTCFullYear(); })(), cc: cc, poEmail: ownerEmail(name) };
     function sharedHtml() {
       if (!others.length) return '<div data-slot="shared"></div>';
       var CW = [110, 110, 85, 80, 240, 130, 190, 140, 110, 130, 150, 100], SW = CW.reduce(function (a, b) { return a + b; }, 0);
@@ -692,7 +692,7 @@
     var m = modal(), real = realWho(name), key = "svm:" + name, out = {};
     var guess = function () { var b = pmBook(); return b[key] != null ? b[key] : ""; };
     m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder <span class="n" id="pmN"></span></h3><button type="button" class="hdx-btn" data-p="close">Cancel</button></div>' +
-      '<div class="hdx-row"><label for="pmTo">To</label><input class="hdx-inp" id="pmTo" style="flex:1;min-width:240px" placeholder="name@solverminds.com"><label for="pmHi">Hi</label><input class="hdx-inp" id="pmHi" style="width:200px"></div>' +
+      '<div class="hdx-row"><label for="pmTo">To</label><input class="hdx-inp" id="pmTo" style="flex:1;min-width:240px" placeholder="name@solverminds.com"><label for="pmHi">Dear</label><input class="hdx-inp" id="pmHi" style="width:200px"></div>' +
       '<div class="hdx-row"><label for="pmCc">Cc</label><input class="hdx-inp" id="pmCc" style="flex:1" placeholder="Filled with the other modules’ POs when a ticket is shared"></div>' +
       '<div class="hdx-row"><label for="pmSubj">Subject</label><input class="hdx-inp" id="pmSubj" style="flex:1"></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="pmNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="pmNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown above the tickets"></textarea></div>' +
