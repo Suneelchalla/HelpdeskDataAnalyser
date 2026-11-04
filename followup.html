@@ -497,11 +497,12 @@
     var listSheet = function (name, ts) { return { name: name, cols: HEAD.map(function (h) { return h[1]; }), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, ts.length + 1),
       rows: [HEAD.map(function (h) { return { v: h[0], s: S.head }; })].concat(ts.map(row)) }; };
     /* one block per SVM In Charge: title row (name also in the SVM In Charge column, so a filter on it keeps the title), tickets, blank row */
-    var bySvm = function (name, groups) { var svmCol = HEAD.findIndex(function (h) { return h[0] === "SVM In Charge"; }), out = [HEAD.map(function (h) { return { v: h[0], s: S.head }; })];
+    /* SVM In Charge as the first column, on every row; people one after another, a blank row between them */
+    var bySvm = function (name, groups) { var svmCol = HEAD.findIndex(function (h) { return h[0] === "SVM In Charge"; }), drop = function (arr) { return arr.filter(function (x, c) { return c !== svmCol; }); };
+      var out = [[{ v: "SVM In Charge", s: S.head }].concat(drop(HEAD).map(function (h) { return { v: h[0], s: S.head }; }))];
       groups.forEach(function (g, k) { if (k) out.push([]);
-        out.push(HEAD.map(function (h, c) { return { v: c === 0 ? "SVM In Charge: " + g.w + " · " + g.ts.length + " ticket" + (g.ts.length === 1 ? "" : "s") : c === svmCol ? g.w : "", s: S.totLbl }; }));
-        g.ts.slice().sort(bySevAge).forEach(function (t) { out.push(row(t)); }); });
-      return { name: name, cols: HEAD.map(function (h) { return h[1]; }), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, out.length), rows: out }; };
+        g.ts.slice().sort(bySevAge).forEach(function (t, j) { out.push([{ v: g.w, s: j ? S.txt : S.lbl }].concat(drop(row(t)))); }); });
+      return { name: name, cols: [22].concat(drop(HEAD).map(function (h) { return h[1]; })), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, out.length), rows: out }; };
     var rows = [];
     rows.push([{ v: "Help Desk handover", s: S.title }]);
     rows.push([{ v: "Position at " + fdt(d.now) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” sheet.", s: S.sub }]);
