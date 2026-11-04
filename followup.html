@@ -14,6 +14,7 @@
 <script src="sla-engine.js"></script>
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
+<script src="hd-hypercare.js?v=20261031d"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    HDX: Status mismatch (client ticket ↔ LRPS) and Handover for the Follow-up
@@ -528,8 +529,8 @@
   }
   function u8b64(u) { var s = ""; for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
   var b64 = function (s) { return btoa(unescape(encodeURIComponent(s))); }, wrap76 = function (s) { return s.replace(/.{76}/g, "$&\r\n"); };
-  function eml(subject, html, file, to, att) {
-    var body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>", H = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], ["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0"]), out;
+  function eml(subject, html, file, to, att, cc) {
+    var body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>", H = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], cc ? ["Cc: " + String(cc).replace(/[\r\n]/g, " ")] : [], ["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0"]), out;
     if (att) { var B = "=_hdx_" + Date.now().toString(36);
       out = H.concat(['Content-Type: multipart/mixed; boundary="' + B + '"', "", "--" + B, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64(body)), "",
         "--" + B, "Content-Type: " + XLSX_MIME + '; name="' + att.file + '"', 'Content-Disposition: attachment; filename="' + att.file + '"', "Content-Transfer-Encoding: base64", "", wrap76(u8b64(att.bytes)), "", "--" + B + "--", ""]); }
@@ -570,7 +571,7 @@
       w.innerHTML = d.svms.length ? d.svms.map(function (x, n) { return '<div class="hdx-who"><span title="' + esc(x.w) + '">' + esc(x.w) + ' <b>' + x.ts.length + '</b></span><button type="button" class="hdx-btn sm" data-who="' + n + '">Mail</button></div>'; }).join("") : '<p class="hdx-note">Nothing pending with SVM.</p>'; }
     m.box.addEventListener("click", function (e) {
       var b = e.target.closest("[data-h],[data-who]"); if (!b) return;
-      if (b.dataset.who != null) { var x = d.svms[+b.dataset.who]; return openPersonMail(x.ts, x.w); }
+      if (b.dataset.who != null) { var x = d.svms[+b.dataset.who]; return openPersonMail(x.ts, x.w, d.pend); }
       var h = b.dataset.h;
       if (h === "close") return m.close();
       if (h === "copy") return copyRich(hoHTML(d, ppl), hoText(d, ppl), b, "Copy email");
@@ -582,9 +583,27 @@
   }
   /* one person: their tickets with ageing (no SLA) */
   function pmBook() { try { return JSON.parse(localStorage.getItem(PM_KEY) || "{}") || {}; } catch (e) { return {}; } }
-  function personMail(ts, name, hi, note) {
+  /* module POs: the same for every client, from the Swire module's PO list (Master data saved in this browser, else the built-in list) */
+  function poList() { var H = window.HDHypercare; if (!H) return []; var saved = null; try { saved = JSON.parse(localStorage.getItem("hd-swire-cfg") || "null"); } catch (e) {} try { return H.merge(saved).modules || []; } catch (e) { return []; } }
+  var nk = function (x) { return String(x || "").toLowerCase().replace(/[^a-z]/g, ""); };
+  var sameName = function (x, y) { var a = nk(x), c = nk(y); return !!a && !!c && (a === c || (Math.abs(a.length - c.length) <= 2 && (a.indexOf(c) === 0 || c.indexOf(a) === 0))); };
+  function compsOf(t, mods) { var seen = {}, out = [];
+    list(t.comps).forEach(function (c) { var lc = c.toLowerCase().trim(), m = mods.find(function (x) { return (x.match || []).some(function (y) { return y === lc; }); }), k = m ? m.module : c;
+      if (seen[k]) return; seen[k] = 1; out.push(m ? { mod: m.module, po: m.po, email: m.email || "" } : { mod: c, po: "", email: "" }); });
+    return out; }
+  function personMail(ts, name, hi, note, skip, pool) {
     var sr = function (t) { return side(t) === "hd" ? 0 : 1; };
     ts = ts.slice().sort(function (a, b) { return sr(a) - sr(b) || bySevAge(a, b); });
+    /* shared tickets: more than one module; the other modules' POs go in Cc; tickets owned by another SVM In Charge that involve this person's module are listed at the end */
+    var MODS = poList(), isMe = function (po) { return sameName(po, name); }, shared = function (t) { return compsOf(t, MODS).length > 1; }, ccMap = {};
+    ts.forEach(function (t) { if (shared(t)) compsOf(t, MODS).forEach(function (x) { if (x.email && !isMe(x.po)) ccMap[x.email.toLowerCase()] = x.email; }); });
+    var inList = {}; ts.forEach(function (t) { inList[t.key] = 1; });
+    var others = (pool || []).filter(function (t) { return !inList[t.key] && !(skip && skip[t.key]) && !isMe(t.svm) && shared(t) && compsOf(t, MODS).some(function (x) { return isMe(x.po); }); }).sort(bySevAge);
+    var ownerEmail = function (n) { var m = MODS.find(function (x) { return sameName(x.po, n); }); return m && m.email ? m.email : ""; };
+    others.forEach(function (t) { var e = ownerEmail(t.svm); if (e) ccMap[e.toLowerCase()] = e; });
+    var cc = Object.keys(ccMap).map(function (k) { return ccMap[k]; }), nShared = ts.filter(shared).length;
+    var compCell = function (t) { var cs = compsOf(t, MODS); if (!cs.length) return "—";
+      return cs.map(function (x) { var v = esc(x.mod) + (x.po ? " (" + esc(x.po) + ")" : ""); return cs.length > 1 && !isMe(x.po) ? "<b>" + v + "</b>" : v; }).join(" + ") + (cs.length > 1 ? ' <i style="color:#8A7380">· shared</i>' : ""); };
     var real = realWho(name), H = 'style="' + F + 'font-size:14px;color:#0E2A47;margin:14px 0 6px"', ageD = function (t) { return (ageMin(t) || 0) / 1440; }, updD = function (t) { return t.updated != null ? (Date.now() - t.updated) / DAY : null; };
     var bucket = function (dd) { return AGEB.find(function (b) { return dd >= b[0] && dd < b[1]; }) || AGEB[0]; };
     var oldest = ts.reduce(function (mm, t) { return mm == null || ageD(t) > ageD(mm) ? t : mm; }, null), stale = ts.filter(function (t) { return updD(t) != null && updD(t) >= 7; }).length;
@@ -593,13 +612,13 @@
     var summary = "<table " + tbl(bk.length * 100 + 80) + "><tr>" + bk.map(function (x) { return th(x.l, null, 100); }).join("") + th("Total", null, 80) + "</tr><tr>" +
       bk.map(function (x) { return tdc(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : "")); }).join("") + tdc("<b>" + ts.length + "</b>", "text-align:center") + "</tr></table>";
     var facts = [oldest ? "Oldest: <b>" + esc(oldest.key) + "</b>, open " + esc(fmt(ageMin(oldest))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
-    var COLW = [110, 110, 95, 85, 80, 240, 130, 110, 130, 150, 100, 110];
+    var COLW = [110, 110, 95, 85, 80, 240, 130, 190, 110, 130, 150, 100, 110];
     var rows = ts.map(function (t) { var dd = ageD(t), b = bucket(dd), u = updD(t);
       var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
       var ls = t.lrps.length ? t.lrps.map(function (x) { var y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
       var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
       return '<tr data-k="' + esc(t.key) + '">' + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(side(t) === "hd" ? '<b style="color:#0E7C86">Help Desk</b>' : '<b style="color:#5B21B6">Engineering</b>', "white-space:nowrap") + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) + tdc(esc(t.status), "white-space:nowrap") +
-        tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") + tdc(la, "white-space:nowrap;font-weight:600") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
+        tdc(compCell(t), "white-space:nowrap") + tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") + tdc(la, "white-space:nowrap;font-weight:600") + tdc('<b style="' + (dd >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageMin(t))) + "</b>" + sub(esc(fdate(t.created))), "white-space:nowrap") +
         tdc(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdate(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
     var svmIntro = function (h) { var n = ts.length, b = function (x) { return h ? "<b>" + x + "</b>" : String(x); };
       var ss = ts.filter(function (t) { return t.sev === "showstopper"; }).length, cr = ts.filter(function (t) { return t.sev === "critical"; }).length, old30 = ts.filter(function (t) { return (ageMin(t) || 0) >= 30 * 1440; }).length;
@@ -607,16 +626,33 @@
       var extra = [ss ? b(ss) + isAre(ss) + "Show Stopper" : "", cr ? b(cr) + isAre(cr) + "Critical" : "", old30 ? b(old30) + (old30 === 1 ? " has" : " have") + " been open for more than 30 days" : ""].filter(Boolean);
       var list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
       return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " ticket" + (n === 1 ? "" : "s") + (cl > 1 ? " across " + cl + " clients" : "") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
-        (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it."; };
+        (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it." +
+        (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
+        (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); };
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
     var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + ">" + svmIntro(true) + "</p>" +
       "<h3 " + H + ">Ageing</h3>" + summary + gap(6) + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
-      "<p " + P + "><b>Please review each ticket today and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
+      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "Components (PO)", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
+      sharedHtml() + "<p " + P + "><b>Please review each ticket today and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
     var text = "Hi " + nm + ",\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
       ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
+      (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map(function (t) { return "- " + t.key + " " + t.project + " [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " +
+        compsOf(t, MODS).map(function (x) { return x.mod + (x.po ? " (" + x.po + ")" : ""); }).join(" + ") + " | owner " + (t.svm || "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { return x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : ""); }).join("\n") : "") +
       "\n\nPlease review each ticket today and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
-    return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up" };
+    return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up", cc: cc, poEmail: ownerEmail(name) };
+    function sharedHtml() {
+      if (!others.length) return "";
+      var CW = [110, 110, 85, 80, 240, 130, 190, 140, 110, 130, 150, 100], SW = CW.reduce(function (a, b) { return a + b; }, 0);
+      return "<h3 " + H + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p><table " + tbl(SW) + '><tr data-hdr="1">' +
+        ["Ticket", "Client", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"].map(function (h, k) { return th(h, "text-align:left", CW[k]); }).join("") + "</tr>" +
+        others.map(function (t) {
+          var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
+          var ls = t.lrps.length ? t.lrps.map(function (x) { var y = lrpsSt(t, x); return y ? esc(y.s) : '<span style="color:#8A7380">not read</span>'; }).join("<br>") : "—";
+          var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
+          return '<tr data-k="' + esc(t.key) + '">' + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) +
+            tdc(esc(t.status), "white-space:nowrap") + tdc(compCell(t), "white-space:nowrap") + tdc("<b>" + esc(t.svm || "—") + "</b>", "white-space:nowrap") + tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") +
+            tdc(la, "white-space:nowrap;font-weight:600") + tdc(esc(fmt(ageMin(t))) + sub(esc(fdate(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>" + gap(6);
+    }
   }
   /* ── editable mail preview: every ticket row gets a ✕ to leave it out, and the text can be edited in place.
      The ✕ buttons and the editing outline never go into the copied / downloaded mail. ── */
@@ -646,37 +682,39 @@
     ed.text = function () { var c = ed.clean(); c.style.cssText = "position:fixed;left:-9999px;top:0"; document.body.appendChild(c); var t = c.innerText; c.remove(); return t; };
     return ed;
   }
-  function openPersonMail(tsAll, name) {
+  function openPersonMail(tsAll, name, pool) {
     var m = modal(), real = realWho(name), key = "svm:" + name, out = {};
     var guess = function () { var b = pmBook(); return b[key] != null ? b[key] : ""; };
     m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder <span class="n" id="pmN"></span></h3><button type="button" class="hdx-btn" data-p="close">Cancel</button></div>' +
       '<div class="hdx-row"><label for="pmTo">To</label><input class="hdx-inp" id="pmTo" style="flex:1;min-width:240px" placeholder="name@solverminds.com"><label for="pmHi">Hi</label><input class="hdx-inp" id="pmHi" style="width:200px"></div>' +
+      '<div class="hdx-row"><label for="pmCc">Cc</label><input class="hdx-inp" id="pmCc" style="flex:1" placeholder="Filled with the other modules’ POs when a ticket is shared"></div>' +
       '<div class="hdx-row"><label for="pmSubj">Subject</label><input class="hdx-inp" id="pmSubj" style="flex:1"></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="pmNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="pmNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown above the tickets"></textarea></div>' +
       '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts at the top are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
         '<button type="button" class="hdx-btn sm" data-p="restore" id="pmRestore" style="display:none"></button><button type="button" class="hdx-btn sm" data-p="reset" id="pmReset" style="display:none">Undo text edits</button></div>' +
       '<div class="hdx-prev" id="pmPrev"></div>' +
       '<div class="hdx-row" style="margin-top:10px"><span class="hdx-note">The address is remembered for ' + esc(real ? name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="hdx-btn" data-p="eml">Download email draft</button><button type="button" class="hdx-btn pri" data-p="copy">Copy email</button></div>';
-    var q = function (id) { return m.box.querySelector("#" + id); }, subjEdited = false;
+    var q = function (id) { return m.box.querySelector("#" + id); }, subjEdited = false, ccEdited = false;
     q("pmTo").value = guess(); q("pmHi").value = real ? name : "team";
     var ts = function () { return tsAll.filter(function (t) { return !out[t.key]; }); };
-    var cur = function () { return personMail(ts(), name, q("pmHi").value, q("pmNote").value); };
+    var cur = function () { return personMail(ts(), name, q("pmHi").value, q("pmNote").value, out, pool); };
     var ed = mailEditor(q("pmPrev"), function (k, keepEdits) { out[k] = 1; if (keepEdits) counts(); else paint(); });
     ed.onEdit = function () { q("pmReset").style.display = ""; };
     function counts() { var n = Object.keys(out).length; q("pmN").textContent = name + " · " + ts().length + (n ? " of " + tsAll.length : "");
       q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
-    function paint() { var x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
+    function paint() { var x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; if (!ccEdited) q("pmCc").value = (x.cc || []).join("; "); if (!q("pmTo").value && x.poEmail) q("pmTo").value = x.poEmail; ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
     var saveTo = function () { if (!real) return; var b = pmBook(); b[key] = q("pmTo").value.trim(); try { localStorage.setItem(PM_KEY, JSON.stringify(b)); } catch (e) {} };
     var reb = function () { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return false; paint(); return true; };
     q("pmHi").addEventListener("change", reb); q("pmNote").addEventListener("change", reb); q("pmTo").addEventListener("change", saveTo);
     q("pmSubj").addEventListener("input", function () { subjEdited = true; });
+    q("pmCc").addEventListener("input", function () { ccEdited = true; });
     m.box.addEventListener("click", function (e) { var b = e.target.closest("[data-p]"); if (!b) return; var p = b.dataset.p;
       if (p === "close") return m.close();
       if (p === "restore") { if (ed.edited && !confirm("Putting the tickets back rebuilds the mail and undoes your text edits. Continue?")) return; out = {}; return paint(); }
       if (p === "reset") return paint();
       saveTo(); var subj = q("pmSubj").value.trim() || cur().subject;
       if (p === "copy") return copyRich(ed.html(), ed.text(), b, "Copy email");
-      if (p === "eml") return eml(subj, ed.html(), "HD-reminder-" + (real ? name : "team").replace(/[^A-Za-z0-9]+/g, "-") + "-" + dayKey(Date.now()) + ".eml", q("pmTo").value.trim()); });
+      if (p === "eml") return eml(subj, ed.html(), "HD-reminder-" + (real ? name : "team").replace(/[^A-Za-z0-9]+/g, "-") + "-" + dayKey(Date.now()) + ".eml", q("pmTo").value.trim(), null, q("pmCc").value.trim()); });
     paint(); q("pmTo").focus();
   }
 
