@@ -327,6 +327,7 @@ tbody tr:hover td{background:#FCF3F6}
 table.steps{table-layout:auto}table.steps th,table.steps td{font-size:12px;padding:6px 7px}
 table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;min-width:120px}table.steps td.num{white-space:nowrap}table.steps tr.inst td{color:var(--faint)}table.steps tr.inst td b{font-weight:500}
 .nw{white-space:nowrap}.ncl{white-space:nowrap}
+.tiles.five{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
 .tiles.six{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 .tiles.shift4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .sla{display:inline-block;border-radius:6px;padding:1px 7px;font-size:.74rem;font-weight:600;white-space:nowrap;border:1px solid transparent}
@@ -697,6 +698,9 @@ let LISTS = {}, LSEQ = 0;
 function reg(idx, title, extra, kind, mail) { const k = "l" + (++LSEQ); LISTS[k] = { idx: idx.slice(), title, extra, kind, mail }; return k; }
 function dl(idx, title, label, mail) { return '<button type="button" class="dl" data-list="' + reg(idx, title, null, null, mail) + '" title="Show ' + idx.length + ' ticket' + (idx.length === 1 ? "" : "s") + '">' + (label != null ? label : idx.length) + "</button>"; }
 const ICON = {
+  inbox: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
+  desk: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-5H5a2 2 0 0 0-2 2z"/><path d="M18 17v1a3 3 0 0 1-3 3h-3"/></svg>',
+  bill: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>',
   siren: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 21h14v-3H5z"/><path d="M12 3v1M4.2 6.2l.8.8M19.8 6.2l-.8.8"/></svg>',
   flame: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.4-2.4-5.6-4-8.4-.6 2-1.8 3-3 3 .4-3-1-6-4-8 .3 3.4-3 6.3-3 10.6C5 19.3 8 22 12 22z"/></svg>',
   clock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
@@ -716,6 +720,11 @@ function tgtLine(k) {
 }
 function tile(cls, icon, idx, title, desc, share, listTitle) {
   return '<button type="button" class="tile ' + (idx.length ? cls : "zero") + '" data-list="' + reg(idx, listTitle || title) + '"><span class="ic">' + ICON[icon] + '</span><span class="nm">' + idx.length.toLocaleString() + '</span><span class="tt">' + esc(title) + '</span><span class="ds">' + esc(desc) + '</span><span class="mt"><span style="width:' + Math.min(100, Math.round(share * 100)) + '%"></span></span></button>';
+}
+/* a big box in a chosen colour (the hero's colours), opening its list or, for Engineering, the Engineering window */
+function sideTile(color, icon, idx, title, desc, share, kind) {
+  return '<button type="button" class="tile' + (idx.length ? "" : " zero") + '" style="--ac:' + color + ";--acbg:" + color + '1F" data-list="' + reg(idx, title, null, kind) + '"><span class="ic">' + ICON[icon] + '</span><span class="nm">' + idx.length.toLocaleString() +
+    '</span><span class="tt">' + esc(title) + '</span><span class="ds">' + esc(desc) + '</span><span class="mt"><span style="width:' + Math.min(100, Math.round(share * 100)) + '%"></span></span></button>';
 }
 function sigL(cls, idx, k, h, title, kind) {
   return '<button type="button" class="sig ' + cls + (idx.length ? "" : " zero") + '" data-list="' + reg(idx, title || k, null, kind) + '"><div class="v num">' + idx.length.toLocaleString() + '</div><div class="k">' + esc(k) + '</div><div class="h">' + esc(h || "") + "</div></button>";
@@ -937,9 +946,15 @@ function viewNow() {
   const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length).toLocaleString() + " with us (" + box.length + " in the open box), " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
     '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
-    '<div class="legend2">' + parts.map(([n, l, c]) => '<button type="button" class="lg" style="--pc:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '"><i></i><b>' + l.length.toLocaleString() + "</b><span>" + esc(n) + "</span><em>" + pct(l.length) + "</em></button>").join("") + misPill() + '<button type="button" class="lgpdf" id="withUsPdf" title="PDF of the open box, Help Desk and Engineering tickets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>PDF</button></div></section>';
+    '<div class="legend2">' + misPill() + '<button type="button" class="lgpdf" id="withUsPdf" title="PDF of the open box, Help Desk and Engineering tickets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>PDF</button></div></section>';
   const w1 = Math.max(1, withUs.length);
-  return hero + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
+  const sideBox = '<div class="grp">Where the open tickets are</div><div class="tiles five">' +
+    sideTile("#C2577E", "inbox", box, "Open box", "Not triaged yet · " + pct(box.length) + " of open", box.length / tot) +
+    sideTile("#B5486F", "desk", hdTriaged, "With Help Desk", "Triaged, with us · " + pct(hdTriaged.length) + " of open", hdTriaged.length / tot) +
+    sideTile("#5C1730", "toEngg", engg, "With Engineering", "LRPS with the engineers · " + pct(engg.length) + " of open", engg.length / tot, "engg") +
+    sideTile("#B7791F", "toSwire", cl, "Waiting on Swire", "Counted, not chased by us · " + pct(cl.length) + " of open", cl.length / tot) +
+    sideTile("#7E6C8A", "bill", bill, "Delivered, billing", "With Receivables · " + pct(bill.length) + " of open", bill.length / tot) + "</div>";
+  return hero + sideBox + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
     tile("t-cr", "clock", rk, "About to breach", "Due soon or at risk", rk.length / w1, "SLA about to breach, with us") +
     tile("t-ok", "check", ok, "Not yet breached", "Inside the SLA target", ok.length / w1, "SLA not yet breached, with us") +
