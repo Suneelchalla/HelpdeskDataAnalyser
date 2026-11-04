@@ -1720,7 +1720,7 @@ async function hoWorkbook(d) {
   const rows = [];
   const push = (r) => { rows.push(r); return rows.length; };
   push([{ v: "Swire Phoenix Hypercare handover" + (d.w.general ? "" : ", " + d.w.label), s: S.title }]);
-  push([{ v: "Position at " + fdt(NOW) + " IST. Counts as at the handover time. The tickets are on the “Pending with SVM” and “Escalations” sheets.", s: S.sub }]);
+  push([{ v: "Position at " + fdt(NOW) + " IST. Counts as at the handover time. The tickets are on the “Pending with Help Desk”, “Pending with Engineering” and “Escalations” sheets.", s: S.sub }]);
   function pivot(title, note, src, rowField, rowVals, colField, colVals, extra, rowTest, colTest) {
     push([]); push([{ v: title, s: S.title }]); if (note) push([{ v: note, s: S.sub }]);
     push([{ v: rowField, s: S.phead }].concat(colVals.map((c) => ({ v: c, s: S.phead })), [{ v: "Total", s: S.phead }]));
@@ -1760,7 +1760,7 @@ async function hoWorkbook(d) {
     });
     return { name, rows: out, cols: [22].concat(drop(WID)), freeze: 1, filter: "A1:" + XL.col(HEAD.length - 1) + Math.max(2, out.length) };
   };
-  const sheets = [summary, bySvm("Pending with SVM", pending), escSheet];
+  const sheets = [summary, bySvm("Pending with Help Desk", d.hd), bySvm("Pending with Engineering", d.engg), escSheet];
   if (!d.w.general) sheets.splice(1, 0, listSheet("Created this shift", d.created), listSheet("Closed this shift", d.closed.slice().sort(bySevAge)));
   return { bytes: await XL.build(sheets), file: hoFileBase(d) + ".xlsx", sheets: sheets.map((s) => s.name + (s.name === "Summary" ? "" : " (" + (s.rows.length - 1) + ")")) };
 }
@@ -1833,7 +1833,7 @@ function mailHTMLBrief(d, ppl) {
     "<p " + P + ">Handing over the pending on Swire Phoenix Hypercare, position at " + esc(fdt(NOW)) + " IST. The full ticket lists and pivots are in the attached Excel.</p>" +
     prio + gap() + hot + (hot ? gap(4) : "") + svmT + (svmT ? gap(4) : "") + who + (who ? gap(4) : "") + old + stale +
     (note ? "<h3 " + H2 + ">Notes</h3><p " + P + ">" + esc(note).replace(/\n/g, "<br>") + "</p>" : "") +
-    "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with SVM (" + f.pend.length + ") and Escalations (" + d.esc.length + ").</p>" +
+    "<p " + P + ">Attached: <b>" + esc(hoFileBase(d)) + ".xlsx</b> with Summary (pivots), Pending with Help Desk (" + d.hd.length + "), Pending with Engineering (" + d.engg.length + ") and Escalations (" + d.esc.length + ").</p>" +
     "<p " + P + ">Regards,<br>" + esc(ppl.from || "") + "</p></div>";
 }
 function mailTextBrief(d, ppl) {
@@ -1857,7 +1857,7 @@ function viewHandover() {
     return '<button class="pill" data-shift="' + esc(k) + '" aria-pressed="' + (d.w.key === k) + '">' + esc(x.name) + " " + d0.d + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d0.mo] + (live ? " (now)" : "") + "</button>"; }).join("");
   const gen = d.w.general;
   return '<div class="bar noprint"><span class="lbl">Handover</span><button class="pill" data-shift="general" aria-pressed="' + gen + '">General (all pending)</button><span class="lbl" style="margin-left:6px">Shift</span>' + pills +
-    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoXlsx" title="Summary with pivots, Pending with SVM, Escalations, All open">Download Excel</button><button class="btn" id="hoEml" title="Opens in Outlook as a new draft with the Excel already attached">Email draft + Excel</button><button class="btn" id="hoPrint">Print / Save PDF</button></div>' +
+    '<span style="flex:1"></span><button class="btn pri" id="hoCopy">Copy email</button><button class="btn" id="hoXlsx" title="Summary with pivots, Pending with Help Desk, Pending with Engineering, Escalations, All open">Download Excel</button><button class="btn" id="hoEml" title="Opens in Outlook as a new draft with the Excel already attached">Email draft + Excel</button><button class="btn" id="hoPrint">Print / Save PDF</button></div>' +
     (gen ? "<h2>General handover: everything pending</h2><p class=\"sub\">Every open ticket with SVM that needs follow-up, whenever it was created, position at " + esc(fdt(NOW)) + " IST. Nothing shift-specific (no “created this shift”). The email is brief: what is pending with SVM by priority and by engineering assignee, the oldest tickets and the Showstopper/Critical ones to escalate; the ticket lists and pivots go in the Excel. Use <b>Email draft + Excel</b> for an Outlook draft with it attached, or <b>Copy email</b> and attach the downloaded Excel.</p>"
       : "<h2>Handover, " + esc(d.w.label) + "</h2><p class=\"sub\">" + esc(fdt(d.w.start)) + " to " + esc(fdt(d.w.planEnd)) + " IST" + (d.w.live ? ", running now (counted up to " + esc(fdt(d.w.end).slice(-5)) + ")" : "") + ". " + esc(overlapNote()) + " Tickets with the client are counted, not listed.</p>") +
     '<div class="signals noprint">' + (gen ? "" : sigL("teal", d.createdAll, "Created this shift", d.created.length + " listed" + (d.createdClient ? ", " + d.createdClient + " now with the client" : ""), "Created this shift") + sigL("", d.closed, "Closed this shift", "", "Closed this shift")) +
