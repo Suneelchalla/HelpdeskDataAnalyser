@@ -2233,7 +2233,13 @@ function pmSaveEmail(info, v) { if (!pmReal(info)) return; const b = pmBook(); b
 function personMail(list, info, hi, note) {
   const svmM = info && info.by === "svm", where = (i) => sideOf(i) === "engg" ? "engg" : "hd";
   list = list.slice().sort((a, b) => (svmM ? (where(a) === "hd" ? 0 : 1) - (where(b) === "hd" ? 0 : 1) : 0) || bySevAge(a, b));
-  const nHd = list.filter((i) => where(i) === "hd").length, nEn = list.length - nHd;
+  const svmIntro = (h) => { const n = list.length, b = (x) => (h ? "<b>" + x + "</b>" : String(x));
+    const ss = list.filter((i) => T[i].sev === "showstopper").length, cr = list.filter((i) => T[i].sev === "critical").length, old30 = list.filter((i) => (ageOf(T[i]) || 0) >= 30 * 1440).length;
+    const isAre = (k) => (k === 1 ? " is " : " are ");
+    const extra = [ss ? b(ss) + isAre(ss) + "Showstopper" : "", cr ? b(cr) + isAre(cr) + "Critical" : "", old30 ? b(old30) + (old30 === 1 ? " has" : " have") + " been open for more than 30 days" : ""].filter(Boolean);
+    const list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
+    return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " Swire Phoenix ticket" + (n === 1 ? "" : "s") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
+      (extra.length ? ": " + list3 : "") + ". Each row has the LRPS ticket and its engineering assignee."; };
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 6px"';
   const ageD = (i) => (ageOf(T[i]) || 0) / 1440, updD = (i) => T[i].updated != null ? (NOW - T[i].updated) / DAY : null;
   const bucket = (d) => AGEB.find(([a, b]) => d >= a && d < b) || AGEB[0];
@@ -2258,16 +2264,16 @@ function personMail(list, info, hi, note) {
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
       td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
   const nt = (note || "").trim();
-  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are") + (svmM ? " pending with SVM where you are SVM In Charge (" + nHd + " with the Help Desk, " + nEn + " with Engineering). Each row shows the LRPS ticket and its engineering assignee; the ageing is below.</p>" : " pending with you. The ageing is below.</p>") +
+  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
     "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
     ["Ticket"].concat(["Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" +
-    "<p " + P + "><b>Please update each ticket with the next step and an ETR.</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
-  const text = "Hi " + name + ",\n\nSwire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + (svmM ? " pending with SVM where you are SVM In Charge (" + nHd + " Help Desk, " + nEn + " Engineering)." : " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
+    "<p " + P + "><b>" + (svmM ? "Please check on each ticket and make sure the ticket is updated with the next step and an ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+  const text = "Hi " + name + ",\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
     list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
-    "\n\nPlease update each ticket with the next step and an ETR.\n\nRegards,\n" + rmSign();
+    "\n\n" + (svmM ? "Please check on each ticket and make sure the ticket is updated with the next step and an ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
   const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
   return { html, text, subject };
 }
