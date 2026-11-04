@@ -3012,7 +3012,9 @@ function writeStats() {
 /* ══ render ══ */
 function render() {
   if (!ROWS.length) return;
-  LISTS = {}; LSEQ = 0;
+  /* lists behind clickable numbers: never renumber (an open window may still point at its own), and drop only the ones
+     no longer on screen, after this redraw */
+  setTimeout(() => { const live = new Set(Array.from(document.querySelectorAll("[data-list]"), (x) => x.dataset.list)); Object.keys(LISTS).forEach((k) => { if (!live.has(k)) delete LISTS[k]; }); }, 0);
   rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters();
   writeStats();
   const open = openIdx(), C = allChecks(), escN = HC.escalations(T, E, NOW, CFG).length;
