@@ -593,10 +593,10 @@
     return out; }
   function personMail(ts, name, hi, note, skip, pool) {
     /* light header and soft borders for this mail (the handover keeps its own look) */
-    var CELLm = "border:1px solid #DCE3EC;padding:7px 10px;vertical-align:top;color:#0F1E2E;" + F;
+    var CELLm = "border:1.5pt solid #A9B8CA;mso-border-alt:solid #A9B8CA 1.5pt;padding:7px 10px;vertical-align:top;color:#0F1E2E;" + F;
     var th = function (h, x, w) { return '<th width="' + (w || 80) + '" style="' + CELLm + "width:" + (w || 80) + 'px;background:#EEF3F9;color:#0E2A47;font-size:12px;font-weight:700;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>"; };
     var tdc = function (v, x) { return '<td style="' + CELLm + "font-size:12.5px;" + (x || "") + '">' + v + "</td>"; };
-    var tbl = function (w) { return 'width="' + w + '" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;border:1px solid #DCE3EC;width:' + w + "px;" + F + '"'; };
+    var tbl = function (w) { return 'width="' + w + '" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:' + w + "px;" + F + '"'; };
     var sr = function (t) { return side(t) === "hd" ? 0 : 1; };
     ts = ts.slice().sort(function (a, b) { return sr(a) - sr(b) || bySevAge(a, b); });
     /* shared tickets: more than one module; the other modules' POs go in Cc; tickets owned by another SVM In Charge that involve this person's module are listed at the end */
@@ -616,7 +616,7 @@
     var bk = AGEB.map(function (b) { return { l: b[2], c: b[3], n: ts.filter(function (t) { return ageD(t) >= b[0] && ageD(t) < b[1]; }).length }; });
     var summary = "<table " + tbl(bk.length * 100 + 80) + "><tr>" + bk.map(function (x) { return th(x.l, null, 100); }).join("") + th("Total", null, 80) + "</tr><tr>" +
       bk.map(function (x) { return tdc(x.n ? "<b>" + x.n + "</b>" : '<span style="color:#B9A9B1">0</span>', "text-align:center;" + (x.n && x.l !== AGEB[0][2] ? "color:" + x.c : "")); }).join("") + tdc("<b>" + ts.length + "</b>", "text-align:center") + "</tr></table>";
-    var facts = [oldest ? "Oldest: <b>" + esc(oldest.key) + "</b>, open " + esc(fmt(ageMin(oldest))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
+    var facts = [oldest && ts.length > 1 ? "Oldest: <b>" + esc(oldest.key) + "</b>, open " + esc(fmt(ageMin(oldest))) : "", stale ? "<b>" + stale + "</b> not updated in Jira for 7 days or more" : ""].filter(Boolean);
     var COLW = [110, 110, 95, 85, 80, 240, 130, 190, 110, 130, 150, 100, 110];
     var rows = ts.map(function (t) { var dd = ageD(t), b = bucket(dd), u = updD(t);
       var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
@@ -630,6 +630,9 @@
       var isAre = function (k) { return k === 1 ? " is " : " are "; }, cl = uniqClients(ts).length;
       var extra = [ss ? b(ss) + isAre(ss) + "Show Stopper" : "", cr ? b(cr) + isAre(cr) + "Critical" : "", old30 ? b(old30) + (old30 === 1 ? " has" : " have") + " been open for more than 30 days" : ""].filter(Boolean);
       var list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
+      if (n === 1) { var t1 = ts[0], sv = t1.sev === "showstopper" ? "Show Stopper" : t1.sev === "critical" ? "Critical" : "";
+        return "There is " + b(1) + " ticket" + " in your area that is still open: " + (sv ? "it is " + b(sv) + " and has" : "it has") + " been open for " + b(fmt(ageMin(t1))) + ". Below are its LRPS reference and the assignee working on it." +
+          (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); }
       return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " ticket" + (n === 1 ? "" : "s") + (cl > 1 ? " across " + cl + " clients" : "") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
         (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it." +
         (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
@@ -638,12 +641,12 @@
     var html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(nm) + ",</p>" + gap(6) + "<p " + P + ">Greetings of the day.</p>" + gap(6) + "<p data-slot=\"intro\" " + P + ">" + svmIntro(true) + "</p>" +
       gap(12) + "<h3 " + H + ">Ageing</h3>" + gap(4) + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
       gap(12) + "<h3 " + H + ">Tickets</h3>" + gap(4) + "<table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "Components (PO)", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
-      sharedHtml() + gap(12) + "<p " + P + "><b>Please review each ticket and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
+      sharedHtml() + gap(12) + "<p " + P + "><b>" + (ts.length === 1 ? "Please review the ticket" : "Please review each ticket") + " and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
     var text = "Dear " + nm + ",\n\nGreetings of the day.\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
       ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fdt(t.updated) : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
       (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map(function (t) { return "- " + t.key + " " + t.project + " [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " +
         compsOf(t, MODS).map(function (x) { return x.mod + (x.po ? " (" + x.po + ")" : ""); }).join(" + ") + " | owner " + (t.svm || "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { return x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : ""); }).join("\n") : "") +
-      "\n\nPlease review each ticket and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
+      "\n\n" + (ts.length === 1 ? "Please review the ticket" : "Please review each ticket") + " and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
     return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up, " + (function () { var d = new Date(Date.now() + IST); return String(d.getUTCDate()).padStart(2, "0") + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] + " " + d.getUTCFullYear(); })(), cc: cc, poEmail: ownerEmail(name) };
     function sharedHtml() {
       if (!others.length) return '<div data-slot="shared"></div>';
