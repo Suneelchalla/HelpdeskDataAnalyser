@@ -592,6 +592,11 @@
       if (seen[k]) return; seen[k] = 1; out.push(m ? { mod: m.module, po: m.po, email: m.email || "" } : { mod: c, po: "", email: "" }); });
     return out; }
   function personMail(ts, name, hi, note, skip, pool) {
+    /* light header and soft borders for this mail (the handover keeps its own look) */
+    var CELLm = "border:1px solid #DCE3EC;padding:7px 10px;vertical-align:top;color:#0F1E2E;" + F;
+    var th = function (h, x, w) { return '<th width="' + (w || 80) + '" style="' + CELLm + "width:" + (w || 80) + 'px;background:#EEF3F9;color:#0E2A47;font-size:12px;font-weight:700;white-space:nowrap;' + (x || "text-align:center") + '">' + h + "</th>"; };
+    var tdc = function (v, x) { return '<td style="' + CELLm + "font-size:12.5px;" + (x || "") + '">' + v + "</td>"; };
+    var tbl = function (w) { return 'width="' + w + '" cellpadding="0" cellspacing="0" border="1" style="border-collapse:collapse;border:1px solid #DCE3EC;width:' + w + "px;" + F + '"'; };
     var sr = function (t) { return side(t) === "hd" ? 0 : 1; };
     ts = ts.slice().sort(function (a, b) { return sr(a) - sr(b) || bySevAge(a, b); });
     /* shared tickets: more than one module; the other modules' POs go in Cc; tickets owned by another SVM In Charge that involve this person's module are listed at the end */
@@ -630,10 +635,10 @@
         (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
         (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); };
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
-    var html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(nm) + ",</p><p " + P + ">Greetings of the day.</p><p data-slot=\"intro\" " + P + ">" + svmIntro(true) + "</p>" +
-      "<h3 " + H + ">Ageing</h3>" + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-      "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "Components (PO)", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
-      sharedHtml() + "<p " + P + "><b>Please review each ticket and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
+    var html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(nm) + ",</p>" + gap(6) + "<p " + P + ">Greetings of the day.</p>" + gap(6) + "<p data-slot=\"intro\" " + P + ">" + svmIntro(true) + "</p>" +
+      gap(12) + "<h3 " + H + ">Ageing</h3>" + gap(4) + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
+      gap(12) + "<h3 " + H + ">Tickets</h3>" + gap(4) + "<table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "Components (PO)", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
+      sharedHtml() + gap(12) + "<p " + P + "><b>Please review each ticket and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
     var text = "Dear " + nm + ",\n\nGreetings of the day.\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
       ts.map(function (t) { var u = updD(t); return "- " + t.key + " " + t.project + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageMin(t)) + " | updated " + (u != null ? fdt(t.updated) : "-") + (t.lrps.length ? " | " + t.lrps.map(function (x) { var y = lrpsSt(t, x); return x + (y ? " " + y.s : "") + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : ""); }).join(", ") : " | no LRPS"); }).join("\n") +
       (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map(function (t) { return "- " + t.key + " " + t.project + " [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " +
@@ -643,7 +648,7 @@
     function sharedHtml() {
       if (!others.length) return '<div data-slot="shared"></div>';
       var CW = [110, 110, 85, 80, 240, 130, 190, 140, 110, 130, 150, 100], SW = CW.reduce(function (a, b) { return a + b; }, 0);
-      return '<div data-slot="shared">' + "<h3 " + H + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p><table " + tbl(SW) + '><tr data-hdr="1">' +
+      return '<div data-slot="shared">' + gap(12) + "<h3 " + H + ">Shared with another module</h3>" + gap(4) + "<p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p><table " + tbl(SW) + '><tr data-hdr="1">' +
         ["Ticket", "Client", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"].map(function (h, k) { return th(h, "text-align:left", CW[k]); }).join("") + "</tr>" +
         others.map(function (t) {
           var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
