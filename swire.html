@@ -2117,8 +2117,8 @@ function enggMail(list, who) {
       '<td style="' + TDm + 'white-space:nowrap">' + esc(fmt(ageOf(t))) + '</td><td style="' + TDm + 'white-space:nowrap">' + esc(E[i].sinceMoveMin != null ? fmt(E[i].sinceMoveMin) : "—") + "</td>" +
       '<td style="' + TDm + 'white-space:nowrap">' + t.lrps.map((k) => esc(k) + (LRPS[k] && LRPS[k].s ? " (" + esc(LRPS[k].s) + ")" : "")).join("<br>") + "</td></tr>"; }).join("") + "</table>";
   const P = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:14px;color:#5C1730;margin:16px 0 4px"';
-  const html = '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif"><p ' + P + ">Hi " + esc(who || "team") + ",</p><p " + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> tickets are with Engineering" + (br ? ", <b style=\"color:#D7263D\">" + br + " past their SLA</b>" : "") + ". Please update each one on its SWIPHX ticket with the next step and an ETR.</p>" +
-    names.map((n) => "<h3 " + H + ">" + esc(n) + " (" + groups[n].length + ")</h3>" + tbl(groups[n])).join("") + "<p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+  const html = '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif"><p ' + P + ">Hi " + esc(who || "team") + ',</p><p data-slot="intro" ' + P + ">Swire Phoenix Hypercare: <b>" + list.length + "</b> tickets are with Engineering" + (br ? ", <b style=\"color:#D7263D\">" + br + " past their SLA</b>" : "") + ". Please update each one on its SWIPHX ticket with the next step and an ETR.</p>" +
+    names.map((n) => '<h3 data-slot="g:' + esc(n) + '" ' + H + ">" + esc(n) + " (" + groups[n].length + ")</h3>" + tbl(groups[n])).join("") + "<p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Hi " + (who || "team") + ",\n\nSwire Phoenix Hypercare: " + list.length + " tickets are with Engineering" + (br ? ", " + br + " past their SLA" : "") + ".\n\n" +
     names.map((n) => n + " (" + groups[n].length + ")\n" + groups[n].map((i) => "- " + T[i].key + " [" + T[i].priority + "] " + T[i].summary + " | " + T[i].status + " | SLA " + ((slaOf(i) || {}).label || "-")).join("\n")).join("\n\n") + "\n\nRegards,\n" + rmSign();
   return { html, text, subject: "Swire Hypercare: " + list.length + " tickets with Engineering" + (br ? ", " + br + " past SLA" : "") };
@@ -2195,7 +2195,7 @@ function openEnggMail(listAll) {
   const m = rmModal('<div class="lhead"><h3>Engineering mail <span class="dim" id="emN"></span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="emTo">Hi</label><input class="inp" id="emTo" placeholder="team" style="width:240px"><span class="dim small">Grouped by LRPS assignee.</span></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="emSubj">Subject</label><input class="inp" id="emSubj" style="flex:1"></div>' +
-    '<div class="rmrow" style="border:none;margin:2px 0 4px;padding:0"><span class="dim small">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
+    '<div class="rmrow" style="border:none;margin:2px 0 4px;padding:0"><span class="dim small">Click ✕ on a row to leave that ticket out; the counts in the mail update. Click into the mail to edit any text.</span><span style="flex:1"></span>' +
       '<button type="button" class="btn" id="emRestore" style="display:none"></button><button type="button" class="btn" id="emReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="emPrev" style="max-height:52vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
     '<div class="rmrow"><span style="flex:1"></span><button type="button" class="btn" id="emEml">Download email draft</button><button type="button" class="btn pri" id="emCopy">Copy email</button></div>', "wide");
@@ -2203,7 +2203,7 @@ function openEnggMail(listAll) {
   let out = {}, subjEdited = false;
   const list = () => listAll.filter((i) => !out[T[i].key]);
   const cur = () => enggMail(list(), q("emTo").value.trim());
-  const ed = mailEditor(q("emPrev"), (k, keep) => { out[k] = 1; if (keep) counts(); else paint(); });
+  const ed = mailEditor(q("emPrev"), (k, keep) => { out[k] = 1; if (!keep) return paint(); const x = cur(); ed.patch(x.html); if (!subjEdited) q("emSubj").value = x.subject; counts(); });
   ed.onEdit = () => { q("emReset").style.display = ""; };
   function counts() { const n = Object.keys(out).length; q("emN").textContent = n ? list().length + " of " + listAll.length + " tickets" : "";
     q("emRestore").style.display = n ? "" : "none"; q("emRestore").textContent = "Put back " + n + " removed"; }
@@ -2282,8 +2282,8 @@ function personMail(list, info, hi, note, skip) {
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
       td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
   const nt = (note || "").trim();
-  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
-    "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
+  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p data-slot=\"intro\" " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
+    "<h3 " + H + ">Ageing</h3>" + '<div data-slot="age">' + summary + "</div>" + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
     ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" + sharedHtml() +
@@ -2296,9 +2296,9 @@ function personMail(list, info, hi, note, skip) {
         (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") : "") +
     "\n\n" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
   function sharedHtml() {
-    if (!others.length) return "";
+    if (!others.length) return '<div data-slot="shared"></div>';
     const H3 = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 4px"';
-    return "<h3 " + H3 + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p>" +
+    return '<div data-slot="shared">' + "<h3 " + H3 + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p>" +
       '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
       ["Ticket", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"].map(th).join("") + "</tr>" +
       others.map((i, k) => { const t = T[i];
@@ -2317,14 +2317,20 @@ function personMail(list, info, hi, note, skip) {
    the copied / downloaded mail. */
 function mailEditor(host, onRemove) {
   const ed = { edited: false };
-  ed.render = (html) => {
-    ed.edited = false;
-    host.innerHTML = '<div class="pm-edit" contenteditable="true" spellcheck="true">' + html + "</div>";
-    host.querySelectorAll("tr[data-hdr]").forEach((tr) => { const c = document.createElement("th"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "background:#fff;border:none;width:28px"; tr.insertBefore(c, tr.firstChild); });
-    host.querySelectorAll("tr[data-k]").forEach((tr) => { const c = document.createElement("td"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "border:none;padding:0 4px;vertical-align:middle;background:#fff";
+  const decorate = (root) => {
+    root.querySelectorAll("tr[data-hdr]").forEach((tr) => { if (tr.firstElementChild && tr.firstElementChild.hasAttribute("data-ui")) return; const c = document.createElement("th"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "background:#fff;border:none;width:28px"; tr.insertBefore(c, tr.firstChild); });
+    root.querySelectorAll("tr[data-k]").forEach((tr) => { if (tr.firstElementChild && tr.firstElementChild.hasAttribute("data-ui")) return; const c = document.createElement("td"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "border:none;padding:0 4px;vertical-align:middle;background:#fff";
       c.innerHTML = '<button type="button" class="pm-x" title="Leave this ticket out of the mail" data-rm="' + esc(tr.getAttribute("data-k")) + '">✕</button>'; tr.insertBefore(c, tr.firstChild); });
-    host.querySelectorAll("[data-k]:not(tr)").forEach((x) => { const c = document.createElement("span"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "margin-right:4px";
+    root.querySelectorAll("[data-k]:not(tr)").forEach((x) => { if (x.previousElementSibling && x.previousElementSibling.hasAttribute("data-ui")) return; const c = document.createElement("span"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "margin-right:4px";
       c.innerHTML = '<button type="button" class="pm-x sm" title="Leave this ticket out of the mail" data-rm="' + esc(x.getAttribute("data-k")) + '">✕</button>'; x.parentNode.insertBefore(c, x); });
+  };
+  ed.render = (html) => { ed.edited = false; host.innerHTML = '<div class="pm-edit" contenteditable="true" spellcheck="true">' + html + "</div>"; decorate(host); };
+  /* text edited, ticket removed: refresh only the parts with numbers (opening line, ageing, oldest, headings, shared list) and keep the rest of the edits */
+  ed.patch = (html) => {
+    const tmp = document.createElement("div"); tmp.innerHTML = html;
+    host.querySelectorAll("[data-slot]").forEach((el) => { const nw = tmp.querySelector('[data-slot="' + window.CSS.escape(el.getAttribute("data-slot")) + '"]');
+      if (!nw) { const nx = el.nextElementSibling; if (/^H3$/.test(el.tagName) && nx && nx.tagName === "TABLE" && !nx.querySelector("tr[data-k]")) nx.remove(); el.remove(); return; }
+      if (el.innerHTML !== nw.innerHTML) { el.innerHTML = nw.innerHTML; decorate(el); } });
   };
   host.addEventListener("input", () => { ed.edited = true; if (ed.onEdit) ed.onEdit(); });
   host.addEventListener("copy", (e) => {              // selecting by hand and copying: leave the ✕ buttons out
@@ -2350,7 +2356,7 @@ function openPersonMail(listAll, info, title) {
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmCc">Cc</label><input class="inp" id="pmCc" style="flex:1" placeholder="Filled with the other modules’ POs when a ticket is shared"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmSubj">Subject</label><input class="inp" id="pmSubj" style="flex:1"></div>' +
     '<label class="rmlbl" for="pmNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="pmNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
-    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts at the top are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Click ✕ on a row to leave that ticket out; the counts in the mail update. Click into the mail to edit any text.</span><span style="flex:1"></span>' +
       '<button type="button" class="btn" id="pmRestore" style="display:none"></button><button type="button" class="btn" id="pmReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="pmPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
     '<div class="rmrow"><span class="dim small">The address is remembered for ' + esc(pmReal(info) ? info.name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="btn" id="pmEml">Download email draft</button><button type="button" class="btn pri" id="pmCopy">Copy email</button></div>', "wide");
@@ -2359,7 +2365,7 @@ function openPersonMail(listAll, info, title) {
   q("pmTo").value = pmEmail(info, listAll); q("pmHi").value = pmReal(info) ? info.name : "team";
   const list = () => listAll.filter((i) => !out[T[i].key]);
   const cur = () => personMail(list(), info, q("pmHi").value, q("pmNote").value, out);
-  const ed = mailEditor(q("pmPrev"), (k, keep) => { out[k] = 1; if (keep) counts(); else paint(); });
+  const ed = mailEditor(q("pmPrev"), (k, keep) => { out[k] = 1; if (!keep) return paint(); const x = cur(); ed.patch(x.html); if (!ccEdited) q("pmCc").value = (x.cc || []).join("; "); counts(); });
   ed.onEdit = () => { q("pmReset").style.display = ""; };
   function counts() { const n = Object.keys(out).length; q("pmN").textContent = n ? "· " + list().length + " of " + listAll.length : "";
     q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
