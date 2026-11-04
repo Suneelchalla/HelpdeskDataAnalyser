@@ -630,8 +630,8 @@
         (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : "") +
         (others.length ? " " + b(others.length) + " more ticket" + (others.length === 1 ? ", owned by another SVM In Charge, also involves" : "s, owned by another SVM In Charge, also involve") + " your module; " + (others.length === 1 ? "it is" : "they are") + " listed at the end." : ""); };
     var nt = (note || "").trim(), nm = (hi || "").trim() || (real ? name : "team"), W = COLW.reduce(function (a, b) { return a + b; }, 0);
-    var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p " + P + ">" + svmIntro(true) + "</p>" +
-      "<h3 " + H + ">Ageing</h3>" + summary + gap(6) + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
+    var html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(nm) + ",</p><p data-slot=\"intro\" " + P + ">" + svmIntro(true) + "</p>" +
+      "<h3 " + H + ">Ageing</h3>" + '<div data-slot="age">' + summary + "</div>" + gap(6) + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
       "<h3 " + H + ">Tickets</h3><table " + tbl(W) + '><tr data-hdr="1">' + ["Ticket", "Client", "With", "Type", "Priority", "Summary", "Status", "Components (PO)", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"].map(function (h, k) { return th(h, "text-align:left", COLW[k]); }).join("") + "</tr>" + rows + "</table>" + gap() +
       sharedHtml() + "<p " + P + "><b>Please review each ticket today and update it with a clear next step and a committed ETR.</b></p><p " + P + ">Regards,<br>" + esc(hoPeople().from || "") + "</p></div>";
     var text = "Hi " + nm + ",\n\n" + svmIntro(false) + "\n\nAgeing: " + bk.map(function (x) { return x.l + " " + x.n; }).join(", ") + "." + (nt ? "\n\n" + nt : "") + "\n\n" +
@@ -641,9 +641,9 @@
       "\n\nPlease review each ticket today and update it with a clear next step and a committed ETR.\n\nRegards,\n" + (hoPeople().from || "");
     return { html: html, text: text, subject: "Help Desk: open tickets for your follow-up", cc: cc, poEmail: ownerEmail(name) };
     function sharedHtml() {
-      if (!others.length) return "";
+      if (!others.length) return '<div data-slot="shared"></div>';
       var CW = [110, 110, 85, 80, 240, 130, 190, 140, 110, 130, 150, 100], SW = CW.reduce(function (a, b) { return a + b; }, 0);
-      return "<h3 " + H + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p><table " + tbl(SW) + '><tr data-hdr="1">' +
+      return '<div data-slot="shared">' + "<h3 " + H + ">Shared with another module</h3><p " + P + ">Owned by another SVM In Charge and listed for your information; not in your count above.</p><table " + tbl(SW) + '><tr data-hdr="1">' +
         ["Ticket", "Client", "Type", "Priority", "Summary", "Status", "Components (PO)", "Owner (SVM In Charge)", "LRPS ticket", "LRPS status", "Assignee", "Age (created)"].map(function (h, k) { return th(h, "text-align:left", CW[k]); }).join("") + "</tr>" +
         others.map(function (t) {
           var lr = t.lrps.length ? t.lrps.map(function (x) { return '<a href="' + jiraUrl(x) + '" style="color:#1D4ED8;font-weight:600;text-decoration:none">' + esc(x) + "</a>"; }).join("<br>") : '<span style="color:#8A7380">no LRPS</span>';
@@ -651,19 +651,25 @@
           var la = t.lrps.length ? t.lrps.map(function (x) { return LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>'; }).join("<br>") : "—";
           return '<tr data-k="' + esc(t.key) + '">' + tdc(lk(t), "white-space:nowrap") + tdc(esc(t.project)) + tdc(esc(typeTxt(t)), "white-space:nowrap") + tdc(esc(t.priority || "—"), "white-space:nowrap") + tdc(esc(t.summary)) +
             tdc(esc(t.status), "white-space:nowrap") + tdc(compCell(t), "white-space:nowrap") + tdc("<b>" + esc(t.svm || "—") + "</b>", "white-space:nowrap") + tdc(lr, "white-space:nowrap") + tdc(ls, "white-space:nowrap") +
-            tdc(la, "white-space:nowrap;font-weight:600") + tdc(esc(fmt(ageMin(t))) + sub(esc(fdate(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>" + gap(6);
+            tdc(la, "white-space:nowrap;font-weight:600") + tdc(esc(fmt(ageMin(t))) + sub(esc(fdate(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>" + gap(6) + "</div>";
     }
   }
   /* ── editable mail preview: every ticket row gets a ✕ to leave it out, and the text can be edited in place.
      The ✕ buttons and the editing outline never go into the copied / downloaded mail. ── */
   function mailEditor(host, onRemove) {
     var ed = { edited: false };
-    ed.render = function (html) {
-      ed.edited = false;
-      host.innerHTML = '<div class="hdx-edit" contenteditable="true" spellcheck="true">' + html + "</div>";
-      host.querySelectorAll("tr[data-hdr]").forEach(function (tr) { var c = document.createElement("th"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "background:#fff;border:none;width:28px"; tr.insertBefore(c, tr.firstChild); });
-      host.querySelectorAll("tr[data-k]").forEach(function (tr) { var c = document.createElement("td"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "border:none;padding:0 4px;vertical-align:middle;background:#fff";
+    var done1 = function (tr) { return tr.firstElementChild && tr.firstElementChild.hasAttribute("data-ui"); };
+    function decorate(root) {
+      root.querySelectorAll("tr[data-hdr]").forEach(function (tr) { if (done1(tr)) return; var c = document.createElement("th"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "background:#fff;border:none;width:28px"; tr.insertBefore(c, tr.firstChild); });
+      root.querySelectorAll("tr[data-k]").forEach(function (tr) { if (done1(tr)) return; var c = document.createElement("td"); c.setAttribute("data-ui", "1"); c.contentEditable = "false"; c.style.cssText = "border:none;padding:0 4px;vertical-align:middle;background:#fff";
         c.innerHTML = '<button type="button" class="hdx-x" title="Leave this ticket out of the mail" data-rm="' + esc(tr.getAttribute("data-k")) + '">✕</button>'; tr.insertBefore(c, tr.firstChild); });
+    }
+    ed.render = function (html) { ed.edited = false; host.innerHTML = '<div class="hdx-edit" contenteditable="true" spellcheck="true">' + html + "</div>"; decorate(host); };
+    /* text edited, ticket removed: refresh only the parts with numbers and keep the rest of the edits */
+    ed.patch = function (html) {
+      var tmp = document.createElement("div"); tmp.innerHTML = html;
+      host.querySelectorAll("[data-slot]").forEach(function (el) { var nw = tmp.querySelector('[data-slot="' + window.CSS.escape(el.getAttribute("data-slot")) + '"]');
+        if (!nw) { el.remove(); return; } if (el.innerHTML !== nw.innerHTML) { el.innerHTML = nw.innerHTML; decorate(el); } });
     };
     host.addEventListener("input", function () { ed.edited = true; if (ed.onEdit) ed.onEdit(); });
     host.addEventListener("copy", function (e) {           // a copy made by hand never carries the ✕ buttons
@@ -690,7 +696,7 @@
       '<div class="hdx-row"><label for="pmCc">Cc</label><input class="hdx-inp" id="pmCc" style="flex:1" placeholder="Filled with the other modules’ POs when a ticket is shared"></div>' +
       '<div class="hdx-row"><label for="pmSubj">Subject</label><input class="hdx-inp" id="pmSubj" style="flex:1"></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="pmNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="pmNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown above the tickets"></textarea></div>' +
-      '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts at the top are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
+      '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Click ✕ on a row to leave that ticket out; the counts in the mail update. Click into the mail to edit any text.</span><span style="flex:1"></span>' +
         '<button type="button" class="hdx-btn sm" data-p="restore" id="pmRestore" style="display:none"></button><button type="button" class="hdx-btn sm" data-p="reset" id="pmReset" style="display:none">Undo text edits</button></div>' +
       '<div class="hdx-prev" id="pmPrev"></div>' +
       '<div class="hdx-row" style="margin-top:10px"><span class="hdx-note">The address is remembered for ' + esc(real ? name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="hdx-btn" data-p="eml">Download email draft</button><button type="button" class="hdx-btn pri" data-p="copy">Copy email</button></div>';
@@ -698,7 +704,7 @@
     q("pmTo").value = guess(); q("pmHi").value = real ? name : "team";
     var ts = function () { return tsAll.filter(function (t) { return !out[t.key]; }); };
     var cur = function () { return personMail(ts(), name, q("pmHi").value, q("pmNote").value, out, pool); };
-    var ed = mailEditor(q("pmPrev"), function (k, keepEdits) { out[k] = 1; if (keepEdits) counts(); else paint(); });
+    var ed = mailEditor(q("pmPrev"), function (k, keepEdits) { out[k] = 1; if (!keepEdits) return paint(); var x = cur(); ed.patch(x.html); if (!ccEdited) q("pmCc").value = (x.cc || []).join("; "); counts(); });
     ed.onEdit = function () { q("pmReset").style.display = ""; };
     function counts() { var n = Object.keys(out).length; q("pmN").textContent = name + " · " + ts().length + (n ? " of " + tsAll.length : "");
       q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
