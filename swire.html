@@ -2310,7 +2310,7 @@ function personMail(list, info, hi, note, skip) {
           td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary)) + td(esc(t.status), "white-space:nowrap") + td(compCell(i), "white-space:nowrap") + td("<b>" + esc(t.svm || "—") + "</b>", "white-space:nowrap") +
           td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") + td(esc(fmt(ageOf(t))) + sub(esc(fdt(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>";
   }
-  const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
+  const subject = "Swire Hypercare: open tickets for your follow-up";
   return { html, text, subject, cc };
 }
 /* editable mail preview: ✕ on every ticket row leaves it out; the text can be edited in place. The ✕ cells never go into
