@@ -2280,17 +2280,17 @@ function personMail(list, info, hi, note, skip) {
       td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
       td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + (svmM ? td(compCell(i), "white-space:nowrap") : "") + td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") +
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
-      td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
+      td(u != null ? esc(fdt(t.updated)) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
   const nt = (note || "").trim();
-  const html = '<div style="' + F + '"><p ' + P + ">Hi " + esc(name) + ",</p><p data-slot=\"intro\" " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
+  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p><p " + P + ">Greetings of the day.</p><p data-slot=\"intro\" " + P + ">" + (svmM ? svmIntro(true) : "Swire Phoenix Hypercare: <b>" + list.length + "</b> ticket" + (list.length === 1 ? " is" : "s are")) + (svmM ? "" : " pending with you. The ageing is below.") + "</p>" +
     "<h3 " + H + ">Ageing</h3>" + '<div data-slot="age">' + summary + "</div>" + '<p data-slot="facts" ' + P + ">" + facts.join(" · ") + "</p>" +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
     ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" + sharedHtml() +
     "<p " + P + "><b>" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
-  const text = "Hi " + name + ",\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
+  const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
-    list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
+    list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fdt(T[i].updated) : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
     (others.length ? "\n\nShared with another module (owned by another SVM In Charge, for your information):\n" + others.map((i) => { const t = T[i];
       return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | " + compsOf(i).map((x) => x.mod + (x.po ? " (" + x.po + ")" : "")).join(" + ") + " | owner " + (t.svm || "-") +
         (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") : "") +
@@ -2310,7 +2310,8 @@ function personMail(list, info, hi, note, skip) {
           td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary)) + td(esc(t.status), "white-space:nowrap") + td(compCell(i), "white-space:nowrap") + td("<b>" + esc(t.svm || "—") + "</b>", "white-space:nowrap") +
           td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") + td(esc(fmt(ageOf(t))) + sub(esc(fdt(t.created))), "white-space:nowrap") + "</tr>"; }).join("") + "</table>";
   }
-  const subject = "Swire Hypercare: open tickets for your follow-up";
+  const today = (() => { const d = new Date(Date.now() + 330 * MIN); return String(d.getUTCDate()).padStart(2, "0") + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()] + " " + d.getUTCFullYear(); })();
+  const subject = "Swire Hypercare: open tickets for your follow-up, " + today;
   return { html, text, subject, cc };
 }
 /* editable mail preview: ✕ on every ticket row leaves it out; the text can be edited in place. The ✕ cells never go into
@@ -2352,7 +2353,7 @@ function mailEditor(host, onRemove) {
 function openPersonMail(listAll, info, title) {
   const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(title) + ' <span id="pmN"></span></span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="pmTo">To</label><input class="inp" id="pmTo" placeholder="name@solverminds.com" style="flex:1;min-width:240px">' +
-    '<label class="rmlbl" for="pmHi">Hi</label><input class="inp" id="pmHi" style="width:200px"></div>' +
+    '<label class="rmlbl" for="pmHi">Dear</label><input class="inp" id="pmHi" style="width:200px"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmCc">Cc</label><input class="inp" id="pmCc" style="flex:1" placeholder="Filled with the other modules’ POs when a ticket is shared"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmSubj">Subject</label><input class="inp" id="pmSubj" style="flex:1"></div>' +
     '<label class="rmlbl" for="pmNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="pmNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
