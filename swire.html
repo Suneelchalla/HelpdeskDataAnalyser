@@ -2088,10 +2088,10 @@ function copyRich(html, text, btn, label) {
   if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(() => done("Copied, paste into Outlook"), () => done("Copy blocked by the browser"));
   else done("Copy blocked by the browser");
 }
-function emlDownload(subject, html, file, to) {
+function emlDownload(subject, html, file, to, cc) {
   const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
   const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
-  const eml = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : []).concat(["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")]).join("\r\n");
+  const eml = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], cc ? ["Cc: " + String(cc).replace(/[\r\n]/g, " ")] : []).concat(["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")]).join("\r\n");
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" })); a.download = file; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 /* SLA chips, same buckets as the Follow-up Tracker */
@@ -2233,13 +2233,23 @@ function pmSaveEmail(info, v) { if (!pmReal(info)) return; const b = pmBook(); b
 function personMail(list, info, hi, note) {
   const svmM = info && info.by === "svm", where = (i) => sideOf(i) === "engg" ? "engg" : "hd";
   list = list.slice().sort((a, b) => (svmM ? (where(a) === "hd" ? 0 : 1) - (where(b) === "hd" ? 0 : 1) : 0) || bySevAge(a, b));
+  /* each component with its PO (Master data); a ticket with more than one module is shared, and the other modules' POs go in Cc */
+  const nk = (x) => String(x || "").toLowerCase().replace(/[^a-z]/g, ""), me = nk(info && info.name);
+  const isMe = (po) => { const a = nk(po); return !!a && !!me && (a === me || a.indexOf(me) === 0 || me.indexOf(a) === 0); };
+  const compsOf = (i) => { const seen = {}, out = []; (T[i].components || []).forEach((c) => { const m = HC.moduleOf(c, CFG), k = m ? m.module : c; if (seen[k]) return; seen[k] = 1; out.push(m ? { mod: m.module, po: m.po, email: m.email || "" } : { mod: c, po: "", email: "" }); }); return out; };
+  const shared = (i) => compsOf(i).length > 1;
+  const ccMap = {}; if (svmM) list.forEach((i) => { if (shared(i)) compsOf(i).forEach((x) => { if (x.email && !isMe(x.po)) ccMap[x.email.toLowerCase()] = x.email; }); });
+  const cc = Object.keys(ccMap).map((k) => ccMap[k]), nShared = svmM ? list.filter(shared).length : 0;
+  const compCell = (i) => { const cs = compsOf(i); if (!cs.length) return "—";
+    return cs.map((x) => { const t = esc(x.mod) + (x.po ? " (" + esc(x.po) + ")" : ""); return cs.length > 1 && !isMe(x.po) ? "<b>" + t + "</b>" : t; }).join(" + ") + (cs.length > 1 ? ' <i style="color:#8A7380">· shared</i>' : ""); };
   const svmIntro = (h) => { const n = list.length, b = (x) => (h ? "<b>" + x + "</b>" : String(x));
     const ss = list.filter((i) => T[i].sev === "showstopper").length, cr = list.filter((i) => T[i].sev === "critical").length, old30 = list.filter((i) => (ageOf(T[i]) || 0) >= 30 * 1440).length;
     const isAre = (k) => (k === 1 ? " is " : " are ");
     const extra = [ss ? b(ss) + isAre(ss) + "Showstopper" : "", cr ? b(cr) + isAre(cr) + "Critical" : "", old30 ? b(old30) + (old30 === 1 ? " has" : " have") + " been open for more than 30 days" : ""].filter(Boolean);
     const list3 = extra.length > 1 ? extra.slice(0, -1).join(", ") + " and " + extra[extra.length - 1] : extra[0];
     return "Here " + (n === 1 ? "is the " : "are the ") + b(n) + " Swire Phoenix ticket" + (n === 1 ? "" : "s") + " in your area that " + (n === 1 ? "is" : "are") + " still open" +
-      (extra.length ? ": " + list3 : "") + ". Each row has the LRPS ticket and its engineering assignee."; };
+      (extra.length ? ": " + list3 : "") + ". Each ticket below shows its LRPS reference and the assignee working on it." +
+      (nShared ? " " + b(nShared) + " ticket" + (nShared === 1 ? " also involves" : "s also involve") + " another module" + (cc.length ? "; " + (cc.length === 1 ? "its PO is" : "their POs are") + " copied on this mail." : "; see the Components column.") : ""); };
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', H = 'style="' + F + 'font-size:14px;color:#5C1730;margin:16px 0 6px"';
   const ageD = (i) => (ageOf(T[i]) || 0) / 1440, updD = (i) => T[i].updated != null ? (NOW - T[i].updated) / DAY : null;
   const bucket = (d) => AGEB.find(([a, b]) => d >= a && d < b) || AGEB[0];
@@ -2260,7 +2270,7 @@ function personMail(list, info, hi, note) {
     const la = t.lrps.length ? t.lrps.map((x) => LRPS[x] ? (LRPS[x].gone ? "not found" : esc(LRPS[x].a || "Unassigned")) : '<span style="color:#8A7380">not read yet</span>').join("<br>") : "—";
     return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" +
       td('<a href="' + jiraUrl(t.key) + '" style="color:#7A1F3D;font-weight:600;text-decoration:none;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") + td(esc(typeTxt(t)), "white-space:nowrap") +
-      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") +
+      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(t.summary) + (t.meId ? sub("ME ID " + esc(t.meId)) : "")) + td(esc(t.status), "white-space:nowrap") + (svmM ? td(compCell(i), "white-space:nowrap") : "") + td(lr, "white-space:nowrap") + td(ls, "white-space:nowrap") + td(la, "white-space:nowrap;font-weight:600") +
       td('<b style="' + (d >= 7 ? "color:" + b[3] : "") + '">' + esc(fmt(ageOf(t))) + "</b>" + sub(esc(fdt(t.created))), "white-space:nowrap") +
       td(u != null ? esc(fmt(u * 1440)) + " ago" + sub(esc(fdt(t.updated))) : "—", "white-space:nowrap;" + (u != null && u >= 7 ? "color:#D7263D;font-weight:600" : "")) + "</tr>"; }).join("");
   const nt = (note || "").trim();
@@ -2268,14 +2278,14 @@ function personMail(list, info, hi, note) {
     "<h3 " + H + ">Ageing</h3>" + summary + (facts.length ? "<p " + P + ">" + facts.join(" · ") + "</p>" : "") +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<h3 " + H + ">Tickets</h3>" + '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;' + F + '"><tr data-hdr="1">' +
-    ["Ticket"].concat(["Type", "Priority", "Summary", "Status", "LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" +
-    "<p " + P + "><b>" + (svmM ? "Please check on each ticket and make sure the ticket is updated with the next step and an ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+    ["Ticket"].concat(["Type", "Priority", "Summary", "Status"], svmM ? ["Components (PO)"] : [], ["LRPS ticket", "LRPS status", "Engineering assignee", "Age (created)", "Last updated"]).map(th).join("") + "</tr>" + rows + "</table>" +
+    "<p " + P + "><b>" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
   const text = "Hi " + name + ",\n\n" + (svmM ? svmIntro(false) : "Swire Phoenix Hypercare: " + list.length + " ticket" + (list.length === 1 ? " is" : "s are") + " pending with you.") + "\n\nAgeing: " + bk.map((x) => x.l + " " + x.n).join(", ") + "." +
     (facts.length ? "\n" + facts.map((f) => f.replace(/<[^>]+>/g, "")).join(". ") + "." : "") + (nt ? "\n\n" + nt : "") + "\n\n" +
     list.map((i) => { const t = T[i], u = updD(i); return "- " + t.key + " (" + typeTxt(t) + ") [" + (t.priority || "-") + "] " + t.summary + " | " + t.status + " | age " + fmt(ageOf(t)) + " | updated " + (u != null ? fmt(u * 1440) + " ago" : "-") + (t.lrps.length ? " | " + t.lrps.map((x) => x + (LRPS[x] && LRPS[x].a ? " (" + LRPS[x].a + ")" : "")).join(", ") : ""); }).join("\n") +
-    "\n\n" + (svmM ? "Please check on each ticket and make sure the ticket is updated with the next step and an ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
+    "\n\n" + (svmM ? "Please review each ticket today and update it with a clear next step and a committed ETR." : "Please update each ticket with the next step and an ETR.") + "\n\nRegards,\n" + rmSign();
   const subject = "Swire Hypercare follow-up: " + (pmReal(info) ? info.name + ", " : "") + list.length + " ticket" + (list.length === 1 ? "" : "s") + (oldest != null ? ", oldest " + fmt(ageOf(T[oldest])) : "");
-  return { html, text, subject };
+  return { html, text, subject, cc };
 }
 /* editable mail preview: ✕ on every ticket row leaves it out; the text can be edited in place. The ✕ cells never go into
    the copied / downloaded mail. */
@@ -2311,6 +2321,7 @@ function openPersonMail(listAll, info, title) {
   const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(title) + ' <span id="pmN"></span></span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="pmTo">To</label><input class="inp" id="pmTo" placeholder="name@solverminds.com" style="flex:1;min-width:240px">' +
     '<label class="rmlbl" for="pmHi">Hi</label><input class="inp" id="pmHi" style="width:200px"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmCc">Cc</label><input class="inp" id="pmCc" style="flex:1" placeholder="Filled with the other modules’ POs when a ticket is shared"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="pmSubj">Subject</label><input class="inp" id="pmSubj" style="flex:1"></div>' +
     '<label class="rmlbl" for="pmNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="pmNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
     '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Click ✕ on a row to leave that ticket out. Click into the mail to edit any text. Remove tickets first: the counts at the top are rebuilt only while the text is unedited.</span><span style="flex:1"></span>' +
@@ -2318,7 +2329,7 @@ function openPersonMail(listAll, info, title) {
     '<div class="rmprev" id="pmPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
     '<div class="rmrow"><span class="dim small">The address is remembered for ' + esc(pmReal(info) ? info.name : "this list") + ' in this browser.</span><span style="flex:1"></span><button type="button" class="btn" id="pmEml">Download email draft</button><button type="button" class="btn pri" id="pmCopy">Copy email</button></div>', "wide");
   const q = (id) => m.ov.querySelector("#" + id);
-  let out = {}, subjEdited = false;
+  let out = {}, subjEdited = false, ccEdited = false;
   q("pmTo").value = pmEmail(info, listAll); q("pmHi").value = pmReal(info) ? info.name : "team";
   const list = () => listAll.filter((i) => !out[T[i].key]);
   const cur = () => personMail(list(), info, q("pmHi").value, q("pmNote").value);
@@ -2326,16 +2337,17 @@ function openPersonMail(listAll, info, title) {
   ed.onEdit = () => { q("pmReset").style.display = ""; };
   function counts() { const n = Object.keys(out).length; q("pmN").textContent = n ? "· " + list().length + " of " + listAll.length : "";
     q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
-  function paint() { const x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
+  function paint() { const x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; if (!ccEdited) q("pmCc").value = (x.cc || []).join("; "); ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
   const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
   q("pmHi").addEventListener("change", reb); q("pmNote").addEventListener("change", reb);
   q("pmSubj").addEventListener("input", () => { subjEdited = true; });
+  q("pmCc").addEventListener("input", () => { ccEdited = true; });
   q("pmTo").addEventListener("change", () => pmSaveEmail(info, q("pmTo").value));
   q("pmRestore").onclick = () => { if (ed.edited && !confirm("Putting the tickets back rebuilds the mail and undoes your text edits. Continue?")) return; out = {}; paint(); };
   q("pmReset").onclick = () => paint();
   q("pmCopy").onclick = (e) => { pmSaveEmail(info, q("pmTo").value); copyRich(ed.html(), ed.text(), e.target, "Copy email"); };
   q("pmEml").onclick = () => { pmSaveEmail(info, q("pmTo").value); const who = (pmReal(info) ? info.name : "team").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    emlDownload(q("pmSubj").value.trim() || cur().subject, ed.html(), "Swire-reminder-" + who + "-" + HC.dayKey(NOW) + ".eml", q("pmTo").value.trim()); };
+    emlDownload(q("pmSubj").value.trim() || cur().subject, ed.html(), "Swire-reminder-" + who + "-" + HC.dayKey(NOW) + ".eml", q("pmTo").value.trim(), q("pmCc").value.trim()); };
   paint(); q("pmTo").focus();
 }
 /* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
