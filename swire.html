@@ -2520,6 +2520,35 @@ function printWithUs() {
   const ageT = T0 + "<tr>" + th("Age (created)") + AGEB.map((b) => th(b[2], "text-align:center")).join("") + th("Total", "text-align:center") + "</tr>" +
     [["Open box", box], ["Help Desk", hd], ["Engineering", en], ["Total", us]].map(([n, l], k) => "<tr>" + td(k === 3 ? "<b>" + n + "</b>" : n, k === 3 ? "background:#FBF7F9" : "") + AGEB.map((b, j) => { const c = inB(l, b); return td(c || '<span style="color:#C9B7BF">0</span>', "text-align:center;" + (c && j ? "color:" + b[3] + ";font-weight:700;" : "") + (k === 3 ? "background:#FBF7F9" : "")); }).join("") +
       td("<b>" + l.length + "</b>", "text-align:center;" + (k === 3 ? "background:#FBF7F9" : "")) + "</tr>").join("") + "</table>";
+  /* charts row: where the open tickets are, SLA of what is with us, ageing of what is with us, created vs closed (14 days) */
+  const svgT = (x, y, t, o) => '<text x="' + x + '" y="' + y + '" font-family="Segoe UI,Calibri,Arial,sans-serif" font-size="' + ((o && o.fs) || 9) + '" fill="' + ((o && o.c) || "#5A4450") + '"' + (o && o.a ? ' text-anchor="' + o.a + '"' : "") + (o && o.b ? ' font-weight="700"' : "") + ">" + esc(t) + "</text>";
+  const panel = (title, body) => '<td style="vertical-align:top;border:' + B + ';padding:8px 10px;background:#FFFFFF;width:25%"><div style="' + F + 'font-size:10.5px;font-weight:700;color:#5C1730;margin-bottom:4px">' + esc(title) + "</div>" + body + "</td>";
+  const W = 230;
+  /* 1. where open tickets are: one stacked bar + legend */
+  const parts = [["Open box", box.length, "#E7A3B9"], ["Help Desk", hd.length, "#0E7C86"], ["Engineering", en.length, "#7A1F3D"], ["Waiting on Swire", swire.length, "#D9A35A"], ["Billing", bill.length, "#8B7FB8"]];
+  const tot = Math.max(1, parts.reduce((m, p) => m + p[1], 0));
+  let x0 = 0; const bar = parts.map((p) => { const w = Math.max(p[1] ? 2 : 0, p[1] / tot * W); const r = '<rect x="' + x0 + '" y="4" width="' + w + '" height="16" fill="' + p[2] + '"/>'; x0 += w; return r; }).join("");
+  const leg = parts.map((p, k) => '<rect x="0" y="' + (34 + k * 17) + '" width="9" height="9" rx="2" fill="' + p[2] + '"/>' + svgT(14, 42 + k * 17, p[0]) + svgT(W, 42 + k * 17, p[1].toLocaleString() + "  (" + (p[1] / tot * 100 < 1 && p[1] ? "<1" : Math.round(p[1] / tot * 100)) + "%)", { a: "end", b: true, c: "#2A161D" })).join("");
+  const ch1 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + bar + leg + "</svg>";
+  /* 2. SLA of tickets with us: horizontal bars */
+  const slaP = [["Breached", sl(us, "breached"), "#D7263D"], ["Due soon / at risk", sl(us, "due") + sl(us, "risk"), "#C2680A"], ["On track", sl(us, "ok"), "#15803D"], ["Paused", sl(us, "paused"), "#8A7380"], ["No SLA data", sl(us, "nodata") + sl(us, "notgt"), "#C9B7BF"]];
+  const mx2 = Math.max(1, ...slaP.map((p) => p[1]));
+  const ch2 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + slaP.map((p, k) => svgT(0, 12 + k * 23, p[0]) + '<rect x="0" y="' + (15 + k * 23) + '" width="' + (W - 34) + '" height="6" rx="3" fill="#F3E9EE"/>' +
+    '<rect x="0" y="' + (15 + k * 23) + '" width="' + Math.max(p[1] ? 3 : 0, p[1] / mx2 * (W - 34)) + '" height="6" rx="3" fill="' + p[2] + '"/>' + svgT(W, 21 + k * 23, String(p[1]), { a: "end", b: true, c: "#2A161D" })).join("") + "</svg>";
+  /* 3. ageing of what is with us: columns */
+  const ag = AGEB.map((b) => [b[2], inB(us, b), b[3]]), mx3 = Math.max(1, ...ag.map((a) => a[1])), cw = W / ag.length;
+  const ch3 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + ag.map((a, k) => { const h = a[1] / mx3 * 78; return '<rect x="' + (k * cw + 7) + '" y="' + (94 - h) + '" width="' + (cw - 14) + '" height="' + Math.max(a[1] ? 2 : 0, h) + '" rx="3" fill="' + (k ? a[2] : "#D98FA8") + '"/>' +
+    svgT(k * cw + cw / 2, 90 - h, String(a[1]), { a: "middle", b: true, c: "#2A161D" }) + svgT(k * cw + cw / 2, 108, a[0].replace(" days", "d"), { a: "middle", fs: 8.5 }); }).join("") + '<line x1="0" y1="94.5" x2="' + W + '" y2="94.5" stroke="#E3D3DA"/>' + "</svg>";
+  /* 4. created vs closed per day, last 14 days (tickets in view) */
+  const d0 = HC.istMidnight(NOW) - 13 * DAY, days = Array.from({ length: 14 }, (_, k) => d0 + k * DAY);
+  const cr = days.map((d) => T.filter((t) => t.created != null && t.created >= d && t.created < d + DAY).length), cl = days.map((d) => T.filter((t, i) => E[i].closedAt != null && E[i].closedAt >= d && E[i].closedAt < d + DAY).length);
+  const mx4 = Math.max(1, ...cr, ...cl), bw = W / 14;
+  const ch4 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + days.map((d, k) => { const h1 = cr[k] / mx4 * 70, h2 = cl[k] / mx4 * 70;
+      return '<rect x="' + (k * bw + 1.5) + '" y="' + (88 - h1) + '" width="' + (bw / 2 - 2) + '" height="' + h1 + '" fill="#7A1F3D"/><rect x="' + (k * bw + bw / 2) + '" y="' + (88 - h2) + '" width="' + (bw / 2 - 2) + '" height="' + h2 + '" fill="#15803D"/>' +
+        ((k % 4 === 0 && k < 12) || k === 13 ? svgT(k * bw + bw / 2, 101, fday(d).replace(/ \d{4}$/, ""), { a: "middle", fs: 7.5 }) : ""); }).join("") + '<line x1="0" y1="88.5" x2="' + W + '" y2="88.5" stroke="#E3D3DA"/>' +
+    '<rect x="0" y="110" width="8" height="8" fill="#7A1F3D"/>' + svgT(12, 117.5, "Created " + cr.reduce((a, b) => a + b, 0)) + '<rect x="110" y="110" width="8" height="8" fill="#15803D"/>' + svgT(122, 117.5, "Closed " + cl.reduce((a, b) => a + b, 0)) + "</svg>";
+  const charts = '<div style="height:12px"></div><table class="lay" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:0 -8px"><tr>' +
+    panel("Where the open tickets are", ch1) + panel("SLA, with us", ch2) + panel("Ageing, with us", ch3) + panel("Created vs closed, last 14 days", ch4) + "</tr></table>";
   /* 6. ticket list, compact */
   const cols = [["Ticket", (t) => '<b style="color:#7A1F3D;white-space:nowrap">' + esc(t.key) + "</b>"], ["Priority", (t) => '<span style="white-space:nowrap">' + esc(t.priority || "—") + "</span>"],
     ["Summary", (t) => esc((t.summary || "").slice(0, 110)) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "")], ["Status", (t) => '<span style="white-space:nowrap">' + esc(t.status) + "</span>"],
@@ -2536,10 +2565,10 @@ function printWithUs() {
     '<div style="font-size:10.5px;color:#8A7380;margin-top:2px">' + esc(fday(NOW)) + " · position at " + esc(fdt(NOW)) + " IST · created " + esc(R.label) + (GF.type === "isr" ? " · Incident + Service Request" : GF.type === "all" ? " · all request types" : " · " + esc(GF.type)) + "</div></td>" +
     '<td style="text-align:right;vertical-align:bottom;font-size:10px;color:#8A7380">SVM Help Desk</td></tr></table>' +
     '<div style="height:10px"></div>' + cards +
-    H("With us, by priority") + prio +
-    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:58%;vertical-align:top;padding-right:10px">' + H("SLA breached, with us", "most overdue first") + att + "</td>" +
+    H("With us, by priority") + prio + charts +
+    '<table class="lay" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:58%;vertical-align:top;padding-right:10px">' + H("SLA breached, with us", "most overdue first") + att + "</td>" +
     '<td style="vertical-align:top;padding-left:10px">' + H("Escalations to raise", "Section 10.2") + escT + "</td></tr></table>" +
-    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:50%;vertical-align:top;padding-right:10px">' + H("By SVM In Charge", "with us") + bySvm + "</td>" +
+    '<table class="lay" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:50%;vertical-align:top;padding-right:10px">' + H("By SVM In Charge", "with us") + bySvm + "</td>" +
     '<td style="vertical-align:top;padding-left:10px">' + H("By engineering assignee", "with Engineering") + byEng + "</td></tr></table>" +
     H("Ageing, with us") + ageT +
     '<div style="break-before:page;page-break-before:always"></div>' +
@@ -2547,7 +2576,7 @@ function printWithUs() {
     list("Open box, not triaged", box) + list("With Help Desk", hd) + list("With Engineering", en) +
     '<p style="' + F + 'font-size:9px;color:#8A7380;margin-top:14px">Generated from the Swire Hypercare module ' + esc(fdt(NOW)) + " IST. SLA as in the SLA Tracker; waiting-on-Swire tickets are counted only.</p></div>";
   document.body.appendChild(host); document.body.classList.add("printing-area");
-  const st = document.createElement("style"); st.textContent = "@page{size:A4 landscape;margin:9mm} #printArea{-webkit-print-color-adjust:exact;print-color-adjust:exact} #printArea tr{break-inside:avoid} #printArea h3{break-after:avoid}"; document.head.appendChild(st);
+  const st = document.createElement("style"); st.textContent = "@page{size:A4 landscape;margin:9mm} #printArea{-webkit-print-color-adjust:exact;print-color-adjust:exact} #printArea tr{break-inside:avoid} #printArea table.lay>tbody>tr,#printArea table.lay>tr{break-inside:auto} #printArea h3{break-after:avoid}"; document.head.appendChild(st);
   const done = () => { host.remove(); st.remove(); document.body.classList.remove("printing-area"); window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
   window.HDPrint ? HDPrint("Swire-Hypercare-status-report_" + HC.dayKey(NOW)) : window.print(); setTimeout(done, 3000);
