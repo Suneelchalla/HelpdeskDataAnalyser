@@ -2467,31 +2467,90 @@ function openPersonMail(listAll, info, title) {
   paint(); q("pmTo").focus();
 }
 /* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
+/* PDF from the Now page: a one-glance status report first (counts, SLA, what needs attention, who has what), then a compact
+   ticket list of everything with us. Filters at the top apply. */
 function printWithUs() {
   const open = openIdx(), box = open.filter((i) => E[i].stage === "openbox").sort(bySevAge);
   const hd = open.filter((i) => sideOf(i) === "hd" && E[i].stage !== "openbox").sort(bySevAge), en = open.filter((i) => sideOf(i) === "engg").sort(bySevAge);
-  const th = (h) => '<th style="' + TD + 'background:#7A1F3D;color:#fff;text-align:left;font-weight:600;white-space:nowrap">' + h + "</th>";
-  const cols = [["Ticket", (t) => '<b style="color:#7A1F3D;white-space:nowrap">' + esc(t.key) + "</b>"], ["Type", (t) => typeMail(t)], ["Priority", (t) => '<b style="white-space:nowrap">' + esc(t.priority || "—") + "</b>"],
-    ["Summary", (t) => esc(t.summary) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "")], ["Status", (t) => '<span style="white-space:nowrap">' + esc(t.status) + "</span>"],
-    ["SLA", (t) => { const x = slaOfT(t) || {}; return '<span style="white-space:nowrap;' + (x.state === "breached" ? "color:#D7263D;font-weight:600" : "") + '">' + esc(x.label || "—") + "</span>"; }],
-    ["Created", (t) => '<span style="white-space:nowrap">' + esc(fdt(t.created)) + "</span>"], ["Updated", (t) => '<span style="white-space:nowrap">' + esc(fdt(t.updated)) + "</span>"],
-    ["Age", (t) => '<span style="white-space:nowrap">' + esc(fmt(ageOf(t))) + "</span>"], ["Sitting with", (t, e) => '<b style="color:#5C1730">' + esc(holderOf(t, e)) + "</b>"],
-    ["PO", (t, e) => esc((e.po && e.po.po) || "—") + (e.po && e.po.module ? '<br><span style="color:#8A7380">' + esc(e.po.module) + "</span>" : "")], ["SVM In Charge", (t) => esc(t.svm || "—")], ["Current worker", (t) => esc(t.cw || "—")],
-    ["LRPS (assignee, status)", (t) => t.lrps.length ? t.lrps.map((k) => '<span style="white-space:nowrap">' + esc(k) + "</span>" + (LRPS[k] ? "<br>" + esc(LRPS[k].a || "Unassigned") + (LRPS[k].s ? " (" + esc(LRPS[k].s) + ")" : "") : "")).join("<br>") : "—"],
-    ["Next action", (t) => esc(t.nextAction || "—")]];
-  const tbl = (l) => l.length ? '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;margin:4px 0 14px;font-family:Segoe UI,Calibri,Arial,sans-serif"><tr>' + cols.map((c) => th(c[0])).join("") + "</tr>" +
-    l.map((i, k) => "<tr" + (k % 2 ? ' style="background:#FCF7F9"' : "") + ">" + cols.map((c) => '<td style="' + TD + '">' + c[1](T[i], E[i]) + "</td>").join("") + "</tr>").join("") + "</table>" : '<p style="color:#8A7380;font-size:12px">None.</p>';
-  const H = 'style="font-family:Segoe UI,Calibri,Arial,sans-serif;font-size:14px;color:#5C1730;margin:14px 0 4px"';
-  const sec = (n, l) => "<h3 " + H + ">" + esc(n) + " (" + l.length + ")</h3><p style=\"font-size:11px;color:#5A4450;margin:0 0 4px\">" + esc(sevLine((() => { const o = {}; HC.SEVS.forEach((x) => { o[x.id] = l.filter((i) => T[i].sev === x.id).length; }); return o; })())) + "</p>" + tbl(l);
+  const us = box.concat(hd, en), swire = open.filter((i) => sideOf(i) === "client"), bill = open.filter((i) => sideOf(i) === "billing");
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", B = "1pt solid #D9C3CD";
+  const C = "border:" + B + ";padding:5px 7px;vertical-align:top;font-size:10px;color:#2A161D;" + F;
+  const th = (h, x) => '<th style="' + C + "background:#F7EEF2;color:#5C1730;font-weight:700;text-align:left;white-space:nowrap;" + (x || "") + '">' + h + "</th>";
+  const td = (h, x) => '<td style="' + C + (x || "") + '">' + h + "</td>";
+  const T0 = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;' + F + '">';
+  const H = (t, sub) => '<h3 style="' + F + 'font-size:13px;color:#5C1730;margin:16px 0 6px;border-bottom:1.5pt solid #EAD9E0;padding-bottom:3px">' + esc(t) + (sub ? ' <span style="font-weight:400;color:#8A7380;font-size:10.5px">' + esc(sub) + "</span>" : "") + "</h3>";
+  const sl = (l, k) => l.filter((i) => eSla(i) === k).length, sevN = (l, s) => l.filter((i) => T[i].sev === s).length;
+  const brL = us.filter((i) => eSla(i) === "breached"), dueL = us.filter((i) => eSla(i) === "due" || eSla(i) === "risk");
+  const esc0 = HC.escalations(T, E, NOW, CFG).filter((x) => sideOf(x.i) !== "client" && sideOf(x.i) !== "closed");
+  const mis = mismatchCheck().keys.length, old = (l) => l.reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0);
+  const R = rangeMs();
+  /* 1. headline cards */
+  const card = (v, l, sub, col) => '<td style="border:' + B + ";padding:9px 10px;vertical-align:top;width:12.5%;background:" + (col ? col + "14" : "#FBF7F9") + ";" + F + '"><div style="font-size:20px;font-weight:800;color:' + (col || "#2A161D") + '">' + v + '</div><div style="font-size:10.5px;font-weight:700;color:#2A161D;margin-top:2px">' + esc(l) + '</div><div style="font-size:9px;color:#8A7380;margin-top:2px">' + esc(sub || "") + "</div></td>";
+  const cards = T0 + "<tr>" + card(open.length.toLocaleString(), "Open tickets", "all sides") + card(us.length, "With us", box.length + " open box · " + hd.length + " Help Desk · " + en.length + " Engg", "#7A1F3D") +
+    card(swire.length.toLocaleString(), "Waiting on Swire", "counted only", "#B45309") + card(brL.length, "SLA breached", "with us", "#D7263D") + card(dueL.length, "Due soon / at risk", "with us", "#C2680A") +
+    card(sl(us, "ok"), "On track", "inside SLA", "#15803D") + card(esc0.length, "Escalations to raise", "Section 10.2", "#A61B3A") + card(mis, "Status mismatch", "SWIPHX ≠ LRPS", "#6D28D9") + "</tr></table>";
+  /* 2. with us by priority and SLA */
+  const SV = HC.SEVS;
+  const prow = (n, l, tot) => "<tr>" + td((tot ? "<b>" : "") + esc(n) + (tot ? "</b>" : ""), tot ? "background:#FBF7F9" : "") + SV.map((s) => { const c = sevN(l, s.id); return td(c || '<span style="color:#C9B7BF">0</span>', "text-align:center;" + (c ? "color:" + s.color + ";font-weight:700;" : "") + (tot ? "background:#FBF7F9" : "")); }).join("") +
+    td("<b>" + l.length + "</b>", "text-align:center;" + (tot ? "background:#FBF7F9" : "")) + td(sl(l, "breached") ? '<b style="color:#D7263D">' + sl(l, "breached") + "</b>" : "·", "text-align:center;" + (tot ? "background:#FBF7F9" : "")) +
+    td(l.length ? esc(fmt(old(l))) : "·", "text-align:center;" + (tot ? "background:#FBF7F9" : "")) + "</tr>";
+  const prio = T0 + "<tr>" + th("With us") + SV.map((s) => th(s.name, "text-align:center")).join("") + th("Total", "text-align:center") + th("SLA breached", "text-align:center") + th("Oldest", "text-align:center") + "</tr>" +
+    prow("Open box", box) + prow("Help Desk", hd) + prow("Engineering", en) + prow("Total", us, true) + "</table>";
+  /* 3. needs attention: breached (most over first) and escalations */
+  const over = (i) => (slaOf(i) || {}).overByMin || 0;
+  const brTop = brL.slice().sort((a, b) => over(b) - over(a)).slice(0, 12);
+  const att = brTop.length ? T0 + "<tr>" + th("Ticket") + th("Priority") + th("Summary") + th("Sitting with") + th("SLA", "text-align:right") + th("Age", "text-align:right") + "</tr>" +
+    brTop.map((i) => { const t = T[i]; return "<tr>" + td('<b style="color:#7A1F3D">' + esc(t.key) + "</b>", "white-space:nowrap") + td(esc(t.priority || "—"), "white-space:nowrap") + td(esc((t.summary || "").slice(0, 90))) +
+      td(esc(holderOf(t, E[i])), "white-space:nowrap") + td('<b style="color:#D7263D">' + esc((slaOf(i) || {}).label || "") + "</b>", "white-space:nowrap;text-align:right") + td(esc(fmt(ageOf(t))), "white-space:nowrap;text-align:right") + "</tr>"; }).join("") + "</table>" +
+    (brL.length > brTop.length ? '<p style="' + F + 'font-size:9.5px;color:#8A7380;margin:4px 0 0">and ' + (brL.length - brTop.length) + " more in the ticket list.</p>" : "")
+    : '<p style="' + F + 'font-size:10.5px;color:#15803D;margin:0">No ticket with us is past its SLA.</p>';
+  const escT = esc0.length ? T0 + "<tr>" + th("Ticket") + th("Priority") + th("Trigger") + th("Sitting with") + th("No progress", "text-align:right") + "</tr>" +
+    esc0.slice(0, 10).map((x) => { const t = T[x.i]; return "<tr>" + td('<b style="color:#7A1F3D">' + esc(t.key) + "</b>", "white-space:nowrap") + td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(x.trigger)) + td(esc(holderOf(t, E[x.i])), "white-space:nowrap") + td(esc(escWait(x)), "white-space:nowrap;text-align:right") + "</tr>"; }).join("") + "</table>" +
+    (esc0.length > 10 ? '<p style="' + F + 'font-size:9.5px;color:#8A7380;margin:4px 0 0">and ' + (esc0.length - 10) + " more.</p>" : "")
+    : '<p style="' + F + 'font-size:10.5px;color:#15803D;margin:0">No escalations to raise.</p>';
+  /* 4. who has what: SVM In Charge, engineering assignee */
+  const group = (l, f) => { const g = {}; l.forEach((i) => { const k = f(i) || "(none)"; (g[k] = g[k] || []).push(i); }); return Object.keys(g).map((k) => ({ k, l: g[k] })).sort((a, b) => b.l.length - a.l.length || a.k.localeCompare(b.k)); };
+  const whoT = (title, rows, withHd) => T0 + "<tr>" + th(title) + (withHd ? th("Help Desk", "text-align:center") + th("Engineering", "text-align:center") : "") + th("Total", "text-align:center") + th("Breached", "text-align:center") + th("Oldest", "text-align:center") + "</tr>" +
+    rows.slice(0, 14).map((r) => { const h = r.l.filter((i) => sideOf(i) !== "engg").length, b = sl(r.l, "breached"), o = old(r.l);
+      return "<tr>" + td(esc(r.k), "white-space:nowrap") + (withHd ? td(h || "·", "text-align:center") + td((r.l.length - h) || "·", "text-align:center") : "") + td("<b>" + r.l.length + "</b>", "text-align:center") +
+        td(b ? '<b style="color:#D7263D">' + b + "</b>" : "·", "text-align:center") + td(esc(fmt(o)), "text-align:center;white-space:nowrap;" + (o >= 30 * 1440 ? "color:#D7263D;font-weight:700" : "")) + "</tr>"; }).join("") + "</table>";
+  const bySvm = whoT("SVM In Charge", group(us, (i) => T[i].svm), true), byEng = en.length ? whoT("Engineering assignee", group(en, (i) => lrpsWho(i)), false) : '<p style="' + F + 'font-size:10.5px;color:#8A7380">Nothing with Engineering.</p>';
+  /* 5. ageing of what is with us */
+  const ageD = (i) => (ageOf(T[i]) || 0) / 1440, inB = (l, b) => l.filter((i) => ageD(i) >= b[0] && ageD(i) < b[1]).length;
+  const ageT = T0 + "<tr>" + th("Age (created)") + AGEB.map((b) => th(b[2], "text-align:center")).join("") + th("Total", "text-align:center") + "</tr>" +
+    [["Open box", box], ["Help Desk", hd], ["Engineering", en], ["Total", us]].map(([n, l], k) => "<tr>" + td(k === 3 ? "<b>" + n + "</b>" : n, k === 3 ? "background:#FBF7F9" : "") + AGEB.map((b, j) => { const c = inB(l, b); return td(c || '<span style="color:#C9B7BF">0</span>', "text-align:center;" + (c && j ? "color:" + b[3] + ";font-weight:700;" : "") + (k === 3 ? "background:#FBF7F9" : "")); }).join("") +
+      td("<b>" + l.length + "</b>", "text-align:center;" + (k === 3 ? "background:#FBF7F9" : "")) + "</tr>").join("") + "</table>";
+  /* 6. ticket list, compact */
+  const cols = [["Ticket", (t) => '<b style="color:#7A1F3D;white-space:nowrap">' + esc(t.key) + "</b>"], ["Priority", (t) => '<span style="white-space:nowrap">' + esc(t.priority || "—") + "</span>"],
+    ["Summary", (t) => esc((t.summary || "").slice(0, 110)) + (t.meId ? '<br><span style="color:#8A7380">ME ID ' + esc(t.meId) + "</span>" : "")], ["Status", (t) => '<span style="white-space:nowrap">' + esc(t.status) + "</span>"],
+    ["Sitting with", (t, e) => '<span style="white-space:nowrap">' + esc(holderOf(t, e)) + "</span>"], ["SVM In Charge", (t) => esc(t.svm || "—")],
+    ["LRPS · assignee", (t) => t.lrps.length ? t.lrps.map((k) => '<span style="white-space:nowrap">' + esc(k) + (LRPS[k] && LRPS[k].a ? " · " + esc(LRPS[k].a) : "") + "</span>").join("<br>") : '<span style="color:#8A7380">—</span>'],
+    ["SLA", (t, e, i) => { const x = slaOf(i) || {}, k = eSla(i); return '<span style="white-space:nowrap;' + (k === "breached" ? "color:#D7263D;font-weight:700" : k === "due" || k === "risk" ? "color:#C2680A;font-weight:700" : "") + '">' + esc(x.label || "—") + "</span>"; }],
+    ["Age", (t) => '<span style="white-space:nowrap">' + esc(fmt(ageOf(t))) + "</span>"], ["Updated", (t) => '<span style="white-space:nowrap">' + esc(fdt(t.updated)) + "</span>"]];
+  const list = (n, l) => H(n, l.length + " ticket" + (l.length === 1 ? "" : "s") + (l.length ? " · " + sevLine((() => { const o = {}; SV.forEach((s) => { o[s.id] = sevN(l, s.id); }); return o; })()) : "")) +
+    (l.length ? T0 + "<tr>" + cols.map((c) => th(c[0])).join("") + "</tr>" + l.map((i, k) => "<tr" + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" + cols.map((c) => td(c[1](T[i], E[i], i))).join("") + "</tr>").join("") + "</table>"
+      : '<p style="' + F + 'font-size:10.5px;color:#8A7380;margin:0">None.</p>');
   const host = document.createElement("div"); host.id = "printArea";
-  host.innerHTML = '<div style="font-family:Segoe UI,Calibri,Arial,sans-serif;color:#2A161D"><h2 style="font-size:18px;color:#7A1F3D;margin:0">Swire Hypercare: tickets with us</h2>' +
-    '<p style="font-size:11.5px;color:#8A7380;margin:2px 0 8px">Open box ' + box.length + ", with Help Desk " + hd.length + ", with Engineering " + en.length + " (" + (box.length + hd.length + en.length) + " in total). Generated " + esc(fdt(NOW)) + " IST. Filters at the top apply.</p>" +
-    sec("Open box, not triaged", box) + sec("With Help Desk", hd) + sec("With Engineering", en) + "</div>";
+  host.innerHTML = '<div style="' + F + 'color:#2A161D">' +
+    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;' + F + '"><tr><td style="vertical-align:bottom"><div style="font-size:19px;font-weight:800;color:#7A1F3D">Swire Phoenix Hypercare · status report</div>' +
+    '<div style="font-size:10.5px;color:#8A7380;margin-top:2px">' + esc(fday(NOW)) + " · position at " + esc(fdt(NOW)) + " IST · created " + esc(R.label) + (GF.type === "isr" ? " · Incident + Service Request" : GF.type === "all" ? " · all request types" : " · " + esc(GF.type)) + "</div></td>" +
+    '<td style="text-align:right;vertical-align:bottom;font-size:10px;color:#8A7380">SVM Help Desk</td></tr></table>' +
+    '<div style="height:10px"></div>' + cards +
+    H("With us, by priority") + prio +
+    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:58%;vertical-align:top;padding-right:10px">' + H("SLA breached, with us", "most overdue first") + att + "</td>" +
+    '<td style="vertical-align:top;padding-left:10px">' + H("Escalations to raise", "Section 10.2") + escT + "</td></tr></table>" +
+    '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:50%;vertical-align:top;padding-right:10px">' + H("By SVM In Charge", "with us") + bySvm + "</td>" +
+    '<td style="vertical-align:top;padding-left:10px">' + H("By engineering assignee", "with Engineering") + byEng + "</td></tr></table>" +
+    H("Ageing, with us") + ageT +
+    '<div style="break-before:page;page-break-before:always"></div>' +
+    '<div style="font-size:15px;font-weight:800;color:#7A1F3D;margin:0 0 2px">Ticket list · with us</div><div style="font-size:10px;color:#8A7380">Priority first, then oldest.</div>' +
+    list("Open box, not triaged", box) + list("With Help Desk", hd) + list("With Engineering", en) +
+    '<p style="' + F + 'font-size:9px;color:#8A7380;margin-top:14px">Generated from the Swire Hypercare module ' + esc(fdt(NOW)) + " IST. SLA as in the SLA Tracker; waiting-on-Swire tickets are counted only.</p></div>";
   document.body.appendChild(host); document.body.classList.add("printing-area");
-  const st = document.createElement("style"); st.textContent = "@page{size:A4 landscape;margin:8mm} #printArea td,#printArea th{font-size:8.5px!important;padding:3px 4px!important} #printArea tr{break-inside:avoid}"; document.head.appendChild(st);
+  const st = document.createElement("style"); st.textContent = "@page{size:A4 landscape;margin:9mm} #printArea{-webkit-print-color-adjust:exact;print-color-adjust:exact} #printArea tr{break-inside:avoid} #printArea h3{break-after:avoid}"; document.head.appendChild(st);
   const done = () => { host.remove(); st.remove(); document.body.classList.remove("printing-area"); window.removeEventListener("afterprint", done); };
   window.addEventListener("afterprint", done);
-  window.HDPrint ? HDPrint("Swire-Hypercare-tickets-with-us_" + HC.dayKey(NOW)) : window.print(); setTimeout(done, 3000);
+  window.HDPrint ? HDPrint("Swire-Hypercare-status-report_" + HC.dayKey(NOW)) : window.print(); setTimeout(done, 3000);
 }
 function printEngg(list) {
   const x = enggMail(list.slice(), ""), host = document.createElement("div"); host.id = "printArea";
