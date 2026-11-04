@@ -732,9 +732,150 @@
     paint(); q("pmTo").focus();
   }
 
+  /* ═══ SLA window (like the Swire SLA tab) and the PDF status report, for every client ═══
+     SLA comes from the SLA Tracker (HDSlaLink), the same numbers the rest of the Follow-up Tracker shows. */
+  function slaX(t) { try { return window.HDSlaLink ? window.HDSlaLink.get(t.r) || {} : {}; } catch (e) { return {}; } }
+  function slaB(t) { var x = slaX(t); if (!x || !x.state) return "nodata";
+    if (x.state === "breached") return "breached"; if (x.state === "missed") return "missed"; if (x.state === "met") return "met"; if (x.state === "paused") return "paused";
+    if (["nohist", "none", "na", "loading"].indexOf(x.state) > -1) return "nodata"; return x.atRisk ? "risk" : "ontrack"; }
+  var SLA_OPEN = [["breached", "Breached", "#D7263D"], ["risk", "About to breach", "#C2680A"], ["ontrack", "Not yet breached", "#15803D"], ["paused", "Paused, with client", "#64748B"], ["nodata", "No SLA data", "#94A3B8"]];
+  var SLA_CLOSED = [["met", "Met", "#15803D"], ["missed", "Missed", "#D7263D"], ["nodata", "No SLA data yet", "#94A3B8"]];
+  var slaLbl = function (t) { return slaX(t).label || "—"; };
+  var overBy = function (t) { return slaX(t).overByMin || 0; };
+  function openSla(open, all) {
+    var m = modal(), S = { st: "", cl: "", list: null, title: "" };
+    var openT = open.map(T), closedT = (all || []).map(T).filter(function (t) { return side(t) === "closed"; });
+    function paint() {
+      var ok = function (t) { return (!S.st || (t.status || "(blank)") === S.st) && (!S.cl || t.project === S.cl); };
+      var stC = {}, clC = {}; openT.concat(closedT).forEach(function (t) { var k = t.status || "(blank)"; stC[k] = (stC[k] || 0) + 1; clC[t.project] = (clC[t.project] || 0) + 1; });
+      var op = openT.filter(ok), cl = closedT.filter(ok);
+      var sel = function (id, lbl, cnt, val) { var ks = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a] || a.localeCompare(b); });
+        return '<label class="hdx-note" style="display:flex;align-items:center;gap:6px;font-weight:700">' + lbl + '<select class="hdx-inp" data-sf="' + id + '" style="max-width:260px"><option value="">All (' + ks.reduce(function (m2, k) { return m2 + cnt[k]; }, 0).toLocaleString() + ")</option>" +
+          ks.map(function (k) { return '<option value="' + esc(k) + '"' + (k === val ? " selected" : "") + ">" + esc(k) + " (" + cnt[k].toLocaleString() + ")</option>"; }).join("") + "</select></label>"; };
+      var by = function (l, k) { return l.filter(function (t) { return slaB(t) === k; }); };
+      var tile = function (c, n, l, sub) { return '<button type="button" class="hdx-card" style="--c:' + c + '" data-sl="' + esc(n) + '"' + (l.length ? "" : " disabled") + '><div class="v">' + l.length.toLocaleString() + '</div><div class="t">' + esc(n) + '</div><div class="d">' + esc(sub) + "</div></button>"; };
+      var o1 = Math.max(1, op.length), dec = by(cl, "met").length + by(cl, "missed").length;
+      LST = {};
+      var reg = function (n, l) { LST[n] = l; return n; };
+      var body;
+      if (S.list) {
+        var L = S.list.slice().sort(function (a, b) { return overBy(b) - overBy(a) || bySevAge(a, b); });
+        body = '<div class="hdx-crumb"><button type="button" class="hdx-lnk" data-sb>‹ Back to SLA</button> <b>' + esc(S.title) + "</b> · " + L.length + "</div>" +
+          '<div class="hdx-tw"><table><thead><tr><th>Ticket</th><th>Client</th><th>Priority</th><th>Summary</th><th>Status</th><th>SLA</th><th>Age</th><th>Sitting with</th><th>SVM In Charge</th><th>LRPS · assignee</th></tr></thead><tbody>' +
+          L.map(function (t) { var b = slaB(t); return '<tr><td><a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a></td><td>" + esc(t.project) + "</td><td>" + esc(t.priority || "—") + '</td><td style="min-width:240px">' + esc(t.summary) +
+            '</td><td><span class="hdx-st">' + esc(t.status) + '</span></td><td style="white-space:nowrap;' + (b === "breached" || b === "missed" ? "color:#BE123C;font-weight:700" : b === "risk" ? "color:#C2680A;font-weight:700" : "") + '" title="' + esc(slaX(t).tip || "") + '">' + esc(slaLbl(t)) + "</td><td>" + esc(fmt(ageMin(t))) + "</td><td>" + esc(holder(t)) + "</td><td>" + esc(t.svm || "—") + "</td><td>" +
+            (t.lrps.length ? t.lrps.map(function (k) { return esc(k) + (LRPS[k] && LRPS[k].a ? " · " + esc(LRPS[k].a) : ""); }).join("<br>") : "—") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+      } else {
+        var dl = function (l, n) { return l.length ? '<button type="button" class="hdx-lnk" data-sl="' + esc(reg(n, l) ) + '">' + l.length + "</button>" : '<span class="hdx-dim">·</span>'; };
+        SLA_OPEN.forEach(function (c) { reg(c[1], by(op, c[0])); }); reg("Met", by(cl, "met")); reg("Missed", by(cl, "missed")); reg("No SLA data yet", by(cl, "nodata"));
+        var prRows = SEVS.map(function (s) { var o = op.filter(function (t) { return t.sev === s.id; }), c = cl.filter(function (t) { return t.sev === s.id; });
+          return "<tr><td><b>" + esc(s.name) + "</b></td>" + SLA_OPEN.map(function (k) { return '<td class="hdx-num">' + dl(by(o, k[0]), s.name + ", open, " + k[1]) + "</td>"; }).join("") +
+            '<td class="hdx-num">' + dl(by(c, "met"), s.name + ", met") + '</td><td class="hdx-num">' + dl(by(c, "missed"), s.name + ", missed") + "</td></tr>"; }).join("");
+        var clN = uniqClients(op).map(function (x) { return x[0]; });
+        var clRows = clN.map(function (n) { var o = op.filter(function (t) { return t.project === n; }), br = by(o, "breached");
+          return "<tr><td>" + esc(n) + '</td><td class="hdx-num"><b>' + o.length + '</b></td><td class="hdx-num" style="color:#BE123C">' + dl(br, n + ", breached") + '</td><td class="hdx-num">' + dl(by(o, "risk"), n + ", about to breach") + '</td><td class="hdx-num">' + dl(by(o, "ontrack"), n + ", not yet breached") +
+            '</td><td class="hdx-num">' + dl(by(o, "paused"), n + ", paused") + '</td><td class="hdx-num">' + (o.length ? Math.round(br.length / o.length * 100) + "%" : "·") + "</td></tr>"; }).join("");
+        var brL = by(op, "breached").slice().sort(function (a, b) { return overBy(b) - overBy(a); });
+        body = '<div class="hdx-note" style="margin:2px 0 6px;font-weight:700;color:#334155">Open tickets (' + op.length.toLocaleString() + ")</div>" +
+          '<div class="hdx-cards">' + SLA_OPEN.map(function (c) { var l = by(op, c[0]); return tile(c[2], c[1], l, Math.round(l.length / o1 * 100) + "% of open"); }).join("") + "</div>" +
+          '<div class="hdx-note" style="margin:14px 0 6px;font-weight:700;color:#334155">Closed tickets (' + cl.length.toLocaleString() + ")</div>" +
+          '<div class="hdx-cards">' + tile("#15803D", "Met", by(cl, "met"), dec ? Math.round(by(cl, "met").length / dec * 100) + "% of closed with SLA data" : "") + tile("#D7263D", "Missed", by(cl, "missed"), dec ? Math.round(by(cl, "missed").length / dec * 100) + "% of closed with SLA data" : "") +
+            tile("#94A3B8", "No SLA data yet", by(cl, "nodata"), "history not read yet") + "</div>" +
+          '<div class="hdx-note" style="margin:16px 0 6px;font-weight:700;color:#334155">By priority</div><div class="hdx-tw"><table><thead><tr><th>Priority</th>' + SLA_OPEN.map(function (k) { return '<th class="hdx-num">Open: ' + esc(k[1]) + "</th>"; }).join("") + '<th class="hdx-num">Closed: met</th><th class="hdx-num">Closed: missed</th></tr></thead><tbody>' + prRows + "</tbody></table></div>" +
+          '<div class="hdx-note" style="margin:16px 0 6px;font-weight:700;color:#334155">By client, open</div><div class="hdx-tw"><table><thead><tr><th>Client</th><th class="hdx-num">Open</th><th class="hdx-num">Breached</th><th class="hdx-num">About to breach</th><th class="hdx-num">Not yet breached</th><th class="hdx-num">Paused</th><th class="hdx-num">Breached %</th></tr></thead><tbody>' + (clRows || '<tr><td colspan="7" class="hdx-dim">No open tickets.</td></tr>') + "</tbody></table></div>" +
+          '<div class="hdx-note" style="margin:16px 0 6px;font-weight:700;color:#334155">Breached, most overdue first (' + brL.length + ')</div><div class="hdx-tw"><table><thead><tr><th>Ticket</th><th>Client</th><th>Priority</th><th>Summary</th><th>Status</th><th>SLA</th><th>Sitting with</th></tr></thead><tbody>' +
+          (brL.slice(0, 60).map(function (t) { return '<tr><td><a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a></td><td>" + esc(t.project) + "</td><td>" + esc(t.priority || "—") + '</td><td style="min-width:240px">' + esc(t.summary) + '</td><td><span class="hdx-st">' + esc(t.status) + '</span></td><td style="color:#BE123C;font-weight:700;white-space:nowrap">' + esc(slaLbl(t)) + "</td><td>" + esc(holder(t)) + "</td></tr>"; }).join("") || '<tr><td colspan="7" class="hdx-dim">None.</td></tr>') + "</tbody></table></div>";
+      }
+      m.box.innerHTML = '<div class="hdx-hd"><h3>SLA' + (S.st || S.cl ? '<span class="n">' + esc([S.cl, S.st].filter(Boolean).join(" · ")) + "</span>" : "") + "</h3>" + sel("cl", "Client", clC, S.cl) + sel("st", "Status", stC, S.st) +
+        (S.st || S.cl ? '<button type="button" class="hdx-btn sm" data-sx>Clear</button>' : "") + '<button type="button" class="hdx-btn" data-sc>Close</button></div>' +
+        '<p class="hdx-sub">Every ticket in the header filters, including those waiting on the client. Same numbers as the SLA Tracker: its targets and working calendar, and the clock pauses while the client has the ticket. Every number opens its tickets.</p>' + body;
+    }
+    var LST = {};
+    m.box.addEventListener("change", function (e) { var x = e.target.closest("[data-sf]"); if (!x) return; S[x.dataset.sf] = x.value; S.list = null; paint(); });
+    m.box.addEventListener("click", function (e) { var b = e.target.closest("[data-sl],[data-sb],[data-sx],[data-sc]"); if (!b) return;
+      if (b.hasAttribute("data-sc")) return m.close(); if (b.hasAttribute("data-sx")) { S.st = S.cl = ""; S.list = null; return paint(); }
+      if (b.hasAttribute("data-sb")) { S.list = null; return paint(); }
+      var n = b.dataset.sl; if (LST[n]) { S.list = LST[n]; S.title = n; paint(); } });
+    m.onEsc = function () { if (S.list) { S.list = null; paint(); return true; } return false; };
+    m._chg = function () { paint(); }; window.addEventListener("hdx-change", m._chg);
+    var un = window.HDSlaLink && window.HDSlaLink.subscribe ? window.HDSlaLink.subscribe(function () { if (document.body.contains(m.ov)) paint(); else if (un) un(); }) : null;
+    paint();
+  }
+
+  /* ── PDF status report: one page of counts, charts and who-has-what, then the ticket list of everything with us ── */
+  function printReport(open, all) {
+    var ts = open.map(T), hd = ts.filter(function (t) { return side(t) === "hd"; }).sort(bySevAge), en = ts.filter(function (t) { return side(t) === "engg"; }).sort(bySevAge);
+    var us = hd.concat(en), cli = ts.filter(function (t) { return side(t) === "client"; }), hold = ts.filter(function (t) { return side(t) === "hold"; });
+    var Fp = "font-family:Segoe UI,Calibri,Arial,sans-serif;", Bd = "1pt solid #C9D4E1";
+    var C = "border:" + Bd + ";padding:5px 7px;vertical-align:top;font-size:10px;color:#0F1E2E;" + Fp;
+    var thp = function (h, x) { return '<th style="' + C + "background:#EEF3F9;color:#0E2A47;font-weight:700;text-align:left;white-space:nowrap;" + (x || "") + '">' + h + "</th>"; };
+    var tdp = function (h, x) { return '<td style="' + C + (x || "") + '">' + h + "</td>"; };
+    var T0 = '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;' + Fp + '">';
+    var Hh = function (t, sub) { return '<h3 style="' + Fp + 'font-size:13px;color:#0E2A47;margin:16px 0 6px;border-bottom:1.5pt solid #DCE5EF;padding-bottom:3px">' + esc(t) + (sub ? ' <span style="font-weight:400;color:#64748B;font-size:10.5px">' + esc(sub) + "</span>" : "") + "</h3>"; };
+    var sl = function (l, k) { return l.filter(function (t) { return slaB(t) === k; }).length; }, sevN = function (l, s) { return l.filter(function (t) { return t.sev === s; }).length; };
+    var oldest = function (l) { return l.reduce(function (mm, t) { return Math.max(mm, ageMin(t) || 0); }, 0); };
+    var brL = us.filter(function (t) { return slaB(t) === "breached"; }), mis = misList(open, all).list.length;
+    var card = function (v, l, sub, col) { return '<td style="border:' + Bd + ";padding:9px 10px;vertical-align:top;width:12.5%;background:" + (col ? col + "14" : "#F8FAFC") + ";" + Fp + '"><div style="font-size:20px;font-weight:800;color:' + (col || "#0F1E2E") + '">' + v + '</div><div style="font-size:10.5px;font-weight:700;margin-top:2px">' + esc(l) + '</div><div style="font-size:9px;color:#64748B;margin-top:2px">' + esc(sub || "") + "</div></td>"; };
+    var cards = T0 + "<tr>" + card(ts.length.toLocaleString(), "Open tickets", uniqClients(ts).length + " clients") + card(us.length, "With SVM", hd.length + " Help Desk · " + en.length + " Engineering", "#1D4ED8") + card(cli.length.toLocaleString(), "With client", "waiting on the client", "#B45309") +
+      card(hold.length, "On-Hold / Invoice", "", "#64748B") + card(brL.length, "SLA breached", "with SVM", "#D7263D") + card(sl(us, "risk"), "About to breach", "with SVM", "#C2680A") + card(sl(us, "ontrack"), "Not yet breached", "with SVM", "#15803D") + card(mis, "Status mismatch", "client ≠ LRPS", "#6D28D9") + "</tr></table>";
+    var prow = function (n, l, tot) { var bg = tot ? "background:#F8FAFC;" : ""; return "<tr>" + tdp(tot ? "<b>" + n + "</b>" : n, bg) + SEVS.map(function (s) { var c = sevN(l, s.id); return tdp(c || '<span style="color:#CBD5E1">0</span>', "text-align:center;" + (c ? "color:" + s.color + ";font-weight:700;" : "") + bg); }).join("") +
+      tdp("<b>" + l.length + "</b>", "text-align:center;" + bg) + tdp(sl(l, "breached") ? '<b style="color:#D7263D">' + sl(l, "breached") + "</b>" : "·", "text-align:center;" + bg) + tdp(l.length ? esc(fmt(oldest(l))) : "·", "text-align:center;" + bg) + "</tr>"; };
+    var prio = T0 + "<tr>" + thp("With SVM") + SEVS.map(function (s) { return thp(s.name, "text-align:center"); }).join("") + thp("Total", "text-align:center") + thp("SLA breached", "text-align:center") + thp("Oldest", "text-align:center") + "</tr>" + prow("Help Desk", hd) + prow("Engineering", en) + prow("Total", us, true) + "</table>";
+    /* charts */
+    var svgT = function (x, y, t, o) { o = o || {}; return '<text x="' + x + '" y="' + y + '" font-family="Segoe UI,Calibri,Arial,sans-serif" font-size="' + (o.fs || 9) + '" fill="' + (o.c || "#475569") + '"' + (o.a ? ' text-anchor="' + o.a + '"' : "") + (o.b ? ' font-weight="700"' : "") + ">" + esc(t) + "</text>"; };
+    var panel = function (title, body) { return '<td style="vertical-align:top;border:' + Bd + ';padding:8px 10px;background:#fff;width:25%"><div style="' + Fp + 'font-size:10.5px;font-weight:700;color:#0E2A47;margin-bottom:4px">' + esc(title) + "</div>" + body + "</td>"; };
+    var W = 230, parts = [["Help Desk", hd.length, "#0891B2"], ["Engineering", en.length, "#7C3AED"], ["With client", cli.length, "#D97706"], ["On-Hold / Invoice", hold.length, "#94A3B8"]], tot = Math.max(1, ts.length), x0 = 0;
+    var ch1 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + parts.map(function (p) { var w = Math.max(p[1] ? 2 : 0, p[1] / tot * W), r = '<rect x="' + x0 + '" y="4" width="' + w + '" height="16" fill="' + p[2] + '"/>'; x0 += w; return r; }).join("") +
+      parts.map(function (p, k) { return '<rect x="0" y="' + (34 + k * 19) + '" width="9" height="9" rx="2" fill="' + p[2] + '"/>' + svgT(14, 42 + k * 19, p[0]) + svgT(W, 42 + k * 19, p[1].toLocaleString() + "  (" + (p[1] && p[1] / tot * 100 < 1 ? "<1" : Math.round(p[1] / tot * 100)) + "%)", { a: "end", b: true, c: "#0F1E2E" }); }).join("") + "</svg>";
+    var slaP = [["Breached", sl(us, "breached"), "#D7263D"], ["About to breach", sl(us, "risk"), "#C2680A"], ["Not yet breached", sl(us, "ontrack"), "#15803D"], ["Paused", sl(us, "paused"), "#64748B"], ["No SLA data", sl(us, "nodata"), "#CBD5E1"]], mx2 = Math.max.apply(null, [1].concat(slaP.map(function (p) { return p[1]; })));
+    var ch2 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + slaP.map(function (p, k) { return svgT(0, 12 + k * 23, p[0]) + '<rect x="0" y="' + (15 + k * 23) + '" width="' + (W - 34) + '" height="6" rx="3" fill="#EEF2F7"/><rect x="0" y="' + (15 + k * 23) + '" width="' + Math.max(p[1] ? 3 : 0, p[1] / mx2 * (W - 34)) + '" height="6" rx="3" fill="' + p[2] + '"/>' + svgT(W, 21 + k * 23, String(p[1]), { a: "end", b: true, c: "#0F1E2E" }); }).join("") + "</svg>";
+    var ageD = function (t) { return (ageMin(t) || 0) / 1440; }, inB = function (l, b) { return l.filter(function (t) { return ageD(t) >= b[0] && ageD(t) < b[1]; }).length; };
+    var ag = AGEB.map(function (b) { return [b[2], inB(us, b), b[3]]; }), mx3 = Math.max.apply(null, [1].concat(ag.map(function (a) { return a[1]; }))), cw = W / ag.length;
+    var ch3 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + ag.map(function (a, k) { var h = a[1] / mx3 * 78; return '<rect x="' + (k * cw + 7) + '" y="' + (94 - h) + '" width="' + (cw - 14) + '" height="' + Math.max(a[1] ? 2 : 0, h) + '" rx="3" fill="' + (k ? a[2] : "#D98FA8") + '"/>' + svgT(k * cw + cw / 2, 90 - h, String(a[1]), { a: "middle", b: true, c: "#0F1E2E" }) + svgT(k * cw + cw / 2, 108, a[0].replace(" days", "d"), { a: "middle", fs: 8.5 }); }).join("") + '<line x1="0" y1="94.5" x2="' + W + '" y2="94.5" stroke="#DCE3EC"/></svg>';
+    var allT = (all || []).map(T), now = Date.now(), d0 = new Date(now + IST); d0 = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate()) - IST - 13 * DAY;
+    var days = []; for (var k = 0; k < 14; k++) days.push(d0 + k * DAY);
+    var cr = days.map(function (d) { return allT.filter(function (t) { return t.created != null && t.created >= d && t.created < d + DAY; }).length; });
+    var clD = days.map(function (d) { return allT.filter(function (t) { return side(t) === "closed" && t.updated != null && t.updated >= d && t.updated < d + DAY; }).length; });
+    var mx4 = Math.max.apply(null, [1].concat(cr, clD)), bw = W / 14;
+    var ch4 = '<svg width="' + W + '" height="124" viewBox="0 0 ' + W + ' 124">' + days.map(function (d, k) { var h1 = cr[k] / mx4 * 70, h2 = clD[k] / mx4 * 70;
+      return '<rect x="' + (k * bw + 1.5) + '" y="' + (88 - h1) + '" width="' + (bw / 2 - 2) + '" height="' + h1 + '" fill="#1D4ED8"/><rect x="' + (k * bw + bw / 2) + '" y="' + (88 - h2) + '" width="' + (bw / 2 - 2) + '" height="' + h2 + '" fill="#15803D"/>' + ((k % 4 === 0 && k < 12) || k === 13 ? svgT(k * bw + bw / 2, 101, fdate(d).replace(/ \d{2}$/, ""), { a: "middle", fs: 7.5 }) : ""); }).join("") +
+      '<line x1="0" y1="88.5" x2="' + W + '" y2="88.5" stroke="#DCE3EC"/><rect x="0" y="110" width="8" height="8" fill="#1D4ED8"/>' + svgT(12, 117.5, "Created " + cr.reduce(function (a, b) { return a + b; }, 0)) + '<rect x="110" y="110" width="8" height="8" fill="#15803D"/>' + svgT(122, 117.5, "Closed " + clD.reduce(function (a, b) { return a + b; }, 0)) + "</svg>";
+    var charts = '<div style="height:12px"></div><table class="lay" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:0 -8px"><tr>' + panel("Where the open tickets are", ch1) + panel("SLA, with SVM", ch2) + panel("Ageing, with SVM", ch3) + panel("Created vs closed, last 14 days", ch4) + "</tr></table>";
+    /* breached + by client */
+    var brTop = brL.slice().sort(function (a, b) { return overBy(b) - overBy(a); }).slice(0, 12);
+    var att = brTop.length ? T0 + "<tr>" + thp("Ticket") + thp("Client") + thp("Priority") + thp("Summary") + thp("Sitting with") + thp("SLA", "text-align:right") + "</tr>" + brTop.map(function (t) { return "<tr>" + tdp('<b style="color:#1D4ED8">' + esc(t.key) + "</b>", "white-space:nowrap") + tdp(esc(t.project), "white-space:nowrap") + tdp(esc(t.priority || "—"), "white-space:nowrap") + tdp(esc((t.summary || "").slice(0, 80))) + tdp(esc(holder(t)), "white-space:nowrap") + tdp('<b style="color:#D7263D">' + esc(slaLbl(t)) + "</b>", "white-space:nowrap;text-align:right") + "</tr>"; }).join("") + "</table>" +
+      (brL.length > 12 ? '<p style="' + Fp + 'font-size:9.5px;color:#64748B;margin:4px 0 0">and ' + (brL.length - 12) + " more in the ticket list.</p>" : "") : '<p style="' + Fp + 'font-size:10.5px;color:#15803D;margin:0">No ticket with SVM is past its SLA.</p>';
+    var clRows = uniqClients(us).slice(0, 14).map(function (c) { var l = us.filter(function (t) { return t.project === c[0]; }), h = l.filter(function (t) { return side(t) === "hd"; }).length, b = sl(l, "breached"), o = oldest(l);
+      return "<tr>" + tdp(esc(c[0]), "white-space:nowrap") + tdp(h || "·", "text-align:center") + tdp((l.length - h) || "·", "text-align:center") + tdp("<b>" + l.length + "</b>", "text-align:center") + tdp(b ? '<b style="color:#D7263D">' + b + "</b>" : "·", "text-align:center") + tdp(esc(fmt(o)), "text-align:center;white-space:nowrap;" + (o >= 30 * 1440 ? "color:#D7263D;font-weight:700" : "")) + "</tr>"; }).join("");
+    var byCl = T0 + "<tr>" + thp("Client") + thp("Help Desk", "text-align:center") + thp("Engineering", "text-align:center") + thp("Total", "text-align:center") + thp("Breached", "text-align:center") + thp("Oldest", "text-align:center") + "</tr>" + clRows + "</table>";
+    var group = function (l, f) { var g = {}; l.forEach(function (t) { var k2 = f(t) || "(none)"; (g[k2] = g[k2] || []).push(t); }); return Object.keys(g).map(function (k2) { return { k: k2, l: g[k2] }; }).sort(function (a, b) { return b.l.length - a.l.length || a.k.localeCompare(b.k); }); };
+    var whoT = function (title, rows) { return T0 + "<tr>" + thp(title) + thp("Total", "text-align:center") + thp("Breached", "text-align:center") + thp("Oldest", "text-align:center") + "</tr>" + rows.slice(0, 14).map(function (r) { var b = sl(r.l, "breached"), o = oldest(r.l);
+      return "<tr>" + tdp(esc(r.k), "white-space:nowrap") + tdp("<b>" + r.l.length + "</b>", "text-align:center") + tdp(b ? '<b style="color:#D7263D">' + b + "</b>" : "·", "text-align:center") + tdp(esc(fmt(o)), "text-align:center;white-space:nowrap;" + (o >= 30 * 1440 ? "color:#D7263D;font-weight:700" : "")) + "</tr>"; }).join("") + "</table>"; };
+    var cols = [["Ticket", function (t) { return '<b style="color:#1D4ED8;white-space:nowrap">' + esc(t.key) + "</b>"; }], ["Client", function (t) { return esc(t.project); }], ["Priority", function (t) { return '<span style="white-space:nowrap">' + esc(t.priority || "—") + "</span>"; }],
+      ["Summary", function (t) { return esc((t.summary || "").slice(0, 100)); }], ["Status", function (t) { return '<span style="white-space:nowrap">' + esc(t.status) + "</span>"; }], ["Sitting with", function (t) { return esc(holder(t)); }], ["SVM In Charge", function (t) { return esc(t.svm || "—"); }],
+      ["LRPS · assignee", function (t) { return t.lrps.length ? t.lrps.map(function (k2) { return '<span style="white-space:nowrap">' + esc(k2) + (LRPS[k2] && LRPS[k2].a ? " · " + esc(LRPS[k2].a) : "") + "</span>"; }).join("<br>") : '<span style="color:#94A3B8">—</span>'; }],
+      ["SLA", function (t) { var b = slaB(t); return '<span style="white-space:nowrap;' + (b === "breached" ? "color:#D7263D;font-weight:700" : b === "risk" ? "color:#C2680A;font-weight:700" : "") + '">' + esc(slaLbl(t)) + "</span>"; }], ["Age", function (t) { return '<span style="white-space:nowrap">' + esc(fmt(ageMin(t))) + "</span>"; }]];
+    var list = function (n, l) { return Hh(n, l.length + " ticket" + (l.length === 1 ? "" : "s") + (l.length ? " · " + sevLine(l) : "")) + (l.length ? T0 + "<tr>" + cols.map(function (c) { return thp(c[0]); }).join("") + "</tr>" + l.map(function (t, k2) { return "<tr" + (k2 % 2 ? ' style="background:#F8FAFC"' : "") + ">" + cols.map(function (c) { return tdp(c[1](t)); }).join("") + "</tr>"; }).join("") + "</table>" : '<p style="' + Fp + 'font-size:10.5px;color:#64748B;margin:0">None.</p>'); };
+    var html = '<div style="' + Fp + 'color:#0F1E2E">' +
+      '<div style="font-size:19px;font-weight:800;color:#0E2A47">Help Desk · status report</div><div style="font-size:10.5px;color:#64748B;margin-top:2px">' + esc(fdt(now)) + " IST · " + uniqClients(ts).length + " clients · the header filters apply</div>" +
+      '<div style="height:10px"></div>' + cards + Hh("With SVM, by priority") + prio + charts +
+      '<table class="lay" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:58%;vertical-align:top;padding-right:10px">' + Hh("SLA breached, with SVM", "most overdue first") + att + '</td><td style="vertical-align:top;padding-left:10px">' + Hh("By client", "with SVM") + byCl + "</td></tr></table>" +
+      '<table class="lay" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse"><tr><td style="width:50%;vertical-align:top;padding-right:10px">' + Hh("By SVM In Charge", "with SVM") + whoT("SVM In Charge", group(us, function (t) { return t.svm; })) + '</td><td style="vertical-align:top;padding-left:10px">' + Hh("By engineering assignee", "with Engineering") + (en.length ? whoT("Engineering assignee", group(en, enggWho)) : '<p style="' + Fp + 'font-size:10.5px;color:#64748B">Nothing with Engineering.</p>') + "</td></tr></table>" +
+      '<div style="break-before:page;page-break-before:always"></div><div style="font-size:15px;font-weight:800;color:#0E2A47">Ticket list · with SVM</div><div style="font-size:10px;color:#64748B">Priority first, then oldest.</div>' + list("With Help Desk", hd) + list("With Engineering", en) +
+      '<p style="' + Fp + 'font-size:9px;color:#64748B;margin-top:14px">Generated from the Follow-up Tracker ' + esc(fdt(now)) + " IST. SLA as in the SLA Tracker; tickets with the client are counted only.</p></div>";
+    var host = document.createElement("div"); host.id = "hdxPrint"; host.innerHTML = html; document.body.appendChild(host);
+    var st = document.createElement("style"); st.textContent = "#hdxPrint{display:none}@media print{@page{size:A4 landscape;margin:9mm}body>*:not(#hdxPrint){display:none!important}#hdxPrint{display:block!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}#hdxPrint tr{break-inside:avoid}#hdxPrint table.lay>tbody>tr,#hdxPrint table.lay>tr{break-inside:auto}#hdxPrint h3{break-after:avoid}}";
+    document.head.appendChild(st);
+    var oldTitle = document.title; document.title = "HD-status-report_" + dayKey(now);
+    var done = function () { host.remove(); st.remove(); document.title = oldTitle; window.removeEventListener("afterprint", done); };
+    window.addEventListener("afterprint", done); setTimeout(function () { window.print(); setTimeout(done, 4000); }, 60);
+    return html;
+  }
   window.HDX = {
     openMismatch: function (open, all) { openMismatch(open || [], all || []); },
     openHandover: function (open) { openHandover(open || []); },
+    openSla: function (open, all) { openSla(open || [], all || []); },
+    printReport: function (open, all) { return printReport(open || [], all || []); },
     misCount: function (open, all) { return misList(open || [], all || []).list.length; },
     refreshLrps: function (rows) { return lrpsRefresh(rows || [], false); },
     bridgeOn: bridgeOn,
@@ -3495,6 +3636,15 @@ function App(){
         {window.HDX&&<button onClick={function(){window.HDX.openHandover(flt);}} title="Handover email + Excel for everything pending with SVM"
           style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
           <span style={{fontSize:13}}>📨</span> Handover
+        </button>}
+
+        {window.HDX&&window.HDX.openSla&&<button onClick={function(){window.HDX.openSla(flt,allFiltered);}} title="SLA for the tickets in view: breached, about to breach, met and missed, by priority and client"
+          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{fontSize:13}}>⏱</span> SLA
+        </button>}
+        {window.HDX&&window.HDX.printReport&&<button onClick={function(){window.HDX.printReport(flt,allFiltered);}} title="PDF status report: counts, charts, SLA, who has what, and the ticket list"
+          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{fontSize:13}}>📄</span> PDF
         </button>}
 
         {/* Global search trigger — compact */}
