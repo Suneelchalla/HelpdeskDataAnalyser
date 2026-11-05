@@ -1900,8 +1900,11 @@ function teamsData() {
   const st = {}; en.forEach((i) => { const k = T[i].status || "(blank)"; (st[k] = st[k] || []).push(i); });
   const sts = Object.keys(st).map((k) => ({ k, l: st[k] })).sort((a, b) => b.l.length - a.l.length || a.k.localeCompare(b.k));
   const hot = en.filter((i) => T[i].sev === "showstopper" || T[i].sev === "critical");
-  return { en, who, sts, hot, at: NOW };
+  const sg = {}; en.forEach((i) => { const w = T[i].svm || "(no SVM In Charge)"; (sg[w] = sg[w] || []).push(i); });
+  const svm = Object.keys(sg).map((w) => ({ w, l: sg[w], old: sg[w].reduce((m, i) => Math.max(m, ageOf(T[i]) || 0), 0) })).sort((a, b) => b.l.length - a.l.length || b.old - a.old || a.w.localeCompare(b.w));
+  return { en, who, svm, sts, hot, at: NOW };
 }
+const teamsHello = (ms) => { const h = HC.ist(ms).min / 60; return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 function teamsHTML(x, note) {
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"';
   const C = "border:1.5pt solid #C7AEB9;padding:6px 10px;font-size:12.5px;color:#2A161D;vertical-align:top;" + F;
@@ -1915,27 +1918,29 @@ function teamsHTML(x, note) {
   const t1 = tbl(W1) + "<tr>" + th("Status", 230, "left") + SV.map((s) => th(s.name, 85)).join("") + th("Total", 70) + "</tr>" +
     x.sts.map((r) => "<tr>" + td(esc(r.k), "left") + cells(r.l) + td("<b>" + r.l.length + "</b>") + "</tr>").join("") +
     '<tr style="background:#FBF7F9">' + td("<b>Total</b>", "left") + cells(x.en, true) + td("<b>" + x.en.length + "</b>") + "</tr></table>";
+  const t3 = tbl(W2) + "<tr>" + th("SVM In Charge", 230, "left") + SV.map((s) => th(s.name, 85)).join("") + th("Total", 70) + th("Oldest", 90) + "</tr>" +
+    x.svm.map((r) => "<tr>" + td(esc(r.w), "left", "white-space:nowrap") + cells(r.l) + td("<b>" + r.l.length + "</b>") + td(esc(fmt(r.old)), "center", "white-space:nowrap;" + (r.old >= 30 * 1440 ? "color:#C8102E;font-weight:700" : "")) + "</tr>").join("") + "</table>";
   const t2 = tbl(W2) + "<tr>" + th("Engineering assignee", 230, "left") + SV.map((s) => th(s.name, 85)).join("") + th("Total", 70) + th("Oldest", 90) + "</tr>" +
     x.who.map((r) => "<tr>" + td(esc(r.w), "left", "white-space:nowrap") + cells(r.l) + td("<b>" + r.l.length + "</b>") + td(esc(fmt(r.old)), "center", "white-space:nowrap;" + (r.old >= 30 * 1440 ? "color:#C8102E;font-weight:700" : "")) + "</tr>").join("") + "</table>";
   const sl = HC.SEVS.filter((s) => cnt(x.en, s.id)).map((s) => cnt(x.en, s.id) + " " + s.name).join(", ");
   const nt = (note || "").trim();
   return '<div style="' + F + 'color:#2A161D">' +
-    "<p " + P + ">Hi team,</p>" + gap(4) +
-    "<p " + P + ">Engineering outstanding on Swire Phoenix Hypercare, as at <b>" + esc(fdt(x.at)) + " IST</b>: <b>" + x.en.length + "</b> ticket" + (x.en.length === 1 ? "" : "s") + (sl ? " (" + esc(sl) + ")" : "") + ".</p>" +
-    (x.hot.length ? "<p " + P + '><b style="color:#C8102E">Showstopper/Critical:</b> ' + x.hot.map((i) => "<b>" + esc(T[i].key) + "</b> (" + esc(lrpsWho(i)) + ")").join(", ") + ".</p>" : "") +
+    "<p " + P + ">" + teamsHello(x.at) + " team,</p>" + gap(4) +
+    "<p " + P + ">Here’s a quick look at what’s with Engineering on Swire Phoenix Hypercare as of <b>" + esc(fdt(x.at)) + " IST</b>: <b>" + x.en.length + "</b> open ticket" + (x.en.length === 1 ? "" : "s") + (sl ? " (" + esc(sl) + ")" : "") + ".</p>" +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + gap(6) +
     '<p style="' + F + 'font-size:14px;font-weight:700;color:#5C1730;margin:0 0 6px">By status</p>' + t1 + gap(12) +
+    '<p style="' + F + 'font-size:14px;font-weight:700;color:#5C1730;margin:0 0 6px">By SVM In Charge</p>' + t3 + gap(12) +
     '<p style="' + F + 'font-size:14px;font-weight:700;color:#5C1730;margin:0 0 6px">By engineering assignee</p>' + t2 + gap(12) +
-    "<p " + P + "><b>Please check your tickets and update each one with the next step and an ETR.</b> The full list is in the attached Excel.</p></div>";
+    "<p " + P + ">Could you please take a look at your tickets and update each one with the next step and an ETR? The full list is in the attached Excel.</p><p " + P + ">Thanks!</p></div>";
 }
 function teamsText(x, note) {
   const sl = (l) => HC.SEVS.filter((s) => l.some((i) => T[i].sev === s.id)).map((s) => l.filter((i) => T[i].sev === s.id).length + " " + s.name).join(", ");
   const nt = (note || "").trim();
-  return "Hi team,\n\nEngineering outstanding on Swire Phoenix Hypercare, as at " + fdt(x.at) + " IST: " + x.en.length + " tickets" + (x.en.length ? " (" + sl(x.en) + ")" : "") + "." +
-    (x.hot.length ? "\nShowstopper/Critical: " + x.hot.map((i) => T[i].key + " (" + lrpsWho(i) + ")").join(", ") + "." : "") + (nt ? "\n\n" + nt : "") +
+  return teamsHello(x.at) + " team,\n\nHere’s a quick look at what’s with Engineering on Swire Phoenix Hypercare as of " + fdt(x.at) + " IST: " + x.en.length + " open ticket" + (x.en.length === 1 ? "" : "s") + (x.en.length ? " (" + sl(x.en) + ")" : "") + "." + (nt ? "\n\n" + nt : "") +
     "\n\nBy status:\n" + x.sts.map((r) => "- " + r.k + ": " + r.l.length).join("\n") +
+    "\n\nBy SVM In Charge:\n" + x.svm.map((r) => "- " + r.w + ": " + r.l.length + " (" + sl(r.l) + "), oldest " + fmt(r.old)).join("\n") +
     "\n\nBy engineering assignee:\n" + x.who.map((r) => "- " + r.w + ": " + r.l.length + " (" + sl(r.l) + "), oldest " + fmt(r.old)).join("\n") +
-    "\n\nPlease check your tickets and update each one with the next step and an ETR. The full list is in the attached Excel.";
+    "\n\nCould you please take a look at your tickets and update each one with the next step and an ETR? The full list is in the attached Excel.\n\nThanks!";
 }
 async function teamsWorkbook(x) {
   const S = XL.S, D = XL.date, SEV = HC.SEVS.map((s) => s.name), rows = [];
@@ -1952,7 +1957,8 @@ async function teamsWorkbook(x) {
     push(tr);
   };
   pv("1. Engineering outstanding by status × priority", "Status", x.sts);
-  pv("2. Engineering outstanding by engineering assignee × priority", "Engineering assignee", x.who.map((r) => ({ k: r.w, l: r.l })));
+  pv("2. Engineering outstanding by SVM In Charge × priority", "SVM In Charge", x.svm.map((r) => ({ k: r.w, l: r.l })));
+  pv("3. Engineering outstanding by engineering assignee × priority", "Engineering assignee", x.who.map((r) => ({ k: r.w, l: r.l })));
   const HEAD = [["Engineering assignee", 24], ["Ticket", 15], ["Type", 11], ["Priority", 11], ["Summary", 52], ["ME ID", 10], ["Status", 24], ["LRPS", 14], ["LRPS status", 20], ["SVM In Charge", 18], ["Module", 16], ["Created", 17], ["Updated", 17], ["Age (days)", 9], ["Not updated (days)", 11]];
   const out = [HEAD.map((h) => ({ v: h[0], s: S.head }))];
   x.who.forEach((g, k) => { if (k) out.push([]);
