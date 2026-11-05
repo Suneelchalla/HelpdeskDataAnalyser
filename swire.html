@@ -1905,42 +1905,20 @@ function teamsData() {
   return { en, who, svm, sts, hot, at: NOW };
 }
 const teamsHello = (ms) => { const h = HC.ist(ms).min / 60; return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
+/* the Teams post: one short line; the counts by status, SVM In Charge and engineering assignee are in the attached Excel */
+function teamsLine(x) {
+  const sl = HC.SEVS.filter((s) => x.en.some((i) => T[i].sev === s.id)).map((s) => x.en.filter((i) => T[i].sev === s.id).length + " " + s.name).join(", ");
+  return { when: fdt(x.at) + " IST", n: x.en.length, word: "open ticket" + (x.en.length === 1 ? "" : "s"), sl };
+}
 function teamsHTML(x, note) {
-  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"';
-  const C = "border:1.5pt solid #C7AEB9;padding:6px 10px;font-size:12.5px;color:#2A161D;vertical-align:top;" + F;
-  const th = (h, w, al) => '<th width="' + w + '" style="' + C + "width:" + w + "px;background:#F7EEF2;color:#5C1730;font-weight:700;white-space:nowrap;text-align:" + (al || "center") + '">' + h + "</th>";
-  const td = (h, al, x2) => '<td style="' + C + "text-align:" + (al || "center") + ";" + (x2 || "") + '">' + h + "</td>";
-  const tbl = (w) => '<table width="' + w + '" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;width:' + w + "px;" + F + '">';
-  const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
-  const SV = HC.SEVS.filter((s) => x.en.some((i) => T[i].sev === s.id)), cnt = (l, s) => l.filter((i) => T[i].sev === s).length;
-  const cells = (l, bold) => SV.map((s) => { const c = cnt(l, s.id); return td(c ? (bold ? "<b>" + c + "</b>" : c) : '<span style="color:#C9B7BF">·</span>', "center", c ? "color:" + s.color + ";font-weight:700" : ""); }).join("");
-  const W1 = 230 + SV.length * 85 + 70, W2 = 230 + SV.length * 85 + 70 + 90;
-  const t1 = tbl(W1) + "<tr>" + th("Status", 230, "left") + SV.map((s) => th(s.name, 85)).join("") + th("Total", 70) + "</tr>" +
-    x.sts.map((r) => "<tr>" + td(esc(r.k), "left") + cells(r.l) + td("<b>" + r.l.length + "</b>") + "</tr>").join("") +
-    '<tr style="background:#FBF7F9">' + td("<b>Total</b>", "left") + cells(x.en, true) + td("<b>" + x.en.length + "</b>") + "</tr></table>";
-  const t3 = tbl(W2) + "<tr>" + th("SVM In Charge", 230, "left") + SV.map((s) => th(s.name, 85)).join("") + th("Total", 70) + th("Oldest", 90) + "</tr>" +
-    x.svm.map((r) => "<tr>" + td(esc(r.w), "left", "white-space:nowrap") + cells(r.l) + td("<b>" + r.l.length + "</b>") + td(esc(fmt(r.old)), "center", "white-space:nowrap;" + (r.old >= 30 * 1440 ? "color:#C8102E;font-weight:700" : "")) + "</tr>").join("") + "</table>";
-  const t2 = tbl(W2) + "<tr>" + th("Engineering assignee", 230, "left") + SV.map((s) => th(s.name, 85)).join("") + th("Total", 70) + th("Oldest", 90) + "</tr>" +
-    x.who.map((r) => "<tr>" + td(esc(r.w), "left", "white-space:nowrap") + cells(r.l) + td("<b>" + r.l.length + "</b>") + td(esc(fmt(r.old)), "center", "white-space:nowrap;" + (r.old >= 30 * 1440 ? "color:#C8102E;font-weight:700" : "")) + "</tr>").join("") + "</table>";
-  const sl = HC.SEVS.filter((s) => cnt(x.en, s.id)).map((s) => cnt(x.en, s.id) + " " + s.name).join(", ");
-  const nt = (note || "").trim();
-  return '<div style="' + F + 'color:#2A161D">' +
-    "<p " + P + ">" + teamsHello(x.at) + " team,</p>" + gap(4) +
-    "<p " + P + ">Here’s a quick look at what’s with Engineering on Swire Phoenix Hypercare as of <b>" + esc(fdt(x.at)) + " IST</b>: <b>" + x.en.length + "</b> open ticket" + (x.en.length === 1 ? "" : "s") + (sl ? " (" + esc(sl) + ")" : "") + ".</p>" +
-    (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + gap(6) +
-    '<p style="' + F + 'font-size:14px;font-weight:700;color:#5C1730;margin:0 0 6px">By status</p>' + t1 + gap(12) +
-    '<p style="' + F + 'font-size:14px;font-weight:700;color:#5C1730;margin:0 0 6px">By SVM In Charge</p>' + t3 + gap(12) +
-    '<p style="' + F + 'font-size:14px;font-weight:700;color:#5C1730;margin:0 0 6px">By engineering assignee</p>' + t2 + gap(12) +
-    "<p " + P + ">Could you please take a look at your tickets and update each one with the next step and an ETR? The full list is in the attached Excel.</p><p " + P + ">Thanks!</p></div>";
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"', L = teamsLine(x), nt = (note || "").trim();
+  return '<div style="' + F + 'color:#2A161D"><p ' + P + ">Hi Everyone - Here’s a quick look at what’s with Engineering on Swire Phoenix Hypercare as of <b>" + esc(L.when) + ":</b> <b>" + L.n + "</b> " + L.word + (L.sl ? " (" + esc(L.sl) + ")" : "") +
+    ". Could you please take a look at your tickets and update. The full list is in the attached Excel.</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + "</div>";
 }
 function teamsText(x, note) {
-  const sl = (l) => HC.SEVS.filter((s) => l.some((i) => T[i].sev === s.id)).map((s) => l.filter((i) => T[i].sev === s.id).length + " " + s.name).join(", ");
-  const nt = (note || "").trim();
-  return teamsHello(x.at) + " team,\n\nHere’s a quick look at what’s with Engineering on Swire Phoenix Hypercare as of " + fdt(x.at) + " IST: " + x.en.length + " open ticket" + (x.en.length === 1 ? "" : "s") + (x.en.length ? " (" + sl(x.en) + ")" : "") + "." + (nt ? "\n\n" + nt : "") +
-    "\n\nBy status:\n" + x.sts.map((r) => "- " + r.k + ": " + r.l.length).join("\n") +
-    "\n\nBy SVM In Charge:\n" + x.svm.map((r) => "- " + r.w + ": " + r.l.length + " (" + sl(r.l) + "), oldest " + fmt(r.old)).join("\n") +
-    "\n\nBy engineering assignee:\n" + x.who.map((r) => "- " + r.w + ": " + r.l.length + " (" + sl(r.l) + "), oldest " + fmt(r.old)).join("\n") +
-    "\n\nCould you please take a look at your tickets and update each one with the next step and an ETR? The full list is in the attached Excel.\n\nThanks!";
+  const L = teamsLine(x), nt = (note || "").trim();
+  return "Hi Everyone - Here’s a quick look at what’s with Engineering on Swire Phoenix Hypercare as of " + L.when + ": " + L.n + " " + L.word + (L.sl ? " (" + L.sl + ")" : "") +
+    ". Could you please take a look at your tickets and update. The full list is in the attached Excel." + (nt ? "\n\n" + nt : "");
 }
 async function teamsWorkbook(x) {
   const S = XL.S, D = XL.date, SEV = HC.SEVS.map((s) => s.name), rows = [];
@@ -1974,10 +1952,10 @@ async function teamsWorkbook(x) {
 function viewTeams(bar) {
   const x = teamsData();
   return bar + "<h2>Teams message: Engineering outstanding</h2><p class=\"sub\">A short post for the night-shift Teams group, position at " + esc(fdt(NOW)) +
-    " IST: what is with Engineering, by status and by engineering assignee. <b>Copy message</b> and paste it into the Teams chat, then attach the Excel from <b>Download Excel</b> (the tickets grouped by engineering assignee).</p>" +
+    " IST: one line with the Engineering count. <b>Copy message</b> and paste it into the Teams chat, then attach the Excel from <b>Download Excel</b> (the counts by status, SVM In Charge and engineering assignee, and the tickets grouped by engineering assignee).</p>" +
     '<div class="signals noprint">' + sigL("eng", x.en, "With Engineering", sevLine((() => { const o = {}; HC.SEVS.forEach((s) => { o[s.id] = x.en.filter((i) => T[i].sev === s.id).length; }); return o; })()), "Engineering outstanding", "svmby") +
       sigL(x.hot.length ? "cr" : "", x.hot, "Showstopper/Critical", "with Engineering", "Showstopper/Critical, with Engineering") + "</div>" +
-    '<div class="panel noprint"><div class="setrow" style="grid-template-columns:130px 1fr;align-items:start;margin:0"><label for="tmNote">Note</label><textarea class="inp" id="tmNote" rows="2" placeholder="Optional, shown under the count">' + esc(UI.tmNote || "") + "</textarea></div></div>" +
+    '<div class="panel noprint"><div class="setrow" style="grid-template-columns:130px 1fr;align-items:start;margin:0"><label for="tmNote">Note</label><textarea class="inp" id="tmNote" rows="2" placeholder="Optional, added under the message">' + esc(UI.tmNote || "") + "</textarea></div></div>" +
     '<div class="sec-h noprint">Message preview</div><div class="report" id="tmPreview" style="overflow-x:auto">' + teamsHTML(x, UI.tmNote) + "</div>";
 }
 function viewHandover() {
