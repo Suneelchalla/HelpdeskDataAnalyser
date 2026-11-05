@@ -327,6 +327,10 @@ tbody tr:hover td{background:#FCF3F6}
 table.steps{table-layout:auto}table.steps th,table.steps td{font-size:12px;padding:6px 7px}
 table.steps td:first-child{min-width:110px}table.steps td.nw{white-space:normal;min-width:120px}table.steps td.num{white-space:nowrap}table.steps tr.inst td{color:var(--faint)}table.steps tr.inst td b{font-weight:500}
 .nw{white-space:nowrap}.ncl{white-space:nowrap}
+.fl-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}.fl-grid .panel{margin:0}@media(max-width:1000px){.fl-grid{grid-template-columns:1fr}}
+.fl-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:8px 0 12px}
+.fl-chip{border:1px solid var(--line2);border-radius:12px;background:#fff;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.fl-chip b{font-size:20px;font-weight:800;line-height:1.1}.fl-chip span{font-size:12px;font-weight:700;color:var(--ink)}.fl-chip em{font-style:normal;font-size:11px;color:var(--muted)}
 .tiles.five{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
 .tiles.six{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 .tiles.shift4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
@@ -837,7 +841,7 @@ function paintChips(lrpsMsg) {
 }
 
 /* ── tabs ── */
-const TABS = [["now", "Now"], ["openbox", "Open box"], ["work", "Workload"], ["sla", "SLA"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["move", "Movement"], ["rel", "Releases"], ["analytics", "Analytics"], ["handover", "Shift handover"], ["weekly", "Weekly report"], ["setup", "Master data"]];
+const TABS = [["now", "Now"], ["openbox", "Open box"], ["handover", "Shift handover"], ["sla", "SLA"], ["esc", "Escalations"], ["rules", "Rule checks"], ["queue", "All open"], ["move", "Movement"], ["rel", "Releases"], ["analytics", "Analytics"], ["work", "Workload"], ["weekly", "Weekly report"], ["setup", "Master data"]];
 const TAB_IC = {
   now: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', openbox: '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/>', work: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.2 3.2 0 0 1 0 6.3M18 14c2 .8 3 3 3 6"/>',
   esc: '<path d="M12 19V5M5 12l7-7 7 7"/>', sla: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>', rel: '<path d="M12 2l3 6 6 .9-4.5 4.3 1 6.3L12 16.5 6.5 19.5l1-6.3L3 8.9 9 8z"/>', move: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>', rules: '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>', queue: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
@@ -981,11 +985,57 @@ function personTable(title, idx, keyOf, note) {
   return '<div class="panel"><div class="sec-h" style="margin-top:0">' + esc(title) + ' <span class="dim">' + dl(idx, title) + "</span></div>" + (note ? '<p class="sub" style="margin-bottom:8px">' + esc(note) + "</p>" : "") +
     (names.length ? '<div class="tw"><table><thead><tr><th>Name</th><th>Total</th>' + S.map((x) => "<th>" + esc(x.name) + "</th>").join("") + "<th>Oldest</th></tr></thead><tbody>" + body + "</tbody></table></div>" : '<div class="empty">Nothing pending.</div>') + "</div>";
 }
+/* ══ Workload: ticket flow. When tickets arrive (hour of day, day of week) and what comes in vs goes out, from the tickets in
+   the filters. Times are IST. Every bar and cell opens its tickets. ══ */
+function flowHTML() {
+  const W = 560, ist = (ms) => new Date(ms + 330 * MIN), withC = T.map((t, i) => i).filter((i) => T[i].created != null);
+  const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], dowOf = (ms) => (ist(ms).getUTCDay() + 6) % 7, hrOf = (ms) => ist(ms).getUTCHours();
+  const svgT = (x, y, t, o) => { o = o || {}; return '<text x="' + x + '" y="' + y + '" font-size="' + (o.fs || 10) + '" fill="' + (o.c || "var(--muted)") + '"' + (o.a ? ' text-anchor="' + o.a + '"' : "") + (o.b ? ' font-weight="700"' : "") + ">" + esc(t) + "</text>"; };
+  const link = (idx, title, inner) => idx.length ? '<a href="#" data-list="' + reg(idx, title) + '" style="cursor:pointer">' + inner + "</a>" : inner;
+  /* 1. arrivals by hour of day */
+  const byH = Array.from({ length: 24 }, () => []); withC.forEach((i) => byH[hrOf(T[i].created)].push(i));
+  const mxH = Math.max(1, ...byH.map((l) => l.length)), peak = byH.reduce((b, l, h) => (l.length > byH[b].length ? h : b), 0), bw = W / 24;
+  const h2 = (h) => String(h).padStart(2, "0") + ":00";
+  const hours = '<svg viewBox="0 0 ' + W + ' 150" width="100%" role="img" aria-label="Tickets created by hour of day">' +
+    byH.map((l, h) => { const hh = l.length / mxH * 100; return link(l, "Created " + h2(h) + "–" + h2((h + 1) % 24) + " IST", '<rect x="' + (h * bw + 2) + '" y="' + (112 - hh) + '" width="' + (bw - 4) + '" height="' + Math.max(l.length ? 2 : 0, hh) + '" rx="2" fill="' + (h === peak ? "#7A1F3D" : h >= 9 && h < 18 ? "#C98AA2" : "#E6CBD6") + '"><title>' + h2(h) + ": " + l.length + " tickets</title></rect>") +
+      (l.length && (h === peak || l.length / mxH > .6) ? svgT(h * bw + bw / 2, 108 - hh, String(l.length), { a: "middle", b: true, c: "var(--ink)", fs: 9 }) : "") + (h % 3 === 0 ? svgT(h * bw + bw / 2, 126, h2(h), { a: "middle", fs: 9 }) : ""); }).join("") +
+    '<line x1="0" y1="112.5" x2="' + W + '" y2="112.5" stroke="var(--line2)"/>' + svgT(0, 145, "Darker bars: office hours 09–18 · darkest: the busiest hour", { fs: 9.5 }) + "</svg>";
+  /* 2. weekday × hour heatmap */
+  const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => [])); withC.forEach((i) => grid[dowOf(T[i].created)][hrOf(T[i].created)].push(i));
+  const mxG = Math.max(1, ...grid.map((r) => Math.max(...r.map((l) => l.length)))), cw = (W - 34) / 24, chh = 17;
+  const shade = (n) => { if (!n) return "#F6F0F3"; const a = .15 + .85 * n / mxG; return "rgba(122,31,61," + a.toFixed(2) + ")"; };
+  const heat = '<svg viewBox="0 0 ' + W + " " + (7 * chh + 26) + '" width="100%" role="img" aria-label="Tickets created by day of week and hour">' +
+    grid.map((r, d) => svgT(0, d * chh + 12, DOW[d], { fs: 9.5 }) + r.map((l, h) => link(l, "Created on " + DOW[d] + " " + h2(h) + "–" + h2((h + 1) % 24) + " IST", '<rect x="' + (34 + h * cw) + '" y="' + (d * chh) + '" width="' + (cw - 1.5) + '" height="' + (chh - 2) + '" rx="2" fill="' + shade(l.length) + '"><title>' + DOW[d] + " " + h2(h) + ": " + l.length + "</title></rect>")).join("")).join("") +
+    [0, 6, 12, 18, 23].map((h) => svgT(34 + h * cw + cw / 2, 7 * chh + 12, h2(h), { a: "middle", fs: 9 })).join("") + "</svg>";
+  const dayTot = grid.map((r) => r.reduce((m, l) => m + l.length, 0)), busyDay = dayTot.indexOf(Math.max(...dayTot));
+  /* 3. incoming vs outgoing, last 30 days, with the open backlog at the end of each day */
+  const WF = 1120, N = 30, d0 = HC.istMidnight(NOW) - (N - 1) * DAY, days = Array.from({ length: N }, (_, k) => d0 + k * DAY);
+  const inn = days.map((d) => withC.filter((i) => T[i].created >= d && T[i].created < d + DAY)), out = days.map((d) => T.map((t, i) => i).filter((i) => E[i].closedAt != null && E[i].closedAt >= d && E[i].closedAt < d + DAY));
+  const back = days.map((d) => T.filter((t, i) => t.created != null && t.created < d + DAY && !(E[i].closedAt != null && E[i].closedAt < d + DAY) && (E[i].stage !== "closed" || E[i].closedAt != null)).length);
+  const mxF = Math.max(1, ...inn.map((l) => l.length), ...out.map((l) => l.length)), mxB = Math.max(1, ...back), dw = WF / N, H3 = 120;
+  const flow = '<svg viewBox="0 0 ' + WF + ' 170" width="100%" role="img" aria-label="Created and closed per day, last 30 days">' +
+    days.map((d, k) => { const a = inn[k].length / mxF * H3 * .85, b = out[k].length / mxF * H3 * .85, lbl = fday(d).replace(/ \d{4}$/, "");
+      return link(inn[k], "Created " + lbl, '<rect x="' + (k * dw + 1) + '" y="' + (H3 - a) + '" width="' + (dw / 2 - 1.5) + '" height="' + Math.max(inn[k].length ? 2 : 0, a) + '" fill="#7A1F3D"><title>' + lbl + ": " + inn[k].length + " created</title></rect>") +
+        link(out[k], "Closed " + lbl, '<rect x="' + (k * dw + dw / 2) + '" y="' + (H3 - b) + '" width="' + (dw / 2 - 1.5) + '" height="' + Math.max(out[k].length ? 2 : 0, b) + '" fill="#15803D"><title>' + lbl + ": " + out[k].length + " closed</title></rect>") +
+        (k % 5 === 0 || k === N - 1 ? svgT(k * dw + dw / 2, H3 + 14, lbl, { a: "middle", fs: 9 }) : ""); }).join("") +
+    '<polyline fill="none" stroke="#B7791F" stroke-width="2" points="' + back.map((v, k) => (k * dw + dw / 2).toFixed(1) + "," + (H3 - v / mxB * H3 * .95).toFixed(1)).join(" ") + '"/>' +
+    '<line x1="0" y1="' + (H3 + .5) + '" x2="' + WF + '" y2="' + (H3 + .5) + '" stroke="var(--line2)"/>' +
+    '<rect x="0" y="152" width="9" height="9" fill="#7A1F3D"/>' + svgT(13, 160, "Created (incoming)", { fs: 9.5 }) + '<rect x="128" y="152" width="9" height="9" fill="#15803D"/>' + svgT(141, 160, "Closed (outgoing)", { fs: 9.5 }) +
+    '<line x1="250" y1="156.5" x2="264" y2="156.5" stroke="#B7791F" stroke-width="2"/>' + svgT(268, 160, "Open at day end (own scale, " + back[0] + " → " + back[N - 1] + ")", { fs: 9.5 }) + "</svg>";
+  const sum = (a) => a.reduce((m, l) => m + l.length, 0), ci = sum(inn), co = sum(out), wk = (a) => a.slice(-7).reduce((m, l) => m + l.length, 0), net = ci - co;
+  const chip = (v, k, sub, col) => '<div class="fl-chip"><b style="color:' + (col || "var(--ink)") + '">' + v + "</b><span>" + esc(k) + "</span><em>" + esc(sub) + "</em></div>";
+  const chips = '<div class="fl-chips">' + chip(h2(peak) + "–" + h2((peak + 1) % 24), "Busiest hour", byH[peak].length + " tickets created in that hour", "#7A1F3D") + chip(DOW[busyDay], "Busiest day", dayTot[busyDay] + " tickets created on " + DOW[busyDay] + "s") +
+    chip((ci / N).toFixed(1), "Created per day", "last 30 days · " + wk(inn) + " in the last 7") + chip((co / N).toFixed(1), "Closed per day", "last 30 days · " + wk(out) + " in the last 7", "#15803D") +
+    chip((net > 0 ? "+" : "") + net, "Net change", net > 0 ? "more came in than went out" : net < 0 ? "more went out than came in" : "in = out", net > 0 ? "var(--ss)" : "#15803D") + "</div>";
+  return '<div class="sec-h">Ticket flow <span class="dim small" style="font-weight:400">· tickets in the filters, times in IST · click a bar or cell for its tickets</span></div>' + chips +
+    '<div class="fl-grid"><div class="panel"><h3 style="margin:0 0 6px;font-size:14px">When tickets arrive, by hour</h3>' + hours + '</div><div class="panel"><h3 style="margin:0 0 6px;font-size:14px">By day of week and hour</h3>' + heat + "</div></div>" +
+    '<div class="panel"><h3 style="margin:0 0 6px;font-size:14px">Incoming vs outgoing, last 30 days</h3>' + flow + "</div>";
+}
 function viewWork() {
   const open = openIdx(), hd = open.filter((i) => sideOf(i) === "hd"), engg = open.filter((i) => sideOf(i) === "engg"), ours = hd.concat(engg);
   const lrpsWho = (i) => { const t = T[i]; if (!t.lrps.length) return "(no LRPS ticket)"; const n = t.lrps.map((k) => LRPS[k] && LRPS[k].a).filter(Boolean); return n.length ? n[0] : t.lrps.some((k) => LRPS[k]) ? "(LRPS unassigned)" : "(LRPS not read yet)"; };
   const eb = engg.length ? ' <button type="button" class="btn pri" style="margin-left:10px;vertical-align:2px" data-list="' + reg(engg, "With Engineering", null, "engg") + '">Engineering follow-up (' + engg.length + ")</button>" : "";
-  return "<h2>Workload" + eb + "</h2><p class=\"sub\">Open tickets on our side and who holds them. Help Desk and Engineering follow the Master Data status classes, the same split as the Follow-up Tracker. Every number opens its tickets.</p>" +
+  return "<h2>Workload" + eb + "</h2><p class=\"sub\">Open tickets on our side and who holds them. Help Desk and Engineering follow the Master Data status classes, the same split as the Follow-up Tracker. Every number opens its tickets.</p>" + flowHTML() +
     '<div class="grid2 wk">' + personTable("Pending with Help Desk, by current worker", hd, (i) => T[i].cw) + personTable("Pending with Engineering, by LRPS assignee", engg, lrpsWho, "The engineering owner from the linked LRPS ticket.") + "</div>" +
     '<div class="grid2 wk">' + personTable("Pending with Engineering, by current worker", engg, (i) => T[i].cw) + personTable("Pending with us, by PO", ours, (i) => E[i].po && E[i].po.po) + "</div>";
 }
