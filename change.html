@@ -1045,7 +1045,7 @@ function render(){
     '<div class="fcell"><span class="flabel">Status</span><select class="fsel" id="fStatus"><option value="">All</option><option value="open"'+(S.status==="open"?' selected':'')+'>Open</option><option value="closed"'+(S.status==="closed"?' selected':'')+'>Closed</option></select></div>'+
     (S.tab==="movement"?'':
     '<div class="fcell"><span class="flabel">From</span><input type="date" class="dinput" id="fFrom" value="'+esc(S.from)+'"></div>'+
-    '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>')+
+    '<div class="fcell"><span class="flabel">To</span><input type="date" class="dinput" id="fTo" value="'+esc(S.to)+'"></div>'+dateRangeNote())+
   '</div></header><main>';
   if(S.search.trim()){                 // searching → results list replaces the dashboard
     h+='<div id="searchView">'+searchViewHTML()+'</div>';
@@ -2036,12 +2036,23 @@ function bindAll(){
 /* Opened from another module with a filter, e.g. the Swire module: change.html#proj=Swire%20Shipping sets the Client filter.
    The client is matched without case; failing that, the first client containing the name. The address is then cleaned
    so a later refresh does not undo a filter changed by hand. */
+/* "Showing all dates · created 12 Mar 2024 – 05 Nov 2026" or "Showing created 01 Nov 2026 – 06 Nov 2026" */
+function dateRangeNote(){
+  var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], f=function(d){return ("0"+d.getDate()).slice(-2)+" "+M[d.getMonth()]+" "+d.getFullYear();};
+  var ymd=function(v){var p=String(v).split("-");return new Date(+p[0],+p[1]-1,+p[2]);};
+  var lo=null,hi=null; (RAW||[]).forEach(function(t){ if(S.proj&&t.project!==S.proj) return; var c=t.created; if(!c||isNaN(c)) return; if(!lo||c<lo)lo=c; if(!hi||c>hi)hi=c; });
+  var txt = S.from||S.to ? "Showing created "+(S.from?f(ymd(S.from)):(lo?f(lo):"…"))+" – "+(S.to?f(ymd(S.to)):(hi?f(hi):"…"))
+    : "Showing all dates"+(lo?" · created "+f(lo)+" – "+f(hi):"");
+  return '<div class="fcell" style="justify-content:flex-end"><span class="flabel">&nbsp;</span><span style="font-size:11.5px;color:var(--muted,#64748B);padding:8px 2px;white-space:nowrap" title="Based on the Created date of the change tickets'+(S.proj?" for "+esc(S.proj):"")+'">'+esc(txt)+'</span></div>';
+}
 function applyHashFilter(){
   var m=/(?:^#|&)proj=([^&]*)/.exec(location.hash||""); if(!m) return false;
   var want=decodeURIComponent(m[1]||"").trim(), lw=want.toLowerCase(), names={};
   (RAW||[]).forEach(function(t){ if(t.project) names[t.project]=1; });
   var ks=Object.keys(names), hit=ks.filter(function(k){return k.toLowerCase()===lw;})[0]||ks.filter(function(k){return k.toLowerCase().indexOf(lw.split(" ")[0])>-1;})[0]||want;
   S.proj=hit; S.page=0;
+  var fm=/(?:^#|&)from=(\d{4}-\d{2}-\d{2})/.exec(location.hash||""), tm=/(?:^#|&)to=(\d{4}-\d{2}-\d{2})/.exec(location.hash||"");
+  S.from=fm?fm[1]:""; S.to=tm?tm[1]:"";
   try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
   return true;
 }
