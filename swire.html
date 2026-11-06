@@ -6,7 +6,7 @@
 <title>Swire Hypercare</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237A1F3D'/%3E%3Cpath d='M6 20h20l-3 5H9z' fill='%23F3C6D4'/%3E%3Cpath d='M15 7v12M15 8l7 9h-7' stroke='%23fff' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="hd-store.js?v=20261031d"></script>
+<script src="hd-store.js?v=20261107a"></script>
 <script src="sla-engine.js?v=20261031d"></script>
 <script src="sla-history.js?v=20261031d"></script>
 <script src="sla-link.js?v=20261031d"></script>
@@ -1731,6 +1731,7 @@ const XL = (function () {
     if (c == null || c === "") return "";
     const ref = col(k) + r;
     if (typeof c !== "object") c = { v: c };
+    if (!c.f && typeof c.v === "string" && /^LRPS-\d+(\s*,\s*LRPS-\d+)*$/.test(c.v.trim())) { const k0 = c.v.trim().split(/\s*,\s*/)[0]; c = { f: 'HYPERLINK("' + jiraUrl(k0) + '","' + c.v.trim() + '")', v: c.v.trim(), s: S.link }; }
     if (!c.f && (c.v == null || c.v === "")) return c.s != null ? "<c r=\"" + ref + "\" s=\"" + c.s + "\"/>" : "";   // styled but empty: text from the left can run over it
     const st = c.s != null ? ' s="' + c.s + '"' : typeof c.v === "number" ? ' s="' + S.cellInt + '"' : ' s="0"';
     if (c.f) return "<c r=\"" + ref + "\"" + st + (typeof c.v === "number" ? "" : ' t="str"') + "><f>" + xe(c.f) + "</f>" + (c.v != null ? "<v>" + xe(c.v) + "</v>" : "") + "</c>";
@@ -1891,6 +1892,7 @@ function u8b64(u) { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += 
 function saveBlob(blob, file) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800); }
 /* an unsent .eml (opens in Outlook as a draft) with the HTML body and the Excel attached */
 function emlWithAttachment(subject, html, att, file) {
+  if (window.HDLinks) html = HDLinks.html(html);                    // LRPS-12345 → link to Jira
   const b64 = (s) => btoa(unescape(encodeURIComponent(s))), wrap = (s) => s.replace(/.{76}/g, "$&\r\n"), B = "=_hd_" + Date.now().toString(36);
   const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
   const eml = ["X-Unsent: 1", "Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", 'Content-Type: multipart/mixed; boundary="' + B + '"', "",
@@ -2332,6 +2334,7 @@ function openTicket(i, tt, ee) {
 /* Copy the mail so Outlook pastes it with its tables. First choice: render it off-screen, select it and copy, exactly
    like selecting it by hand (Outlook reliably takes that as formatted). Only if the browser refuses, the clipboard API. */
 function copyRich(html, text, btn, label) {
+  if (window.HDLinks) html = HDLinks.html(html);                    // LRPS-12345 → link to Jira
   const done = (m) => { if (!btn) return; btn.textContent = m; setTimeout(() => { btn.textContent = label; }, 1800); };
   const box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;color:#000"; box.innerHTML = html; document.body.appendChild(box);
   const sel = getSelection(), r = document.createRange(); r.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(r);
@@ -2342,6 +2345,7 @@ function copyRich(html, text, btn, label) {
   else done("Copy blocked by the browser");
 }
 function emlDownload(subject, html, file, to, cc) {
+  if (window.HDLinks) html = HDLinks.html(html);                    // LRPS-12345 → link to Jira
   const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
   const body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
   const eml = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], cc ? ["Cc: " + String(cc).replace(/[\r\n]/g, " ")] : []).concat(["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")]).join("\r\n");
