@@ -58,8 +58,15 @@
       { module: "CMR",     po: "Sentamil Selvan",            email: "sentamil.selvan@solverminds.com",             phone: "+91 90801 19523", match: ["cmr"] },
       { module: "EDI",     po: "Vignesh R",                  email: "vignesh.ravi@solverminds.com",                phone: "+91 63830 78917", match: ["edi"] },
       { module: "CVP",     po: "Raghul Sekar",               email: "raghul.sekar@solverminds.com",                phone: "+91 82480 92223", match: ["cvp"] },
-      { module: "Release", po: "Vinothkumar Viswanathan",    email: "vinothkumar.v@solverminds.com",               phone: "+91 97907 13820", match: ["release", "releases"] },
-      { module: "DB",      po: "Naveen Enaganti",            email: "naveen.e@solverminds.com",                    phone: "+91 83744 89900", match: ["db", "database"] }
+      { module: "Release", po: "Senthilkumar R",             email: "senthilkumar.r@solverminds.com",              phone: "", match: ["release", "releases", "devops"] },
+      { module: "DB",      po: "Naveen Enaganti",            email: "naveen.e@solverminds.com",                    phone: "+91 83744 89900", match: ["db", "database"] },
+      /* added 07 Nov 2026 from the engineer master list */
+      { module: "Ecom",              po: "Vijay",             email: "vijay@solverminds.com",             phone: "", match: ["ecom & mobile app", "ecom and mobile app", "ecom", "e-com"] },
+      { module: "Product Finance",   po: "Siva Vadivel",      email: "siva.vadivel@solverminds.com",      phone: "", match: ["product finance", "cost"] },
+      { module: "Sedge",             po: "SAI BHARATH BAJOJI", email: "sai.bharath.bajoji@solverminds.com", phone: "", match: ["sedgiq", "sedge"] },
+      { module: "MIS",               po: "Alauudeen.M",       email: "alaudeen.m@solverminds.com",        phone: "", match: ["mis"] },
+      { module: "Feeder Operations", po: "Karthick R",        email: "karthick.r@solverminds.com",        phone: "", match: ["feeder operations", "feeder ops", "feeder"] },
+      { module: "Performance",       po: "Senthilkumar R",    email: "senthilkumar.r@solverminds.com",    phone: "", match: ["performance"] }
     ],
     /* Section 15.2 */
     contacts: [
@@ -85,6 +92,14 @@
       else if (k === "escalate" && saved.escalate) c.escalate = Object.assign({}, c.escalate, saved.escalate);
       else c[k] = saved[k];
     });
+    if (saved && saved.modules) {
+      DEFAULTS.modules.forEach(function (d) {
+        var m = c.modules.filter(function (x) { return String(x.module).toLowerCase() === d.module.toLowerCase(); })[0];
+        if (!m) { c.modules.push(JSON.parse(JSON.stringify(d))); return; }
+        d.match.forEach(function (w) { if ((m.match || (m.match = [])).indexOf(w) < 0) m.match.push(w); });
+        if (d.module === "Release" && m.po === "Vinothkumar Viswanathan") { m.po = d.po; m.email = d.email; m.phone = d.phone; }
+      });
+    }
     /* shift times saved by earlier versions (2nd 12:30–21:30, or 15:00–21:00) are replaced by the roster times */
     var old = c.shifts && c.shifts.map(function (x) { return x.id + x.from + x.to; }).join("|");
     if (old === "1st06:0015:00|2nd12:3021:30|night21:0006:00" || old === "1st06:0015:00|2nd15:0021:00|night21:0006:00") c.shifts = JSON.parse(JSON.stringify(DEFAULTS.shifts));
