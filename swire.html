@@ -573,7 +573,7 @@ const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: ""
 const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", type: "isr", sev: "", po: "", svm: "", cw: "", comp: "", env: "" };
 let GF = (() => { try { return Object.assign({}, GF_DEF, JSON.parse(localStorage.getItem(GF_KEY) || "{}")); } catch (e) { return Object.assign({}, GF_DEF); } })();
 if (["start", "7", "30"].indexOf(GF.range) > -1) GF.range = "all";      // date options no longer offered
-if (/^change\b/i.test(String(GF.type || ""))) GF.type = "isr";          // Change is no longer offered here
+if (GF.type === "all" || (/^change\b/i.test(String(GF.type || "")) && GF.type !== "change")) GF.type = "isr";   // options no longer offered
 function saveGF() { try { localStorage.setItem(GF_KEY, JSON.stringify(GF)); } catch (e) {} }
 function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
 function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); DIRTY = true; }
@@ -635,6 +635,27 @@ function rebuild() {
 }
 /* Change requests have their own module (Change Tracker), so the Swire module never shows them */
 const isChangeType = (ty) => /^change\b/i.test(String(ty || "").trim());
+/* Change chosen as request type: nothing to show here; one button opens the Change Tracker on the Swire client */
+function swireChanges() { const l = ALLT.filter((t) => isChangeType(t.type)); const pc = {}; l.forEach((t) => { const p = (t._row && (t._row.Project || t._row.project)) || ""; if (p) pc[p] = (pc[p] || 0) + 1; });
+  return { n: l.length, open: l.filter((t, k) => { const i = ALLT.indexOf(t); return i > -1 && ALLE[i] && ALLE[i].stage !== "closed"; }).length, project: Object.keys(pc).sort((a, b) => pc[b] - pc[a])[0] || "Swire Shipping" }; }
+function openChangeTracker() {
+  const c = swireChanges(), hash = "proj=" + encodeURIComponent(c.project);
+  try { if (window.parent && window.parent !== window) { window.parent.postMessage({ type: "HD_OPEN_MODULE", href: "change.html", hash }, "*"); return; } } catch (e) {}
+  window.open("change.html#" + hash, "_blank", "noopener");
+}
+function viewChangeLink() {
+  const c = swireChanges();
+  return '<div class="panel" style="max-width:720px;margin:24px auto;text-align:center;padding:34px 28px">' +
+    '<div style="width:52px;height:52px;border-radius:14px;margin:0 auto 12px;display:grid;place-items:center;background:var(--blush);color:var(--maroon)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4-4 4M3 7h18M7 21l-4-4 4-4M21 17H3"/></svg></div>' +
+    '<h2 style="margin:0 0 6px">Change requests are in the Change Tracker</h2>' +
+    '<p class="sub" style="margin:0 auto 16px;max-width:520px">The Swire module covers Incidents and Service Requests. ' + (c.n ? "<b>" + c.n.toLocaleString() + "</b> Swire change request" + (c.n === 1 ? "" : "s") + " (" + c.open.toLocaleString() + " open) are in the data." : "No Swire change requests are in the data.") +
+      " The Change Tracker has their stages, releases, sizing and approvals.</p>" +
+    '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button type="button" class="btn pri" id="gotoChange">Open Swire changes in the Change Tracker</button>' +
+    '<button type="button" class="btn" id="backIsr">Back to Incident + Service Request</button></div>' +
+    '<p class="dim small" style="margin-top:12px">Opens the Change Tracker tab with the client set to <b>' + esc(c.project) + "</b>.</p></div>";
+}
+document.addEventListener("click", (e) => { const t = e.target.closest && e.target.closest("#gotoChange,#backIsr"); if (!t) return;
+  if (t.id === "gotoChange") return openChangeTracker(); GF.type = "isr"; saveGF(); render(); });
 function passes(t, e, rg, isr) {
   const ty = t.type || "(blank)";
   if (isChangeType(ty)) return false;
@@ -660,7 +681,7 @@ function paintFilters() {
   ALLT.forEach((t, i) => { (t.components.length ? t.components : ["(none)"]).forEach((c) => vals.comp.push(c)); vals.po.push((ALLE[i].po && ALLE[i].po.po) || "(none)"); vals.svm.push(t.svm || "(none)"); vals.cw.push(t.cw || "(none)"); vals.env.push(t.env || "(blank)"); });
   const opts = (id) => id === "sev" ? HC.SEVS.map((x) => [x.id, x.name]) : uniq(vals[id]).map((v) => [v, v]);
   const sel = (id) => '<label>' + esc(GF_LBL[id]) + '<select class="fsel' + (GF[id] ? " on" : "") + '" data-gf="' + id + '"><option value="">All</option>' + opts(id).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF[id] ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
-  const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"], ["all", "All request types (no Change)"]].concat(ALLTYPES.filter((x) => !isChangeType(x)).map((x) => [x, x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
+  const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"]].concat(ALLTYPES.filter((x) => !isChangeType(x)).map((x) => [x, x]), ALLTYPES.some(isChangeType) ? [["change", "Change → open in the Change Tracker"]] : []).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
   const R = [["all", "All time"], ["today", "Today"], ["official", "Since 1 Nov"], ["month", "This month"], ["lastmonth", "Last month"]];
   if (GF.range !== "custom" && !R.some(([id]) => id === GF.range)) { GF.range = "all"; saveGF(); }        // a saved choice that is no longer offered
   const cust = GF.range === "custom", act = Object.keys(GF_LBL).filter((k) => GF[k]);
@@ -3404,7 +3425,7 @@ function render() {
   paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, sla: (() => { const n = open.filter((i) => slaB(i) === "breached").length; return { n, hot: n > 0 }; })(), esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
   const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, sla: viewSla, move: viewMove, rel: viewRel, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
   const y = window.scrollY, f = document.activeElement && document.activeElement.id;
-  el("view").innerHTML = V(); window.scrollTo(0, y);
+  el("view").innerHTML = GF.type === "change" ? viewChangeLink() : V(); window.scrollTo(0, y);
   if (f && el(f)) { const x = el(f); x.focus(); if (x.setSelectionRange && typeof x.value === "string") x.setSelectionRange(x.value.length, x.value.length); }
   wire();
 }
