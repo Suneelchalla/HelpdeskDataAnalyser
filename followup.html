@@ -207,6 +207,7 @@
       if (c == null || c === "") return "";
       const ref = col(k) + r;
       if (typeof c !== "object") c = { v: c };
+    if (!c.f && typeof c.v === "string" && /^LRPS-\d+(\s*,\s*LRPS-\d+)*$/.test(c.v.trim())) { var k0 = c.v.trim().split(/\s*,\s*/)[0]; c = { f: 'HYPERLINK("' + jiraUrl(k0) + '","' + c.v.trim() + '")', v: c.v.trim(), s: S.link }; }
     if (!c.f && (c.v == null || c.v === "")) return c.s != null ? "<c r=\"" + ref + "\" s=\"" + c.s + "\"/>" : "";   // styled but empty: text from the left can run over it
       const st = c.s != null ? ' s="' + c.s + '"' : typeof c.v === "number" ? ' s="' + S.cellInt + '"' : ' s="0"';
       if (c.f) return "<c r=\"" + ref + "\"" + st + (typeof c.v === "number" ? "" : ' t="str"') + "><f>" + xe(c.f) + "</f>" + (c.v != null ? "<v>" + xe(c.v) + "</v>" : "") + "</c>";
@@ -530,6 +531,7 @@
   function u8b64(u) { var s = ""; for (var i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
   var b64 = function (s) { return btoa(unescape(encodeURIComponent(s))); }, wrap76 = function (s) { return s.replace(/.{76}/g, "$&\r\n"); };
   function eml(subject, html, file, to, att, cc) {
+    if (window.HDLinks) html = HDLinks.html(html);                  // LRPS-12345 → link to Jira
     var body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>", H = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], cc ? ["Cc: " + String(cc).replace(/[\r\n]/g, " ")] : [], ["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0"]), out;
     if (att) { var B = "=_hdx_" + Date.now().toString(36);
       out = H.concat(['Content-Type: multipart/mixed; boundary="' + B + '"', "", "--" + B, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", wrap76(b64(body)), "",
@@ -539,6 +541,7 @@
   }
   /* copy like selecting by hand (Outlook keeps the tables); the clipboard API only if the browser refuses */
   function copyRich(html, text, btn, label) {
+    if (window.HDLinks) html = HDLinks.html(html);                  // LRPS-12345 → link to Jira
     var done = function (msg) { btn.textContent = msg; setTimeout(function () { btn.textContent = label; }, 1800); };
     var box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;color:#000"; box.innerHTML = html; document.body.appendChild(box);
     var sel = getSelection(), r = document.createRange(); r.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(r);
