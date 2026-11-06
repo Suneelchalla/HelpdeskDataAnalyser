@@ -874,10 +874,75 @@
     window.addEventListener("afterprint", done); setTimeout(function () { window.print(); setTimeout(done, 4000); }, 60);
     return html;
   }
+  /* ═══ Rule checks for every client: the ones that matter whatever the client ═══
+     1 status mismatch (opens its own window) · 2 assignee's module missing in Components · 3 with Engineering, no LRPS ticket ·
+     4 no SVM In Charge · 5 no Components */
+  var cmNk = function (x) { return String(x || "").toLowerCase().replace(/[^a-z]/g, ""); };
+  var cmSame = function (a, b) { var x = cmNk(a), y = cmNk(b); return !!x && !!y && (x === y || (Math.abs(x.length - y.length) <= 2 && (x.indexOf(y) === 0 || y.indexOf(x) === 0))); };
+  function assigneeOf(t) { var n = t.lrps.map(function (k) { return LRPS[k] && !LRPS[k].gone && LRPS[k].a; }).filter(Boolean); return n[0] || ""; }
+  var CMC = null;
+  function learnHome(all, MODS) {
+    var key = (all || []).length + "|" + Object.keys(LRPS).length; if (CMC && CMC.key === key) return CMC.home;
+    var cnt = {};
+    (all || []).forEach(function (r) { var t = T(r), a = assigneeOf(t), m = compsOf(t, MODS); if (!a || m.length !== 1) return; var c = cnt[a] = cnt[a] || { n: 0, by: {} }; c.n++; c.by[m[0].mod] = (c.by[m[0].mod] || 0) + 1; });
+    var home = {}; Object.keys(cnt).forEach(function (a) { var c = cnt[a], best = Object.keys(c.by).sort(function (x, y) { return c.by[y] - c.by[x]; })[0]; if (c.n >= 5 && c.by[best] / c.n >= 0.7) home[a] = { mod: best, n: c.by[best], of: c.n }; });
+    CMC = { key: key, home: home }; return home;
+  }
+  function runChecks(open, all) {
+    var MODS = poList(), ts = open.map(T), home = learnHome(all, MODS);
+    var homeOf = function (a) { var po = MODS.filter(function (m) { return cmSame(m.po, a); }).map(function (m) { return m.module; }); if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
+      var h = home[a]; return h ? { mods: [h.mod], how: "usually works on " + h.mod + " (" + h.n + " of " + h.of + " tickets)" } : null; };
+    var cm = [], cmD = {};
+    ts.forEach(function (t) { var a = assigneeOf(t); if (!a) return; var h = homeOf(a); if (!h) return; var have = compsOf(t, MODS).map(function (x) { return x.mod; });
+      if (h.mods.some(function (m) { return have.indexOf(m) > -1; })) return; cm.push(t); cmD[t.key] = { mod: h.mods[0], who: a, how: h.how, have: have.join(", ") || "(none)" }; });
+    return [
+      { id: "mis", title: "Status mismatch between client ticket and LRPS", why: "The client ticket and its linked LRPS ticket are in different statuses.", list: misList(open, all).list, window: true },
+      { id: "cm", title: "Assignee’s module missing in Components", why: "The LRPS assignee’s own module is not in the ticket’s Components, so it does not show in their Jira dashboard. Add the module when the assignee is from another team. From the PO list (certain) or their past tickets (likely).", list: cm, detail: cmD },
+      { id: "nolrps", title: "With Engineering, but no linked LRPS ticket", why: "The status is on the Engineering side, but no LRPS ticket is linked, so engineering cannot see it.", list: ts.filter(function (t) { return side(t) === "engg" && !t.lrps.length; }) },
+      { id: "nosvm", title: "No SVM In Charge", why: "Every open ticket needs one named owner.", list: ts.filter(function (t) { return !t.svm; }) },
+      { id: "nocomp", title: "No Components", why: "Without a component the ticket has no module, no PO and does not show in any module dashboard.", list: ts.filter(function (t) { return !list(t.comps).length; }) }
+    ];
+  }
+  function openChecks(open, all) {
+    var m = modal(), S = { id: null };
+    function paint() {
+      var C = runChecks(open, all), c = S.id && C.find(function (x) { return x.id === S.id; });
+      if (!c) {
+        m.box.innerHTML = '<div class="hdx-hd"><h3>Rule checks<span class="n">' + C.reduce(function (a, x) { return a + x.list.length; }, 0).toLocaleString() + '</span></h3><button type="button" class="hdx-btn" data-c="close">Close</button></div>' +
+          '<p class="hdx-sub">Open tickets in the header filters, all clients. Click a check for its tickets.</p><div class="hdx-tw"><table><tbody>' +
+          C.map(function (x) { return '<tr class="clk" data-cid="' + x.id + '"><td style="width:70%"><b>' + esc(x.title) + '</b><div class="hdx-note">' + esc(x.why) + '</div></td><td class="hdx-num" style="font-size:20px;font-weight:800;color:' + (x.list.length ? "#BE123C" : "#15803D") + '">' + (x.list.length ? x.list.length.toLocaleString() : "✓") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+        return;
+      }
+      var d = c.detail || {}, MODS = poList();
+      var L = c.list.slice().sort(function (a, b) { return a.project.localeCompare(b.project) || bySevAge(a, b); });
+      m.box.innerHTML = '<div class="hdx-hd"><h3>' + esc(c.title) + '<span class="n">' + L.length + '</span></h3><button type="button" class="hdx-btn" data-c="xlsx">Download Excel</button><button type="button" class="hdx-btn" data-c="back">Back</button><button type="button" class="hdx-btn" data-c="close">Close</button></div>' +
+        '<p class="hdx-sub">' + esc(c.why) + '</p><div class="hdx-tw"><table><thead><tr>' + (c.id === "cm" ? "<th>Missing module</th><th>LRPS assignee</th><th>Components now</th>" : "") +
+        "<th>Ticket</th><th>Client</th><th>Priority</th><th>Summary</th><th>Status</th><th>LRPS</th><th>SVM In Charge</th><th>Age</th></tr></thead><tbody>" +
+        L.map(function (t) { var x = d[t.key] || {};
+          return "<tr>" + (c.id === "cm" ? '<td><b style="color:#BE123C">' + esc(x.mod) + "</b></td><td>" + esc(x.who) + '<div class="hdx-dim" style="font-size:11px">' + esc(x.how) + "</div></td><td>" + esc(x.have) + "</td>" : "") +
+            '<td><a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a></td><td>" + esc(t.project) + "</td><td>" + esc(t.priority || "—") + '</td><td style="min-width:240px">' + esc(t.summary) +
+            '</td><td><span class="hdx-st">' + esc(t.status) + "</span></td><td>" + (t.lrps.length ? t.lrps.map(function (k) { return '<a class="hdx-key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener">' + esc(k) + "</a>"; }).join("<br>") : "—") + "</td><td>" + esc(t.svm || "—") + "</td><td>" + esc(fmt(ageMin(t))) + "</td></tr>"; }).join("") +
+        (L.length ? "" : '<tr><td colspan="11" class="hdx-dim">Nothing to fix.</td></tr>') + "</tbody></table></div>";
+      m._xl = function () { var Sx = XL.S, H = (c.id === "cm" ? ["Missing module", "LRPS assignee", "Why", "Components now"] : []).concat(["Ticket", "Client", "Priority", "Summary", "Status", "LRPS", "SVM In Charge", "Age (days)"]);
+        var rows = [H.map(function (h) { return { v: h, s: Sx.head }; })].concat(L.map(function (t) { var x = d[t.key] || {};
+          return (c.id === "cm" ? [{ v: x.mod, s: Sx.bad }, x.who, x.how, x.have] : []).concat([{ f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: Sx.link }, t.project, t.priority, { v: t.summary, s: Sx.wrap }, t.status, t.lrps.join(", "), t.svm, { v: Math.round((ageMin(t) || 0) / 144) / 10, s: Sx.num }]); }));
+        return XL.build([{ name: "Tickets", rows: rows, cols: H.map(function (h) { return h === "Summary" ? 52 : h === "Why" ? 34 : 18; }), freeze: 1, filter: "A1:" + XL.col(H.length - 1) + Math.max(2, rows.length) }]).then(function (u) {
+          saveBlob(new Blob([u], { type: XLSX_MIME }), "HD-" + c.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + dayKey(Date.now()) + ".xlsx"); }); };
+    }
+    m.box.addEventListener("click", function (e) { var r = e.target.closest("[data-cid],[data-c]"); if (!r) return;
+      if (r.dataset.cid) { if (r.dataset.cid === "mis") { m.close(); return openMismatch(open, all); } S.id = r.dataset.cid; return paint(); }
+      var x = r.dataset.c; if (x === "close") return m.close(); if (x === "back") { S.id = null; return paint(); } if (x === "xlsx") return busy(r, "Download Excel", m._xl); });
+    m.onEsc = function () { if (S.id) { S.id = null; paint(); return true; } return false; };
+    m._chg = function () { paint(); }; window.addEventListener("hdx-change", m._chg);
+    paint();
+  }
+  function checkCount(open, all) { return runChecks(open || [], all || []).reduce(function (a, x) { return a + x.list.length; }, 0); }
   window.HDX = {
     openMismatch: function (open, all) { openMismatch(open || [], all || []); },
     openHandover: function (open) { openHandover(open || []); },
     openSla: function (open, all) { openSla(open || [], all || []); },
+    openChecks: function (open, all) { openChecks(open || [], all || []); },
+    checkCount: checkCount,
     printReport: function (open, all) { return printReport(open || [], all || []); },
     misCount: function (open, all) { return misList(open || [], all || []).list.length; },
     refreshLrps: function (rows) { return lrpsRefresh(rows || [], false); },
@@ -3410,6 +3475,7 @@ function App(){
 
   /* HDX: status mismatch count for the header pill (client ticket ↔ LRPS), and a one-off LRPS read from Jira */
   var hdxMis=useMemo(function(){return window.HDX?window.HDX.misCount(flt,allFiltered):0;},[flt,allFiltered,hdxVer]);
+  var hdxChk=useMemo(function(){return window.HDX&&window.HDX.checkCount?window.HDX.checkCount(flt,allFiltered):0;},[flt,allFiltered,hdxVer]);
   useEffect(function(){if(!window.HDX||!op||!op.length)return;var t=setTimeout(function(){if(window.HDX.bridgeOn())window.HDX.refreshLrps(op).catch(function(){});},4000);return function(){clearTimeout(t);};},[op]);
 
   /* SLA — from the SLA Tracker. open = open tickets in view; range = all tickets in the date range (for "% met"). */
@@ -3641,6 +3707,10 @@ function App(){
           <span style={{fontSize:13}}>📨</span> Handover
         </button>}
 
+        {window.HDX&&window.HDX.openChecks&&<button onClick={function(){window.HDX.openChecks(flt,allFiltered);}} title="Rule checks for all clients: status mismatch, assignee's module missing, no LRPS, no SVM In Charge, no Components"
+          style={{background:hdxChk?"#FFF7ED":"var(--bg)",border:"1px solid "+(hdxChk?"#FED7AA":"var(--border)"),color:hdxChk?"#C2410C":"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
+          <span style={{fontSize:13}}>☑</span> Checks{hdxChk?<b style={{marginLeft:2}}>{hdxChk.toLocaleString()}</b>:null}
+        </button>}
         {window.HDX&&window.HDX.openSla&&<button onClick={function(){window.HDX.openSla(flt,allFiltered);}} title="SLA for the tickets in view: breached, about to breach, met and missed, by priority and client"
           style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
           <span style={{fontSize:13}}>⏱</span> SLA
