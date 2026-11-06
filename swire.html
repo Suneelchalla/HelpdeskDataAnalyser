@@ -1145,6 +1145,7 @@ function learnHome() {
   CM_CACHE = { key, home }; return home;
 }
 function homeOf(a) {
+  const set = (CFG.engineers || {})[a]; if (set) return { mods: [set], how: "set in Master data: " + set };
   const po = (CFG.modules || []).filter((m) => cmSame(m.po, a)).map((m) => m.module);
   if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
   const h = learnHome()[a]; return h ? { mods: [h.mod], how: "usually works on " + h.mod + " (" + h.n + " of " + h.of + " tickets)" } : null;
@@ -2227,6 +2228,63 @@ function viewWeekly() {
 }
 
 /* ══ Setup ══ */
+/* ── Engineering assignees → module (Master data). Filled once from the downloaded list; used first by the
+   "Assignee's module missing in Components" check (then the PO list, then past tickets). ── */
+function engRoster() {
+  const cnt = {};
+  ALLT.forEach((t) => { if (isChangeType(t.type)) return; t.lrps.forEach((k) => { const a = LRPS[k] && !LRPS[k].gone && LRPS[k].a; if (a) cnt[a] = (cnt[a] || 0) + 1; }); });
+  return Object.keys(cnt).sort((a, b) => a.localeCompare(b)).map((a) => ({ a, n: cnt[a] }));
+}
+function engSuggest(a) {
+  const po = (CFG.modules || []).filter((m) => cmSame(m.po, a)).map((m) => m.module); if (po.length) return { mod: po[0], how: "PO of " + po.join(" / ") };
+  const h = learnHome()[a]; return h ? { mod: h.mod, how: h.n + " of " + h.of + " tickets" } : null;
+}
+function engPanel() {
+  const R = engRoster(), map = CFG.engineers || {}, mods = (CFG.modules || []).map((m) => m.module), done = R.filter((r) => map[r.a]).length;
+  const poOf = (mod) => ((CFG.modules || []).find((m) => m.module === mod) || {}).po || "";
+  return '<div class="panel"><div class="sec-h" style="margin-top:0">Engineering assignees → module</div>' +
+    '<p class="sub" style="margin:0 0 8px">Every engineering (LRPS) assignee seen on Swire tickets, without duplicates: <b>' + R.length + "</b>, of which <b>" + done + "</b> have a module set here. " +
+    "Set each person’s module (the SVM In Charge / PO they work under). The “Assignee’s module missing in Components” check uses this first, then the PO list, then their past tickets. " +
+    "You can also <b>Download the list</b>, fill the Module or SVM In Charge column in Excel, and <b>Upload</b> it back.</p>" +
+    '<div class="bar" style="margin:0 0 8px"><button class="btn" id="engDl">Download the list (Excel)</button><label class="btn" style="cursor:pointer">Upload filled list<input type="file" id="engUp" accept=".xlsx,.xls,.csv" style="display:none"></label>' +
+      (done ? '<button class="btn" id="engClr">Clear all</button>' : "") + '<span class="dim small" id="engMsg"></span></div>' +
+    '<div class="tw" style="max-height:420px;overflow:auto"><table><thead><tr><th>Engineering assignee</th><th class="num">Tickets</th><th>Suggested</th><th>Module</th><th>SVM In Charge (PO)</th></tr></thead><tbody>' +
+    R.map((r) => { const sg = engSuggest(r.a), cur = map[r.a] || "";
+      return "<tr><td>" + esc(r.a) + '</td><td class="num">' + r.n + "</td><td>" + (sg ? esc(sg.mod) + ' <span class="dim small">(' + esc(sg.how) + ")</span>" : '<span class="dim">—</span>') + "</td>" +
+        '<td><select class="fsel" data-eng="' + esc(r.a) + '"><option value="">—</option>' + mods.map((m) => '<option' + (m === cur ? " selected" : "") + ">" + esc(m) + "</option>").join("") + "</select></td>" +
+        "<td>" + esc(poOf(cur) || "") + "</td></tr>"; }).join("") +
+    (R.length ? "" : '<tr><td colspan="5" class="dim">No LRPS assignees read yet. Use Refresh LRPS assignees in the sidebar.</td></tr>') + "</tbody></table></div></div>";
+}
+function engSet(map) { const c = JSON.parse(JSON.stringify(CFG)); c.engineers = map; saveCfg(c); CM_CACHE = null; render(); }
+document.addEventListener("change", (e) => {
+  const s = e.target.closest && e.target.closest("[data-eng]");
+  if (s) { const m = Object.assign({}, CFG.engineers || {}); if (s.value) m[s.dataset.eng] = s.value; else delete m[s.dataset.eng]; return engSet(m); }
+  if (e.target.id !== "engUp" || !e.target.files || !e.target.files[0]) return;
+  const f = e.target.files[0], rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const wb = XLSX.read(new Uint8Array(rd.result), { type: "array" }), rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+      const pick = (r, re) => { const k = Object.keys(r).find((x) => re.test(String(x).trim())); return k ? String(r[k]).trim() : ""; };
+      const mods = CFG.modules || [], m = Object.assign({}, CFG.engineers || {}); let n = 0, skip = 0;
+      rows.forEach((r) => { const a = pick(r, /assignee|engineer|name/i); if (!a) return;
+        let mod = pick(r, /^module$/i); const svm = pick(r, /svm|in ?charge|^po$/i);
+        const hit = mods.find((x) => x.module.toLowerCase() === mod.toLowerCase()) || (svm && mods.find((x) => cmSame(x.po, svm)));
+        if (hit) { m[a] = hit.module; n++; } else if (mod || svm) skip++; });
+      engSet(m); const msg = document.getElementById("engMsg"); if (msg) msg.textContent = n + " assignees updated" + (skip ? ", " + skip + " rows skipped (module or SVM In Charge not recognised)" : "") + ".";
+    } catch (x) { alert("Could not read that file: " + x.message); }
+  };
+  rd.readAsArrayBuffer(f); e.target.value = "";
+});
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("#engDl,#engClr"); if (!b) return;
+  if (b.id === "engClr") { if (confirm("Clear every assignee’s module?")) engSet({}); return; }
+  const S = XL.S, R = engRoster(), map = CFG.engineers || {}, H = ["Engineering assignee", "Tickets", "Suggested module", "Module", "SVM In Charge"];
+  const rows = [H.map((h) => ({ v: h, s: S.head }))].concat(R.map((r) => { const sg = engSuggest(r.a), cur = map[r.a] || "", po = ((CFG.modules || []).find((m) => m.module === cur) || {}).po || "";
+    return [r.a, r.n, sg ? sg.mod + " (" + sg.how + ")" : "", cur, po]; }));
+  const note = [[{ v: "Modules: " + (CFG.modules || []).map((m) => m.module + " = " + m.po).join(" · "), s: S.sub }], [{ v: "Fill Module (as above) or SVM In Charge for each person, then upload this file in Master data.", s: S.sub }]];
+  XL.build([{ name: "Assignees", rows, cols: [30, 9, 32, 16, 22], freeze: 1, filter: "A1:E" + Math.max(2, rows.length) }, { name: "Modules", rows: note.concat([[]], (CFG.modules || []).map((m) => [m.module, m.po])), cols: [40, 30] }])
+    .then((u) => saveBlob(new Blob([u], { type: XLSX_MIME }), "Swire-engineering-assignees-" + HC.dayKey(NOW) + ".xlsx"));
+});
 function viewSetup() {
   const t = CFG.targets;
   const trow = (id) => { const s = HC.SEVS.find((x) => x.id === id); return "<tr><td>" + esc(s.name) + "</td>" + ["fr", "upd", "res"].map((k) => '<td><input class="inp" style="width:90px" data-tg="' + id + "." + k + '" value="' + t[id][k] + '"> <span class="dim small">min</span></td>').join("") + "</tr>"; };
@@ -2244,6 +2302,7 @@ function viewSetup() {
     '<p class="sub" style="margin-top:8px">Components on open Swire tickets that match no module: ' + esc(unmatched().join(", ") || "none") + ".</p></div>" +
     '<div class="panel"><div class="sec-h" style="margin-top:0">Key contacts (Section 15.2)</div><div class="tw"><table><thead><tr><th>Role</th><th>Name</th><th>Email</th><th>Phone</th></tr></thead><tbody>' +
     CFG.contacts.map((c, k) => "<tr>" + ["role", "name", "email", "phone"].map((f) => '<td><input class="inp" style="width:100%" data-ct="' + k + "." + f + '" value="' + esc(c[f] || "") + '"></td>').join("") + "</tr>").join("") + "</tbody></table></div></div>" +
+    engPanel() +
     '<div class="bar"><button class="btn pri" id="sSave">Save master data</button><button class="btn" id="sReset">Restore runbook defaults</button></div>';
 }
 function unmatched() { const s = new Set(); T.forEach((t, i) => { if (E[i].stage !== "closed") t.components.forEach((c) => { if (!HC.moduleOf(c, CFG)) s.add(c); }); }); return Array.from(s).sort(); }
