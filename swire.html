@@ -3116,6 +3116,28 @@ const NOREL = "(release no. not assigned)";
 COLS.rel = { h: "Release no.", s: (t) => t.rels.join(" "), c: (t) => t.rels.length ? t.rels.map((r) => '<span class="mono nw">' + esc(r) + "</span>").join("<br>") : '<span class="dim">—</span>' };
 COLS.relstage = { h: "Release stage", s: (t) => { const g = relStage(t); return g ? REL_STAGES.indexOf(g) : 9; }, c: (t) => { const g = relStage(t); return g ? '<span class="rlst" style="--rc:' + g.color + '">' + esc(g.label) + "</span>" : '<span class="dim">—</span>'; } };
 COLS.delivered = { h: "Delivered", s: (t, e) => t.delivered || e.closedAt || 0, c: (t, e) => { const d = t.delivered || e.closedAt; return d ? '<span class="nw">' + esc(fday(d)) + "</span>" : '<span class="dim">—</span>'; } };
+/* Incidents only, from the status history: "Release moved to production" = workaround provided, "Delivered" = permanent fix.
+   Both seen = workaround first and then the permanent fix (or the other way round). The current status counts as part of the history. */
+const FIX_CLS = [["fix", "Permanent fix delivered", "Reached Delivered, never Release moved to production", "t-ok", "check"],
+  ["both", "Workaround + permanent fix", "Release moved to production and Delivered, both", "t-ink", "toEngg"],
+  ["wa", "Workaround only, closed", "Release moved to production, closed without Delivered", "t-cr", "reopen"],
+  ["pend", "Workaround given, fix pending", "Release moved to production, still open, no Delivered yet", "t-ss", "clock"]];
+function fixClass(i) {
+  const t = T[i]; if (!/incident/i.test(t.type || "")) return null;
+  const k = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const seen = (E[i].tr || []).map((x) => k(x.to)).concat([k(t.status)]);
+  const wa = seen.some((x) => x === "release moved to production"), fx = seen.some((x) => x === "delivered");
+  if (wa && fx) return "both"; if (fx) return "fix"; if (wa) return E[i].stage === "closed" ? "wa" : "pend";
+  return null;
+}
+function fixBlock() {
+  const inc = T.map((t, i) => i).filter((i) => /incident/i.test(T[i].type || "")), by = {}; FIX_CLS.forEach(([id]) => { by[id] = []; });
+  inc.forEach((i) => { const c = fixClass(i); if (c) by[c].push(i); });
+  const noHist = inc.filter((i) => !E[i].tr).length, tot = Math.max(1, FIX_CLS.reduce((m, [id]) => m + by[id].length, 0));
+  return '<div class="grp">Incidents: workaround or permanent fix</div><p class="sub" style="margin:-4px 0 10px">From each incident’s status history: <b>Release moved to production</b> = workaround provided, <b>Delivered</b> = permanent fix. ' +
+    (noHist ? noHist.toLocaleString() + " incident" + (noHist === 1 ? " has" : "s have") + " no status history read yet and only count by their current status." : "") + "</p>" +
+    '<div class="tiles">' + FIX_CLS.map(([id, n, d, cls, ic]) => tile(cls, ic, by[id], n, d, by[id].length / tot, "Incidents: " + n)).join("") + "</div>";
+}
 function viewRel() {
   const all = T.map((t, i) => i), withRel = all.filter((i) => T[i].rels.length);
   const released = withRel.filter((i) => relDone(T[i], E[i]));
@@ -3144,6 +3166,7 @@ function viewRel() {
     tile("t-ink", "up", [].concat(...d7.map((x) => x.l)), "Released in the last 7 days", d7.length + " release" + (d7.length === 1 ? "" : "s"), rels.length ? d7.length / rels.length : 0, "Released in the last 7 days") +
     tile("t-ink", "up", [].concat(...d30.map((x) => x.l)), "Released in the last 30 days", d30.length + " release" + (d30.length === 1 ? "" : "s"), rels.length ? d30.length / rels.length : 0, "Released in the last 30 days") +
     tile("t-cr", "clock", expected, "Expected releases", erels.filter((r) => r !== NOREL).length + " release numbers, " + (eg[NOREL] || []).length + " not numbered yet", 1, "Expected releases") + "</div>" +
+    fixBlock() +
     '<section class="escsec t-ink"><div class="escsec-h"><div><b>With Engineering now: expected releases</b> <span>' + enggNow.length + '</span><div class="small">Every open Swire ticket currently with Engineering, grouped by the release it is expected in. Not numbered yet comes last.</div></div></div>' +
     (enggNow.length ? nrels.map((r) => { const l = ng[r].slice().sort(bySevAge), st = {}; l.forEach((i) => { const g0 = relStage(T[i]); const k = g0 ? g0.label : "Engineering work (" + T[i].status + ")"; st[k] = (st[k] || 0) + 1; });
       return '<div class="escgrp" data-xlname="rel-engg-' + esc(r) + '"><div class="escgrp-h">' + (r === NOREL ? '<span class="dim">' + esc(r) + "</span>" : '<span class="mono">' + esc(r) + "</span>") + " <b>" + l.length + '</b> <span class="dim small">' + esc(Object.keys(st).map((k) => st[k] + " " + k).join(", ")) + "</span></div>" +
