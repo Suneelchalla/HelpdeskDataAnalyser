@@ -639,7 +639,9 @@ const isChangeType = (ty) => /^change\b/i.test(String(ty || "").trim());
 function swireChanges() { const l = ALLT.filter((t) => isChangeType(t.type)); const pc = {}; l.forEach((t) => { const p = (t._row && (t._row.Project || t._row.project)) || ""; if (p) pc[p] = (pc[p] || 0) + 1; });
   return { n: l.length, open: l.filter((t, k) => { const i = ALLT.indexOf(t); return i > -1 && ALLE[i] && ALLE[i].stage !== "closed"; }).length, project: Object.keys(pc).sort((a, b) => pc[b] - pc[a])[0] || "Swire Shipping" }; }
 function openChangeTracker() {
-  const c = swireChanges(), hash = "proj=" + encodeURIComponent(c.project);
+  /* the Swire date choice goes along too (created dates, IST) */
+  const R = rangeMs(), ymd = (ms) => new Date(ms + 330 * MIN).toISOString().slice(0, 10);
+  const c = swireChanges(), hash = "proj=" + encodeURIComponent(c.project) + (R.from != null ? "&from=" + ymd(R.from) : "") + (R.to != null ? "&to=" + ymd(R.to - DAY) : "");
   try { if (window.parent && window.parent !== window) { window.parent.postMessage({ type: "HD_OPEN_MODULE", href: "change.html", hash }, "*"); return; } } catch (e) {}
   window.open("change.html#" + hash, "_blank", "noopener");
 }
@@ -652,7 +654,7 @@ function viewChangeLink() {
       " The Change Tracker has their stages, releases, sizing and approvals.</p>" +
     '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button type="button" class="btn pri" id="gotoChange">Open Swire changes in the Change Tracker</button>' +
     '<button type="button" class="btn" id="backIsr">Back to Incident + Service Request</button></div>' +
-    '<p class="dim small" style="margin-top:12px">Opens the Change Tracker tab with the client set to <b>' + esc(c.project) + "</b>.</p></div>";
+    '<p class="dim small" style="margin-top:12px">Opens the Change Tracker tab with the client set to <b>' + esc(c.project) + "</b>" + (rangeMs().from != null || rangeMs().to != null ? " and the dates set to <b>" + esc(rangeMs().label) + "</b>" : ", all dates") + ".</p></div>";
 }
 document.addEventListener("click", (e) => { const t = e.target.closest && e.target.closest("#gotoChange,#backIsr"); if (!t) return;
   if (t.id === "gotoChange") return openChangeTracker(); GF.type = "isr"; saveGF(); render(); });
