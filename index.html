@@ -1522,7 +1522,7 @@ if(HS){
     var f=document.createElement("iframe"); f.className="tframe"; f.title=t.title;
     f.addEventListener("load",function(){ hookFrame(t); });
     /* a fresh copy of the module each time the launcher loads, so an uploaded update is never hidden by the browser cache */
-    f.src=t.href+(t.href.indexOf("?")<0?"?":"&")+"_="+LAUNCH_ID; framesBox.appendChild(f); t.frame=f;
+    f.src=t.href+(t.href.indexOf("?")<0?"?":"&")+"_="+LAUNCH_ID+(t.pendingHash?"#"+t.pendingHash:""); t.pendingHash=null; framesBox.appendChild(f); t.frame=f;
   }
   function reload(t){
     try{ t.frame.contentWindow.location.reload(); }catch(e){ t.frame.src=t.href; }
@@ -1563,6 +1563,15 @@ if(HS){
     activate(h);
   }
 
+  /* a module asks to open another module with a filter, e.g. Swire → Change Tracker on the Swire client */
+  window.addEventListener("message",function(e){
+    var d=e.data; if(!d||d.type!=="HD_OPEN_MODULE"||!MODS[d.href]) return;
+    if(e.origin!==location.origin&&e.origin!=="null") return;
+    var t=find(d.href);
+    if(t&&t.frame){ openTab(d.href); try{ t.frame.contentWindow.location.hash=d.hash||""; }catch(err){} return; }
+    if(!t){ t={href:d.href,title:MODS[d.href],icon:iconFor(d.href),frame:null,stale:false}; t.btn=makeButton(t); tabs.push(t); }
+    t.pendingHash=d.hash||""; activate(d.href);
+  });
   function markStale(){ tabs.forEach(function(t){ if(t.frame){ t.stale=true; t.btn.classList.add("stale"); } }); }
 
   homeTab.addEventListener("click",function(){ activate("home"); });
