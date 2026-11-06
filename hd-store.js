@@ -483,3 +483,56 @@
     try { window.print(); } finally { setTimeout(restore, 1500); }   // print() blocks until the dialog closes
   };
 })();
+
+/* ══ HDLinks: every linked engineering ticket (LRPS-12345) becomes a link to Jira, on every page that loads this file.
+   Text already inside a link, a button, a form field, an editable mail preview, SVG, or a React-managed area is left alone
+   (React pages render their own links). Mails: HDLinks.html(html) / HDLinks.linkify(node) before copying or saving. ══ */
+(function () {
+  "use strict";
+  if (typeof window === "undefined" || typeof document === "undefined" || window.HDLinks) return;
+  var RX = /\bLRPS-\d{2,7}\b/g;
+  function host() { try { var c = JSON.parse(localStorage.getItem("hd-jira-cfg") || "{}"); if (c.jiraHost) return c.jiraHost; } catch (e) {} return "svmhelpdesk.atlassian.net"; }
+  function url(k) { return "https://" + host() + "/browse/" + encodeURIComponent(k); }
+  var SKIP = /^(A|BUTTON|SCRIPT|STYLE|TEXTAREA|INPUT|SELECT|OPTION|CODE|PRE|NOSCRIPT|TITLE|svg|SVG|text|tspan)$/;
+  function skipEl(el, live) {
+    for (var n = el; n && n.nodeType === 1; n = n.parentNode) {
+      if (SKIP.test(n.tagName) || (live && n.isContentEditable) || n.hasAttribute("data-nolink")) return true;
+      if (live && n !== document.body) { for (var k in n) { if (k.indexOf("__reactContainer") === 0 || k.indexOf("__reactFiber") === 0) return true; } }
+    }
+    return false;
+  }
+  function linkify(root, opts) {
+    if (!root) return root;
+    var live = !(opts && opts.detached), style = (opts && opts.style) || "color:#1D4ED8;text-decoration:underline";
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (t) { RX.lastIndex = 0; return t.nodeValue && t.nodeValue.indexOf("LRPS-") > -1 && RX.test(t.nodeValue) && !skipEl(t.parentNode, live) ? 1 : 3; } });
+    var list = []; while (w.nextNode()) list.push(w.currentNode);
+    list.forEach(function (t) {
+      var s = t.nodeValue, frag = document.createDocumentFragment(), last = 0, m; RX.lastIndex = 0;
+      while ((m = RX.exec(s))) {
+        if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+        var a = document.createElement("a"); a.href = url(m[0]); a.target = "_blank"; a.rel = "noopener"; a.className = "hd-lrps"; a.textContent = m[0];
+        if (!live) a.setAttribute("style", style);
+        frag.appendChild(a); last = m.index + m[0].length;
+      }
+      if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+      t.parentNode.replaceChild(frag, t);
+    });
+    return root;
+  }
+  function html(h, style) { var d = document.createElement("template"); d.innerHTML = h; linkify(d.content, { detached: true, style: style }); return d.innerHTML; }
+  window.HDLinks = { linkify: linkify, html: html, url: url };
+  /* live pages: link what is there and what appears later; a click on the link never opens the row behind it */
+  function start() {
+    if (!document.body) return;
+    var st = document.createElement("style"); st.textContent = "a.hd-lrps{color:inherit;text-decoration:underline;text-decoration-color:rgba(37,99,235,.55);text-underline-offset:2px}a.hd-lrps:hover{color:#1D4ED8;text-decoration-color:#1D4ED8}";
+    document.head && document.head.appendChild(st);
+    linkify(document.body);
+    var pend = [], timer = null;
+    new MutationObserver(function (ms) {
+      ms.forEach(function (m) { m.addedNodes && m.addedNodes.forEach(function (n) { if (n.nodeType === 1 || n.nodeType === 3) pend.push(n.nodeType === 3 ? n.parentNode : n); }); });
+      if (!timer) timer = setTimeout(function () { timer = null; var l = pend; pend = []; l.forEach(function (n) { if (n && n.isConnected) linkify(n); }); }, 60);
+    }).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("click", function (e) { var a = e.target.closest && e.target.closest("a.hd-lrps"); if (a) e.stopPropagation(); }, true);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
