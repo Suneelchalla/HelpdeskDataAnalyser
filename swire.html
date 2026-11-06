@@ -3122,11 +3122,15 @@ const FIX_CLS = [["fix", "Permanent fix delivered", "Reached Delivered, never Re
   ["both", "Workaround + permanent fix", "Release moved to production and Delivered, both", "t-ink", "toEngg"],
   ["wa", "Workaround only, closed", "Release moved to production, closed without Delivered", "t-cr", "reopen"],
   ["pend", "Workaround given, fix pending", "Release moved to production, still open, no Delivered yet", "t-ss", "clock"]];
+/* status names: "Release moved to production" (and close spellings such as "Release Moved To Prod"), and exactly "Delivered"
+   ("DB Script Delivered" is not a fix) */
+const fxKey = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
+const isWaSt = (x) => /\bmoved? to prod(uction)?\b/.test(fxKey(x));
+const isFixSt = (x) => fxKey(x) === "delivered";
 function fixClass(i) {
   const t = T[i]; if (!/incident/i.test(t.type || "")) return null;
-  const k = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
-  const seen = (E[i].tr || []).map((x) => k(x.to)).concat([k(t.status)]);
-  const wa = seen.some((x) => x === "release moved to production"), fx = seen.some((x) => x === "delivered");
+  const seen = (E[i].tr || []).map((x) => x.to).concat([t.status]);
+  const wa = seen.some(isWaSt), fx = seen.some(isFixSt);
   if (wa && fx) return "both"; if (fx) return "fix"; if (wa) return E[i].stage === "closed" ? "wa" : "pend";
   return null;
 }
@@ -3134,9 +3138,22 @@ function fixBlock() {
   const inc = T.map((t, i) => i).filter((i) => /incident/i.test(T[i].type || "")), by = {}; FIX_CLS.forEach(([id]) => { by[id] = []; });
   inc.forEach((i) => { const c = fixClass(i); if (c) by[c].push(i); });
   const noHist = inc.filter((i) => !E[i].tr).length, tot = Math.max(1, FIX_CLS.reduce((m, [id]) => m + by[id].length, 0));
+  /* incidents sitting in one of the two statuses right now, one box per status name found */
+  const nowWa = {}, nowFx = [];
+  inc.forEach((i) => { const st = T[i].status || ""; if (isWaSt(st)) (nowWa[st] = nowWa[st] || []).push(i); else if (isFixSt(st)) nowFx.push(i); });
+  const waNames = Object.keys(nowWa).sort((x, y) => nowWa[y].length - nowWa[x].length), nowTot = Math.max(1, waNames.reduce((m, k) => m + nowWa[k].length, 0) + nowFx.length);
+  const nowTiles = waNames.map((k) => tile("t-cr", "clock", nowWa[k], "Now in " + k, "Workaround live, permanent fix still to come", nowWa[k].length / nowTot, "Incidents now in " + k)).join("") +
+    tile("t-ok", "check", nowFx, "Now in Delivered", "Permanent fix delivered, not closed yet", nowFx.length / nowTot, "Incidents now in Delivered") +
+    (waNames.length ? "" : tile("t-cr", "clock", [], "Now in Release moved to production", "No incident is in this status right now", 0));
+  /* which status names were matched, so a spelling difference is easy to spot */
+  const evW = {}, evF = {}; inc.forEach((i) => { (E[i].tr || []).map((x) => x.to).concat([T[i].status]).forEach((st) => { if (isWaSt(st)) evW[st] = (evW[st] || 0) + 1; if (isFixSt(st)) evF[st] = (evF[st] || 0) + 1; }); });
+  const nm = (o) => Object.keys(o).map((k) => "“" + esc(k) + "”").join(", ");
   return '<div class="grp">Incidents: workaround or permanent fix</div><p class="sub" style="margin:-4px 0 10px">From each incident’s status history: <b>Release moved to production</b> = workaround provided, <b>Delivered</b> = permanent fix. ' +
+    (Object.keys(evW).length || Object.keys(evF).length ? "Status names found: " + [nm(evW), nm(evF)].filter(Boolean).join(" · ") + ". " : "") +
+    (!Object.keys(evW).length ? '<b style="color:var(--ss)">No incident has a “Release moved to production” status in its history yet</b>; if the status is spelled differently in Jira, tell me the exact name. ' : "") +
     (noHist ? noHist.toLocaleString() + " incident" + (noHist === 1 ? " has" : "s have") + " no status history read yet and only count by their current status." : "") + "</p>" +
-    '<div class="tiles">' + FIX_CLS.map(([id, n, d, cls, ic]) => tile(cls, ic, by[id], n, d, by[id].length / tot, "Incidents: " + n)).join("") + "</div>";
+    '<div class="tiles">' + FIX_CLS.map(([id, n, d, cls, ic]) => tile(cls, ic, by[id], n, d, by[id].length / tot, "Incidents: " + n)).join("") + "</div>" +
+    '<div class="grp">Incidents in these statuses right now</div><div class="tiles">' + nowTiles + "</div>";
 }
 function viewRel() {
   const all = T.map((t, i) => i), withRel = all.filter((i) => T[i].rels.length);
