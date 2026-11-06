@@ -3737,28 +3737,17 @@ function App(){
         <MultiSelect allLabel="All Types" options={itypes.map(function(x){return [x[0],x[1]];})} selected={itF} onChange={function(v){setItF(v);clr();}} minWidth={110}/>
         <div style={{flex:1,minWidth:4}}/>
 
-        {/* HDX: status mismatch (client ticket ↔ LRPS) and handover */}
-        {window.HDX&&<button onClick={function(){window.HDX.openMismatch(flt,allFiltered);}} title={hdxMis?hdxMis+" tickets where the client ticket and its LRPS ticket are in different statuses":"Client tickets and LRPS tickets agree"}
-          style={{background:hdxMis?"#FFF1F2":"var(--bg)",border:"1px solid "+(hdxMis?"#FECDD3":"var(--border)"),color:hdxMis?"#BE123C":"var(--t3)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
-          <span style={{fontSize:13}}>⇄</span>{hdxMis?<><b>{hdxMis.toLocaleString()}</b> mismatch</>:"Status in sync"}
-        </button>}
-        {window.HDX&&<button onClick={function(){window.HDX.openHandover(flt);}} title="Handover email + Excel for everything pending with SVM"
-          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
-          <span style={{fontSize:13}}>📨</span> Handover
-        </button>}
-
-        {window.HDX&&window.HDX.openChecks&&<button onClick={function(){window.HDX.openChecks(flt,allFiltered);}} title="Rule checks for all clients: status mismatch, assignee's module missing, no LRPS, no SVM In Charge, no Components"
-          style={{background:hdxChk?"#FFF7ED":"var(--bg)",border:"1px solid "+(hdxChk?"#FED7AA":"var(--border)"),color:hdxChk?"#C2410C":"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
-          <span style={{fontSize:13}}>☑</span> Checks{hdxChk?<b style={{marginLeft:2}}>{hdxChk.toLocaleString()}</b>:null}
-        </button>}
-        {window.HDX&&window.HDX.openSla&&<button onClick={function(){window.HDX.openSla(flt,allFiltered);}} title="SLA for the tickets in view: breached, about to breach, met and missed, by priority and client"
-          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
-          <span style={{fontSize:13}}>⏱</span> SLA
-        </button>}
-        {window.HDX&&window.HDX.printReport&&<button onClick={function(){window.HDX.printReport(flt,allFiltered);}} title="PDF status report: counts, charts, SLA, who has what, and the ticket list"
-          style={{background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"7px 11px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap",flexShrink:0}}>
-          <span style={{fontSize:13}}>📄</span> PDF
-        </button>}
+        {/* HDX: status mismatch, rule checks, handover, SLA, PDF; compact so the header fits on one line */}
+        {window.HDX&&(function(){
+          var B={background:"var(--bg)",border:"1px solid var(--border)",color:"var(--t2)",padding:"6px 9px",borderRadius:9,fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap",flexShrink:0,cursor:"pointer",lineHeight:1};
+          var tone=function(on,bg,bd,c){return on?Object.assign({},B,{background:bg,border:"1px solid "+bd,color:c}):B;};
+          return(<div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+            <button onClick={function(){window.HDX.openMismatch(flt,allFiltered);}} title={hdxMis?hdxMis+" status mismatches: client ticket and LRPS in different statuses":"Client tickets and LRPS tickets agree"} style={tone(hdxMis,"#FFF1F2","#FECDD3","#BE123C")}><span style={{fontSize:13}}>⇄</span>{hdxMis?<b>{hdxMis.toLocaleString()}</b>:"✓"}</button>
+            {window.HDX.openChecks&&<button onClick={function(){window.HDX.openChecks(flt,allFiltered);}} title={"Rule checks"+(hdxChk?": "+hdxChk+" to fix":"")+" (status mismatch, assignee’s module missing, new assignee, no LRPS, no SVM In Charge, no Components)"} style={tone(hdxChk,"#FFF7ED","#FED7AA","#C2410C")}><span style={{fontSize:13}}>☑</span>{hdxChk?<b>{hdxChk.toLocaleString()}</b>:"✓"}</button>}
+            <button onClick={function(){window.HDX.openHandover(flt);}} title="Handover: email + Excel for everything pending with SVM" style={B}><span style={{fontSize:13}}>📨</span></button>
+            {window.HDX.openSla&&<button onClick={function(){window.HDX.openSla(flt,allFiltered);}} title="SLA: breached, about to breach, met and missed, by priority and client" style={B}><span style={{fontSize:13}}>⏱</span></button>}
+            {window.HDX.printReport&&<button onClick={function(){window.HDX.printReport(flt,allFiltered);}} title="PDF status report" style={B}><span style={{fontSize:13}}>📄</span></button>}
+          </div>);})()}
 
         {/* Global search trigger — compact */}
         <button onClick={function(){setGlobalSearchOpen(true);}} title="Search tickets (Ctrl+K)"
