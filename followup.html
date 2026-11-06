@@ -921,7 +921,7 @@
     ];
   }
   function openChecks(open, all) {
-    var m = modal(), S = { id: null };
+    var m = modal(), S = { id: null, side: null };
     function paint() {
       var C = runChecks(open, all), c = S.id && C.find(function (x) { return x.id === S.id; });
       if (!c) {
@@ -931,8 +931,18 @@
         return;
       }
       var d = c.detail || {}, MODS = poList();
-      var L = c.list.slice().sort(function (a, b) { return a.project.localeCompare(b.project) || bySevAge(a, b); });
-      m.box.innerHTML = '<div class="hdx-hd"><h3>' + esc(c.title) + '<span class="n">' + L.length + '</span></h3><button type="button" class="hdx-btn" data-c="xlsx">Download Excel</button><button type="button" class="hdx-btn" data-c="back">Back</button><button type="button" class="hdx-btn" data-c="close">Close</button></div>' +
+      var sides = SIDES.filter(function (x) { return c.list.some(function (t) { return side(t) === x[0]; }); });
+      if (sides.length === 1) S.side = sides[0][0];
+      if (!S.side) {
+        m.box.innerHTML = '<div class="hdx-hd"><h3>' + esc(c.title) + '<span class="n">' + c.list.length + '</span></h3><button type="button" class="hdx-btn" data-c="back">Back</button><button type="button" class="hdx-btn" data-c="close">Close</button></div>' +
+          '<p class="hdx-sub">' + esc(c.why) + " Where the tickets are now; pick one.</p>" +
+          '<div class="hdx-cards">' + SIDES.filter(function (x) { return x[0] !== "closed"; }).map(function (x) { var n = c.list.filter(function (t) { return side(t) === x[0]; }).length;
+            return '<button type="button" class="hdx-card" style="--c:' + x[3] + '" data-cside="' + x[0] + '"' + (n ? "" : " disabled") + '><div class="v">' + n.toLocaleString() + '</div><div class="t">' + esc(x[1]) + '</div><div class="d">' + esc(x[2]) + "</div></button>"; }).join("") + "</div>";
+        return;
+      }
+      var sd = SIDES.filter(function (x) { return x[0] === S.side; })[0];
+      var L = c.list.filter(function (t) { return side(t) === S.side; }).sort(function (a, b) { return a.project.localeCompare(b.project) || bySevAge(a, b); });
+      m.box.innerHTML = '<div class="hdx-hd"><h3>' + esc(c.title) + '<span class="n">' + L.length + " · " + esc(sd ? sd[1] : "") + '</span></h3><button type="button" class="hdx-btn" data-c="xlsx">Download Excel</button><button type="button" class="hdx-btn" data-c="back">Back</button><button type="button" class="hdx-btn" data-c="close">Close</button></div>' +
         '<p class="hdx-sub">' + esc(c.why) + '</p><div class="hdx-tw"><table><thead><tr>' + (c.id === "cm" ? "<th>Missing module</th><th>LRPS assignee</th><th>Components now</th>" : c.id === "neweng" ? "<th>New assignee</th>" : c.id === "teamacc" ? "<th>Team account</th>" : c.id === "jmwe" ? "<th>Assigned to</th>" : "") +
         "<th>Ticket</th><th>Client</th><th>Priority</th><th>Summary</th><th>Status</th><th>LRPS</th><th>SVM In Charge</th><th>Age</th></tr></thead><tbody>" +
         L.map(function (t) { var x = d[t.key] || {};
@@ -946,10 +956,12 @@
         return XL.build([{ name: "Tickets", rows: rows, cols: H.map(function (h) { return h === "Summary" ? 52 : h === "Why" ? 34 : 18; }), freeze: 1, filter: "A1:" + XL.col(H.length - 1) + Math.max(2, rows.length) }]).then(function (u) {
           saveBlob(new Blob([u], { type: XLSX_MIME }), "HD-" + c.title.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + dayKey(Date.now()) + ".xlsx"); }); };
     }
-    m.box.addEventListener("click", function (e) { var r = e.target.closest("[data-cid],[data-c]"); if (!r) return;
-      if (r.dataset.cid) { if (r.dataset.cid === "mis") { m.close(); return openMismatch(open, all); } S.id = r.dataset.cid; return paint(); }
-      var x = r.dataset.c; if (x === "close") return m.close(); if (x === "back") { S.id = null; return paint(); } if (x === "xlsx") return busy(r, "Download Excel", m._xl); });
-    m.onEsc = function () { if (S.id) { S.id = null; paint(); return true; } return false; };
+    m.box.addEventListener("click", function (e) { var r = e.target.closest("[data-cid],[data-c],[data-cside]"); if (!r) return;
+      if (r.dataset.cid) { if (r.dataset.cid === "mis") { m.close(); return openMismatch(open, all); } S.id = r.dataset.cid; S.side = null; return paint(); }
+      if (r.dataset.cside) { S.side = r.dataset.cside; return paint(); }
+      var x = r.dataset.c; if (x === "close") return m.close(); if (x === "back") { var only = S.id && (function () { var cc = runChecks(open, all).find(function (y) { return y.id === S.id; }); return cc && SIDES.filter(function (z) { return cc.list.some(function (t) { return side(t) === z[0]; }); }).length <= 1; })();
+        if (S.side && !only) S.side = null; else { S.id = null; S.side = null; } return paint(); } if (x === "xlsx") return busy(r, "Download Excel", m._xl); });
+    m.onEsc = function () { if (S.id) { var b = m.box.querySelector('[data-c="back"]'); if (b) b.click(); return true; } return false; };
     m._chg = function () { paint(); }; window.addEventListener("hdx-change", m._chg);
     paint();
   }
