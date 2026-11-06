@@ -769,8 +769,60 @@ function releaseInsights(F){
 }
 
 /* ── OVERVIEW TAB ── */
+/* ══ Incidents: workaround or permanent fix (same rules as the Swire module) ══
+   From each incident's status history (the SLA history already used by the Movement tab) plus its current status:
+   "Release moved to production" (or a close spelling) = workaround provided, exactly "Delivered" = permanent fix.
+   Scope: every ticket in the filters, with or without a release number. */
+var FX_CLS=[["fix","Permanent fix delivered","Reached Delivered, never Release moved to production","#059669"],
+  ["both","Workaround + permanent fix","Release moved to production and Delivered, both","#7C3AED"],
+  ["wa","Workaround only, closed","Release moved to production, closed without Delivered","#D97706"],
+  ["pend","Workaround given, fix pending","Release moved to production, still open, no Delivered yet","#DC2626"]];
+var FX_LISTS={};
+function fxKey(x){return String(x||"").toLowerCase().replace(/\s+/g," ").trim();}
+function fxIsWa(x){return /\bmoved? to prod(uction)?\b/.test(fxKey(x));}
+function fxIsFix(x){return fxKey(x)==="delivered";}
+function fxSeen(t){var e=MV.loaded?mvEntry(t):null;return (e&&e.transitions?e.transitions.map(function(x){return x.to;}):[]).concat([t.status]);}
+function fxClass(t){
+  if(!/incident/i.test(t.issueType||"")) return null;
+  var s=fxSeen(t),wa=s.some(fxIsWa),fx=s.some(fxIsFix);
+  if(wa&&fx) return "both"; if(fx) return "fix"; if(wa) return t.closed?"wa":"pend"; return null;
+}
+function fxBlock(){
+  if(!MV.loaded&&!MV.loading){MV.loading=true;mvLoad().then(function(){MV.loading=false;render();});}
+  var inc=(EXP_ALL||[]).filter(function(t){return /incident/i.test(t.issueType||"");}),by={};FX_CLS.forEach(function(c){by[c[0]]=[];});
+  inc.forEach(function(t){var c=fxClass(t);if(c)by[c].push(t);});
+  var noHist=MV.loaded?inc.filter(function(t){return !mvEntry(t);}).length:inc.length;
+  var nowWa={},nowFx=[];inc.forEach(function(t){if(fxIsWa(t.status))(nowWa[t.status]=nowWa[t.status]||[]).push(t);else if(fxIsFix(t.status))nowFx.push(t);});
+  var evW={},evF={};inc.forEach(function(t){fxSeen(t).forEach(function(st){if(fxIsWa(st))evW[st]=1;if(fxIsFix(st))evF[st]=1;});});
+  FX_LISTS={};
+  var tile=function(id,n,d,c,l){FX_LISTS[id]={title:n,list:l};return '<button type="button" data-fxl="'+id+'" style="text-align:left;border:1px solid var(--line,#E2E8F0);border-left:4px solid '+c+';border-radius:12px;background:#fff;padding:12px 14px;cursor:'+(l.length?"pointer":"default")+';opacity:'+(l.length?1:.55)+'">'+
+    '<div style="font-size:24px;font-weight:800;color:'+c+';line-height:1.1">'+l.length.toLocaleString()+'</div><div style="font-size:13px;font-weight:700;margin-top:2px">'+esc(n)+'</div><div style="font-size:11px;color:#64748B;margin-top:3px">'+esc(d)+'</div></button>';};
+  var grid='display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:8px';
+  var names=Object.keys(evW).concat(Object.keys(evF)).map(function(k){return "“"+esc(k)+"”";}).join(", ");
+  var h='<div class="card up" style="padding:18px 20px;margin-bottom:16px"><div class="sec-head"><span class="sec-title">Incidents: workaround or permanent fix</span></div>'+
+    '<div style="font-size:12px;color:#64748B;line-height:1.5">From each incident’s status history: <b>Release moved to production</b> = workaround provided, <b>Delivered</b> = permanent fix. Every ticket in the filters, with or without a release number. '+
+    (names?"Status names found: "+names+". ":"")+(!Object.keys(evW).length?'<b style="color:#DC2626">No incident has a “Release moved to production” status in its history yet</b>; if it is spelled differently in Jira, the exact name is needed. ':"")+
+    (!MV.loaded?"Reading status history…":noHist?noHist.toLocaleString()+" incident"+(noHist===1?" has":"s have")+" no status history read yet (the Movement tab reads it) and only count by their current status.":"")+'</div>'+
+    '<div style="'+grid+'">'+FX_CLS.map(function(c){return tile(c[0],c[1],c[2],c[3],by[c[0]]);}).join("")+'</div>'+
+    '<div style="font-size:12px;font-weight:700;color:#334155;margin:14px 0 0">Incidents in these statuses right now</div><div style="'+grid+'">'+
+    (Object.keys(nowWa).length?Object.keys(nowWa).sort(function(a,b){return nowWa[b].length-nowWa[a].length;}).map(function(k,j){return tile("now_wa_"+j,"Now in "+k,"Workaround live, permanent fix still to come","#D97706",nowWa[k]);}).join(""):tile("now_wa_0","Now in Release moved to production","No incident is in this status right now","#D97706",[]))+
+    tile("now_fx","Now in Delivered","Permanent fix delivered, not closed yet","#059669",nowFx)+'</div></div>';
+  return h;
+}
+function fxOpen(id){
+  var x=FX_LISTS[id]; if(!x||!x.list.length) return;
+  var ov=document.createElement("div"); ov.style.cssText="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto";
+  var rows=x.list.slice().sort(function(a,b){return (a.created||0)-(b.created||0);}).map(function(t){var s=fxSeen(t),wa=s.some(fxIsWa),fx=s.some(fxIsFix);
+    return '<tr><td style="white-space:nowrap"><b>'+esc(t.key)+'</b></td><td>'+esc(t.project)+'</td><td>'+esc(t.priority||"—")+'</td><td style="min-width:260px">'+esc(t.summary)+'</td><td style="white-space:nowrap">'+esc(t.status)+'</td><td style="white-space:nowrap">'+esc(t.releaseStr||"—")+'</td><td style="white-space:nowrap">'+(wa?"Workaround":"")+(wa&&fx?" + ":"")+(fx?"Permanent fix":"")+'</td><td>'+esc(t.svm||"—")+'</td></tr>';}).join("");
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;width:min(1200px,100%);padding:18px 20px;box-shadow:0 24px 60px rgba(15,23,42,.25)"><div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid #E2E8F0;padding-bottom:10px;margin-bottom:10px"><b style="flex:1;font-size:16px">'+esc(x.title)+' <span style="color:#94A3B8">'+x.list.length+'</span></b><button type="button" data-fxclose style="border:1px solid #CBD5E1;background:#fff;border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer">Close</button></div>'+
+    '<div style="overflow:auto;max-height:70vh;border:1px solid #E2E8F0;border-radius:12px"><table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>'+["Ticket","Client","Priority","Summary","Status","Release","Seen in history","SVM In Charge"].map(function(hh){return '<th style="position:sticky;top:0;background:#F8FAFC;text-align:left;padding:8px 10px;border-bottom:1px solid #E2E8F0;white-space:nowrap">'+hh+'</th>';}).join("")+'</tr></thead><tbody>'+rows.replace(/<td/g,'<td style="padding:7px 10px;border-bottom:1px solid #F1F5F9;vertical-align:top"').replace(/<td style="padding:7px 10px;border-bottom:1px solid #F1F5F9;vertical-align:top" style="/g,'<td style="padding:7px 10px;border-bottom:1px solid #F1F5F9;vertical-align:top;')+'</tbody></table></div></div>';
+  var close=function(){ov.remove();document.removeEventListener("keydown",key,true);}, key=function(e){if(e.key==="Escape"){e.stopPropagation();close();}};
+  ov.addEventListener("click",function(e){if(e.target===ov||e.target.closest("[data-fxclose]"))close();});
+  document.addEventListener("keydown",key,true); document.body.appendChild(ov);
+}
+document.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-fxl]");if(b)fxOpen(b.getAttribute("data-fxl"));});
 function renderOverview(){
-  var h='<div class="ogrid up d1">';
+  var h=fxBlock()+'<div class="ogrid up d1">';
 
   // Left: donut
   var df=FILTERED.filter(function(t){return t.fixType==="Data Fix";}).length;
