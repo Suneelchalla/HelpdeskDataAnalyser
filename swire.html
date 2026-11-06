@@ -7,11 +7,11 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237A1F3D'/%3E%3Cpath d='M6 20h20l-3 5H9z' fill='%23F3C6D4'/%3E%3Cpath d='M15 7v12M15 8l7 9h-7' stroke='%23fff' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="hd-store.js?v=20261107a"></script>
-<script src="hd-engineers.js?v=20261107a"></script>
+<script src="hd-engineers.js?v=20261107b"></script>
 <script src="sla-engine.js?v=20261031d"></script>
 <script src="sla-history.js?v=20261031d"></script>
 <script src="sla-link.js?v=20261031d"></script>
-<script src="hd-hypercare.js?v=20261031d"></script>
+<script src="hd-hypercare.js?v=20261107a"></script>
 <script src="hd-search.js?v=20261031d"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -1134,10 +1134,18 @@ function mismatchCheck() {
    2. their past tickets (learned): at least 5 single-component tickets with an LRPS assignee, 70% or more in one module. */
 const cmNk = (x) => String(x || "").toLowerCase().replace(/[^a-z]/g, "");
 const cmSame = (a, b) => { const x = cmNk(a), y = cmNk(b); return !!x && !!y && (x === y || (Math.abs(x.length - y.length) <= 2 && (x.indexOf(y) === 0 || y.indexOf(x) === 0))); };
-const cmMods = (t) => Array.from(new Set((t.components || []).map((c) => { const m = HC.moduleOf(c, CFG); return m ? m.module : String(c).trim(); }).filter(Boolean)));
+const compSpecial = (c) => (window.HD_COMP_SPECIAL || {})[String(c || "").toLowerCase().trim()] || "";
+const cmMods = (t) => Array.from(new Set((t.components || []).filter((c) => compSpecial(c) !== "ignore").map((c) => { const m = HC.moduleOf(c, CFG); return m ? m.module : String(c).trim(); }).filter(Boolean)));
 /* engineer master list (hd-engineers.js, kept by the Help Desk): LRPS assignee → module */
 function engMaster(a) { const M = window.HD_ENGINEERS || {}; if (M[a]) return M[a]; const k = Object.keys(M).find((x) => cmSame(x, a)); return k ? M[k] : ""; }
-const engKnown = (a) => !!engMaster(a);
+/* what kind of name an LRPS assignee is: an engineer with a module, a team account, automation (JMWE), no module, a client user */
+function engKind(a) {
+  if (!a) return ""; const has = (arr) => (arr || []).some((x) => cmSame(x, a) || String(x).toLowerCase() === String(a).toLowerCase());
+  if (has(window.HD_ENG_AUTO) || /jmwe/i.test(a)) return "auto"; if (has(window.HD_ENG_TEAM)) return "team";
+  if (Object.keys(window.HD_ENG_NOMOD || {}).some((x) => cmSame(x, a))) return "nomod"; if (has(window.HD_ENG_IGNORE)) return "ignore";
+  return engMaster(a) ? "eng" : "";
+}
+const engKnown = (a) => !!engKind(a);
 function assigneeOf(t) { const n = t.lrps.map((k) => LRPS[k] && !LRPS[k].gone && LRPS[k].a).filter(Boolean); return n[0] || ""; }
 let CM_CACHE = null;
 function learnHome() {
@@ -1156,7 +1164,7 @@ function homeOf(a) {
 }
 function compMissCheck() {
   const keys = [], detail = {};
-  openIdx().forEach((i) => { const t = T[i], a = assigneeOf(t); if (!a) return; const h = homeOf(a); if (!h) return;
+  openIdx().forEach((i) => { const t = T[i], a = assigneeOf(t); if (!a || ["auto", "team", "nomod", "ignore"].indexOf(engKind(a)) > -1) return; const h = homeOf(a); if (!h) return;
     const have = cmMods(t); if (h.mods.some((m) => have.indexOf(m) > -1)) return;
     keys.push(t.key); detail[t.key] = { mod: h.mods[0], who: a, how: h.how, have: have.join(", ") || "(none)" }; });
   return { id: "compmiss", ref: "Step 4", title: "Assignee’s module missing in Components", who: "Shadow team / General Support",
@@ -1168,9 +1176,15 @@ function newEngCheck() {
   return { id: "neweng", ref: "Master", title: "Engineering assignee not in the engineer master list", who: "Help Desk lead",
     why: hasList ? "A new LRPS assignee: add them, with their module, to the engineer master list (Follow-up Tracker › Gaps › Download engineering assignees)." : "The engineer master list is still empty: download the assignee list in Follow-up Tracker › Gaps, fill it and share it.", keys, detail };
 }
+function kindCheck(kind, id, title, why) {
+  const keys = [], detail = {}; openIdx().forEach((i) => { const a = assigneeOf(T[i]); if (a && engKind(a) === kind) { keys.push(T[i].key); detail[T[i].key] = { who: a }; } });
+  return { id, ref: "LRPS", title, who: "Shadow team / General Support", why, keys, detail };
+}
+const teamCheck = () => kindCheck("team", "teamacc", "LRPS assigned to a team account, not a person", "The LRPS ticket is assigned to a shared account (SVM HELP DESK, Solverminds, SVM Quality, svmpmo, Product Owner, Receivables), so no engineer owns it. Assign it to a named engineer.");
+const jmweCheck = () => kindCheck("auto", "jmwe", "LRPS with the client (JMWE)", "The LRPS ticket is assigned to the JMWE automation, which happens when engineering hands it to the client. Shown separately; nothing to fix unless the client has already replied.");
 function allChecks() {
   const C = HC.checks(T, E, NOW, CFG), at = C.findIndex((c) => c.id === "lrps");
-  C.splice(at < 0 ? C.length : at + 1, 0, mismatchCheck(), compMissCheck(), newEngCheck());
+  C.splice(at < 0 ? C.length : at + 1, 0, mismatchCheck(), compMissCheck(), newEngCheck(), teamCheck(), jmweCheck());
   return C;
 }
 /* the two status columns shown first in the mismatch list */
@@ -1212,6 +1226,9 @@ function chkDef(c) {
       cols: ["key", "type", "pri", "sum", "status", "age", "po", "rem"], note: "Each ME ID once, with every ticket that carries it." };
     case "triage": return { gh: ["Status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: ["key", "type", "pri", "sum", "status", "age", "cw", "po", "rem"] };
     case "lrps": return { gh: ["SWIPHX status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: STD };
+    case "teamacc": case "jmwe": return { gh: [c.id === "jmwe" ? "Assigned to" : "Team account"], vals: (i) => { const x = d[T[i].key]; return x ? [[x.who]] : []; },
+      front: [{ h: c.id === "jmwe" ? "Assigned to" : "Team account", s: (i) => (d[T[i].key] || {}).who, c: (i) => "<b>" + esc((d[T[i].key] || {}).who || "") + "</b>" }],
+      cols: ["key", "type", "pri", "sum", "status", "age", "lrps", "svm", "rem"] };
     case "neweng": return { gh: ["New engineering assignee"], vals: (i) => { const x = d[T[i].key]; return x ? [[x.who]] : []; },
       front: [{ h: "New assignee", s: (i) => (d[T[i].key] || {}).who, c: (i) => '<b style="color:var(--ss)">' + esc((d[T[i].key] || {}).who || "") + "</b>" }],
       cols: ["key", "type", "pri", "sum", "status", "age", "lrps", "svm", "rem"], note: "Each new assignee once, with their open tickets." };
@@ -2545,7 +2562,7 @@ function personMail(list, info, hi, note, skip) {
   const nk = (x) => String(x || "").toLowerCase().replace(/[^a-z]/g, ""), me = nk(info && info.name);
   const sameName = (x, y) => { const a = nk(x), c = nk(y); return !!a && !!c && (a === c || (Math.abs(a.length - c.length) <= 2 && (a.indexOf(c) === 0 || c.indexOf(a) === 0))); };
   const isMe = (po) => sameName(po, info && info.name);
-  const compsOf = (i) => { const seen = {}, out = []; (T[i].components || []).forEach((c) => { const m = HC.moduleOf(c, CFG), k = m ? m.module : c; if (seen[k]) return; seen[k] = 1; out.push(m ? { mod: m.module, po: m.po, email: m.email || "" } : { mod: c, po: "", email: "" }); }); return out; };
+  const compsOf = (i) => { const seen = {}, out = []; (T[i].components || []).filter((c) => compSpecial(c) !== "ignore").forEach((c) => { const m = HC.moduleOf(c, CFG), k = m ? m.module : c; if (seen[k]) return; seen[k] = 1; out.push(m ? { mod: m.module, po: m.po, email: m.email || "" } : { mod: c, po: "", email: "" }); }); return out; };
   const shared = (i) => compsOf(i).length > 1;
   const ccMap = {}; if (svmM) list.forEach((i) => { if (shared(i)) compsOf(i).forEach((x) => { if (x.email && !isMe(x.po)) ccMap[x.email.toLowerCase()] = x.email; }); });
   /* tickets owned by another SVM In Charge that also involve this person's module: listed at the end, for information */
@@ -3518,7 +3535,7 @@ function render() {
   rebuild(); paintDuty(); paintChips(); paintFilters(); wireFilters(); wireGSearch();
   writeStats();
   const open = openIdx(), C = allChecks(), escN = HC.escalations(T, E, NOW, CFG).length;
-  const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen").length;
+  const ruleN = C.filter((c) => c.keys.length && c.id !== "reopen" && c.id !== "jmwe").length;
   paintTabs({ openbox: { n: open.filter((i) => E[i].stage === "openbox").length }, work: { n: open.filter((i) => { const x = sideOf(i); return x === "hd" || x === "engg"; }).length }, sla: (() => { const n = open.filter((i) => slaB(i) === "breached").length; return { n, hot: n > 0 }; })(), esc: { n: escN, hot: escN > 0 }, rules: { n: ruleN }, queue: { n: open.length } });
   const V = { now: viewNow, openbox: viewOpenBox, work: viewWork, sla: viewSla, move: viewMove, rel: viewRel, esc: viewEsc, rules: viewRules, queue: viewQueue, analytics: viewAnalytics, handover: viewHandover, weekly: viewWeekly, setup: viewSetup }[TAB] || viewNow;
   const y = window.scrollY, f = document.activeElement && document.activeElement.id;
