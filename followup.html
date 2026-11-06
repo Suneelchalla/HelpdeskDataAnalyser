@@ -890,7 +890,8 @@
   }
   function runChecks(open, all) {
     var MODS = poList(), ts = open.map(T), home = learnHome(all, MODS);
-    var homeOf = function (a) { var po = MODS.filter(function (m) { return cmSame(m.po, a); }).map(function (m) { return m.module; }); if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
+    var ENG = (function () { try { var sv = JSON.parse(localStorage.getItem("hd-swire-cfg") || "null"); return (sv && sv.engineers) || {}; } catch (e) { return {}; } })();   // set in Swire › Master data
+    var homeOf = function (a) { if (ENG[a]) return { mods: [ENG[a]], how: "set in Master data: " + ENG[a] }; var po = MODS.filter(function (m) { return cmSame(m.po, a); }).map(function (m) { return m.module; }); if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
       var h = home[a]; return h ? { mods: [h.mod], how: "usually works on " + h.mod + " (" + h.n + " of " + h.of + " tickets)" } : null; };
     var cm = [], cmD = {};
     ts.forEach(function (t) { var a = assigneeOf(t); if (!a) return; var h = homeOf(a); if (!h) return; var have = compsOf(t, MODS).map(function (x) { return x.mod; });
