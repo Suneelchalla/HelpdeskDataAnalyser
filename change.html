@@ -2033,6 +2033,19 @@ function bindAll(){
 }
 
 /* ── BOOT ── */
+/* Opened from another module with a filter, e.g. the Swire module: change.html#proj=Swire%20Shipping sets the Client filter.
+   The client is matched without case; failing that, the first client containing the name. The address is then cleaned
+   so a later refresh does not undo a filter changed by hand. */
+function applyHashFilter(){
+  var m=/(?:^#|&)proj=([^&]*)/.exec(location.hash||""); if(!m) return false;
+  var want=decodeURIComponent(m[1]||"").trim(), lw=want.toLowerCase(), names={};
+  (RAW||[]).forEach(function(t){ if(t.project) names[t.project]=1; });
+  var ks=Object.keys(names), hit=ks.filter(function(k){return k.toLowerCase()===lw;})[0]||ks.filter(function(k){return k.toLowerCase().indexOf(lw.split(" ")[0])>-1;})[0]||want;
+  S.proj=hit; S.page=0;
+  try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+  return true;
+}
+window.addEventListener("hashchange",function(){ if(RAW&&applyHashFilter()) render(); });
 function boot(){
   if(!window.HDStore){renderLanding();return;}
   HDStore.loadConfig().then(function(cfg){
@@ -2044,10 +2057,10 @@ function boot(){
       FILENAME=rec.name;BLOB=rec.blob;
       HDStore.loadRows().then(function(edited){
         var src=(edited&&edited.length)?Promise.resolve(edited):readFile(rec.blob);
-        src.then(function(rows){RAW=normalize(rows);render();}).catch(function(err){alert("Could not read stored file: "+err.message);renderLanding();});
+        src.then(function(rows){RAW=normalize(rows);applyHashFilter();render();}).catch(function(err){alert("Could not read stored file: "+err.message);renderLanding();});
       });
     });
-  }).catch(function(){ HDStore.loadFile().then(function(rec){ if(!rec){renderLanding();return;} FILENAME=rec.name;BLOB=rec.blob; readFile(rec.blob).then(function(rows){RAW=normalize(rows);render();}); }); });
+  }).catch(function(){ HDStore.loadFile().then(function(rec){ if(!rec){renderLanding();return;} FILENAME=rec.name;BLOB=rec.blob; readFile(rec.blob).then(function(rows){RAW=normalize(rows);applyHashFilter();render();}); }); });
 }
 document.addEventListener("keydown",function(e){if(e.key==="Escape")closeModal();});
 boot();
