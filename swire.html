@@ -573,6 +573,7 @@ const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: ""
 const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", type: "isr", sev: "", po: "", svm: "", cw: "", comp: "", env: "" };
 let GF = (() => { try { return Object.assign({}, GF_DEF, JSON.parse(localStorage.getItem(GF_KEY) || "{}")); } catch (e) { return Object.assign({}, GF_DEF); } })();
 if (["start", "7", "30"].indexOf(GF.range) > -1) GF.range = "all";      // date options no longer offered
+if (/^change\b/i.test(String(GF.type || ""))) GF.type = "isr";          // Change is no longer offered here
 function saveGF() { try { localStorage.setItem(GF_KEY, JSON.stringify(GF)); } catch (e) {} }
 function loadCfg() { try { return HC.merge(JSON.parse(localStorage.getItem(CFG_KEY) || "null")); } catch (e) { return HC.merge(null); } }
 function saveCfg(c) { try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch (e) {} CFG = HC.merge(c); DIRTY = true; }
@@ -632,8 +633,11 @@ function rebuild() {
   ALLT.forEach((t, i) => { if (passes(t, ALLE[i], rg, isr)) keep.push(i); });
   T = keep.map((i) => ALLT[i]); E = keep.map((i) => ALLE[i]);
 }
+/* Change requests have their own module (Change Tracker), so the Swire module never shows them */
+const isChangeType = (ty) => /^change\b/i.test(String(ty || "").trim());
 function passes(t, e, rg, isr) {
   const ty = t.type || "(blank)";
+  if (isChangeType(ty)) return false;
   if (GF.type === "isr") { if (isr && !/^(incident|service request)$/i.test(ty)) return false; }
   else if (GF.type !== "all" && ty !== GF.type) return false;
   if (rg.from != null && (t.created == null || t.created < rg.from)) return false;
@@ -656,7 +660,7 @@ function paintFilters() {
   ALLT.forEach((t, i) => { (t.components.length ? t.components : ["(none)"]).forEach((c) => vals.comp.push(c)); vals.po.push((ALLE[i].po && ALLE[i].po.po) || "(none)"); vals.svm.push(t.svm || "(none)"); vals.cw.push(t.cw || "(none)"); vals.env.push(t.env || "(blank)"); });
   const opts = (id) => id === "sev" ? HC.SEVS.map((x) => [x.id, x.name]) : uniq(vals[id]).map((v) => [v, v]);
   const sel = (id) => '<label>' + esc(GF_LBL[id]) + '<select class="fsel' + (GF[id] ? " on" : "") + '" data-gf="' + id + '"><option value="">All</option>' + opts(id).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF[id] ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
-  const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"], ["all", "All request types"]].concat(ALLTYPES.map((x) => [x, x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
+  const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"], ["all", "All request types (no Change)"]].concat(ALLTYPES.filter((x) => !isChangeType(x)).map((x) => [x, x])).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
   const R = [["all", "All time"], ["today", "Today"], ["official", "Since 1 Nov"], ["month", "This month"], ["lastmonth", "Last month"]];
   if (GF.range !== "custom" && !R.some(([id]) => id === GF.range)) { GF.range = "all"; saveGF(); }        // a saved choice that is no longer offered
   const cust = GF.range === "custom", act = Object.keys(GF_LBL).filter((k) => GF[k]);
@@ -675,14 +679,16 @@ function hiddenParts() {
   let typeN = 0, otherN = 0;
   ALLT.forEach((t, i) => {
     if (shown.has(t.key)) return;
-    const ty = t.type || "(blank)", typeOut = GF.type === "isr" ? isr && !/^(incident|service request)$/i.test(ty) : GF.type !== "all" && ty !== GF.type;
+    const ty = t.type || "(blank)", typeOut = isChangeType(ty) || (GF.type === "isr" ? isr && !/^(incident|service request)$/i.test(ty) : GF.type !== "all" && ty !== GF.type);
     if (typeOut) { typeN++; byType[ty] = (byType[ty] || 0) + 1; } else otherN++;
   });
   return { typeN, otherN, byType };
 }
 function hiddenShort() {
   const h = hiddenParts(), parts = [];
-  if (h.typeN) parts.push(Object.keys(h.byType).sort((a, b) => h.byType[b] - h.byType[a]).map((k) => h.byType[k].toLocaleString() + " " + k).join(", ") + " hidden by request type");
+  const chN = Object.keys(h.byType).filter(isChangeType).reduce((m, k) => m + h.byType[k], 0), other = Object.keys(h.byType).filter((k) => !isChangeType(k));
+  if (other.length) parts.push(other.sort((a, b) => h.byType[b] - h.byType[a]).map((k) => h.byType[k].toLocaleString() + " " + k).join(", ") + " hidden by request type");
+  if (chN) parts.push(chN.toLocaleString() + " Change in the Change Tracker");
   if (h.otherN) parts.push(h.otherN.toLocaleString() + " outside the date range or filters");
   return parts.join("; ");
 }
@@ -2237,7 +2243,7 @@ function slaBlock(t) {
 function gFind(q) {
   q = String(q || "").trim(); if (!q) return [];
   const up = q.toUpperCase(), num = (up.match(/^(?:SWIPHX[-\s]?)?(\d{1,7})$/) || [])[1], lr = (up.match(/^LRPS[-\s]?(\d{1,7})$/) || [])[1];
-  const out = [], seen = new Set(), add = (t, why) => { if (!seen.has(t.key)) { seen.add(t.key); out.push({ t, why }); } };
+  const out = [], seen = new Set(), add = (t, why) => { if (!seen.has(t.key) && !isChangeType(t.type)) { seen.add(t.key); out.push({ t, why }); } };
   if (num) { const k = "SWIPHX-" + num; ALLT.forEach((t) => { if (t.key === k) add(t, "Ticket"); }); }
   if (lr) { const k = "LRPS-" + lr; ALLT.forEach((t) => { if (t.lrps.indexOf(k) > -1) add(t, "Linked to " + k); }); }
   if (num) ALLT.forEach((t) => { if (t.meId && String(t.meId).replace(/\D/g, "") === num) add(t, "ME ID " + t.meId); });
