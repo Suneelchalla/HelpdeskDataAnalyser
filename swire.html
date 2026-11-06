@@ -1126,9 +1126,40 @@ function mismatchCheck() {
     why: "The client ticket and its linked LRPS ticket are in different statuses. Bring them in line in Jira. Open tickets and tickets closed since counting started." +
       (unk ? " " + unk + " linked ticket" + (unk === 1 ? " is" : "s are") + " not checked yet because the LRPS status is not read (Refresh LRPS assignees)." : ""), keys };
 }
+/* ── Assignee's module missing from Components ──
+   An engineer only sees a ticket in their Jira dashboard when their module is in its Components. When the assignee is changed to
+   someone from another team, their module has to be added. Who belongs to which module, without a user list:
+   1. the PO list in Master data (certain): an assignee who is the PO of a module belongs to that module;
+   2. their past tickets (learned): at least 5 single-component tickets with an LRPS assignee, 70% or more in one module. */
+const cmNk = (x) => String(x || "").toLowerCase().replace(/[^a-z]/g, "");
+const cmSame = (a, b) => { const x = cmNk(a), y = cmNk(b); return !!x && !!y && (x === y || (Math.abs(x.length - y.length) <= 2 && (x.indexOf(y) === 0 || y.indexOf(x) === 0))); };
+const cmMods = (t) => Array.from(new Set((t.components || []).map((c) => { const m = HC.moduleOf(c, CFG); return m ? m.module : String(c).trim(); }).filter(Boolean)));
+function assigneeOf(t) { const n = t.lrps.map((k) => LRPS[k] && !LRPS[k].gone && LRPS[k].a).filter(Boolean); return n[0] || ""; }
+let CM_CACHE = null;
+function learnHome() {
+  const key = ALLT.length + "|" + Object.keys(LRPS).length; if (CM_CACHE && CM_CACHE.key === key) return CM_CACHE.home;
+  const cnt = {};
+  ALLT.forEach((t) => { if (isChangeType(t.type)) return; const a = assigneeOf(t), m = cmMods(t); if (!a || m.length !== 1) return; const c = cnt[a] = cnt[a] || { n: 0, by: {} }; c.n++; c.by[m[0]] = (c.by[m[0]] || 0) + 1; });
+  const home = {};
+  Object.keys(cnt).forEach((a) => { const c = cnt[a], best = Object.keys(c.by).sort((x, y) => c.by[y] - c.by[x])[0]; if (c.n >= 5 && c.by[best] / c.n >= 0.7) home[a] = { mod: best, n: c.by[best], of: c.n }; });
+  CM_CACHE = { key, home }; return home;
+}
+function homeOf(a) {
+  const po = (CFG.modules || []).filter((m) => cmSame(m.po, a)).map((m) => m.module);
+  if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
+  const h = learnHome()[a]; return h ? { mods: [h.mod], how: "usually works on " + h.mod + " (" + h.n + " of " + h.of + " tickets)" } : null;
+}
+function compMissCheck() {
+  const keys = [], detail = {};
+  openIdx().forEach((i) => { const t = T[i], a = assigneeOf(t); if (!a) return; const h = homeOf(a); if (!h) return;
+    const have = cmMods(t); if (h.mods.some((m) => have.indexOf(m) > -1)) return;
+    keys.push(t.key); detail[t.key] = { mod: h.mods[0], who: a, how: h.how, have: have.join(", ") || "(none)" }; });
+  return { id: "compmiss", ref: "Step 4", title: "Assignee’s module missing in Components", who: "Shadow team / General Support",
+    why: "The engineering (LRPS) assignee’s own module is not in the ticket’s Components, so the ticket does not show in their Jira dashboard. Add the module when the assignee is from another team. Who belongs to which module comes from the PO list (certain) or their past tickets (likely).", keys, detail };
+}
 function allChecks() {
   const C = HC.checks(T, E, NOW, CFG), at = C.findIndex((c) => c.id === "lrps");
-  C.splice(at < 0 ? C.length : at + 1, 0, mismatchCheck());
+  C.splice(at < 0 ? C.length : at + 1, 0, mismatchCheck(), compMissCheck());
   return C;
 }
 /* the two status columns shown first in the mismatch list */
@@ -1170,6 +1201,11 @@ function chkDef(c) {
       cols: ["key", "type", "pri", "sum", "status", "age", "po", "rem"], note: "Each ME ID once, with every ticket that carries it." };
     case "triage": return { gh: ["Status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: ["key", "type", "pri", "sum", "status", "age", "cw", "po", "rem"] };
     case "lrps": return { gh: ["SWIPHX status"], vals: one((i) => T[i].status || "(blank)"), chip: [""], cols: STD };
+    case "compmiss": return { gh: ["Missing module", "Engineering assignee"], vals: (i) => { const x = d[T[i].key]; return x ? [[x.mod, x.who]] : []; },
+      front: [{ h: "Missing module", s: (i) => (d[T[i].key] || {}).mod, c: (i) => '<b style="color:var(--ss)">' + esc((d[T[i].key] || {}).mod || "") + "</b>" },
+              { h: "Engineering assignee", s: (i) => (d[T[i].key] || {}).who, c: (i) => esc((d[T[i].key] || {}).who || "") + '<div class="dim small">' + esc((d[T[i].key] || {}).how || "") + "</div>" },
+              { h: "Components now", s: (i) => (d[T[i].key] || {}).have, c: (i) => esc((d[T[i].key] || {}).have || "") }],
+      cols: ["key", "type", "pri", "sum", "status", "age", "lrps", "svm", "rem"], note: "Each missing module and assignee once. “PO of …” is certain; “usually works on …” is learned from their past tickets." };
     case "lrpsmis": return { gh: ["SWIPHX status", "LRPS status"], norm: stKey, chip: ["", RED_ST], front: MIS_FRONT, cols: ["key", "type", "pri", "sum", "age", "prog", "lrps", "po", "rem"],
       vals: (i) => { const t = T[i], sn = stNow(t); return t.lrps.map((k) => lrpsSt(t, k)).filter((x) => x && misOff(sn, x.s)).map((x) => [sn, x.s]); },
       note: "Each status pair once. A ticket whose LRPS tickets share the same status counts once." };
