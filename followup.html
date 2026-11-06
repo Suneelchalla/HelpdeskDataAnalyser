@@ -15,6 +15,7 @@
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
 <script src="hd-hypercare.js?v=20261031d"></script>
+<script src="hd-engineers.js?v=20261107a"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    HDX: Status mismatch (client ticket ↔ LRPS) and Handover for the Follow-up
@@ -879,6 +880,8 @@
      4 no SVM In Charge · 5 no Components */
   var cmNk = function (x) { return String(x || "").toLowerCase().replace(/[^a-z]/g, ""); };
   var cmSame = function (a, b) { var x = cmNk(a), y = cmNk(b); return !!x && !!y && (x === y || (Math.abs(x.length - y.length) <= 2 && (x.indexOf(y) === 0 || y.indexOf(x) === 0))); };
+  /* engineer master list (hd-engineers.js, kept by the Help Desk): LRPS assignee → module */
+  function engMaster(a) { var M = window.HD_ENGINEERS || {}; if (M[a]) return M[a]; var k = Object.keys(M).filter(function (x) { return cmSame(x, a); })[0]; return k ? M[k] : ""; }
   function assigneeOf(t) { var n = t.lrps.map(function (k) { return LRPS[k] && !LRPS[k].gone && LRPS[k].a; }).filter(Boolean); return n[0] || ""; }
   var CMC = null;
   function learnHome(all, MODS) {
@@ -890,8 +893,7 @@
   }
   function runChecks(open, all) {
     var MODS = poList(), ts = open.map(T), home = learnHome(all, MODS);
-    var ENG = (function () { try { var sv = JSON.parse(localStorage.getItem("hd-swire-cfg") || "null"); return (sv && sv.engineers) || {}; } catch (e) { return {}; } })();   // set in Swire › Master data
-    var homeOf = function (a) { if (ENG[a]) return { mods: [ENG[a]], how: "set in Master data: " + ENG[a] }; var po = MODS.filter(function (m) { return cmSame(m.po, a); }).map(function (m) { return m.module; }); if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
+    var homeOf = function (a) { var em = engMaster(a); if (em) return { mods: [em], how: "engineer master list: " + em }; var po = MODS.filter(function (m) { return cmSame(m.po, a); }).map(function (m) { return m.module; }); if (po.length) return { mods: po, how: "PO of " + po.join(" / ") };
       var h = home[a]; return h ? { mods: [h.mod], how: "usually works on " + h.mod + " (" + h.n + " of " + h.of + " tickets)" } : null; };
     var cm = [], cmD = {};
     ts.forEach(function (t) { var a = assigneeOf(t); if (!a) return; var h = homeOf(a); if (!h) return; var have = compsOf(t, MODS).map(function (x) { return x.mod; });
@@ -899,6 +901,8 @@
     return [
       { id: "mis", title: "Status mismatch between client ticket and LRPS", why: "The client ticket and its linked LRPS ticket are in different statuses.", list: misList(open, all).list, window: true },
       { id: "cm", title: "Assignee’s module missing in Components", why: "The LRPS assignee’s own module is not in the ticket’s Components, so it does not show in their Jira dashboard. Add the module when the assignee is from another team. From the PO list (certain) or their past tickets (likely).", list: cm, detail: cmD },
+      (function () { var has = Object.keys(window.HD_ENGINEERS || {}).length > 0, l = has ? ts.filter(function (t) { var a = assigneeOf(t); return a && !engMaster(a); }) : [], dd = {}; l.forEach(function (t) { dd[t.key] = { who: assigneeOf(t) }; });
+        return { id: "neweng", title: "Engineering assignee not in the engineer master list", why: has ? "A new LRPS assignee: add them, with their module, to the engineer master list (Gaps › Download engineering assignees)." : "The engineer master list is still empty: download the assignee list from Gaps, fill it and share it.", list: l, detail: dd, newEng: true }; })(),
       { id: "nolrps", title: "With Engineering, but no linked LRPS ticket", why: "The status is on the Engineering side, but no LRPS ticket is linked, so engineering cannot see it.", list: ts.filter(function (t) { return side(t) === "engg" && !t.lrps.length; }) },
       { id: "nosvm", title: "No SVM In Charge", why: "Every open ticket needs one named owner.", list: ts.filter(function (t) { return !t.svm; }) },
       { id: "nocomp", title: "No Components", why: "Without a component the ticket has no module, no PO and does not show in any module dashboard.", list: ts.filter(function (t) { return !list(t.comps).length; }) }
@@ -917,10 +921,10 @@
       var d = c.detail || {}, MODS = poList();
       var L = c.list.slice().sort(function (a, b) { return a.project.localeCompare(b.project) || bySevAge(a, b); });
       m.box.innerHTML = '<div class="hdx-hd"><h3>' + esc(c.title) + '<span class="n">' + L.length + '</span></h3><button type="button" class="hdx-btn" data-c="xlsx">Download Excel</button><button type="button" class="hdx-btn" data-c="back">Back</button><button type="button" class="hdx-btn" data-c="close">Close</button></div>' +
-        '<p class="hdx-sub">' + esc(c.why) + '</p><div class="hdx-tw"><table><thead><tr>' + (c.id === "cm" ? "<th>Missing module</th><th>LRPS assignee</th><th>Components now</th>" : "") +
+        '<p class="hdx-sub">' + esc(c.why) + '</p><div class="hdx-tw"><table><thead><tr>' + (c.id === "cm" ? "<th>Missing module</th><th>LRPS assignee</th><th>Components now</th>" : c.id === "neweng" ? "<th>New assignee</th>" : "") +
         "<th>Ticket</th><th>Client</th><th>Priority</th><th>Summary</th><th>Status</th><th>LRPS</th><th>SVM In Charge</th><th>Age</th></tr></thead><tbody>" +
         L.map(function (t) { var x = d[t.key] || {};
-          return "<tr>" + (c.id === "cm" ? '<td><b style="color:#BE123C">' + esc(x.mod) + "</b></td><td>" + esc(x.who) + '<div class="hdx-dim" style="font-size:11px">' + esc(x.how) + "</div></td><td>" + esc(x.have) + "</td>" : "") +
+          return "<tr>" + (c.id === "cm" ? '<td><b style="color:#BE123C">' + esc(x.mod) + "</b></td><td>" + esc(x.who) + '<div class="hdx-dim" style="font-size:11px">' + esc(x.how) + "</div></td><td>" + esc(x.have) + "</td>" : c.id === "neweng" ? '<td><b style="color:#BE123C">' + esc(x.who) + "</b></td>" : "") +
             '<td><a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a></td><td>" + esc(t.project) + "</td><td>" + esc(t.priority || "—") + '</td><td style="min-width:240px">' + esc(t.summary) +
             '</td><td><span class="hdx-st">' + esc(t.status) + "</span></td><td>" + (t.lrps.length ? t.lrps.map(function (k) { return '<a class="hdx-key" href="' + jiraUrl(k) + '" target="_blank" rel="noopener">' + esc(k) + "</a>"; }).join("<br>") : "—") + "</td><td>" + esc(t.svm || "—") + "</td><td>" + esc(fmt(ageMin(t))) + "</td></tr>"; }).join("") +
         (L.length ? "" : '<tr><td colspan="11" class="hdx-dim">Nothing to fix.</td></tr>') + "</tbody></table></div>";
@@ -937,6 +941,39 @@
     m._chg = function () { paint(); }; window.addEventListener("hdx-change", m._chg);
     paint();
   }
+  /* people who changed a ticket's status, from the status history (closed tickets too); bots and Jira automation left out */
+  var BOT = /jmwe|automation|^system$|jira|bot\b|service account|^admin$/i;
+  function histPeople(all) {
+    var out = {}; if (!window.HDSlaLink || !HDSlaLink.entry) return out;
+    (all || []).forEach(function (r) { var e = null; try { e = HDSlaLink.entry(r); } catch (x) {} if (!e || !e.transitions) return; var t = T(r);
+      e.transitions.forEach(function (x) { var a = String(x.by || "").trim(); if (!a || BOT.test(a)) return; var o = out[a] = out[a] || { moves: 0, keys: {}, last: 0 }; o.moves++; o.keys[t.key] = t; if (x.t > o.last) o.last = x.t; }); });
+    return out;
+  }
+  function downloadAssignees(all) {
+    var MODS = poList(), ts = (all || []).map(T), by = {};
+    var row0 = function (a) { return by[a] = by[a] || { n: 0, open: 0, cl: {}, comp: {}, keys: {}, lrps: false, moves: 0, last: 0 }; };
+    var addT = function (r, t) { if (r.keys[t.key]) return; r.keys[t.key] = 1; r.n++; if (side(t) !== "closed") r.open++; r.cl[t.project] = (r.cl[t.project] || 0) + 1; compsOf(t, MODS).forEach(function (c) { r.comp[c.mod] = (r.comp[c.mod] || 0) + 1; }); };
+    /* 1. LRPS assignees (read from Jira) */
+    ts.forEach(function (t) { t.lrps.forEach(function (k) { var x = LRPS[k]; if (!x || x.gone || !x.a) return; var r = row0(x.a); r.lrps = true; addT(r, t); }); });
+    /* 2. everyone in the status history, open and closed tickets */
+    var hp = histPeople(all); Object.keys(hp).forEach(function (a) { var r = row0(a), o = hp[a]; r.moves += o.moves; if (o.last > r.last) r.last = o.last; Object.keys(o.keys).forEach(function (k) { addT(r, o.keys[k]); }); });
+    var home = learnHome(all, MODS), top = function (o, n) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }).slice(0, n).map(function (k) { return k + " (" + o[k] + ")"; }).join(", "); };
+    var names = Object.keys(by).sort(function (a, b) { var na = !engMaster(a), nb = !engMaster(b); return (nb - na) || (by[b].lrps - by[a].lrps) || a.localeCompare(b); });
+    var Sx = XL.S, H = ["Name", "In master list", "Seen as", "Tickets", "Open tickets", "Status changes", "Last status change", "Clients", "Components seen", "Suggested module", "Module", "SVM In Charge"];
+    var rows = [H.map(function (h) { return { v: h, s: Sx.head }; })].concat(names.map(function (a) { var r = by[a], em = engMaster(a), po = MODS.filter(function (m) { return cmSame(m.po, a); })[0], h = home[a];
+      var sug = po ? po.module + " (PO of " + po.module + ")" : h ? h.mod + " (" + h.n + " of " + h.of + " tickets)" : "";
+      var mo = em ? MODS.filter(function (m) { return m.module === em; })[0] : null;
+      return [a, em ? "Yes" : { v: "NEW", s: Sx.bad }, r.lrps && r.moves ? "LRPS assignee + status changes" : r.lrps ? "LRPS assignee" : "Status changes only", r.n, r.open, r.moves || "", r.last ? XL.date(r.last) : "",
+        top(r.cl, 4), top(r.comp, 4), sug, em || "", mo ? mo.po : ""]; }));
+    var note = [[{ v: "Fill Module for every engineer (or the SVM In Charge they work under) and share this file to update the engineer master list. Leave Module empty for people who are not engineers (Help Desk, client users).", s: Sx.sub }],
+      [{ v: "Seen as: LRPS assignee = assignee of a linked LRPS ticket (read from Jira); Status changes = changed a ticket’s status in the status history (open and closed tickets). NEW = not in the master list yet.", s: Sx.sub }], [],
+      [{ v: "Module", s: Sx.head }, { v: "SVM In Charge (PO)", s: Sx.head }]].concat(MODS.map(function (m) { return [m.module, m.po]; }));
+    return XL.build([{ name: "Assignees", rows: rows, cols: [28, 12, 26, 9, 11, 12, 17, 34, 30, 28, 14, 22], freeze: 1, filter: "A1:L" + Math.max(2, rows.length) }, { name: "Modules", rows: note, cols: [22, 28] }]).then(function (u) {
+      saveBlob(new Blob([u], { type: XLSX_MIME }), "HD-engineering-assignees-" + dayKey(Date.now()) + ".xlsx"); return names.length; });
+  }
+  function assigneeStats(all) { var seen = {}; (all || []).forEach(function (r) { T(r).lrps.forEach(function (k) { var x = LRPS[k]; if (x && !x.gone && x.a) seen[x.a] = 1; }); });
+    var n = Object.keys(seen), has = Object.keys(window.HD_ENGINEERS || {}).length > 0, all2 = Object.assign({}, seen, histPeople(all));
+    return { total: Object.keys(all2).length, newN: has ? n.filter(function (a) { return !engMaster(a); }).length : n.length, hasList: has }; }
   function checkCount(open, all) { return runChecks(open || [], all || []).reduce(function (a, x) { return a + x.list.length; }, 0); }
   window.HDX = {
     openMismatch: function (open, all) { openMismatch(open || [], all || []); },
@@ -944,6 +981,8 @@
     openSla: function (open, all) { openSla(open || [], all || []); },
     openChecks: function (open, all) { openChecks(open || [], all || []); },
     checkCount: checkCount,
+    downloadAssignees: function (all) { return downloadAssignees(all || []); },
+    assigneeStats: assigneeStats,
     printReport: function (open, all) { return printReport(open || [], all || []); },
     misCount: function (open, all) { return misList(open || [], all || []).list.length; },
     refreshLrps: function (rows) { return lrpsRefresh(rows || [], false); },
@@ -4064,6 +4103,14 @@ function App(){
           <div style={{width:42,height:42,borderRadius:10,background:"#fff",border:"1px solid var(--amber-border)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>⚠️</div>
           <div><div style={{color:"var(--amber)",fontWeight:800,fontSize:15}}>Data Quality Issues</div>
           <div style={{color:"var(--t2)",fontSize:12,marginTop:2}}>{gd.t.length.toLocaleString()} tickets with missing fields{w?` · ${w}`:""}</div></div>
+          {/* HDX: every engineering (LRPS) assignee, for the engineer master list; new ones are flagged */}
+          {window.HDX&&window.HDX.downloadAssignees&&(function(){var st=window.HDX.assigneeStats(allFiltered);return(
+            <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+              {st.total>0&&st.newN>0&&<span title={st.hasList?"Engineering assignees who are not in the engineer master list yet":"The engineer master list is still empty"} style={{background:"#FFF1F2",border:"1px solid #FECDD3",color:"#BE123C",borderRadius:999,padding:"4px 10px",fontSize:11.5,fontWeight:700}}>{st.newN.toLocaleString()} {st.hasList?"new":"not in master list"}</span>}
+              <button onClick={function(e){var b=e.currentTarget;b.disabled=true;window.HDX.downloadAssignees(allFiltered).then(function(){b.disabled=false;},function(){b.disabled=false;});}}
+                title="Excel of everyone seen, without duplicates: LRPS assignees and everyone who changed a ticket status in the history (open and closed tickets), with tickets, clients, components and a suggested module. Fill the Module column and share it."
+                style={{background:"#fff",border:"1px solid var(--amber-border)",color:"var(--amber)",padding:"7px 12px",borderRadius:9,fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",cursor:"pointer"}}>⬇ Download engineering assignees ({st.total})</button>
+            </div>);})()}
         </div>
         <div className="fu fu1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))",gap:12,marginBottom:9}}>
           {GF.map(function(f){var v=gd.s[f]||0;var ac=gf===f;
