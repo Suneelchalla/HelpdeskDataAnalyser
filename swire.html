@@ -571,7 +571,7 @@ let SLAC = {}, CFG = loadCfg(), ROWS = [], ALLT = [], ALLE = [], T = [], E = [],
 const UI = { range: "start", from: "", to: "", q: "", stage: "", sev: "", po: "", sort: { k: "age", d: -1 }, openCheck: null, week: null, shift: "" };
 
 /* filters at the top, shared by every tab (kept in this browser) */
-const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", type: "isr", sev: "", po: "", svm: "", cw: "", comp: "", env: "" };
+const GF_KEY = "hd-swire-filters", GF_DEF = { range: "all", from: "", to: "", type: "isr", sev: "", status: "", po: "", svm: "", cw: "", comp: "", env: "" };
 let GF = (() => { try { return Object.assign({}, GF_DEF, JSON.parse(localStorage.getItem(GF_KEY) || "{}")); } catch (e) { return Object.assign({}, GF_DEF); } })();
 if (["start", "7", "30"].indexOf(GF.range) > -1) GF.range = "all";      // date options no longer offered
 if (GF.type === "all" || (/^change\b/i.test(String(GF.type || "")) && GF.type !== "change")) GF.type = "isr";   // options no longer offered
@@ -668,6 +668,7 @@ function passes(t, e, rg, isr) {
   if (rg.from != null && (t.created == null || t.created < rg.from)) return false;
   if (rg.to != null && (t.created == null || t.created >= rg.to)) return false;
   if (GF.sev && t.sev !== GF.sev) return false;
+  if (GF.status && (t.status || "(blank)") !== GF.status) return false;
   if (GF.po && ((e.po && e.po.po) || "(none)") !== GF.po) return false;
   if (GF.svm && (t.svm || "(none)") !== GF.svm) return false;
   if (GF.cw && (t.cw || "(none)") !== GF.cw) return false;
@@ -678,12 +679,14 @@ function passes(t, e, rg, isr) {
 
 /* ── filter toolbar: date range and request type up front; priority, PO, SVM, worker, component, environment in a
    Filters panel; each active one shows as a chip with × ── */
-const GF_LBL = { sev: "Priority", po: "PO", svm: "SVM In Charge", cw: "Current worker", comp: "Component", env: "Environment" };
+const GF_LBL = { sev: "Priority", status: "Status", po: "PO", svm: "SVM In Charge", cw: "Current worker", comp: "Component", env: "Environment" };
 function paintFilters() {
   const uniq = (vals) => Array.from(new Set(vals)).filter((x) => x != null && x !== "").sort((a, b) => a === "(none)" || a === "(blank)" ? 1 : b === "(none)" || b === "(blank)" ? -1 : a.localeCompare(b));
-  const vals = { po: [], svm: [], cw: [], comp: [], env: [] };
-  ALLT.forEach((t, i) => { (t.components.length ? t.components : ["(none)"]).forEach((c) => vals.comp.push(c)); vals.po.push((ALLE[i].po && ALLE[i].po.po) || "(none)"); vals.svm.push(t.svm || "(none)"); vals.cw.push(t.cw || "(none)"); vals.env.push(t.env || "(blank)"); });
-  const opts = (id) => id === "sev" ? HC.SEVS.map((x) => [x.id, x.name]) : uniq(vals[id]).map((v) => [v, v]);
+  const vals = { status: [], po: [], svm: [], cw: [], comp: [], env: [] };
+  ALLT.forEach((t, i) => { (t.components.length ? t.components : ["(none)"]).forEach((c) => vals.comp.push(c)); if (!isChangeType(t.type)) vals.status.push(t.status || "(blank)"); vals.po.push((ALLE[i].po && ALLE[i].po.po) || "(none)"); vals.svm.push(t.svm || "(none)"); vals.cw.push(t.cw || "(none)"); vals.env.push(t.env || "(blank)"); });
+  /* Status: every status in the Swire data with its ticket count (change requests are in the Change Tracker, so not counted) */
+  const stN = {}; vals.status.forEach((v) => { stN[v] = (stN[v] || 0) + 1; });
+  const opts = (id) => id === "sev" ? HC.SEVS.map((x) => [x.id, x.name]) : id === "status" ? uniq(vals.status).map((v) => [v, v + " (" + stN[v].toLocaleString() + ")"]) : uniq(vals[id]).map((v) => [v, v]);
   const sel = (id) => '<label>' + esc(GF_LBL[id]) + '<select class="fsel' + (GF[id] ? " on" : "") + '" data-gf="' + id + '"><option value="">All</option>' + opts(id).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF[id] ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select></label>";
   const typeSel = '<select class="fsel' + (GF.type !== "isr" ? " on" : "") + '" data-gf="type" aria-label="Request type">' + [["isr", "Incident + Service Request"]].concat(ALLTYPES.filter((x) => !isChangeType(x)).map((x) => [x, x]), ALLTYPES.some(isChangeType) ? [["change", "Change → open in the Change Tracker"]] : []).map(([v, t]) => '<option value="' + esc(v) + '"' + (v === GF.type ? " selected" : "") + ">" + esc(t) + "</option>").join("") + "</select>";
   const R = [["all", "All time"], ["today", "Today"], ["official", "Since 1 Nov"], ["month", "This month"], ["lastmonth", "Last month"]];
@@ -1000,6 +1003,7 @@ function viewNow() {
     tile("t-ss", "clock", frOver, "First response overdue", "Created since " + fday(hcFrom).replace(/ \d{4}$/, "") + " and not answered in time (" + tgtLine("fr") + ")", frOver.length / w1, "First response overdue") +
     tile("t-cr", "pause", updDue, "ETR update overdue", "No status change for longer than its update interval (" + tgtLine("upd") + ")", updDue.length / w1, "ETR update overdue: no status change for longer than the update interval") +
     tile("t-ink", "up", escI, "Escalations to raise", "Critical with no progress " + fmt(CFG.escalate.critical) + ", High " + fmt(CFG.escalate.high) + ", Showstoppers at once", escI.length / w1, "Escalations to raise") + "</div>" +
+    apprBlock() +
     '<h2>Needs attention now</h2><p class="sub">Tickets with us whose SLA is breached (most overdue first) or about to breach (soonest first). Tickets waiting on Swire are in the SLA tab. ' +
     (d.id === "night" ? "Tonight the Hypercare team owns these." : "The PO for the module owns these.") + "</p>" +
     table(br.concat(rk), ["key", "type", "pri", "sum", "status", "sla", "fr", "prog", "po", "svm", "cw", "lrps", "rem"], { sortable: false, empty: "Nothing with us is breached or about to breach." });
@@ -2269,6 +2273,7 @@ function viewSetup() {
     '<div class="setrow"><label for="sTri">Triage within</label><div><input class="inp" id="sTri" style="width:90px" value="' + CFG.triageMin + '"> <span class="dim small">minutes in the open box before it is flagged</span></div></div>' +
     '<div class="setrow"><span>Shifts (IST)</span><div>' + CFG.shifts.map((x, k) => '<span style="margin-right:14px;white-space:nowrap">' + esc(x.name) + ' <input class="inp" style="width:74px" data-shf="' + k + '.from" value="' + esc(x.from) + '"> to <input class="inp" style="width:74px" data-shf="' + k + '.to" value="' + esc(x.to) + '"></span>').join("") + '<div class="dim small" style="margin-top:4px">Used for shift handover. Shifts may overlap; a ticket created in an overlap is in both handovers.</div></div></div>' +
     '<div class="setrow"><label for="sPre">Jira key prefix</label><input class="inp" id="sPre" style="width:140px" value="' + esc(CFG.prefix) + '"></div>' +
+    '<div class="setrow"><label for="sAppr">Client approval statuses</label><div><input class="inp" id="sAppr" style="width:100%" value="' + esc(apprList().join(", ")) + '"><div class="dim small" style="margin-top:4px">Now page, “Client approval pending: DB scripts” and its reminder mail to Swire.</div></div></div>' +
     '<div class="setrow"><label for="sMoved">Moved-to-production statuses</label><div><input class="inp" id="sMoved" style="width:100%" value="' + esc(movedList().join(", ")) + '"><div class="dim small" style="margin-top:4px">Releases tab: a ticket counts as moved to production at the time its status changed to one of these (from the status history). Spellings such as “Release Moved To Prod” match too.</div></div></div>' +
     '<div class="setrow"><label for="sRnDow">Release night (IST)</label><div><select class="inp" id="sRnDow">' + DNF.map((d, k) => '<option value="' + k + '"' + (+relNight().dow === k ? " selected" : "") + ">" + d + "</option>").join("") + '</select> from <input class="inp" style="width:74px" id="sRnFrom" value="' + esc(relNight().from) + '"> to <input class="inp" style="width:74px" id="sRnTo" value="' + esc(relNight().to) + '"><div class="dim small" style="margin-top:4px">When the release team moves releases to production. The Releases tab shows the latest release night as one block, even when it runs past midnight.</div></div></div>' +
     "</div>" +
@@ -2709,7 +2714,9 @@ function openPersonMail(listAll, info, title) {
     q("pmRestore").style.display = n ? "" : "none"; q("pmRestore").textContent = "Put back " + n + " removed"; }
   function paint() { const x = cur(); if (!subjEdited) q("pmSubj").value = x.subject; if (!ccEdited) q("pmCc").value = (x.cc || []).join("; "); ed.render(x.html); q("pmReset").style.display = "none"; counts(); }
   const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
-  q("pmHi").addEventListener("change", reb); q("pmNote").addEventListener("change", reb);
+  /* rebuild a moment later: leaving the field by clicking ✕ in the preview must not replace that button mid-click */
+  const later = () => setTimeout(reb, 180);
+  q("pmHi").addEventListener("change", later); q("pmNote").addEventListener("change", later);
   q("pmSubj").addEventListener("input", () => { subjEdited = true; });
   q("pmCc").addEventListener("input", () => { ccEdited = true; });
   q("pmTo").addEventListener("change", () => pmSaveEmail(info, q("pmTo").value));
@@ -2719,6 +2726,99 @@ function openPersonMail(listAll, info, title) {
   q("pmEml").onclick = () => { pmSaveEmail(info, q("pmTo").value); const who = (pmReal(info) ? info.name : "team").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
     emlDownload(q("pmSubj").value.trim() || cur().subject, ed.html(), "Swire-reminder-" + who + "-" + HC.dayKey(NOW) + ".eml", q("pmTo").value.trim(), q("pmCc").value.trim()); };
   paint(); q("pmTo").focus();
+}
+/* ══ Client approval pending (DB scripts): tickets waiting for Swire to approve, and one reminder mail to Swire ══
+   Statuses from Master data (default "CLIENT Approval (DB Script)"; case, spaces and "&" / "and" do not matter).
+   Waiting since = the time the ticket last moved into that status (status history); without a history yet, its last update
+   ("approx."). The mail goes to the client, so it carries only what Swire needs: ME ID, ticket, summary, priority and how long
+   it has waited. No LRPS / engineering tickets, no internal names, no SLA. To / Cc / Dear are remembered in this browser. */
+const APPR_DEF = ["CLIENT Approval (DB Script)"], APPR_MAIL = "hd-swire-apprmail";
+const apprList = () => (CFG.apprSt && CFG.apprSt.length ? CFG.apprSt : APPR_DEF);
+function apprIdx() { const set = new Set(apprList().map(stKey)); return openIdx().filter((i) => set.has(stKey(T[i].status))); }
+function apprSince(i) {
+  const set = new Set(apprList().map(stKey)), tr = E[i].tr || [];
+  for (let k = tr.length - 1; k >= 0; k--) if (set.has(stKey(tr[k].to))) return { at: tr[k].t, src: "history" };
+  return { at: T[i].updated != null ? T[i].updated : T[i].created, src: "updated" };
+}
+const apprWait = (i) => (NOW - (apprSince(i).at || NOW)) / MIN;
+const apprSorted = () => apprIdx().sort((a, b) => apprWait(b) - apprWait(a) || bySevAge(a, b));
+function apprBook() { try { return Object.assign({ to: "", cc: "", hi: "Swire team" }, JSON.parse(localStorage.getItem(APPR_MAIL) || "{}")); } catch (e) { return { to: "", cc: "", hi: "Swire team" }; } }
+function apprSave(p) { try { localStorage.setItem(APPR_MAIL, JSON.stringify(p)); } catch (e) {} }
+const APPR_FRONT = [
+  { h: "ME ID", s: (i) => T[i].meId || "", c: (i) => T[i].meId ? '<b class="mono" style="font-size:13px">' + esc(T[i].meId) + "</b>" : '<span class="small" style="color:var(--ss)">no ME ID</span>' },
+  { h: "Waiting for approval", s: (i) => String(Math.round(apprWait(i))).padStart(9, "0"), c: (i) => { const x = apprSince(i), d = apprWait(i) / 1440;
+    return '<b class="clk' + (d >= 7 ? " bad" : d >= 3 ? " warn" : "") + '">' + esc(fmt(apprWait(i))) + '</b><div class="dim small">since ' + esc(fdt(x.at)) + (x.src !== "history" ? ' <span title="Status history not read yet: this is the ticket’s last update" style="color:var(--cr)">approx.</span>' : "") + "</div>"; } }
+];
+COLS.sumplain = { h: "Summary", s: (t) => t.summary.toLowerCase(), c: (t) => '<div class="sum">' + esc(t.summary) + "</div>" };
+function apprBlock() {
+  const l = apprSorted(), sev = HC.SEVS.map((s) => [s, l.filter((i) => T[i].sev === s.id).length]).filter((x) => x[1]);
+  const w7 = l.filter((i) => apprWait(i) >= 7 * 1440).length;
+  return '<section class="escsec" style="--ac:#B7791F;--acbg:#FBF1E2"><div class="escsec-h"><div><b>Client approval pending: DB scripts</b> <span>' + l.length + "</span>" +
+    '<div class="small">Swire tickets in ' + esc(apprList().join(", ")) + ", waiting for Swire to approve. Longest waiting first" + (l.length ? "; the oldest has waited " + esc(fmt(apprWait(l[0]))) : "") + (w7 ? ", " + w7 + " for 7 days or more" : "") + ". " +
+      (sev.length ? sev.map(([s, n]) => n + " " + s.name).join(" · ") + ". " : "") + "The filters at the top apply.</div></div>" +
+    (l.length ? '<button type="button" class="btn pri" id="apprMail" title="Draft one reminder mail to Swire for these tickets">Mail reminder to Swire</button>' : "") + "</div>" +
+    '<div class="escgrp" data-xlname="client-approval-db">' + (l.length ? table(l, ["key", "pri", "sumplain", "status", "age"], { sortable: false, front: APPR_FRONT }) : '<p class="dim">No Swire ticket is waiting for DB script approval.</p>') + "</div></section>";
+}
+/* the mail to Swire: ME ID first, oldest first */
+function apprMail(list, hi, note) {
+  list = list.slice().sort((a, b) => apprWait(b) - apprWait(a) || bySevAge(a, b));
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"';
+  const CELL = "padding:7px 10px;border:1.5pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1.5pt;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
+  const HEADS = [["ME ID", 130], ["Ticket", 115], ["Summary", 330], ["Priority", 80], ["Waiting since", 115], ["Waiting for", 95]];
+  const W = HEADS.reduce((m, h) => m + h[1], 0);
+  const th = ([h, w]) => '<th width="' + w + '" style="' + CELL + "width:" + w + 'px;background:#F7EEF2;color:#5C1730;text-align:left;font-weight:700;white-space:nowrap">' + h + "</th>";
+  const td = (h, x) => '<td style="' + CELL + (x || "") + '">' + h + "</td>";
+  const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
+  const days = (i) => Math.floor(apprWait(i) / 1440), dTxt = (i) => { const d = days(i); return d < 1 ? "today" : d + " day" + (d === 1 ? "" : "s"); };
+  const rows = list.map((i, k) => { const t = T[i], d = days(i);
+    return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" + td("<b>" + esc(t.meId || "—") + "</b>", "white-space:nowrap;font-size:13px") + td(esc(t.key), "white-space:nowrap") + td(esc(t.summary)) +
+      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(fday(apprSince(i).at)), "white-space:nowrap") + td("<b" + (d >= 7 ? ' style="color:#D7263D"' : "") + ">" + esc(dTxt(i)) + "</b>", "white-space:nowrap") + "</tr>"; }).join("");
+  const n = list.length, nt = (note || "").trim(), name = (hi || "").trim() || "Swire team";
+  const intro = n === 1 ? "The DB script below is awaiting your approval." : "The <b>" + n + "</b> DB scripts below are awaiting your approval.";
+  const ask = n === 1 ? "Kindly review and share your approval on the ticket, so that we can proceed with the execution in Phoenix production." : "Kindly review and share your approval on each ticket, so that we can proceed with the execution in Phoenix production.";
+  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(6) + "<p " + P + ">Greetings of the day.</p>" + gap(6) +
+    '<p data-slot="intro" ' + P + ">" + intro + (n > 1 ? " They are listed with the longest waiting first." : "") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + gap(8) +
+    '<table width="' + W + '" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:' + W + "px;" + F + '"><tr data-hdr="1">' + HEADS.map(th).join("") + "</tr>" + rows + "</table>" + gap(12) +
+    '<p data-slot="ask" ' + P + "><b>" + ask + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
+  const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + intro.replace(/<[^>]+>/g, "") + (nt ? "\n\n" + nt : "") + "\n\n" +
+    list.map((i) => { const t = T[i]; return "- ME ID " + (t.meId || "-") + " | " + t.key + " | " + t.summary + " | " + (t.priority || "-") + " | waiting since " + fday(apprSince(i).at) + " (" + dTxt(i) + ")"; }).join("\n") +
+    "\n\n" + ask + "\n\nRegards,\n" + rmSign();
+  const subject = "Swire Phoenix: " + (n === 1 ? "DB script" : n + " DB scripts") + " awaiting your approval, " + fday(NOW);
+  return { html, text, subject };
+}
+function openApprMail(listAll) {
+  const m = rmModal('<div class="lhead"><h3>Mail reminder to Swire <span class="dim">DB script approval <span id="amN"></span></span></h3><button type="button" class="btn" data-rmx>Cancel</button></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="amTo">To</label><input class="inp" id="amTo" placeholder="approver@swireshipping.com" style="flex:1;min-width:240px">' +
+    '<label class="rmlbl" for="amHi">Dear</label><input class="inp" id="amHi" style="width:200px"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amCc">Cc</label><input class="inp" id="amCc" style="flex:1" placeholder="Swire IT, SVM Help Desk, …"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amSubj">Subject</label><input class="inp" id="amSubj" style="flex:1"></div>' +
+    '<label class="rmlbl" for="amNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="amNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Only what Swire needs: ME ID, ticket, summary, priority and waiting time; no LRPS or internal names. Click ✕ on a row to leave it out; click into the mail to edit any text.</span><span style="flex:1"></span>' +
+      '<button type="button" class="btn" id="amRestore" style="display:none"></button><button type="button" class="btn" id="amReset" style="display:none">Undo text edits</button></div>' +
+    '<div class="rmprev" id="amPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
+    '<div class="rmrow"><span class="dim small">To, Cc and Dear are remembered in this browser. Send it from your own mailbox (R10).</span><span style="flex:1"></span><button type="button" class="btn" id="amEml">Download email draft</button><button type="button" class="btn pri" id="amCopy">Copy email</button></div>', "wide");
+  const q = (id) => m.ov.querySelector("#" + id), bk = apprBook();
+  let out = {}, subjEdited = false;
+  q("amTo").value = bk.to; q("amCc").value = bk.cc; q("amHi").value = bk.hi;
+  const keep = () => apprSave({ to: q("amTo").value.trim(), cc: q("amCc").value.trim(), hi: q("amHi").value.trim() || "Swire team" });
+  const list = () => listAll.filter((i) => !out[T[i].key]);
+  const cur = () => apprMail(list(), q("amHi").value, q("amNote").value);
+  const ed = mailEditor(q("amPrev"), (k, kept) => { out[k] = 1; if (!kept) return paint(); const x = cur(); ed.patch(x.html); if (!subjEdited) q("amSubj").value = x.subject; counts(); });
+  ed.onEdit = () => { q("amReset").style.display = ""; };
+  function counts() { const n = Object.keys(out).length; q("amN").textContent = n ? "· " + list().length + " of " + listAll.length : "· " + listAll.length;
+    q("amRestore").style.display = n ? "" : "none"; q("amRestore").textContent = "Put back " + n + " removed"; }
+  function paint() { const x = cur(); if (!subjEdited) q("amSubj").value = x.subject; ed.render(x.html); q("amReset").style.display = "none"; counts(); }
+  const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
+  /* rebuild a moment later: leaving the field by clicking ✕ in the preview must not replace that button mid-click */
+  const later = () => setTimeout(reb, 180);
+  q("amHi").addEventListener("change", () => { keep(); later(); }); q("amNote").addEventListener("change", later);
+  q("amTo").addEventListener("change", keep); q("amCc").addEventListener("change", keep);
+  q("amSubj").addEventListener("input", () => { subjEdited = true; });
+  q("amRestore").onclick = () => { if (ed.edited && !confirm("Putting the tickets back rebuilds the mail and undoes your text edits. Continue?")) return; out = {}; paint(); };
+  q("amReset").onclick = () => paint();
+  q("amCopy").onclick = (e) => { keep(); copyRich(ed.html(), ed.edited ? ed.text() : cur().text, e.target, "Copy email"); };
+  q("amEml").onclick = () => { keep(); emlDownload(q("amSubj").value.trim() || cur().subject, ed.html(), "Swire-DB-script-approval-" + HC.dayKey(NOW) + ".eml", q("amTo").value.trim(), q("amCc").value.trim()); };
+  paint(); (bk.to ? q("amNote") : q("amTo")).focus();
 }
 /* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
 /* PDF from the Now page: a one-glance status report first (counts, SLA, what needs attention, who has what), then a compact
@@ -3606,6 +3706,7 @@ function wire() {
   on("qStage", "change", (e) => { UI.stage = e.target.value; render(); });
   on("qCsv", "click", () => csv(queueIdx(), "open tickets"));
   on("withUsPdf", "click", printWithUs);
+  on("apprMail", "click", () => openApprMail(apprSorted()));
   on("shDay", "change", (e) => { if (e.target.value) { UI.shDay = e.target.value; render(); } });
   on("usersAll", "click", () => { UI.allUsers = !UI.allUsers; render(); });
   on("btnHist", "click", (e) => { const rows = histNeed(); if (L && L.fetchMissing) { e.target.disabled = true; e.target.textContent = "Reading…"; L.fetchMissing(rows, { onProgress: (d, n) => { e.target.textContent = "Reading " + d + " / " + n + "…"; } }).then(render, (x) => { e.target.textContent = x.message; }); } });
@@ -3654,6 +3755,7 @@ function wire() {
     document.querySelectorAll("[data-shf]").forEach((x) => { const [k, f] = x.dataset.shf.split("."); if (/^\d{1,2}:\d{2}$/.test(x.value.trim())) c.shifts[+k][f] = x.value.trim().padStart(5, "0"); });
     document.querySelectorAll("[data-mod]").forEach((x) => { const [k, f] = x.dataset.mod.split("."); c.modules[+k][f] = f === "match" ? x.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : x.value.trim(); });
     document.querySelectorAll("[data-ct]").forEach((x) => { const [k, f] = x.dataset.ct.split("."); c.contacts[+k][f] = x.value.trim(); });
+    const apIn = el("sAppr"); if (apIn) { const l = apIn.value.split(",").map((x) => x.trim()).filter(Boolean); c.apprSt = l.length ? l : APPR_DEF.slice(); }
     const mvIn = el("sMoved"); if (mvIn) { const l = mvIn.value.split(",").map((x) => x.trim()).filter(Boolean); c.movedSt = l.length ? l : MOVED_DEF.slice(); }
     const tm = (v, d) => /^\d{1,2}:\d{2}$/.test(String(v || "").trim()) ? String(v).trim().padStart(5, "0") : d;
     if (el("sRnDow")) c.relNight = { dow: +el("sRnDow").value, from: tm(el("sRnFrom").value, relNight().from), to: tm(el("sRnTo").value, relNight().to) };
