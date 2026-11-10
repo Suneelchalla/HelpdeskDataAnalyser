@@ -610,7 +610,7 @@ const CLS = { isTerminal: (s) => window.HDClass ? HDClass.isTerminal(s) : /^clos
 let DIRTY = true, LASTSIG = "";
 function markDirty() { DIRTY = true; }
 function rebuild() {
-  const sig = JSON.stringify(GF) + "|" + (TAB === "weekly" || TAB === "move") + "|" + JSON.stringify(CFG).length + "|" + ROWS.length;
+  const sig = JSON.stringify(GF) + "|" + (TAB === "weekly" || TAB === "move" || TAB === "rel") + "|" + JSON.stringify(CFG).length + "|" + ROWS.length;
   if (!DIRTY && sig === LASTSIG && ALLT.length) return;          // same inputs as last time: reuse the evaluation
   DIRTY = false; LASTSIG = sig;
   NOW = Date.now();
@@ -629,7 +629,8 @@ function rebuild() {
   });
   SLAC = {};
   ALLTYPES = Array.from(new Set(ALLT.map((t) => t.type || "(blank)"))).sort();
-  const rg = TAB === "weekly" || TAB === "move" ? { from: null, to: null } : rangeMs(), keep = [];
+  /* Releases: the dates choose WHEN a ticket moved to production (viewRel), not when it was created */
+  const rg = TAB === "weekly" || TAB === "move" || TAB === "rel" ? { from: null, to: null } : rangeMs(), keep = [];
   const isr = ALLT.some((t) => /^(incident|service request)$/i.test(t.type || ""));
   ALLT.forEach((t, i) => { if (passes(t, ALLE[i], rg, isr)) keep.push(i); });
   T = keep.map((i) => ALLT[i]); E = keep.map((i) => ALLE[i]);
@@ -2268,6 +2269,8 @@ function viewSetup() {
     '<div class="setrow"><label for="sTri">Triage within</label><div><input class="inp" id="sTri" style="width:90px" value="' + CFG.triageMin + '"> <span class="dim small">minutes in the open box before it is flagged</span></div></div>' +
     '<div class="setrow"><span>Shifts (IST)</span><div>' + CFG.shifts.map((x, k) => '<span style="margin-right:14px;white-space:nowrap">' + esc(x.name) + ' <input class="inp" style="width:74px" data-shf="' + k + '.from" value="' + esc(x.from) + '"> to <input class="inp" style="width:74px" data-shf="' + k + '.to" value="' + esc(x.to) + '"></span>').join("") + '<div class="dim small" style="margin-top:4px">Used for shift handover. Shifts may overlap; a ticket created in an overlap is in both handovers.</div></div></div>' +
     '<div class="setrow"><label for="sPre">Jira key prefix</label><input class="inp" id="sPre" style="width:140px" value="' + esc(CFG.prefix) + '"></div>' +
+    '<div class="setrow"><label for="sMoved">Moved-to-production statuses</label><div><input class="inp" id="sMoved" style="width:100%" value="' + esc(movedList().join(", ")) + '"><div class="dim small" style="margin-top:4px">Releases tab: a ticket counts as moved to production at the time its status changed to one of these (from the status history). Spellings such as “Release Moved To Prod” match too.</div></div></div>' +
+    '<div class="setrow"><label for="sRnDow">Release night (IST)</label><div><select class="inp" id="sRnDow">' + DNF.map((d, k) => '<option value="' + k + '"' + (+relNight().dow === k ? " selected" : "") + ">" + d + "</option>").join("") + '</select> from <input class="inp" style="width:74px" id="sRnFrom" value="' + esc(relNight().from) + '"> to <input class="inp" style="width:74px" id="sRnTo" value="' + esc(relNight().to) + '"><div class="dim small" style="margin-top:4px">When the release team moves releases to production. The Releases tab shows the latest release night as one block, even when it runs past midnight.</div></div></div>' +
     "</div>" +
     '<div class="panel"><div class="sec-h" style="margin-top:0">Section 10.1 targets, round the clock</div><div class="tw"><table><thead><tr><th>Priority</th><th>First response</th><th>Analysis and ETR update</th><th>Resolution benchmark</th></tr></thead><tbody>' + HC.SEVS.map((s) => trow(s.id)).join("") + "</tbody></table></div></div>" +
     '<div class="panel"><div class="sec-h" style="margin-top:0">Product Owners by module (Section 15.3)</div><p class="sub">A ticket with one component goes to that module’s PO. With several components, or a component not listed, the SVM In Charge is the PO. “Matches” lists the component names used in Jira, comma separated.</p><div class="tw"><table><thead><tr><th>Module</th><th>Product Owner</th><th>Email</th><th>Phone</th><th>Matches components</th></tr></thead><tbody>' +
@@ -3227,34 +3230,88 @@ function fixBlock() {
     '<div class="tiles">' + FIX_CLS.map(([id, n, d, cls, ic]) => tile(cls, ic, by[id], n, d, by[id].length / tot, "Incidents: " + n)).join("") + "</div>" +
     '<div class="grp">Incidents in these statuses right now</div><div class="tiles">' + nowTiles + "</div>";
 }
+/* ── Moved to production: WHEN a ticket went to production ──
+   The time of its latest status change INTO a moved-to-production status (Master data; default Delivered, Release Move
+   to Production, DB Script Delivered, Script Delivered; spellings such as "Release Moved To Prod" match too), from the
+   status history, with who made the change. Without a valid status history yet: the Delivered Date field; else, only when
+   the ticket is in such a status now, its last update, shown as "to confirm" (a later comment also moves that time).
+   A ticket counts as a release when it has a release number, a linked LRPS ticket, or reached Release Move to Production. */
+const MOVED_DEF = ["Delivered", "Release Move to Production", "DB Script Delivered", "Script Delivered"];
+const RELN_DEF = { dow: 2, from: "20:00", to: "06:00" };            // Tuesday night, IST
+const DN3 = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], DNF = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const movedList = () => (CFG.movedSt && CFG.movedSt.length ? CFG.movedSt : MOVED_DEF);
+const relNight = () => Object.assign({}, RELN_DEF, CFG.relNight || {});
+function hmin(s) { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : 0; }
+function isMovedSt(s, set) { return !!s && (set.has(stKey(s)) || isWaSt(s)); }
+function relMove(i, set) {
+  const t = T[i], e = E[i], tr = e.tr || [];
+  for (let k = tr.length - 1; k >= 0; k--) if (isMovedSt(tr[k].to, set)) return { at: tr[k].t, to: tr[k].to, by: tr[k].by || "", src: "history" };
+  const now = isMovedSt(t.status, set);
+  if (t.delivered && (now || relDone(t, e))) return { at: t.delivered, to: now ? t.status : "", by: "", src: "field" };
+  if (now && !e.tr && t.updated) return { at: t.updated, to: t.status, by: "", src: "updated" };
+  if (relDone(t, e) && t.rels.length) { const at = e.closedAt || t.resolved; if (at) return { at, to: "", by: "", src: "field" }; }
+  return null;
+}
+const isRelease = (i) => !!E[i].mv && (T[i].rels.length > 0 || T[i].lrps.length > 0 || isWaSt(E[i].mv.to));
+/* the latest release night that has started: [start, end), e.g. Tuesday 20:00 → Wednesday 06:00 IST */
+function relNightWin(now) {
+  const rn = relNight(), f = hmin(rn.from), len = (((hmin(rn.to) - f) + 1440) % 1440 || 1440) * MIN, mid = HC.istMidnight(now);
+  for (let k = 0; k < 8; k++) { const d = mid - k * DAY; if (HC.ist(d + 12 * 60 * MIN).dow !== +rn.dow) continue; const st = d + f * MIN; if (st <= now) return { start: st, end: st + len, live: now < st + len }; }
+  return null;
+}
+COLS.moved = { h: "Moved to production", s: (t, e) => (e.mv ? e.mv.at : 0), c: (t, e) => { const m = e.mv; if (!m) return '<span class="dim">—</span>';
+  const how = m.src === "history" ? "Status changed to " + (m.to || "a done status") + (m.by ? " by " + m.by : "") : m.src === "field" ? "From the Delivered Date / closed time: status history not read yet" : "Last update of the ticket: status history not read yet, so the real move time is not known";
+  return '<span class="nw" title="' + esc(how) + '"><b>' + esc(fdt(m.at)) + "</b></span>" + '<div class="dim small">' + esc([m.to, m.by].filter(Boolean).join(" · ")) + (m.src !== "history" ? (m.to || m.by ? " · " : "") + '<span style="color:var(--cr)">' + (m.src === "updated" ? "to confirm" : "approx.") + "</span>" : "") + "</div>"; } };
 function viewRel() {
-  const all = T.map((t, i) => i), withRel = all.filter((i) => T[i].rels.length);
-  const released = withRel.filter((i) => relDone(T[i], E[i]));
+  const all = T.map((t, i) => i), set = new Set(movedList().map(stKey));
+  all.forEach((i) => { E[i].mv = relMove(i, set); });
+  const moved = all.filter(isRelease), byTime = (a, b) => E[b].mv.at - E[a].mv.at;
+  const sure = moved.filter((i) => E[i].mv.src !== "updated"), unsure = moved.filter((i) => E[i].mv.src === "updated");
+  const R = rangeMs(), inR = (ms) => (R.from == null || ms >= R.from) && (R.to == null || ms < R.to);
+  const released = sure.filter((i) => inR(E[i].mv.at));
   const expected = all.filter((i) => !relDone(T[i], E[i]) && relStage(T[i]));
-  /* released, grouped by release number, newest first */
-  const g = {}; released.forEach((i) => T[i].rels.forEach((r) => { (g[r] = g[r] || []).push(i); }));
-  const relDate = (l) => Math.max(...l.map((i) => T[i].delivered || E[i].closedAt || T[i].resolved || 0));
-  const rels = Object.keys(g).map((r) => ({ r, l: g[r], d: relDate(g[r]) })).sort((a, b) => b.d - a.d);
-  const d30 = rels.filter((x) => x.d >= NOW - 30 * DAY), d7 = rels.filter((x) => x.d >= NOW - 7 * DAY);
+  /* today (IST), the latest release night, the last 7 days */
+  const t0 = HC.istMidnight(NOW), inDay = (i) => E[i].mv.at >= t0 && E[i].mv.at < t0 + DAY;
+  const today = sure.filter(inDay).sort(byTime), todayQ = unsure.filter(inDay).sort(byTime);
+  const W = relNightWin(NOW), rn = relNight(), night = W ? sure.filter((i) => E[i].mv.at >= W.start && E[i].mv.at < W.end).sort(byTime) : [];
+  const nightLbl = W ? DN3[HC.ist(W.start).dow] + " " + fday(W.start).replace(/ \d{4}$/, "") + ", " + hhmm(hmin(rn.from)) + " to " + hhmm(hmin(rn.to)) + (W.live ? ", in progress" : "") : "";
+  const nightOnly = night.filter((i) => !inDay(i));
+  const d7 = sure.filter((i) => E[i].mv.at >= NOW - 7 * DAY);
+  /* released in the date range, grouped by release number, newest first; not numbered last */
+  const g = {}; released.forEach((i) => (T[i].rels.length ? T[i].rels : [NOREL]).forEach((r) => { (g[r] = g[r] || []).push(i); }));
+  const rels = Object.keys(g).map((r) => ({ r, l: g[r], d: Math.max(...g[r].map((i) => E[i].mv.at)) })).sort((a, b) => (a.r === NOREL) - (b.r === NOREL) || b.d - a.d);
+  const numberedRels = rels.filter((x) => x.r !== NOREL).length, relN = (l) => new Set([].concat(...l.map((i) => T[i].rels))).size;
+  const relTxt = (l) => { const n = relN(l); return !l.length ? "Nothing yet" : n ? n + " release number" + (n === 1 ? "" : "s") : "No release number on them"; }, plural = (n, w) => n.toLocaleString() + " " + w + (n === 1 ? "" : "s");
   const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
-  const relRow = (x) => '<tr><td><button type="button" class="lnk sm mono" data-list="' + reg(x.l, "Release " + x.r) + '">' + esc(x.r) + '</button></td><td class="num"><b>' + dl(x.l, "Release " + x.r) + "</b></td><td class=\"nw\">" + (x.d ? esc(fday(x.d)) : "—") + "</td><td>" + esc(uniq(x.l.map((i) => T[i].typeOfFix)).join(", ") || "—") +
+  const relRow = (x) => '<tr><td>' + (x.r === NOREL ? '<span class="dim">' + esc(x.r) + "</span>" : '<button type="button" class="lnk sm mono" data-list="' + reg(x.l, "Release " + x.r) + '">' + esc(x.r) + "</button>") + '</td><td class="num"><b>' + dl(x.l, x.r === NOREL ? "Moved, no release number" : "Release " + x.r) + "</b></td><td class=\"nw\">" + (x.d ? esc(fdt(x.d)) : "—") + "</td><td>" + esc(uniq(x.l.map((i) => T[i].typeOfFix)).join(", ") || "—") +
     "</td><td>" + esc(uniq([].concat(...x.l.map((i) => T[i].components))).join(", ") || "—") + "</td><td>" + esc(uniq(x.l.map((i) => E[i].po && E[i].po.po)).join(", ") || "—") + "</td><td>" + HC.SEVS.map((s) => { const n = x.l.filter((i) => T[i].sev === s.id).length; return n ? '<span class="pr ' + s.id + '">' + n + " " + esc(s.name) + "</span> " : ""; }).join("") + "</td></tr>";
   /* expected, by stage and by release number */
   const byStage = REL_STAGES.map((s) => ({ s, l: expected.filter((i) => relStage(T[i]) === s) }));
   const eg = {}; expected.forEach((i) => (T[i].rels.length ? T[i].rels : [NOREL]).forEach((r) => { (eg[r] = eg[r] || []).push(i); }));
   const erels = Object.keys(eg).sort((a, b) => (a === NOREL) - (b === NOREL) || eg[b].length - eg[a].length);
   const tot = Math.max(1, expected.length);
-  /* first: tickets with Engineering right now, and the release each is expected in */
+  /* tickets with Engineering right now, and the release each is expected in */
   const enggNow = all.filter((i) => E[i].stage !== "closed" && sideOf(i) === "engg");
   const ng = {}; enggNow.forEach((i) => (T[i].rels.length ? T[i].rels : [NOREL]).forEach((r) => { (ng[r] = ng[r] || []).push(i); }));
   const nrels = Object.keys(ng).sort((a, b) => (a === NOREL) - (b === NOREL) || ng[b].length - ng[a].length);
   const numbered = enggNow.filter((i) => T[i].rels.length);
-  let h = "<h2>Releases</h2><p class=\"sub\">Swire tickets moved to production, and tickets expected in a coming release. Same rules as the Release Tracker: <b>released</b> = has a release number and a done status; <b>expected</b> = open in a release-pipeline status (with or without a release number yet). The filters at the top apply.</p>" +
-    '<div class="tiles">' + tile("t-cr", "toEngg", enggNow, "With Engineering now", numbered.length + " with a release number, " + (enggNow.length - numbered.length) + " not yet", 1, "With Engineering now") +
-    tile("t-ok", "check", released, "Tickets released", rels.length + " release numbers", 1, "Released tickets") +
-    tile("t-ink", "up", [].concat(...d7.map((x) => x.l)), "Released in the last 7 days", d7.length + " release" + (d7.length === 1 ? "" : "s"), rels.length ? d7.length / rels.length : 0, "Released in the last 7 days") +
-    tile("t-ink", "up", [].concat(...d30.map((x) => x.l)), "Released in the last 30 days", d30.length + " release" + (d30.length === 1 ? "" : "s"), rels.length ? d30.length / rels.length : 0, "Released in the last 30 days") +
+  const MCOLS = ["key", "type", "pri", "sum", "moved", "rel", "status", "po", "svm", "lrpsfull", "rem"];
+  const noHist = all.filter((i) => !E[i].tr && E[i].stage !== "closed").length;
+  let h = "<h2>Releases</h2><p class=\"sub\">Swire tickets moved to production, and tickets expected in a coming release. <b>Moved</b> = the time the ticket changed to " + esc(movedList().join(", ")) + " (from its status history; Master data), for tickets with a release number or a linked LRPS ticket. " +
+    "<b>On this tab the dates at the top choose when tickets were moved</b>, not when they were created; the pipeline below always shows every open ticket. The other filters apply.</p>" +
+    '<div class="tiles six">' + tile("t-cr", "toEngg", enggNow, "With Engineering now", numbered.length + " with a release number, " + (enggNow.length - numbered.length) + " not yet", 1, "With Engineering now") +
+    tile("t-ok", "check", today, "Moved today", relTxt(today) + (todayQ.length ? "; +" + todayQ.length + " to confirm" : ""), moved.length ? today.length / Math.max(1, d7.length) : 0, "Moved to production today") +
+    tile("t-ink", "up", night, "Release night", nightLbl || "Set the release night in Master data", night.length / Math.max(1, d7.length), "Release night, " + nightLbl) +
+    tile("t-ink", "up", d7, "Moved in the last 7 days", relTxt(d7), sure.length ? d7.length / sure.length : 0, "Moved in the last 7 days") +
+    tile("t-ok", "check", released, "Released, " + R.label, relTxt(released), 1, "Released, " + R.label) +
     tile("t-cr", "clock", expected, "Expected releases", erels.filter((r) => r !== NOREL).length + " release numbers, " + (eg[NOREL] || []).length + " not numbered yet", 1, "Expected releases") + "</div>" +
+    /* what moved today, and the release night when part of it fell on another day (it runs past midnight) */
+    '<section class="escsec t-ok"><div class="escsec-h"><div><b>Moved to production today</b> <span>' + today.length + '</span><div class="small">' + esc(fday(t0)) + ", newest first, with who changed the status." +
+      (noHist ? " " + noHist.toLocaleString() + " open ticket" + (noHist === 1 ? " has" : "s have") + " no status history read yet; they are added as it is read." : "") + "</div></div></div>" +
+    '<div class="escgrp" data-xlname="rel-today">' + (today.length ? table(today, MCOLS, { sortable: false }) : '<p class="dim">Nothing has moved to production today yet.</p>') + "</div>" +
+    (todayQ.length ? '<div class="escgrp" data-xlname="rel-today-confirm"><div class="escgrp-h">To confirm <b>' + todayQ.length + '</b> <span class="dim small">In a moved-to-production status and updated today, but the status history is not read yet, so the move time is not known. They move up once it is read.</span></div>' + table(todayQ, MCOLS, { sortable: false }) + "</div>" : "") +
+    (nightOnly.length ? '<div class="escgrp" data-xlname="rel-night"><div class="escgrp-h">Release night, ' + esc(nightLbl) + " <b>" + night.length + '</b> <span class="dim small">The whole release night, including what moved before or after midnight.</span></div>' + table(night, MCOLS, { sortable: false }) + "</div>" : "") +
+    "</section>" +
     fixBlock() +
     '<section class="escsec t-ink"><div class="escsec-h"><div><b>With Engineering now: expected releases</b> <span>' + enggNow.length + '</span><div class="small">Every open Swire ticket currently with Engineering, grouped by the release it is expected in. Not numbered yet comes last.</div></div></div>' +
     (enggNow.length ? nrels.map((r) => { const l = ng[r].slice().sort(bySevAge), st = {}; l.forEach((i) => { const g0 = relStage(T[i]); const k = g0 ? g0.label : "Engineering work (" + T[i].status + ")"; st[k] = (st[k] || 0) + 1; });
@@ -3268,8 +3325,8 @@ function viewRel() {
     erels.map((r) => { const l = eg[r]; return "<tr><td>" + (r === NOREL ? '<span class="dim">' + esc(r) + "</span>" : '<span class="mono">' + esc(r) + "</span>") + '</td><td class="num"><b>' + dl(l, "Expected, " + r) + "</b></td>" + REL_STAGES.map((s) => { const q = l.filter((i) => relStage(T[i]) === s); return '<td class="num">' + (q.length ? dl(q, r + ", " + s.label) : '<span class="dim">·</span>') + "</td>"; }).join("") +
       "<td>" + HC.SEVS.map((s) => { const n = l.filter((i) => T[i].sev === s.id).length; return n ? '<span class="pr ' + s.id + '">' + n + " " + esc(s.name) + "</span> " : ""; }).join("") + "</td><td>" + esc(uniq(l.map((i) => E[i].po && E[i].po.po)).join(", ") || "—") + "</td></tr>"; }).join("") + "</tbody></table></div></div>" +
     REL_STAGES.map((s, k) => { const l = byStage[k].l; return l.length ? '<div class="escgrp" data-xlname="rel-exp-' + s.id + '"><div class="escgrp-h"><span class="rlst" style="--rc:' + s.color + '">' + esc(s.label) + "</span> <b>" + l.length + "</b></div>" + table(l.slice().sort(bySevAge), ["key", "type", "pri", "sum", "status", "rel", "age", "prog", "po", "svm", "lrpsfull", "rem"], { sortable: false }) + "</div>" : ""; }).join("") + "</section>" +
-    '<section class="escsec t-ok"><div class="escsec-h"><div><b>Already moved</b> <span>' + rels.length + ' releases</span><div class="small">Releases with tickets delivered or closed, newest first. Click a release to see its tickets.</div></div></div>' +
-    (rels.length ? '<div class="escgrp" data-xlname="rel-done"><div class="tw"><table><thead><tr><th>Release no.</th><th>Tickets</th><th>Delivered</th><th>Type of fix</th><th>Components</th><th>POs</th><th>Priorities</th></tr></thead><tbody>' + rels.map(relRow).join("") + "</tbody></table></div></div>" : '<div class="escgrp"><p class="dim">No released tickets with a release number in these filters.</p></div>') + "</section>";
+    '<section class="escsec t-ok"><div class="escsec-h"><div><b>Already moved, ' + esc(R.label) + "</b> <span>" + plural(released.length, "ticket") + " in " + plural(numberedRels, "release") + '</span><div class="small">Grouped by release number, newest move first; tickets moved without a release number come last. Click a number to see the tickets.</div></div></div>' +
+    (rels.length ? '<div class="escgrp" data-xlname="rel-done"><div class="tw"><table><thead><tr><th>Release no.</th><th>Tickets</th><th>Moved</th><th>Type of fix</th><th>Components</th><th>POs</th><th>Priorities</th></tr></thead><tbody>' + rels.map(relRow).join("") + "</tbody></table></div></div>" : '<div class="escgrp"><p class="dim">Nothing moved to production ' + esc(R.label) + " in these filters.</p></div>") + "</section>";
   return h;
 }
 
@@ -3597,6 +3654,9 @@ function wire() {
     document.querySelectorAll("[data-shf]").forEach((x) => { const [k, f] = x.dataset.shf.split("."); if (/^\d{1,2}:\d{2}$/.test(x.value.trim())) c.shifts[+k][f] = x.value.trim().padStart(5, "0"); });
     document.querySelectorAll("[data-mod]").forEach((x) => { const [k, f] = x.dataset.mod.split("."); c.modules[+k][f] = f === "match" ? x.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : x.value.trim(); });
     document.querySelectorAll("[data-ct]").forEach((x) => { const [k, f] = x.dataset.ct.split("."); c.contacts[+k][f] = x.value.trim(); });
+    const mvIn = el("sMoved"); if (mvIn) { const l = mvIn.value.split(",").map((x) => x.trim()).filter(Boolean); c.movedSt = l.length ? l : MOVED_DEF.slice(); }
+    const tm = (v, d) => /^\d{1,2}:\d{2}$/.test(String(v || "").trim()) ? String(v).trim().padStart(5, "0") : d;
+    if (el("sRnDow")) c.relNight = { dow: +el("sRnDow").value, from: tm(el("sRnFrom").value, relNight().from), to: tm(el("sRnTo").value, relNight().to) };
     saveCfg(c); el("sSave").textContent = "Saved"; setTimeout(render, 600);
   });
   on("sReset", "click", () => { if (confirm("Restore every setting to the runbook defaults?")) { try { localStorage.removeItem(CFG_KEY); } catch (e) {} CFG = HC.merge(null); DIRTY = true; render(); } });
