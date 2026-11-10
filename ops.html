@@ -220,6 +220,12 @@ td .z{color:var(--faint)}
 .shday{border:1px solid #E2E8F0;border-left:5px solid var(--sc);border-radius:10px;padding:8px 10px;margin-bottom:10px}
 .shday-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}.shday-n{margin-left:auto;font-size:12px;color:#475569}
 
+/* ── main view switch, and the Support stats view on its own ── */
+.oi-views{display:inline-flex;margin-left:14px;padding:3px;border-radius:10px;background:var(--paper);border:1px solid var(--line)}
+.oi-views button{border:0;background:transparent;font:600 12.5px var(--sans);color:var(--muted);padding:6px 14px;border-radius:7px;cursor:pointer}
+.oi-views button.on{background:#0B2365;color:#fff;box-shadow:0 1px 3px rgba(11,35,101,.3)}.oi-views button:not(.on):hover{color:var(--ink)}
+body.oi-sv #slaBar,body.oi-sv #kpis,body.oi-sv .brief-wrap,body.oi-sv #tabs,body.oi-sv #per,body.oi-sv #cust,body.oi-sv #cmp{display:none!important}
+body.oi-sv #view{margin-top:6px}
 /* ── cover page ── */
 .ss-cover{position:relative;aspect-ratio:16/9;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;font-family:Calibri,"Segoe UI",Arial,sans-serif;container-type:inline-size;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .cv-band{position:absolute;left:36%;right:0;top:31%;height:35%;background:#1BA9E1}
@@ -318,6 +324,7 @@ td .z{color:var(--faint)}
       <div class="fgrp"><label>Request type</label><span id="slType"></span></div>
       <div class="fgrp"><label>Priority</label><span id="slPri"></span></div>
       <button class="oi-reset" id="fReset">Reset</button>
+      <div class="oi-views" role="tablist" aria-label="View"><button type="button" class="on" data-view="ops" role="tab">Operations</button><button type="button" data-view="stats" role="tab">Support stats</button></div>
       <div class="oi-cmp" id="cmp"></div>
     </div>
   </header>
@@ -335,7 +342,6 @@ td .z{color:var(--faint)}
       <button class="tab" data-tab="team">Team <span class="n" id="nTm"></span></button>
       <button class="tab" data-tab="risks">Risks <span class="n" id="nRk"></span></button>
       <button class="tab" data-tab="quality">Quality</button>
-      <button class="tab" data-tab="stats">Support stats</button>
     </nav>
     <div id="view"></div>
   </div>
@@ -482,6 +488,14 @@ document.addEventListener('click', function(){ mselCloseAll(); });
 var HS = window.HDStore, DAY = 86400000, IST = 330 * 60000, JIRA = "https://svmhelpdesk.atlassian.net/browse/";
 var ALL = [], S = [], NOW = Date.now(), HIST = {}, HIST_OK = false;
 var F = { per: "30d", from: "", to: "", clients: [], svms: [], types: [], pris: [], tab: "flow", sort: {}, briefAll: false };
+/* main views: Operations (the dashboard with its tabs) or Support stats (the client report on its own page) */
+var VIEW_KEY = "hd-ops-view", OPS_TAB = "flow";
+try { if (localStorage.getItem(VIEW_KEY) === "stats") F.tab = "stats"; } catch (e) {}
+function setView(v) {
+  if (v === "stats") { if (F.tab !== "stats") OPS_TAB = F.tab; F.tab = "stats"; } else if (F.tab === "stats") F.tab = OPS_TAB || "flow";
+  try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+  renderTab(); window.scrollTo(0, 0);
+}
 var PRI = ["Critical", "High", "Medium", "Low"], PRI_C = { c: "#7C3AED", h: "#E11D48", m: "#D97706", l: "#64748B", "": "#C3CCD8" };
 var SIDE_C = { hd: "var(--hd)", engg: "var(--engg)", client: "var(--client)" }, SIDE_L = { hd: "Help Desk", engg: "Engineering", client: "With client", closed: "Closed" };
 
@@ -799,6 +813,8 @@ function renderBacklog(m) {
 /* ══════════ tabs ══════════ */
 function renderTab() {
   document.querySelectorAll("#tabs .tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === F.tab); });
+  var sv = F.tab === "stats"; document.body.classList.toggle("oi-sv", sv);
+  document.querySelectorAll(".oi-views [data-view]").forEach(function (b) { var on = (b.dataset.view === "stats") === sv; b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
   var v = el("view");
   if (F.tab === "flow") v.innerHTML = tabFlow(M);
   else if (F.tab === "shifts") v.innerHTML = tabShifts(M);
@@ -1535,7 +1551,7 @@ function tabStats() {
       '<label class="btn" style="cursor:pointer">Cover picture…<input type="file" accept="image/*" id="ssPicIn" hidden></label>' + (ssPic() ? '<button class="btn" id="ssPicOff" title="Use the drawing instead of your picture">Use the drawing</button>' : "") +
       '<span class="note" style="margin:0">Leave the title empty for the automatic one. The cover is the first page of the PDF and the first slide of the PowerPoint.</span></div>' +
     '<div class="ss-tip hidden" id="ssTip">In the print window, choose <b>Save as PDF</b> as the destination (Printer), landscape. The cover and both report pages are included.</div>' +
-    '<p class="note">Tickets created in each month, by ' + byL + " (the second and third chart can show any type of fix or root cause). " + esc(clientTxt) + ". The Client, SVM in charge, Request type and Priority filters apply; the period buttons do not (this report has its own months)." + (D.R.capped ? " Showing the first 36 months." : "") + " Pick the category of the second and third chart in its title. Page 2 (Support Overview) follows. Click any number or bar for the tickets.</p></div>";
+    '<p class="note">Tickets created in each month, by ' + byL + " (the second and third chart can show any type of fix or root cause). " + esc(clientTxt) + ". The Client, SVM in charge, Request type and Priority filters at the top apply; the months are chosen here." + (D.R.capped ? " Showing the first 36 months." : "") + " Pick the category of the second and third chart in its title. Page 2 (Support Overview) follows. Click any number or bar for the tickets.</p></div>";
   h += '<div id="ssPages">' + ssCoverHTML(D) + '<div class="ss" id="ssPanel"><div class="ss-head"><h1>Support Stats</h1><div class="ss-per">“From ' + esc(ms[0].long) + " to " + esc(ms[ms.length - 1].long) + '”<div class="ss-cl">' + esc(clientTxt) + "</div></div></div>";
   if (!grand) return h + '<div class="ss-empty">No tickets were created in these months with the current filters.</div></div></div>';
   var kSel = function (k) { var cur = ssKind(k); return '<select class="ss-kind" data-ssk="' + k + '" aria-label="Chart style">' + SS_KINDS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>"; };
@@ -1819,6 +1835,7 @@ document.addEventListener("click", function (e) {
   var t = e.target, b;
   if (t.closest && t.closest("a")) return;
   if ((b = t.closest("[data-per]"))) { F.per = b.dataset.per; if (F.per === "custom" && !F.from) { var r = range(); F.from = new Date(NOW - 30 * DAY).toISOString().slice(0, 10); el("fFrom").value = F.from; el("fTo").value = new Date(NOW).toISOString().slice(0, 10); F.to = el("fTo").value; } render(); return; }
+  if ((b = t.closest("[data-view]"))) { setView(b.dataset.view); return; }
   if ((b = t.closest("[data-tab]"))) { F.tab = b.dataset.tab; renderTab(); return; }
   if ((b = t.closest("[data-sort]"))) { var p = b.dataset.sort.split("|"), s = F.sort[p[0]] || {}; F.sort[p[0]] = { k: p[1], d: s.k === p[1] ? -s.d : (p[1] === "name" ? 1 : -1) }; renderTab(); return; }
   if ((b = t.closest("[data-teamby]"))) { F.teamBy = b.dataset.teamby; renderTab(); return; }
