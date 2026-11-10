@@ -2273,6 +2273,7 @@ function viewSetup() {
     '<div class="setrow"><label for="sTri">Triage within</label><div><input class="inp" id="sTri" style="width:90px" value="' + CFG.triageMin + '"> <span class="dim small">minutes in the open box before it is flagged</span></div></div>' +
     '<div class="setrow"><span>Shifts (IST)</span><div>' + CFG.shifts.map((x, k) => '<span style="margin-right:14px;white-space:nowrap">' + esc(x.name) + ' <input class="inp" style="width:74px" data-shf="' + k + '.from" value="' + esc(x.from) + '"> to <input class="inp" style="width:74px" data-shf="' + k + '.to" value="' + esc(x.to) + '"></span>').join("") + '<div class="dim small" style="margin-top:4px">Used for shift handover. Shifts may overlap; a ticket created in an overlap is in both handovers.</div></div></div>' +
     '<div class="setrow"><label for="sPre">Jira key prefix</label><input class="inp" id="sPre" style="width:140px" value="' + esc(CFG.prefix) + '"></div>' +
+    '<div class="setrow"><label for="sPortal">Customer portal no.</label><div><input class="inp" id="sPortal" style="width:90px" value="' + esc(portalId()) + '"> <span class="dim small">Ticket links in mails to Swire open the customer portal: ' + esc(portalUrl("SWIPHX-12345")) + '</span></div></div>' +
     apprGroups().map((g) => '<div class="setrow"><label for="sAppr-' + g.id + '">' + esc(g.name) + ' statuses</label><div><input class="inp" id="sAppr-' + g.id + '" data-appr="' + g.id + '" style="width:100%" value="' + esc(g.st.join(", ")) + '"><div class="dim small" style="margin-top:4px">Now page, “Waiting for Swire approval”: the ' + esc(g.name.toLowerCase()) + ' tile and its reminder mail to Swire.</div></div></div>').join("") +
     '<div class="setrow"><label for="sMoved">Moved-to-production statuses</label><div><input class="inp" id="sMoved" style="width:100%" value="' + esc(movedList().join(", ")) + '"><div class="dim small" style="margin-top:4px">Releases tab: a ticket counts as moved to production at the time its status changed to one of these (from the status history). Spellings such as “Release Moved To Prod” match too.</div></div></div>' +
     '<div class="setrow"><label for="sRnDow">Release night (IST)</label><div><select class="inp" id="sRnDow">' + DNF.map((d, k) => '<option value="' + k + '"' + (+relNight().dow === k ? " selected" : "") + ">" + d + "</option>").join("") + '</select> from <input class="inp" style="width:74px" id="sRnFrom" value="' + esc(relNight().from) + '"> to <input class="inp" style="width:74px" id="sRnTo" value="' + esc(relNight().to) + '"><div class="dim small" style="margin-top:4px">When the release team moves releases to production. The Releases tab shows the latest release night as one block, even when it runs past midnight.</div></div></div>' +
@@ -2734,10 +2735,10 @@ function openPersonMail(listAll, info, title) {
    its last update ("approx."). The mail carries only what Swire needs: ME ID, ticket, release no. (release approvals),
    summary, priority and how long it has waited. To / Cc / Dear are remembered in this browser. */
 const APPR_DEF = [
-  { id: "db", name: "DB script approval", one: "DB script", many: "DB scripts", icon: "bill", st: ["CLIENT Approval (DB Script)"],
+  { id: "db", name: "DB script approval", one: "data script", many: "data scripts", att1: "The data script and its release notes are attached to the ticket.", attN: "The data script and its release notes are attached to each ticket.", icon: "bill", st: ["CLIENT Approval (DB Script)"],
     ask1: "Kindly review and share your approval on the ticket, so that we can proceed with the execution in Phoenix production.",
     askN: "Kindly review and share your approval on each ticket, so that we can proceed with the execution in Phoenix production." },
-  { id: "rel", name: "Release approval", one: "release", many: "releases", icon: "toSwire", st: ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)"],
+  { id: "rel", name: "Release approval", one: "release", many: "releases", att1: "The release notes are attached to the ticket.", attN: "The release notes are attached to each ticket.", icon: "toSwire", st: ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)"],
     ask1: "Kindly review and share your approval on the ticket, so that we can move the release to Phoenix production.",
     askN: "Kindly review and share your approval on each ticket, so that we can move the releases to Phoenix production." }
 ], APPR_MAIL = "hd-swire-apprmail";
@@ -2755,7 +2756,7 @@ function apprSince(i, g) {
 }
 const apprWait = (i, g) => (NOW - (apprSince(i, g).at || NOW)) / MIN;
 const apprSort = (idx, g) => idx.slice().sort((a, b) => apprWait(b, g) - apprWait(a, g) || bySevAge(a, b));
-function apprBook() { try { return Object.assign({ to: "", cc: "", hi: "Swire team" }, JSON.parse(localStorage.getItem(APPR_MAIL) || "{}")); } catch (e) { return { to: "", cc: "", hi: "Swire team" }; } }
+function apprBook() { const d = { to: "", cc: "", hi: "", sign: "" }; try { return Object.assign(d, JSON.parse(localStorage.getItem(APPR_MAIL) || "{}")); } catch (e) { return d; } }
 function apprSave(p) { try { localStorage.setItem(APPR_MAIL, JSON.stringify(p)); } catch (e) {} }
 const apprFront = (g) => [
   { h: "ME ID", s: (i) => T[i].meId || "", c: (i) => T[i].meId ? '<b class="mono" style="font-size:13px">' + esc(T[i].meId) + "</b>" : '<span class="small" style="color:var(--ss)">no ME ID</span>' },
@@ -2795,33 +2796,48 @@ function openApprList(idx0, gid) {
   });
   document.body.appendChild(ov); ov.querySelector('[data-x="close"]').focus(); document.addEventListener("keydown", key);
 }
-/* the mail to Swire: ME ID first, oldest first */
-function apprMail(list, hi, note, g) {
+/* the mail to Swire (it can go to Swire's head of department): formal wording, ME ID first, the ticket as a customer portal
+   link (Swire users cannot open the agent view), business user, status, how long it has waited and when it was raised */
+const portalId = () => String(CFG.portalId || "19").trim() || "19";
+const portalUrl = (k) => "https://" + jiraHost() + "/servicedesk/customer/portal/" + encodeURIComponent(portalId()) + "/" + encodeURIComponent(k);
+function apprMail(list, hi, note, g, sign) {
   list = apprSort(list, g);
-  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.5"';
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.55"';
   const CELL = "padding:7px 10px;border:1.5pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1.5pt;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
   const withRel = g.id === "rel" && list.some((i) => T[i].rels.length);
-  const HEADS = [["ME ID", 130], ["Ticket", 115]].concat(withRel ? [["Release no.", 120]] : [], [["Summary", 330], ["Priority", 80], ["Waiting since", 115], ["Waiting for", 95]]);
+  const HEADS = [["ME ID", 90], ["Ticket", 115]].concat(withRel ? [["Release no.", 115]] : [], [["Summary", 300], ["Business user", 140], ["Status", 170], ["Waiting for approval", 130], ["Created", 95]]);
   const W = HEADS.reduce((m, h) => m + h[1], 0);
   const th = ([h, w]) => '<th width="' + w + '" style="' + CELL + "width:" + w + 'px;background:#F7EEF2;color:#5C1730;text-align:left;font-weight:700;white-space:nowrap">' + h + "</th>";
   const td = (h, x) => '<td style="' + CELL + (x || "") + '">' + h + "</td>";
   const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
-  const days = (i) => Math.floor(apprWait(i, g) / 1440), dTxt = (i) => { const d = days(i); return d < 1 ? "today" : d + " day" + (d === 1 ? "" : "s"); };
+  const days = (i) => Math.floor(apprWait(i, g) / 1440), dTxt = (i) => { const d = days(i); return d < 1 ? "Less than a day" : d + " day" + (d === 1 ? "" : "s"); };
   const rows = list.map((i, k) => { const t = T[i], d = days(i);
-    return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" + td("<b>" + esc(t.meId || "—") + "</b>", "white-space:nowrap;font-size:13px") + td(esc(t.key), "white-space:nowrap") +
-      (withRel ? td(esc(t.rels.join(", ") || "—"), "white-space:nowrap") : "") + td(esc(t.summary)) +
-      td(esc(t.priority || "—"), "white-space:nowrap") + td(esc(fday(apprSince(i, g).at)), "white-space:nowrap") + td("<b" + (d >= 7 ? ' style="color:#D7263D"' : "") + ">" + esc(dTxt(i)) + "</b>", "white-space:nowrap") + "</tr>"; }).join("");
-  const n = list.length, nt = (note || "").trim(), name = (hi || "").trim() || "Swire team";
-  const intro = n === 1 ? "The " + g.one + " below is awaiting your approval." : "The <b>" + n + "</b> " + g.many + " below are awaiting your approval.";
-  const ask = n === 1 ? g.ask1 : g.askN;
-  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(6) + "<p " + P + ">Greetings of the day.</p>" + gap(6) +
-    '<p data-slot="intro" ' + P + ">" + intro + (n > 1 ? " They are listed with the longest waiting first." : "") + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + gap(8) +
+    return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" + td("<b>" + esc(t.meId || "—") + "</b>", "white-space:nowrap;font-size:13px") +
+      td('<a href="' + esc(portalUrl(t.key)) + '" style="color:#7A1F3D;font-weight:600;text-decoration:underline;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") +
+      (withRel ? td(esc(t.rels.join(", ") || "—"), "white-space:nowrap") : "") + td(esc(t.summary)) + td(esc(t.businessUser || "—")) + td(esc(t.status || "—")) +
+      td("<b" + (d >= 7 ? ' style="color:#B4232F"' : "") + ">" + esc(dTxt(i)) + '</b><br><span style="color:#8A7380;font-size:11px">since ' + esc(fday(apprSince(i, g).at)) + "</span>", "white-space:nowrap") +
+      td(esc(fday(t.created)), "white-space:nowrap") + "</tr>"; }).join("");
+  const n = list.length, nt = (note || "").trim(), name = (hi || "").trim() || "Sir/Madam", sg = (sign || "").trim() || rmSign();
+  const what = n === 1 ? "the following " + g.one + " is" : "the following " + n + " " + g.many + " are";
+  /* the team's own wording on the Jira tickets: data scripts are updated in Swire Live; releases are moved to Phoenix production */
+  const purpose = g.id === "db" ? (n === 1 ? "so that the data script can be updated in Swire Live" : "so that the data scripts can be updated in Swire Live")
+    : (n === 1 ? "so that we can proceed with moving the release to Phoenix production" : "so that we can proceed with moving the releases to Phoenix production");
+  const paras = [
+    "Greetings from the SVM Help Desk.",
+    "We would like to bring to your kind attention that " + what + " awaiting your approval. " + (n === 1 ? g.att1 : g.attN),
+    null,                                          // the table goes here
+    "We would be grateful for your review and approval at your earliest convenience, " + purpose + ". The approval can be given directly on " + (n === 1 ? "the ticket using the link above" : "each ticket using the ticket links above") + ", or by replying to this email.",
+    "Thank you for your continued support."
+  ];
+  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(4) +
+    "<p " + P + ">" + paras[0] + "</p>" + '<p data-slot="intro" ' + P + ">" + esc(paras[1]) + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + gap(8) +
     '<table width="' + W + '" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:' + W + "px;" + F + '"><tr data-hdr="1">' + HEADS.map(th).join("") + "</tr>" + rows + "</table>" + gap(12) +
-    '<p data-slot="ask" ' + P + "><b>" + ask + "</b></p><p " + P + ">Regards,<br>" + esc(rmSign()) + "</p></div>";
-  const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + intro.replace(/<[^>]+>/g, "") + (nt ? "\n\n" + nt : "") + "\n\n" +
-    list.map((i) => { const t = T[i]; return "- ME ID " + (t.meId || "-") + " | " + t.key + (withRel ? " | release " + (t.rels.join(", ") || "-") : "") + " | " + t.summary + " | " + (t.priority || "-") + " | waiting since " + fday(apprSince(i, g).at) + " (" + dTxt(i) + ")"; }).join("\n") +
-    "\n\n" + ask + "\n\nRegards,\n" + rmSign();
-  const subject = "Swire Phoenix: " + (n === 1 ? g.one.charAt(0).toUpperCase() + g.one.slice(1) : n + " " + g.many) + " awaiting your approval, " + fday(NOW);
+    '<p data-slot="ask" ' + P + ">" + esc(paras[3]) + "</p><p " + P + ">" + esc(paras[4]) + "</p>" + gap(4) +
+    "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
+  const text = "Dear " + name + ",\n\n" + paras[0] + "\n\n" + paras[1] + (nt ? "\n\n" + nt : "") + "\n\n" +
+    list.map((i) => { const t = T[i]; return "- ME ID " + (t.meId || "-") + " | " + t.key + " (" + portalUrl(t.key) + ")" + (withRel ? " | release " + (t.rels.join(", ") || "-") : "") + " | " + t.summary + " | business user " + (t.businessUser || "-") + " | " + t.status + " | waiting " + dTxt(i).toLowerCase() + " (since " + fday(apprSince(i, g).at) + ") | created " + fday(t.created); }).join("\n") +
+    "\n\n" + paras[3] + "\n\n" + paras[4] + "\n\nWarm regards,\n" + sg;
+  const subject = "Swire Phoenix Hypercare: " + (n === 1 ? g.one.charAt(0).toUpperCase() + g.one.slice(1) + " pending your approval" : n + " " + g.many + " pending your approval") + ", " + fday(NOW);
   return { html, text, subject };
 }
 function openApprMail(listAll, g) {
@@ -2830,17 +2846,19 @@ function openApprMail(listAll, g) {
     '<label class="rmlbl" for="amHi">Dear</label><input class="inp" id="amHi" style="width:200px"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amCc">Cc</label><input class="inp" id="amCc" style="flex:1" placeholder="Swire IT, SVM Help Desk, …"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amSubj">Subject</label><input class="inp" id="amSubj" style="flex:1"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amSign">Signature</label><textarea class="inp" id="amSign" rows="2" style="flex:1;resize:vertical" placeholder="Name, SVM Help Desk, Solverminds"></textarea></div>' +
     '<label class="rmlbl" for="amNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="amNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
-    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Only what Swire needs: ME ID, ticket, summary, priority and waiting time; no LRPS or internal names. Click ✕ on a row to leave it out; click into the mail to edit any text.</span><span style="flex:1"></span>' +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Only what Swire needs: ME ID, ticket (customer portal link), summary, business user, status, waiting time and created date; no LRPS or internal names. Click ✕ on a row to leave it out; click into the mail to edit any text.</span><span style="flex:1"></span>' +
       '<button type="button" class="btn" id="amRestore" style="display:none"></button><button type="button" class="btn" id="amReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="amPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
-    '<div class="rmrow"><span class="dim small">To, Cc and Dear are remembered in this browser. Send it from your own mailbox (R10).</span><span style="flex:1"></span><button type="button" class="btn" id="amEml">Download email draft</button><button type="button" class="btn pri" id="amCopy">Copy email</button></div>', "wide");
+    '<div class="rmrow"><span class="dim small">To, Cc, Dear and the signature are remembered in this browser. Send it from your own mailbox (R10).</span><span style="flex:1"></span><button type="button" class="btn" id="amEml">Download email draft</button><button type="button" class="btn pri" id="amCopy">Copy email</button></div>', "wide");
   const q = (id) => m.ov.querySelector("#" + id), bk = apprBook();
   let out = {}, subjEdited = false;
-  q("amTo").value = bk.to; q("amCc").value = bk.cc; q("amHi").value = bk.hi;
-  const keep = () => apprSave({ to: q("amTo").value.trim(), cc: q("amCc").value.trim(), hi: q("amHi").value.trim() || "Swire team" });
+  q("amTo").value = bk.to; q("amCc").value = bk.cc; q("amHi").value = bk.hi === "Swire team" ? "" : bk.hi; q("amSign").value = bk.sign || rmSign();
+  q("amHi").placeholder = "Name of the approver";
+  const keep = () => apprSave({ to: q("amTo").value.trim(), cc: q("amCc").value.trim(), hi: q("amHi").value.trim(), sign: q("amSign").value.trim() });
   const list = () => listAll.filter((i) => !out[T[i].key]);
-  const cur = () => apprMail(list(), q("amHi").value, q("amNote").value, g);
+  const cur = () => apprMail(list(), q("amHi").value, q("amNote").value, g, q("amSign").value);
   const ed = mailEditor(q("amPrev"), (k, kept) => { out[k] = 1; if (!kept) return paint(); const x = cur(); ed.patch(x.html); if (!subjEdited) q("amSubj").value = x.subject; counts(); });
   ed.onEdit = () => { q("amReset").style.display = ""; };
   function counts() { const n = Object.keys(out).length; q("amN").textContent = n ? "· " + list().length + " of " + listAll.length : "· " + listAll.length;
@@ -2849,7 +2867,7 @@ function openApprMail(listAll, g) {
   const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
   /* rebuild a moment later: leaving the field by clicking ✕ in the preview must not replace that button mid-click */
   const later = () => setTimeout(reb, 180);
-  q("amHi").addEventListener("change", () => { keep(); later(); }); q("amNote").addEventListener("change", later);
+  q("amHi").addEventListener("change", () => { keep(); later(); }); q("amNote").addEventListener("change", later); q("amSign").addEventListener("change", () => { keep(); later(); });
   q("amTo").addEventListener("change", keep); q("amCc").addEventListener("change", keep);
   q("amSubj").addEventListener("input", () => { subjEdited = true; });
   q("amRestore").onclick = () => { if (ed.edited && !confirm("Putting the tickets back rebuilds the mail and undoes your text edits. Continue?")) return; out = {}; paint(); };
@@ -3792,6 +3810,7 @@ function wire() {
     document.querySelectorAll("[data-shf]").forEach((x) => { const [k, f] = x.dataset.shf.split("."); if (/^\d{1,2}:\d{2}$/.test(x.value.trim())) c.shifts[+k][f] = x.value.trim().padStart(5, "0"); });
     document.querySelectorAll("[data-mod]").forEach((x) => { const [k, f] = x.dataset.mod.split("."); c.modules[+k][f] = f === "match" ? x.value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : x.value.trim(); });
     document.querySelectorAll("[data-ct]").forEach((x) => { const [k, f] = x.dataset.ct.split("."); c.contacts[+k][f] = x.value.trim(); });
+    const pIn = el("sPortal"); if (pIn && /^\d+$/.test(pIn.value.trim())) c.portalId = pIn.value.trim();
     const ag = {}; document.querySelectorAll("[data-appr]").forEach((x) => { const l = x.value.split(",").map((v) => v.trim()).filter(Boolean); const d = APPR_DEF.find((g) => g.id === x.dataset.appr); ag[x.dataset.appr] = l.length ? l : d.st.slice(); });
     if (Object.keys(ag).length) { c.apprGroupsSt = ag; delete c.apprSt; }
     const mvIn = el("sMoved"); if (mvIn) { const l = mvIn.value.split(",").map((x) => x.trim()).filter(Boolean); c.movedSt = l.length ? l : MOVED_DEF.slice(); }
