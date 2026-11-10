@@ -227,8 +227,7 @@ td .z{color:var(--faint)}
 .cv-title i,.cv-title b,.cv-title span{display:block;white-space:nowrap;font-style:normal}
 .cv-eye{font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#E8F7FF;margin-bottom:.55cqw}
 .cv-main{font-weight:800;letter-spacing:-.005em;line-height:1.05;text-shadow:0 .25cqw .9cqw rgba(4,60,110,.28)}
-.cv-rule{display:block;width:6.5cqw;height:.3cqw;border-radius:1cqw;background:#FFFFFF;opacity:.9;margin:1.15cqw 0 1.05cqw}
-.cv-sub{font-weight:500;letter-spacing:.04em;color:#F2FAFF}
+.cv-sub{font-weight:500;letter-spacing:.04em;color:#F2FAFF;margin-top:.9cqw}
 .cv-art{position:absolute;left:-5%;top:-9%;width:52%;aspect-ratio:1}.cv-art svg{width:100%;height:100%;display:block}
 .cv-logo{position:absolute;right:3.5%;top:7%;width:22%}
 .cv-prep{position:absolute;left:58%;width:26%;top:74.5%;text-align:center}.cv-prep b{display:block;color:#1B9AD6;font-size:1.85cqw;margin-bottom:.9cqw}.cv-prep img{width:78%}
@@ -1309,7 +1308,7 @@ function ssCoverText(D) { var a = ssCoverAuto(D), c = { t: SS.covT || a.t, s: SS
   var lines = String(c.t).split("\n").map(function (x) { return x.trim(); }).filter(Boolean); if (!lines.length) lines = ["Support Stats"];
   c.main = lines[lines.length - 1]; c.eyebrow = lines.slice(0, -1).join(" ");
   c.wrap = fit(c.main, 0.62) < 2.6;      /* a long typed title wraps onto two balanced lines instead of shrinking */
-  c.ts = Math.min(4.6, c.wrap ? fit(Math.ceil(c.main.length / 2 * 1.12), 0.62) : fit(c.main, 0.62));
+  c.ts = Math.min(3.4, c.wrap ? fit(Math.ceil(c.main.length / 2 * 1.12), 0.62) : fit(c.main, 0.62));
   c.es = c.eyebrow ? Math.min(2.1, fit(c.eyebrow, 0.78)) : 0;
   c.ss = Math.min(1.95, fit(c.s, 0.6));
   c.lines = lines; return c; }
@@ -1347,7 +1346,7 @@ function ssCoverHTML(D) {
   var c = ssCoverText(D);
   return '<div class="ss-cover" id="ssCover"><div class="cv-band"><div class="cv-title">' + (c.eyebrow ? '<i class="cv-eye" style="font-size:' + c.es.toFixed(2) + 'cqw">' + esc(c.eyebrow) + "</i>" : "") +
     '<b class="cv-main" style="font-size:' + c.ts.toFixed(2) + 'cqw' + (c.wrap ? ';white-space:normal;text-wrap:balance' : '') + '">' + esc(c.main) + "</b>" +
-    '<em class="cv-rule"></em><span class="cv-sub" style="font-size:' + c.ss.toFixed(2) + 'cqw">' + esc(c.s) + "</span></div></div>" +
+    '<span class="cv-sub" style="font-size:' + c.ss.toFixed(2) + 'cqw">' + esc(c.s) + "</span></div></div>" +
     '<div class="cv-art">' + ssCoverArt(ssPic()) + "</div>" +
     '<img class="cv-logo" src="' + SS_LOGO + '" alt="Solverminds Solutions and Technologies">' +
     '<div class="cv-prep"><b>Prepared by</b><img src="' + SS_LOGO + '" alt="Solverminds"></div>' +
@@ -1507,12 +1506,11 @@ function ssDeck(P, D, art) {
   if (art) cv.addImage({ data: art, x: -0.05 * SW, y: -0.09 * SH, w: 0.52 * SW, h: 0.52 * SW, altText: "Cover picture", objectName: "Cover picture" });
   var CF = "Century Gothic", bx = 0.36 * SW + 0.64 * SW * 0.185, bwid = 0.64 * SW * 0.77, by = 0.31 * SH, bh = 0.35 * SH;
   var pt = function (cqw) { return Math.round(cqw * 9.6 * 2) / 2; }, lh = function (p, k) { return p * (k || 1.2) / 72; };
-  var mainLines = ct.wrap ? 2 : 1, hE = ct.eyebrow ? lh(pt(ct.es)) + 0.06 : 0, hM = lh(pt(ct.ts), 1.1) * mainLines, hR = 0.04 + 0.24, hS = lh(pt(ct.ss));
+  var mainLines = ct.wrap ? 2 : 1, hE = ct.eyebrow ? lh(pt(ct.es)) + 0.06 : 0, hM = lh(pt(ct.ts), 1.1) * mainLines, hR = 0.12, hS = lh(pt(ct.ss));
   var y0 = by + (bh - (hE + hM + hR + hS)) / 2;
   if (ct.eyebrow) cv.addText(ct.eyebrow.toUpperCase(), { x: bx, y: y0, w: bwid, h: hE, fontFace: CF, fontSize: pt(ct.es), color: "E8F7FF", charSpacing: Math.round(pt(ct.es) * 0.16 * 10) / 10, align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover client" });
   cv.addText(ct.main, { x: bx, y: y0 + hE, w: bwid, h: hM, fontFace: CF, fontSize: pt(ct.ts), bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover title",
     shadow: { type: "outer", color: "043C6E", opacity: 0.3, blur: 6, offset: 2, angle: 90 } });
-  cv.addShape(pres.ShapeType.roundRect, { x: bx + bwid / 2 - 0.45, y: y0 + hE + hM + 0.12, w: 0.9, h: 0.04, rectRadius: 0.02, fill: { color: "FFFFFF", transparency: 10 }, line: { color: "FFFFFF", width: 0 }, objectName: "Cover rule" });
   cv.addText(ct.s, { x: bx, y: y0 + hE + hM + hR, w: bwid, h: hS, fontFace: CF, fontSize: pt(ct.ss), color: "F2FAFF", charSpacing: 0.6, align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover months" });
   var lw = 0.22 * SW; cv.addImage({ data: SS_LOGO, x: SW - 0.035 * SW - lw, y: 0.07 * SH, w: lw, h: lw / SS_LOGO_AR, altText: "Solverminds Solutions and Technologies", objectName: "Logo" });
   var px = 0.58 * SW, pw = 0.26 * SW, l2 = pw * 0.78;
