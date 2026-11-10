@@ -288,6 +288,12 @@
      (pasted logs, stack traces), so long text is cut here, with a note, before the workbook is written. */
   var CELL_MAX = 32767, CUT_NOTE = "\n\n[…truncated — full text is in Jira]";
   function capCell(v) { return (typeof v === "string" && v.length > CELL_MAX) ? v.slice(0, CELL_MAX - CUT_NOTE.length) + CUT_NOTE : v; }
+  /* the rows as XLSX.read + sheet_to_json({ defval: "" }) returns them from the file toBlob writes */
+  function asRead(rows) {
+    var keys = [], seen = {};
+    rows.forEach(function (r) { for (var k in r) if (!seen[k]) { seen[k] = 1; keys.push(k); } });
+    return rows.map(function (r) { var o = {}; keys.forEach(function (k) { var v = capCell(r[k]); o[k] = v == null ? "" : v; }); return o; });
+  }
   function toBlob(rows) {
     rows = rows.map(function (r) { var o = {}; for (var k in r) o[k] = capCell(r[k]); return o; });
     var ws = XLSX.utils.json_to_sheet(rows), wb = XLSX.utils.book_new();
@@ -415,7 +421,10 @@
         : Promise.resolve();
       return saveCache
         .then(function () { return window.HDStore.saveFile(blob, name); })
-        .then(function () { return window.HDStore.clearRows(); })
+        /* also keep the rows themselves, as every page would read them back from this file (every column on every row,
+           long text cut like in the file): the pages then skip reading the whole Excel file on every load, which froze
+           the browser ("Page Unresponsive") with several pages open in the launcher. */
+        .then(function () { return window.HDStore.saveRows(asRead(rows)); })
         .then(function () {
           var r = summarize(rows);
           return { count: rows.length, changed: changed, mode: mode, cMin: r.cMin, cMax: r.cMax, rMin: r.rMin, rMax: r.rMax, fileName: name };
