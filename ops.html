@@ -223,8 +223,8 @@ td .z{color:var(--faint)}
 /* ── cover page ── */
 .ss-cover{position:relative;aspect-ratio:16/9;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;font-family:Calibri,"Segoe UI",Arial,sans-serif;container-type:inline-size;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .cv-band{position:absolute;left:36%;right:0;top:31%;height:35%;background:#1BA9E1}
-.cv-title{position:absolute;left:37%;width:61%;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;text-align:center;color:#fff;font-weight:700;font-size:3.4cqw;line-height:1.3}
-.cv-title span{font-size:2.55cqw;white-space:nowrap}
+.cv-title{position:absolute;left:18.5%;width:77%;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:.9cqw;text-align:center;color:#fff;font-family:Arial,Helvetica,sans-serif;font-weight:700;line-height:1.2}
+.cv-title b,.cv-title span{display:block;white-space:nowrap;letter-spacing:.01em}.cv-title span{font-weight:700;opacity:.97}
 .cv-art{position:absolute;left:-5%;top:-9%;width:52%;aspect-ratio:1}.cv-art svg{width:100%;height:100%;display:block}
 .cv-logo{position:absolute;right:3.5%;top:7%;width:22%}
 .cv-prep{position:absolute;left:58%;width:26%;top:74.5%;text-align:center}.cv-prep b{display:block;color:#1B9AD6;font-size:1.85cqw;margin-bottom:.9cqw}.cv-prep img{width:78%}
@@ -259,7 +259,7 @@ td .z{color:var(--faint)}
 .ss-box h3{font:500 15px var(--sans);color:#fff;margin:0 0 4px;text-align:center}.ss-sub{font-size:12px;color:#C9D6F2;margin-left:6px}
 .ss-p2 > .ss-box{margin-top:14px}
 .ss-lg{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;font:12px var(--sans);color:#E6ECF8;margin-top:2px}.ss-lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
-.ss-mini{min-width:0;margin-top:8px}.ss-mini th,.ss-mini td{font-size:11.5px;padding:3px 2px}.ss-mini col{width:auto}.ss-mini thead th{font-size:11px}
+.ss-mini{min-width:0;margin-top:8px;table-layout:auto}.ss-mini th,.ss-mini td{font-size:11px;padding:3px 3px;white-space:nowrap}.ss-mini thead th{font-size:10.5px;white-space:nowrap}.ss-mini th.rl{text-align:left}
 .ss-note{font:12px var(--sans);color:#C9D6F2;margin:6px 0 0}
 .ss-svg rect.click{cursor:pointer}.ss-svg rect.click:hover{opacity:.82}
 .ss-fix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 28px;margin-top:8px}@media (max-width:900px){.ss-fix{grid-template-columns:1fr}}
@@ -276,6 +276,7 @@ td .z{color:var(--faint)}
   #ssPrintHost .ss-cover{border:none;border-radius:0;margin:0;break-after:page;page-break-after:always}
   #ssPrintHost .ss-pick{border:none;-webkit-appearance:none;appearance:none}
   #ssPrintHost .ss-tw{overflow:visible}
+  #ssPrintHost .ss-mini th,#ssPrintHost .ss-mini td{font-size:9.5px;padding:2px 2px}
   @page{size:A4 landscape;margin:8mm}
 }
 #ssPrintHost{display:none}body.ssprint #ssPrintHost{display:block}
@@ -1285,9 +1286,12 @@ var SS_PIC_KEY = "hd-ops-ss-cover";
 function ssPic() { try { return localStorage.getItem(SS_PIC_KEY) || ""; } catch (e) { return ""; } }
 function ssCoverAuto(D) {
   var ms = D.ms, who = F.clients.length === 1 ? F.clients[0] : F.clients.length > 1 ? F.clients.length + " clients" : "";
-  return { t: (who ? who.toUpperCase() + " " : "") + "Support Stats", s: "From " + ms[0].long + " to " + ms[ms.length - 1].long };
+  return { t: (who ? who + " " : "") + "Support Stats", s: "From " + ms[0].long + " to " + ms[ms.length - 1].long };
 }
-function ssCoverText(D) { var a = ssCoverAuto(D); return { t: SS.covT || a.t, s: SS.covS || a.s }; }
+function ssCoverText(D) { var a = ssCoverAuto(D), c = { t: SS.covT || a.t, s: SS.covS || a.s }, room = 47;
+  var fit = function (txt) { return room / (Math.max(8, String(txt).length) * 0.56); };
+  /* one line when it still reads well; a very long title wraps onto two balanced lines instead of shrinking */
+  c.wrap = fit(c.t) < 1.9; c.ts = Math.min(3.0, c.wrap ? fit(Math.ceil(String(c.t).length / 2 * 1.12)) : fit(c.t)); c.ss = Math.min(c.ts * 0.82, fit(c.s)); return c; }
 /* the circle: a picture, or the drawing (dashboard, rising bars, trend line, a ship) — plain SVG, so it can also become a PNG */
 function ssCoverArt(pic) {
   var s = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 1000" width="1000" height="1000">' +
@@ -1320,7 +1324,7 @@ function ssCoverArt(pic) {
 }
 function ssCoverHTML(D) {
   var c = ssCoverText(D);
-  return '<div class="ss-cover" id="ssCover"><div class="cv-band"><div class="cv-title">' + esc(c.t) + '<span>' + esc(c.s) + "</span></div></div>" +
+  return '<div class="ss-cover" id="ssCover"><div class="cv-band"><div class="cv-title"><b style="font-size:' + c.ts.toFixed(2) + 'cqw' + (c.wrap ? ';white-space:normal;text-wrap:balance' : '') + '">' + esc(c.t) + '</b><span style="font-size:' + c.ss.toFixed(2) + 'cqw">' + esc(c.s) + "</span></div></div>" +
     '<div class="cv-art">' + ssCoverArt(ssPic()) + "</div>" +
     '<img class="cv-logo" src="' + SS_LOGO + '" alt="Solverminds Solutions and Technologies">' +
     '<div class="cv-prep"><b>Prepared by</b><img src="' + SS_LOGO + '" alt="Solverminds"></div>' +
@@ -1468,7 +1472,7 @@ function ssDeck(P, D, art) {
     var B = { type: "solid", pt: 0.5, color: LINE };
     var cell = function (v, i, kind) { var hd = kind === "h", tot = kind === "t" || (!o.noTotal && i === n - 1);
       return { text: v == null ? "" : String(v), options: { fontFace: FONT, fontSize: hd ? fs - 0.5 : fs, bold: hd || tot || i === 0, color: "FFFFFF", fill: { color: hd || tot ? GREY : NAVY },
-        align: i === 0 ? "left" : "center", valign: "middle", border: [B, B, B, B], margin: [1, 3, 1, 3] } }; };
+        align: i === 0 ? "left" : "center", valign: "middle", border: [B, B, B, B], margin: o.tight ? [1, 1, 1, 2] : [1, 3, 1, 3] } }; };
     var data = [headRow.map(function (h, i) { return cell(h, i, "h"); })].concat(rows.map(function (r, ri) { return r.map(function (v, i) { return cell(v, i, o.totalRow && ri === rows.length - 1 ? "t" : ""); }); }));
     sl.addTable(data, { x: o.x, y: o.y, w: w, colW: cw, rowH: o.rowH || 0.22, autoPage: false, objectName: o.name || "Table" });
   };
@@ -1478,8 +1482,8 @@ function ssDeck(P, D, art) {
   var cv = pres.addSlide({ masterName: "COVER" }), ct = ssCoverText(D), SW = 13.333, SH = 7.5, BLUE = "1BA9E1";
   cv.addShape(pres.ShapeType.rect, { x: 0.36 * SW, y: 0.31 * SH, w: 0.64 * SW, h: 0.35 * SH, fill: { color: BLUE }, line: { color: BLUE, width: 0 }, objectName: "Title band" });
   if (art) cv.addImage({ data: art, x: -0.05 * SW, y: -0.09 * SH, w: 0.52 * SW, h: 0.52 * SW, altText: "Cover picture", objectName: "Cover picture" });
-  cv.addText([{ text: ct.t, options: { breakLine: true } }, { text: ct.s, options: { fontSize: 23 } }],
-    { x: 0.36 * SW + 0.64 * SW * 0.37, y: 0.31 * SH, w: 0.64 * SW * 0.61, h: 0.35 * SH, fontFace: "Calibri", fontSize: 32, bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover title" });
+  cv.addText([{ text: ct.t, options: { fontSize: Math.round(ct.ts * 9.6), breakLine: true } }, { text: ct.s, options: { fontSize: Math.round(ct.ss * 9.6) } }],
+    { x: 0.36 * SW + 0.64 * SW * 0.185, y: 0.31 * SH, w: 0.64 * SW * 0.77, h: 0.35 * SH, fontFace: "Arial", bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0, paraSpaceAfter: 6, isTextBox: true, objectName: "Cover title" });
   var lw = 0.22 * SW; cv.addImage({ data: SS_LOGO, x: SW - 0.035 * SW - lw, y: 0.07 * SH, w: lw, h: lw / SS_LOGO_AR, altText: "Solverminds Solutions and Technologies", objectName: "Logo" });
   var px = 0.58 * SW, pw = 0.26 * SW, l2 = pw * 0.78;
   cv.addText("Prepared by", { x: px, y: 0.745 * SH, w: pw, h: 0.4, fontFace: "Calibri", fontSize: 18, bold: true, color: "1B9AD6", align: "center", margin: 0, isTextBox: true, objectName: "Prepared by" });
@@ -1508,10 +1512,11 @@ function ssDeck(P, D, art) {
   s2.addChart([{ type: pres.ChartType.bar, data: [{ name: "Created", labels: L, values: cre }, { name: "Resolved", labels: L, values: res }], options: { chartColors: ["5B83C9", "7FD1A0"], barGapWidthPct: 60, showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 7.5, dataLabelFontBold: false, dataLabelColor: "E6ECF8" } },
                { type: pres.ChartType.line, data: [{ name: "Open at month end", labels: L, values: opn }], options: { chartColors: ["FBBF24"], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t", dataLabelColor: "FDE68A" } }],
     base("Created vs resolved, and open at month end", Object.assign(ax(cre.concat(res, opn)), { x: 0.35, y: 0.95, w: cw2, h: 3.4, showLegend: true, objectName: "Chart: created vs resolved" })));
-  s2.addChart(pres.ChartType.line, [{ name: X.names[0], labels: M3, values: prv }, { name: X.names[1], labels: M3, values: cre }],
-    base("Year on year: " + X.names[0] + " vs " + X.names[1], Object.assign(ax(prv.concat(cre)), { x: 0.35 + cw2 + 0.2, y: 0.95, w: cw2, h: 3.4, showLegend: true, chartColors: ["94A3B8", "6E93D6"], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 5, showValue: true, dataLabelPosition: "t", objectName: "Chart: year on year" })));
-  table(s2, ["Month"].concat(L, ["Total"]), [["Created"].concat(cre, [cn]), ["Resolved"].concat(res, [sum(res)]), ["Open at end"].concat(opn, ["—"])], { x: 0.35, y: 4.5, w: cw2, first: 0.95, fs: 8, rowH: 0.26, name: "Table: created vs resolved" });
-  table(s2, ["Month"].concat(M3, ["Total"]), [[X.names[0]].concat(prv, [pn]), [X.names[1]].concat(cre, [cn]), ["Change"].concat(cre.map(function (v, i) { return chg(prv[i], v); }), [chg(pn, cn)])], { x: 0.35 + cw2 + 0.2, y: 4.5, w: cw2, first: 0.95, fs: 8, rowH: 0.26, name: "Table: year on year" });
+  s2.addChart([{ type: pres.ChartType.line, data: [{ name: X.names[0], labels: M3, values: prv }], options: { chartColors: ["94A3B8"], lineSize: 2, lineDash: "dash", lineDataSymbol: "circle", lineDataSymbolSize: 4 } },
+               { type: pres.ChartType.line, data: [{ name: X.names[1], labels: M3, values: cre }], options: { chartColors: ["6E93D6"], lineSize: 3, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t" } }],
+    base("Year on year: " + X.names[0] + " vs " + X.names[1], Object.assign(ax(prv.concat(cre)), { x: 0.35 + cw2 + 0.2, y: 0.95, w: cw2, h: 3.4, showLegend: true, objectName: "Chart: year on year" })));
+  table(s2, ["Month"].concat(L, ["Total"]), [["Created"].concat(cre, [cn]), ["Resolved"].concat(res, [sum(res)]), ["Open at end"].concat(opn, ["—"])], { x: 0.35, y: 4.5, w: cw2, first: 0.85, fs: ms.length > 8 ? 6.5 : 8, tight: ms.length > 8, rowH: 0.26, name: "Table: created vs resolved" });
+  table(s2, ["Month"].concat(M3, ["Total"]), [[X.names[0]].concat(prv, [pn]), [X.names[1]].concat(cre, [cn]), ["Change"].concat(cre.map(function (v, i) { return chg(prv[i], v); }), [chg(pn, cn)])], { x: 0.35 + cw2 + 0.2, y: 4.5, w: cw2, first: 0.85, fs: ms.length > 8 ? 6.5 : 8, tight: ms.length > 8, rowH: 0.26, name: "Table: year on year" });
   s2.addText([{ text: "Resolved " + num(sum(res)) + " of " + num(cn) + " created (" + pct(sum(res), cn) + "%).", options: { breakLine: false } }],
     { x: 0.35, y: 5.6, w: cw2, h: 0.3, fontFace: FONT, fontSize: 10, color: SOFT, margin: 0, isTextBox: true });
   s2.addText(pn ? num(cn) + " tickets vs " + num(pn) + " in the same months of " + X.names[0] + " (" + chg(pn, cn) + ")." : "No tickets in the same months one year earlier.",
@@ -1523,8 +1528,8 @@ function ssDeck(P, D, art) {
   stack(X.byType, "Request type mix", 0.35); stack(X.byPri, "Priority mix", 0.35 + cw2 + 0.2);
   var mix = function (series) { return series.map(function (se) { var c = cnt(se.l); return [se.name].concat(c.map(blank0), [sum(c)]); }); };
   var rT = mix(X.byType), rP = mix(X.byPri), rn = X.resAll.length;
-  table(s3, ["Request type"].concat(L, ["Total"]), rT, { x: 0.35, y: 4.15, w: 8.4, first: 1.3, fs: 8, rowH: 0.24, name: "Table: request type" });
-  table(s3, ["Priority"].concat(L, ["Total"]), rP, { x: 0.35, y: 4.3 + 0.24 * (rT.length + 1), w: 8.4, first: 1.3, fs: 8, rowH: 0.24, name: "Table: priority" });
+  table(s3, ["Request type"].concat(L, ["Total"]), rT, { x: 0.35, y: 4.15, w: 8.4, first: 1.2, fs: ms.length > 10 ? 7 : 8, tight: ms.length > 10, rowH: 0.24, name: "Table: request type" });
+  table(s3, ["Priority"].concat(L, ["Total"]), rP, { x: 0.35, y: 4.3 + 0.24 * (rT.length + 1), w: 8.4, first: 1.2, fs: ms.length > 10 ? 7 : 8, tight: ms.length > 10, rowH: 0.24, name: "Table: priority" });
   var fx = X.fixes.slice(0, 12);
   table(s3, ["Type of fix (resolved)", "Tickets", "Share"], fx.map(function (f) { return [f.name, f.l.length, rn ? pct(f.l.length, rn) + "%" : ""]; }).concat(X.fixes.length > 12 ? [["Others (" + (X.fixes.length - 12) + ")", sum(X.fixes.slice(12).map(function (f) { return f.l.length; })), rn ? pct(sum(X.fixes.slice(12).map(function (f) { return f.l.length; })), rn) + "%" : ""]] : []),
     { x: 8.95, y: 4.15, w: 4.0, first: 2.3, noTotal: true, fs: 8, rowH: 0.21, name: "Table: type of fix" });
