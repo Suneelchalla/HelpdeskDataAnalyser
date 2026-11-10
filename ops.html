@@ -241,13 +241,27 @@ td .z{color:var(--faint)}
 .ss-t td.click{cursor:pointer}.ss-t td.click:hover{background:#2B4C9B}.ss-t tr.gt td.click:hover,.ss-t td.gt.click:hover{background:#6E6E6E}
 .ss-empty{padding:40px 0;text-align:center;color:#C9D6F2}
 .ss-foot{margin-top:14px;font:800 20px var(--disp);letter-spacing:1px;color:#7FB2FF}.ss-foot span{display:block;font:600 9px var(--sans);letter-spacing:2px;color:#C9D6F2;text-transform:uppercase}
+.ss-p2{margin-top:18px}
+.ss-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:14px 0 4px}@media (max-width:1000px){.ss-g2{grid-template-columns:1fr}}
+.ss-box h3{font:500 15px var(--sans);color:#fff;margin:0 0 4px;text-align:center}.ss-sub{font-size:12px;color:#C9D6F2;margin-left:6px}
+.ss-p2 > .ss-box{margin-top:14px}
+.ss-lg{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;font:12px var(--sans);color:#E6ECF8;margin-top:2px}.ss-lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.ss-mini{min-width:0;margin-top:8px}.ss-mini th,.ss-mini td{font-size:11.5px;padding:3px 2px}.ss-mini col{width:auto}.ss-mini thead th{font-size:11px}
+.ss-note{font:12px var(--sans);color:#C9D6F2;margin:6px 0 0}
+.ss-svg rect.click{cursor:pointer}.ss-svg rect.click:hover{opacity:.82}
+.ss-fix{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 28px;margin-top:8px}@media (max-width:900px){.ss-fix{grid-template-columns:1fr}}
+.ss-fr{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr) 46px 40px;align-items:center;gap:10px;font:12.5px var(--sans);color:#fff;padding:3px 4px;border-radius:6px;cursor:pointer}.ss-fr:hover{background:rgba(255,255,255,.07)}
+.ss-fr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ss-fr .bar{height:12px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden}.ss-fr .bar i{display:block;height:100%;background:#5B83C9;border-radius:3px}
+.ss-fr b{text-align:right}.ss-fr .pc{color:#C9D6F2;text-align:right}
 @media print{
-  body.ssprint *{visibility:hidden!important}
-  body.ssprint #ssPanel,body.ssprint #ssPanel *{visibility:visible!important}
-  body.ssprint #ssPanel{position:absolute;left:0;top:0;width:100%;border-radius:0}
-  body.ssprint .ss-pick{border:none;-webkit-appearance:none;appearance:none}
+  body.ssprint > *:not(#ssPrintHost){display:none!important}
+  #ssPrintHost .ss{border-radius:0;break-inside:avoid;page-break-inside:avoid;margin:0}
+  #ssPrintHost .ss + .ss{break-before:page;page-break-before:always}
+  #ssPrintHost .ss-pick{border:none;-webkit-appearance:none;appearance:none}
+  #ssPrintHost .ss-tw{overflow:visible}
   @page{size:A4 landscape;margin:8mm}
 }
+#ssPrintHost{display:none}body.ssprint #ssPrintHost{display:block}
 </style>
 </head>
 <body>
@@ -1121,6 +1135,106 @@ function ssChart(kind, vals, labels, label) {
   labels.forEach(function (l, i) { s += '<text x="' + x(i) + '" y="' + (y(0) + 12) + '" transform="rotate(-45 ' + x(i) + " " + (y(0) + 12) + ')" text-anchor="end" class="ss-ax">' + esc(l) + "</text>"; });
   return s + "</svg>";
 }
+/* ── page 2: created vs resolved with the backlog, request type and priority mix, type of fix, year on year ──
+   Created = by created date; Resolved = by the date it was resolved (or closed); Open at month end = created before the end
+   of the month and not resolved by then (the current month: as of now). Type of fix = tickets RESOLVED in these months.
+   Year on year = tickets created in the same months one year earlier. Same filters as page 1. */
+var SS_PAL = ["#5B83C9", "#7FD1A0", "#FBBF24", "#F87171", "#C4B5FD", "#67E8F9", "#94A3B8"];
+var SS_PRI = [["c", "Critical", "#C4B5FD"], ["h", "High", "#F87171"], ["m", "Medium", "#FBBF24"], ["l", "Low", "#93C5FD"], ["", "No priority", "#94A3B8"]];
+function ssData2(D) {
+  var ms = D.ms, sc = scope(), a = ms[0].a, b = ms[ms.length - 1].b, mi = function (ms_) { for (var i = 0; i < ms.length; i++) if (ms_ >= ms[i].a && ms_ < ms[i].b) return i; return -1; };
+  var cre = ms.map(function () { return []; }), res = ms.map(function () { return []; }), open = ms.map(function () { return []; });
+  sc.forEach(function (t) {
+    var i = mi(t.created); if (i > -1) cre[i].push(t);
+    if (t.isRes && t.doneAt != null) { var j = mi(t.doneAt); if (j > -1) res[j].push(t); }
+    ms.forEach(function (m, k) { var end = Math.min(m.b, NOW); if (t.created < end && !(t.isRes && t.doneAt != null && t.doneAt < end)) open[k].push(t); });
+  });
+  /* request types (largest first) and priorities, per month, of the tickets created */
+  var tyN = countBy(D.list, "type"), types = Object.keys(tyN).sort(function (x, y) { return tyN[y] - tyN[x]; });
+  var byType = types.map(function (ty, k) { return { name: ty, color: SS_PAL[k % SS_PAL.length], l: cre.map(function (l) { return l.filter(function (t) { return t.type === ty; }); }) }; });
+  var byPri = SS_PRI.map(function (p) { return { name: p[1], color: p[2], l: cre.map(function (l) { return l.filter(function (t) { return (t.pk || "") === p[0]; }); }) }; }).filter(function (s) { return s.l.some(function (l) { return l.length; }); });
+  /* type of fix, on what was resolved in these months */
+  var resAll = [].concat.apply([], res), fx = {}; resAll.forEach(function (t) { var k = t.fix || SS_BLANK; (fx[k] = fx[k] || []).push(t); });
+  var fixes = Object.keys(fx).sort(function (x, y) { return x === SS_BLANK ? 1 : y === SS_BLANK ? -1 : fx[y].length - fx[x].length; }).map(function (k) { return { name: k, l: fx[k] }; });
+  /* the same months one year earlier */
+  var pm = ms.map(function (m) { var d = new Date(m.a + IST), y = d.getUTCFullYear() - 1, mo = d.getUTCMonth(); return { a: Date.UTC(y, mo, 1) - IST, b: Date.UTC(y, mo + 1, 1) - IST, lbl: MON_S[mo] + "_" + String(y).slice(2), long: MON_L[mo] + " " + y }; });
+  var prev = pm.map(function (m) { return sc.filter(function (t) { return t.created >= m.a && t.created < m.b; }); });
+  var y0 = new Date(ms[0].a + IST).getUTCFullYear(), y1 = new Date(ms[ms.length - 1].a + IST).getUTCFullYear();
+  var names = y0 === y1 ? [String(y0 - 1), String(y0)] : ["Year before", "Selected months"];
+  return { cre: cre, res: res, open: open, byType: byType, byPri: byPri, fixes: fixes, resAll: resAll, pm: pm, prev: prev, names: names, curIdx: ms.findIndex(function (m) { return m.a <= NOW && NOW < m.b; }) };
+}
+function ssLegend(items) { return '<div class="ss-lg">' + items.map(function (x) { return '<span><i style="background:' + x[1] + (x[2] ? ";height:3px;border-radius:2px" : "") + '"></i>' + esc(x[0]) + "</span>"; }).join("") + "</div>"; }
+function ssAxis(W, H, pl, pr, pt, pb, mx, labels, cw) {
+  var nc = ssNice(mx), y = function (v) { return pt + (H - pt - pb) * (1 - v / nc.max); }, s = "";
+  for (var v = 0; v <= nc.max + 1e-9; v += nc.step) s += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="rgba(255,255,255,.08)"/><text x="' + (pl - 7) + '" y="' + (y(v) + 4) + '" text-anchor="end" class="ss-ax">' + Math.round(v) + "</text>";
+  labels.forEach(function (l, i) { var x = pl + cw * i + cw / 2; s += '<text x="' + x + '" y="' + (y(0) + 12) + '" transform="rotate(-45 ' + x + " " + (y(0) + 12) + ')" text-anchor="end" class="ss-ax">' + esc(l) + "</text>"; });
+  return { s: s, y: y };
+}
+/* created and resolved bars, open-at-month-end line */
+function ssFlowChart(D, X) {
+  var W = 560, H = 250, pl = 40, pr = 14, pt = 22, pb = 52, n = D.ms.length, cw = (W - pl - pr) / n, labels = D.ms.map(function (m) { return m.lbl; });
+  var c = X.cre.map(function (l) { return l.length; }), r = X.res.map(function (l) { return l.length; }), o = X.open.map(function (l) { return l.length; });
+  var ax = ssAxis(W, H, pl, pr, pt, pb, Math.max.apply(null, c.concat(r, o, [1])), labels, cw), y = ax.y, bw = Math.min(16, cw * 0.3);
+  var s = '<svg viewBox="0 0 ' + W + " " + H + '" class="ss-svg" role="img" aria-label="Created and resolved per month, with the open tickets at month end">' + ax.s;
+  for (var i = 0; i < n; i++) { var x = pl + cw * i + cw / 2;
+    s += '<rect x="' + (x - bw - 1).toFixed(1) + '" y="' + y(c[i]).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (y(0) - y(c[i])).toFixed(1) + '" fill="#5B83C9"><title>' + labels[i] + ": " + c[i] + " created</title></rect>" +
+      '<rect x="' + (x + 1).toFixed(1) + '" y="' + y(r[i]).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (y(0) - y(r[i])).toFixed(1) + '" fill="#7FD1A0"><title>' + labels[i] + ": " + r[i] + " resolved</title></rect>"; }
+  s += '<polyline points="' + o.map(function (v, i) { return (pl + cw * i + cw / 2).toFixed(1) + "," + y(v).toFixed(1); }).join(" ") + '" fill="none" stroke="#FBBF24" stroke-width="2.6" stroke-linejoin="round"/>';
+  o.forEach(function (v, i) { var x = pl + cw * i + cw / 2; s += '<circle cx="' + x + '" cy="' + y(v) + '" r="3" fill="#FBBF24"><title>' + labels[i] + ": " + v + " open at month end</title></circle>" + '<text x="' + x + '" y="' + (y(v) - 8) + '" text-anchor="middle" class="ss-val" style="fill:#FDE68A">' + v + "</text>"; });
+  return s + "</svg>" + ssLegend([["Created", "#5B83C9"], ["Resolved", "#7FD1A0"], ["Open at month end", "#FBBF24", 1]]);
+}
+/* stacked bars per month, total on top */
+function ssStackChart(D, series, label) {
+  var W = 560, H = 240, pl = 40, pr = 14, pt = 20, pb = 52, n = D.ms.length, cw = (W - pl - pr) / n, labels = D.ms.map(function (m) { return m.lbl; });
+  var tot = D.ms.map(function (m, i) { return series.reduce(function (s0, se) { return s0 + se.l[i].length; }, 0); });
+  var ax = ssAxis(W, H, pl, pr, pt, pb, Math.max.apply(null, tot.concat([1])), labels, cw), y = ax.y, bw = Math.min(30, cw * 0.55);
+  var s = '<svg viewBox="0 0 ' + W + " " + H + '" class="ss-svg" role="img" aria-label="' + esc(label) + '">' + ax.s;
+  for (var i = 0; i < n; i++) { var x = pl + cw * i + cw / 2, acc = 0;
+    series.forEach(function (se) { var v = se.l[i].length; if (!v) return; var y1 = y(acc + v), y0 = y(acc); acc += v;
+      s += '<rect class="click" data-drill="' + dreg(se.l[i], D.ms[i].long + " — " + se.name) + '" x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, y0 - y1).toFixed(1) + '" fill="' + se.color + '" stroke="#0B2365" stroke-width=".6"><title>' + esc(labels[i] + ": " + v + " " + se.name) + "</title></rect>"; });
+    s += '<text x="' + x + '" y="' + (y(tot[i]) - 6) + '" text-anchor="middle" class="ss-val">' + tot[i] + "</text>"; }
+  return s + "</svg>" + ssLegend(series.map(function (se) { return [se.name + " " + num(se.l.reduce(function (q, l) { return q + l.length; }, 0)), se.color]; }));
+}
+/* two lines: the year before and the selected months */
+function ssYoyChart(D, X) {
+  var W = 560, H = 250, pl = 40, pr = 14, pt = 22, pb = 52, n = D.ms.length, cw = (W - pl - pr) / n, labels = D.ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; });
+  var a = X.prev.map(function (l) { return l.length; }), b = X.cre.map(function (l) { return l.length; });
+  var ax = ssAxis(W, H, pl, pr, pt, pb, Math.max.apply(null, a.concat(b, [1])), labels, cw), y = ax.y, s = '<svg viewBox="0 0 ' + W + " " + H + '" class="ss-svg" role="img" aria-label="Year on year">' + ax.s;
+  [[a, "#94A3B8", X.names[0], true], [b, "#6E93D6", X.names[1], false]].forEach(function (L) {
+    s += '<polyline points="' + L[0].map(function (v, i) { return (pl + cw * i + cw / 2).toFixed(1) + "," + y(v).toFixed(1); }).join(" ") + '" fill="none" stroke="' + L[1] + '" stroke-width="' + (L[3] ? 2.2 : 3) + '"' + (L[3] ? ' stroke-dasharray="6 4"' : "") + ' stroke-linejoin="round"/>';
+    L[0].forEach(function (v, i) { var x = pl + cw * i + cw / 2; s += '<circle cx="' + x + '" cy="' + y(v) + '" r="2.8" fill="' + L[1] + '"><title>' + esc(L[2] + ", " + labels[i] + ": " + v) + "</title></circle>" + (L[3] ? "" : '<text x="' + x + '" y="' + (y(v) - 8) + '" text-anchor="middle" class="ss-val">' + v + "</text>"); });
+  });
+  return s + "</svg>" + ssLegend([[X.names[0], "#94A3B8", 1], [X.names[1], "#6E93D6", 1]]);
+}
+function ssPage2(D, clientTxt) {
+  var X = ssData2(D), ms = D.ms, td = function (l, title, cls) { return '<td class="' + (cls || "") + (l.length ? " click" : "") + '"' + (l.length ? ' data-drill="' + dreg(l, title) + '"' : "") + ">" + num(l.length) + "</td>"; };
+  var sum = function (arr) { return [].concat.apply([], arr); }, period = "“From " + esc(ms[0].long) + " to " + esc(ms[ms.length - 1].long) + "”";
+  var h = '<div class="ss ss-p2" id="ssPanel2"><div class="ss-head"><h1>Support Overview</h1><div class="ss-per">' + period + '<div class="ss-cl">' + esc(clientTxt) + "</div></div></div>";
+  /* row 1: flow + its table | year on year + its table */
+  var cT = sum(X.cre), rT = sum(X.res), pT = sum(X.prev), cn = cT.length, pn = pT.length, chg = function (a, b) { if (!a) return b ? "new" : "—"; var p = Math.round((b - a) / a * 100); return (p > 0 ? "▲ " : p < 0 ? "▼ " : "") + Math.abs(p) + "%"; };
+  h += '<div class="ss-g2"><div class="ss-box"><h3>Created vs resolved, and open at month end</h3>' + ssFlowChart(D, X) +
+    '<div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">Month</th>' + ms.map(function (m) { return "<th>" + esc(m.lbl) + "</th>"; }).join("") + '<th class="gt">Total</th></tr></thead><tbody>' +
+    '<tr><th class="rl">Created</th>' + X.cre.map(function (l, i) { return td(l, ms[i].long + " — created"); }).join("") + td(cT, "Created — all months", "gt") + "</tr>" +
+    '<tr><th class="rl">Resolved</th>' + X.res.map(function (l, i) { return td(l, ms[i].long + " — resolved"); }).join("") + td(rT, "Resolved — all months", "gt") + "</tr>" +
+    '<tr><th class="rl">Open at end</th>' + X.open.map(function (l, i) { return td(l, "Open at the end of " + ms[i].long + (i === X.curIdx ? " (as of now)" : "")); }).join("") + '<td class="gt">—</td></tr></tbody></table></div>' +
+    '<p class="ss-note">Resolved ' + num(rT.length) + " of " + num(cn) + " created (" + pct(rT.length, cn) + "%). Open at month end" + (X.curIdx > -1 ? "; " + esc(ms[X.curIdx].lbl) + " as of now" : "") + ".</p></div>" +
+    '<div class="ss-box"><h3>Year on year: ' + esc(X.names[0]) + " vs " + esc(X.names[1]) + "</h3>" + ssYoyChart(D, X) +
+    '<div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">Month</th>' + ms.map(function (m) { return "<th>" + MON_S[new Date(m.a + IST).getUTCMonth()] + "</th>"; }).join("") + '<th class="gt">Total</th></tr></thead><tbody>' +
+    '<tr><th class="rl">' + esc(X.names[0]) + "</th>" + X.prev.map(function (l, i) { return td(l, X.pm[i].long + " — created"); }).join("") + td(pT, X.names[0] + " — all months", "gt") + "</tr>" +
+    '<tr><th class="rl">' + esc(X.names[1]) + "</th>" + X.cre.map(function (l, i) { return td(l, ms[i].long + " — created"); }).join("") + td(cT, X.names[1] + " — all months", "gt") + "</tr>" +
+    '<tr><th class="rl">Change</th>' + X.cre.map(function (l, i) { return "<td>" + chg(X.prev[i].length, l.length) + "</td>"; }).join("") + '<td class="gt">' + chg(pn, cn) + "</td></tr></tbody></table></div>" +
+    '<p class="ss-note">' + (pn ? num(cn) + " tickets vs " + num(pn) + " in the same months of " + esc(X.names[0]) + " (" + chg(pn, cn) + ")." : "No tickets in the same months one year earlier: that data may not be loaded.") + "</p></div></div>";
+  /* row 2: request type mix | priority mix */
+  h += '<div class="ss-g2"><div class="ss-box"><h3>Request type mix</h3>' + ssStackChart(D, X.byType, "Request type per month") + "</div>" +
+    '<div class="ss-box"><h3>Priority mix</h3>' + ssStackChart(D, X.byPri, "Priority per month") + "</div></div>";
+  /* row 3: type of fix */
+  var rn = X.resAll.length, mxF = Math.max.apply(null, X.fixes.map(function (f) { return f.l.length; }).concat([1]));
+  h += '<div class="ss-box"><h3>Type of fix <span class="ss-sub">tickets resolved in these months: ' + num(rn) + "</span></h3>" +
+    (rn ? '<div class="ss-fix">' + X.fixes.map(function (f) { var p = pct(f.l.length, rn);
+      return '<div class="ss-fr click" data-drill="' + dreg(f.l, "Resolved — type of fix " + f.name) + '"><span class="nm">' + esc(f.name) + '</span><span class="bar"><i style="width:' + Math.max(1, f.l.length / mxF * 100).toFixed(1) + "%" + (f.name === SS_BLANK ? ";background:#94A3B8" : "") + '"></i></span><b>' + num(f.l.length) + '</b><span class="pc">' + p + "%</span></div>"; }).join("") + "</div>" : '<p class="ss-note">Nothing was resolved in these months.</p>') +
+    "</div>" + '<div class="ss-foot">SOLVERMINDS<span>Solutions and Technologies</span></div></div>';
+  return { html: h, X: X };
+}
 function tabStats() {
   var D = ssData(), ms = D.ms, labels = ms.map(function (m) { return m.lbl; }), byL = D.by === "fix" ? "type of fix" : "root cause";
   var monthTot = D.cell.map(function (o) { return D.cats.reduce(function (s, c) { return s + o[c].length; }, 0); }), grand = D.list.length;
@@ -1131,9 +1245,9 @@ function tabStats() {
     '<label>From <input type="month" class="dinput" id="ssFrom" value="' + esc(D.R.from) + '"></label><label>To <input type="month" class="dinput" id="ssTo" value="' + esc(D.R.to) + '"></label>' +
     '<label>Count by <select class="dinput" id="ssBy">' + SS_BY.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === D.by ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></label>" +
     '<span class="sp"></span><button class="btn" id="ssXlsx">Download Excel</button><button class="btn" id="ssPrint">Print / PDF</button></div>' +
-    '<p class="note">Tickets created in each month, by ' + byL + ". " + esc(clientTxt) + ". The Client, SVM in charge, Request type and Priority filters apply; the period buttons do not (this report has its own months)." + (D.R.capped ? " Showing the first 36 months." : "") + " Pick the category of the second and third chart in its title. Click any number for the tickets.</p></div>";
-  h += '<div class="ss" id="ssPanel"><div class="ss-head"><h1>Support Stats</h1><div class="ss-per">“From ' + esc(ms[0].long) + " to " + esc(ms[ms.length - 1].long) + '”<div class="ss-cl">' + esc(clientTxt) + "</div></div></div>";
-  if (!grand) return h + '<div class="ss-empty">No tickets were created in these months with the current filters.</div></div>';
+    '<p class="note">Tickets created in each month, by ' + byL + ". " + esc(clientTxt) + ". The Client, SVM in charge, Request type and Priority filters apply; the period buttons do not (this report has its own months)." + (D.R.capped ? " Showing the first 36 months." : "") + " Pick the category of the second and third chart in its title. Page 2 (Support Overview) follows. Click any number or bar for the tickets.</p></div>";
+  h += '<div id="ssPages"><div class="ss" id="ssPanel"><div class="ss-head"><h1>Support Stats</h1><div class="ss-per">“From ' + esc(ms[0].long) + " to " + esc(ms[ms.length - 1].long) + '”<div class="ss-cl">' + esc(clientTxt) + "</div></div></div>";
+  if (!grand) return h + '<div class="ss-empty">No tickets were created in these months with the current filters.</div></div></div>';
   h += '<div class="ss-charts"><div><h3>Monthwise incident count</h3>' + ssChart("line", monthTot, labels, "Tickets per month") + "</div>" +
     "<div><h3>" + catSel("c2", D.c2) + "</h3>" + ssChart("bar", catVals(D.c2), labels, D.c2 + " per month") + "</div>" +
     "<div><h3>" + catSel("c3", D.c3) + "</h3>" + ssChart("area", catVals(D.c3), labels, D.c3 + " per month") + "</div></div>";
@@ -1143,6 +1257,7 @@ function tabStats() {
       return '<tr><th class="rl">' + esc(m.lbl) + "</th>" + D.cats.map(function (c) { return cellTd(D.cell[i][c], m.long + " — " + c, ""); }).join("") + cellTd(all, m.long + " — all", "gt") + "</tr>"; }).join("") +
     '<tr class="gt"><th class="rl">Grand Total</th>' + D.cats.map(function (c) { var l = []; D.cell.forEach(function (o) { l = l.concat(o[c]); }); return cellTd(l, c + " — " + ms[0].lbl + " to " + ms[ms.length - 1].lbl, "gt"); }).join("") + cellTd(D.list, "All tickets — " + ms[0].lbl + " to " + ms[ms.length - 1].lbl, "gt") + "</tr></tbody></table></div>" +
     '<div class="ss-foot">SOLVERMINDS<span>Solutions and Technologies</span></div></div>';
+  h += ssPage2(D, clientTxt).html + "</div>";
   return h;
 }
 function ssExcel() {
@@ -1153,9 +1268,21 @@ function ssExcel() {
   aoa.push(["Grand Total"].concat(D.tot, [D.list.length]));
   var ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 12 }].concat(D.cats.map(function (c) { return { wch: Math.max(8, Math.min(18, c.length + 2)) }; }), [{ wch: 11 }]);
   var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Support stats");
+  var X = ssData2(D), L = ms.map(function (m) { return m.lbl; }), cnt = function (arr) { return arr.map(function (l) { return l.length; }); }, sh = function (name, rows) { var w = XLSX.utils.aoa_to_sheet(rows); w["!cols"] = [{ wch: 22 }].concat(L.map(function () { return { wch: 9 }; }), [{ wch: 9 }]); XLSX.utils.book_append_sheet(wb, w, name); };
+  var tsum = function (a) { return a.reduce(function (q, v) { return q + v; }, 0); };
+  sh("Created vs resolved", [["Created vs resolved, open at month end"], [], ["Month"].concat(L, ["Total"]), ["Created"].concat(cnt(X.cre), [tsum(cnt(X.cre))]), ["Resolved"].concat(cnt(X.res), [tsum(cnt(X.res))]), ["Open at month end"].concat(cnt(X.open))]);
+  sh("Request type", [["Request type mix (created)"], [], ["Request type"].concat(L, ["Total"])].concat(X.byType.map(function (se) { var c = cnt(se.l); return [se.name].concat(c, [tsum(c)]); })));
+  sh("Priority", [["Priority mix (created)"], [], ["Priority"].concat(L, ["Total"])].concat(X.byPri.map(function (se) { var c = cnt(se.l); return [se.name].concat(c, [tsum(c)]); })));
+  sh("Type of fix", [["Type of fix (resolved in these months)"], [], ["Type of fix", "Tickets", "Share"]].concat(X.fixes.map(function (f) { return [f.name, f.l.length, X.resAll.length ? Math.round(f.l.length / X.resAll.length * 1000) / 10 + "%" : ""]; })));
+  sh("Year on year", [["Year on year (created)"], [], ["Month"].concat(ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; }), ["Total"]), [X.names[0]].concat(cnt(X.prev), [tsum(cnt(X.prev))]), [X.names[1]].concat(cnt(X.cre), [tsum(cnt(X.cre))])]);
   XLSX.writeFile(wb, "Support-stats-" + D.R.from + "-to-" + D.R.to + ".xlsx");
 }
-function ssPrint() { document.body.classList.add("ssprint"); var off = function () { document.body.classList.remove("ssprint"); window.removeEventListener("afterprint", off); }; window.addEventListener("afterprint", off); window.print(); setTimeout(off, 1500); }
+function ssPrint() {
+  var src = el("ssPages"); if (!src) return;
+  var host = document.createElement("div"); host.id = "ssPrintHost"; host.innerHTML = src.innerHTML; document.body.appendChild(host); document.body.classList.add("ssprint");
+  var off = function () { document.body.classList.remove("ssprint"); var x = el("ssPrintHost"); if (x) x.remove(); window.removeEventListener("afterprint", off); };
+  window.addEventListener("afterprint", off); window.print(); setTimeout(off, 1500);
+}
 document.addEventListener("change", function (e) {
   var t = e.target; if (!t || !t.closest || !t.closest("#view") || F.tab !== "stats") return;
   if (t.id === "ssFrom" || t.id === "ssTo") { SS[t.id === "ssFrom" ? "from" : "to"] = t.value || ""; }
