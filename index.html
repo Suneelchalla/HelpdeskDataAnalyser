@@ -1048,6 +1048,15 @@ function countTickets(file){
             || wb.SheetNames.find(function(s){return s.toLowerCase().indexOf("issue")>-1;})
             || wb.SheetNames[1] || wb.SheetNames[0];
         var rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:""});
+        var info=infoFromRows(rows); info.rows=rows; res(info);
+      }catch(err){ res({count:null}); }
+    };
+    r.onerror=function(){ res({count:null}); };
+    r.readAsArrayBuffer(file);
+  });
+}
+/* the card's numbers (tickets, created and resolved date range) from rows already read */
+function infoFromRows(rows){
         var cMin=null,cMax=null,rMin=null,rMax=null;
         function upd(v,isC){ if(!v)return; var dt=v instanceof Date?v:new Date(v); if(isNaN(dt))return;
           if(isC){ if(!cMin||dt<cMin)cMin=dt; if(!cMax||dt>cMax)cMax=dt; }
@@ -1056,12 +1065,7 @@ function countTickets(file){
           upd(row["Created"]||row["created"], true);
           upd(row["Resolved"]||row["resolved"], false);
         });
-        res({count:rows.length,cMin:cMin,cMax:cMax,rMin:rMin,rMax:rMax});
-      }catch(err){ res({count:null}); }
-    };
-    r.onerror=function(){ res({count:null}); };
-    r.readAsArrayBuffer(file);
-  });
+        return {count:rows.length,cMin:cMin,cMax:cMax,rMin:rMin,rMax:rMax};
 }
 function fmtDate(d){ if(!d)return"—"; return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"2-digit"}); }
 
@@ -1096,9 +1100,12 @@ function showLoaded(name,info){
 // Re-show the stored file (used when a refresh is cancelled or fails).
 window.__restoreLoaded=function(silent){
   if(!HS){ showEmpty(); return; }
-  HS.loadFile().then(function(rec){
-    if(rec&&rec.blob){ countTickets(rec.blob).then(function(info){ showLoaded(rec.name,info); }); }
-    else { showEmpty(); }
+  /* the kept rows give the card's numbers without reading the file; without them (an older save), read it once and keep them */
+  Promise.all([HS.loadFile(), HS.loadRows()]).then(function(r){
+    var rec=r[0], kept=r[1];
+    if(!rec||!rec.blob){ showEmpty(); return; }
+    if(kept&&kept.length){ showLoaded(rec.name,infoFromRows(kept)); return; }
+    countTickets(rec.blob).then(function(info){ var rows=info.rows; delete info.rows; showLoaded(rec.name,info); if(rows&&rows.length) HS.saveRows(rows); });
   }).catch(function(){ if(!silent) showEmpty(); });
 };
 function showEmpty(){
@@ -1116,7 +1123,9 @@ function handleFile(file){
   var btn=el("chooseBtn"); if(btn){btn.textContent="Reading…";btn.disabled=true;}
   countTickets(file).then(function(info){
     if(HS){
-      HS.saveFile(file,file.name).then(function(){ HS.clearRows(); if(HS.clearFetchCache)HS.clearFetchCache(); if(window.HDTabs)HDTabs.markStale(); showLoaded(file.name,info); })
+      /* keep the rows just read with the file, so no page has to read the whole Excel file again */
+      var rows=info.rows; delete info.rows;
+      HS.saveFile(file,file.name).then(function(){ return rows&&rows.length ? HS.saveRows(rows) : HS.clearRows(); }).then(function(){ if(HS.clearFetchCache)HS.clearFetchCache(); if(window.HDTabs)HDTabs.markStale(); showLoaded(file.name,info); })
       .catch(function(err){ alert("Couldn't store the file on this device: "+err.message); if(btn){btn.textContent="Choose Excel file";btn.disabled=false;} });
     } else {
       showLoaded(file.name,info);  // preview fallback (no persistence)
