@@ -1607,7 +1607,7 @@ function processUpload(file){
   FILENAME=file.name;BLOB=file;
   readFile(file).then(function(rows){
     RAW=normalize(rows);
-    if(window.HDStore)HDStore.saveFile(file,file.name);
+    if(window.HDStore)HDStore.saveFile(file,file.name).then(function(){ return HDStore.saveRows(rows); });   /* the kept rows follow the new file */
     S.tab="overview";S.page=0;render();
   }).catch(function(err){alert("Could not read file: "+err.message);});
 }
