@@ -10,7 +10,7 @@
 <script src="sla-engine.js"></script>
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Montserrat:wght@500;600;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --bg:#EEF1F4;--paper:#F6F8FA;--card:#FFFFFF;--ink:#111A2B;--ink2:#3E4C63;--muted:#6B7A90;--faint:#9AA7B8;--line:#E3E8EE;--line2:#D2DAE3;
@@ -223,8 +223,12 @@ td .z{color:var(--faint)}
 /* ── cover page ── */
 .ss-cover{position:relative;aspect-ratio:16/9;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;font-family:Calibri,"Segoe UI",Arial,sans-serif;container-type:inline-size;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .cv-band{position:absolute;left:36%;right:0;top:31%;height:35%;background:#1BA9E1}
-.cv-title{position:absolute;left:18.5%;width:77%;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:.9cqw;text-align:center;color:#fff;font-family:Arial,Helvetica,sans-serif;font-weight:700;line-height:1.2}
-.cv-title b,.cv-title span{display:block;white-space:nowrap;letter-spacing:.01em}.cv-title span{font-weight:700;opacity:.97}
+.cv-title{position:absolute;left:18.5%;width:77%;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;color:#fff;font-family:"Montserrat","Century Gothic","Segoe UI",Arial,sans-serif;line-height:1.15}
+.cv-title i,.cv-title b,.cv-title span{display:block;white-space:nowrap;font-style:normal}
+.cv-eye{font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#E8F7FF;margin-bottom:.55cqw}
+.cv-main{font-weight:800;letter-spacing:-.005em;line-height:1.05;text-shadow:0 .25cqw .9cqw rgba(4,60,110,.28)}
+.cv-rule{display:block;width:6.5cqw;height:.3cqw;border-radius:1cqw;background:#FFFFFF;opacity:.9;margin:1.15cqw 0 1.05cqw}
+.cv-sub{font-weight:500;letter-spacing:.04em;color:#F2FAFF}
 .cv-art{position:absolute;left:-5%;top:-9%;width:52%;aspect-ratio:1}.cv-art svg{width:100%;height:100%;display:block}
 .cv-logo{position:absolute;right:3.5%;top:7%;width:22%}
 .cv-prep{position:absolute;left:58%;width:26%;top:74.5%;text-align:center}.cv-prep b{display:block;color:#1B9AD6;font-size:1.85cqw;margin-bottom:.9cqw}.cv-prep img{width:78%}
@@ -1156,9 +1160,12 @@ function ssChart(kind, vals, labels, label) {
   if (kind === "bar") {
     var bw = Math.min(26, cw * 0.42);
     vals.forEach(function (v, i) { s += '<rect x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (y(0) - y(v)).toFixed(1) + '" fill="#5B83C9"><title>' + esc(labels[i]) + ": " + v + "</title></rect>"; });
+    /* the count on top of every bar (drawn after the trend line below, so the line never covers it) */
+    var barNums = vals.map(function (v, i) { return '<text x="' + x(i).toFixed(1) + '" y="' + (y(v) - 5).toFixed(1) + '" text-anchor="middle" class="ss-val ss-halo">' + v + "</text>"; }).join("");
     if (n > 1) { var sx = 0, sy = 0, sxy = 0, sxx = 0; vals.forEach(function (v, i) { sx += i; sy += v; sxy += i * v; sxx += i * i; });
       var sl = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1), ic = (sy - sl * sx) / n;
       s += '<line x1="' + x(0) + '" y1="' + y(Math.max(0, ic)) + '" x2="' + x(n - 1) + '" y2="' + y(Math.max(0, ic + sl * (n - 1))) + '" stroke="#AFC3EA" stroke-width="2" stroke-dasharray="2 4" stroke-linecap="round"><title>Trend</title></line>'; }
+    s += barNums;
   } else if (kind === "area") {
     s += '<polygon points="' + x(0) + "," + y(0) + " " + pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" ") + " " + x(n - 1) + "," + y(0) + '" fill="#5B83C9"/>';
     vals.forEach(function (v, i) { var yy = Math.min(y(0) - 4, y(v) + 17); s += '<text x="' + x(i) + '" y="' + yy + '" text-anchor="middle" class="ss-val"><title>' + esc(labels[i]) + ": " + v + "</title>" + v + "</text>"; });
@@ -1221,6 +1228,8 @@ function ssFlowChart(D, X) {
   o.forEach(function (v, i) { var x = pl + cw * i + cw / 2; s += '<circle cx="' + x + '" cy="' + y(v) + '" r="3" fill="#FBBF24"><title>' + labels[i] + ": " + v + " open at month end</title></circle>" + '<text x="' + x + '" y="' + (y(v) - 8) + '" text-anchor="middle" class="ss-val ss-halo" style="fill:#FDE68A">' + v + "</text>"; });
   return s + "</svg>" + ssLegend([["Created", "#5B83C9"], ["Resolved", "#7FD1A0"], ["Open at month end", "#FBBF24", 1]]);
 }
+/* dark text on a light segment, white on a dark one */
+function ssInk(hex) { var h = hex.replace("#", ""), r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return (r * 0.299 + g * 0.587 + b * 0.114) > 150 ? "#0B2365" : "#FFFFFF"; }
 /* stacked bars per month, total on top */
 function ssStackChart(D, series, label) {
   var W = 560, H = 240, pl = 40, pr = 14, pt = 20, pb = 52, n = D.ms.length, cw = (W - pl - pr) / n, labels = D.ms.map(function (m) { return m.lbl; });
@@ -1229,7 +1238,8 @@ function ssStackChart(D, series, label) {
   var s = '<svg viewBox="0 0 ' + W + " " + H + '" class="ss-svg" role="img" aria-label="' + esc(label) + '">' + ax.s;
   for (var i = 0; i < n; i++) { var x = pl + cw * i + cw / 2, acc = 0;
     series.forEach(function (se) { var v = se.l[i].length; if (!v) return; var y1 = y(acc + v), y0 = y(acc); acc += v;
-      s += '<rect class="click" data-drill="' + dreg(se.l[i], D.ms[i].long + " — " + se.name) + '" x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, y0 - y1).toFixed(1) + '" fill="' + se.color + '" stroke="#0B2365" stroke-width=".6"><title>' + esc(labels[i] + ": " + v + " " + se.name) + "</title></rect>"; });
+      s += '<rect class="click" data-drill="' + dreg(se.l[i], D.ms[i].long + " — " + se.name) + '" x="' + (x - bw / 2).toFixed(1) + '" y="' + y1.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, y0 - y1).toFixed(1) + '" fill="' + se.color + '" stroke="#0B2365" stroke-width=".6"><title>' + esc(labels[i] + ": " + v + " " + se.name) + "</title></rect>";
+      if (y0 - y1 >= 12) s += '<text x="' + x.toFixed(1) + '" y="' + ((y0 + y1) / 2 + 3.5).toFixed(1) + '" text-anchor="middle" class="ss-bv" style="fill:' + ssInk(se.color) + ';pointer-events:none">' + v + "</text>"; });
     s += '<text x="' + x + '" y="' + (y(tot[i]) - 6) + '" text-anchor="middle" class="ss-val">' + tot[i] + "</text>"; }
   return s + "</svg>" + ssLegend(series.map(function (se) { return [se.name + " " + num(se.l.reduce(function (q, l) { return q + l.length; }, 0)), se.color]; }));
 }
@@ -1240,8 +1250,12 @@ function ssYoyChart(D, X) {
   var ax = ssAxis(W, H, pl, pr, pt, pb, Math.max.apply(null, a.concat(b, [1])), labels, cw), y = ax.y, s = '<svg viewBox="0 0 ' + W + " " + H + '" class="ss-svg" role="img" aria-label="Year on year">' + ax.s;
   [[a, "#94A3B8", X.names[0], true], [b, "#6E93D6", X.names[1], false]].forEach(function (L) {
     s += '<polyline points="' + L[0].map(function (v, i) { return (pl + cw * i + cw / 2).toFixed(1) + "," + y(v).toFixed(1); }).join(" ") + '" fill="none" stroke="' + L[1] + '" stroke-width="' + (L[3] ? 2.2 : 3) + '"' + (L[3] ? ' stroke-dasharray="6 4"' : "") + ' stroke-linejoin="round"/>';
-    L[0].forEach(function (v, i) { var x = pl + cw * i + cw / 2; s += '<circle cx="' + x + '" cy="' + y(v) + '" r="2.8" fill="' + L[1] + '"><title>' + esc(L[2] + ", " + labels[i] + ": " + v) + "</title></circle>" + (L[3] ? "" : '<text x="' + x + '" y="' + (y(v) - 8) + '" text-anchor="middle" class="ss-val">' + v + "</text>"); });
+    L[0].forEach(function (v, i) { var x = pl + cw * i + cw / 2; s += '<circle cx="' + x + '" cy="' + y(v) + '" r="2.8" fill="' + L[1] + '"><title>' + esc(L[2] + ", " + labels[i] + ": " + v) + "</title></circle>"; });
   });
+  /* numbers for both years: in each month the higher point is labelled above, the lower one below, so they never collide */
+  for (var i = 0; i < n; i++) { var x = pl + cw * i + cw / 2, curUp = b[i] >= a[i];
+    var lab = function (v, up, cls, col) { var yy = up ? y(v) - 8 : Math.min(y(0) - 3, y(v) + 17); return '<text x="' + x + '" y="' + yy + '" text-anchor="middle" class="' + cls + ' ss-halo"' + (col ? ' style="fill:' + col + '"' : "") + ">" + v + "</text>"; };
+    s += lab(a[i], !curUp, "ss-bv", "#CBD5E1") + lab(b[i], curUp, "ss-val", ""); }
   return s + "</svg>" + ssLegend([[X.names[0], "#94A3B8", 1], [X.names[1], "#6E93D6", 1]]);
 }
 function ssPage2(D, clientTxt) {
@@ -1286,12 +1300,19 @@ var SS_PIC_KEY = "hd-ops-ss-cover";
 function ssPic() { try { return localStorage.getItem(SS_PIC_KEY) || ""; } catch (e) { return ""; } }
 function ssCoverAuto(D) {
   var ms = D.ms, who = F.clients.length === 1 ? F.clients[0] : F.clients.length > 1 ? F.clients.length + " clients" : "";
-  return { t: (who ? who + " " : "") + "Support Stats", s: "From " + ms[0].long + " to " + ms[ms.length - 1].long };
+  return { t: (who ? who + "\n" : "") + "Support Stats", s: "From " + ms[0].long + " to " + ms[ms.length - 1].long };
 }
-function ssCoverText(D) { var a = ssCoverAuto(D), c = { t: SS.covT || a.t, s: SS.covS || a.s }, room = 47;
-  var fit = function (txt) { return room / (Math.max(8, String(txt).length) * 0.56); };
-  /* one line when it still reads well; a very long title wraps onto two balanced lines instead of shrinking */
-  c.wrap = fit(c.t) < 1.9; c.ts = Math.min(3.0, c.wrap ? fit(Math.ceil(String(c.t).length / 2 * 1.12)) : fit(c.t)); c.ss = Math.min(c.ts * 0.82, fit(c.s)); return c; }
+/* the cover text in three levels: the client as a small spaced-out line, the title large and heavy, the months light;
+   every size fitted to the visible part of the band (room, in % of the cover width; Montserrat ≈ 0.6 em a character) */
+function ssCoverText(D) { var a = ssCoverAuto(D), c = { t: SS.covT || a.t, s: SS.covS || a.s }, room = 46;
+  var fit = function (txt, em) { return room / (Math.max(6, String(txt).length) * em); };
+  var lines = String(c.t).split("\n").map(function (x) { return x.trim(); }).filter(Boolean); if (!lines.length) lines = ["Support Stats"];
+  c.main = lines[lines.length - 1]; c.eyebrow = lines.slice(0, -1).join(" ");
+  c.wrap = fit(c.main, 0.62) < 2.6;      /* a long typed title wraps onto two balanced lines instead of shrinking */
+  c.ts = Math.min(4.6, c.wrap ? fit(Math.ceil(c.main.length / 2 * 1.12), 0.62) : fit(c.main, 0.62));
+  c.es = c.eyebrow ? Math.min(2.1, fit(c.eyebrow, 0.78)) : 0;
+  c.ss = Math.min(1.95, fit(c.s, 0.6));
+  c.lines = lines; return c; }
 /* the circle: a picture, or the drawing (dashboard, rising bars, trend line, a ship) — plain SVG, so it can also become a PNG */
 function ssCoverArt(pic) {
   var s = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 1000" width="1000" height="1000">' +
@@ -1324,7 +1345,9 @@ function ssCoverArt(pic) {
 }
 function ssCoverHTML(D) {
   var c = ssCoverText(D);
-  return '<div class="ss-cover" id="ssCover"><div class="cv-band"><div class="cv-title"><b style="font-size:' + c.ts.toFixed(2) + 'cqw' + (c.wrap ? ';white-space:normal;text-wrap:balance' : '') + '">' + esc(c.t) + '</b><span style="font-size:' + c.ss.toFixed(2) + 'cqw">' + esc(c.s) + "</span></div></div>" +
+  return '<div class="ss-cover" id="ssCover"><div class="cv-band"><div class="cv-title">' + (c.eyebrow ? '<i class="cv-eye" style="font-size:' + c.es.toFixed(2) + 'cqw">' + esc(c.eyebrow) + "</i>" : "") +
+    '<b class="cv-main" style="font-size:' + c.ts.toFixed(2) + 'cqw' + (c.wrap ? ';white-space:normal;text-wrap:balance' : '') + '">' + esc(c.main) + "</b>" +
+    '<em class="cv-rule"></em><span class="cv-sub" style="font-size:' + c.ss.toFixed(2) + 'cqw">' + esc(c.s) + "</span></div></div>" +
     '<div class="cv-art">' + ssCoverArt(ssPic()) + "</div>" +
     '<img class="cv-logo" src="' + SS_LOGO + '" alt="Solverminds Solutions and Technologies">' +
     '<div class="cv-prep"><b>Prepared by</b><img src="' + SS_LOGO + '" alt="Solverminds"></div>' +
@@ -1361,7 +1384,7 @@ function tabStats() {
     '<label>From <input type="month" class="dinput" id="ssFrom" value="' + esc(D.R.from) + '"></label><label>To <input type="month" class="dinput" id="ssTo" value="' + esc(D.R.to) + '"></label>' +
     '<label>Count by <select class="dinput" id="ssBy">' + SS_BY.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === D.by ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></label>" +
     '<span class="sp"></span><button class="btn" id="ssPpt" title="Editable PowerPoint: three slides, the charts and tables native PowerPoint">PowerPoint (editable)</button><button class="btn" id="ssPdf" title="Opens the print window: choose “Save as PDF”">PDF</button><button class="btn" id="ssPrint">Print</button><button class="btn" id="ssXlsx">Excel</button></div>' +
-    '<div class="ss-row ss-cvrow"><b>Cover page</b><label>Title <input class="dinput" id="ssCovT" style="width:250px" placeholder="' + esc(ssCoverAuto(D).t) + '" value="' + esc(SS.covT) + '"></label>' +
+    '<div class="ss-row ss-cvrow"><b>Cover page</b><label>Title <input class="dinput" id="ssCovT" style="width:250px" placeholder="' + esc(ssCoverAuto(D).t.replace(/\n/g, " ")) + '" value="' + esc(SS.covT) + '"></label>' +
       '<label>Subtitle <input class="dinput" id="ssCovS" style="width:290px" placeholder="' + esc(ssCoverAuto(D).s) + '" value="' + esc(SS.covS) + '"></label>' +
       '<label class="btn" style="cursor:pointer">Cover picture…<input type="file" accept="image/*" id="ssPicIn" hidden></label>' + (ssPic() ? '<button class="btn" id="ssPicOff" title="Use the drawing instead of your picture">Use the drawing</button>' : "") +
       '<span class="note" style="margin:0">Leave the title empty for the automatic one. The cover is the first page of the PDF and the first slide of the PowerPoint.</span></div>' +
@@ -1482,8 +1505,15 @@ function ssDeck(P, D, art) {
   var cv = pres.addSlide({ masterName: "COVER" }), ct = ssCoverText(D), SW = 13.333, SH = 7.5, BLUE = "1BA9E1";
   cv.addShape(pres.ShapeType.rect, { x: 0.36 * SW, y: 0.31 * SH, w: 0.64 * SW, h: 0.35 * SH, fill: { color: BLUE }, line: { color: BLUE, width: 0 }, objectName: "Title band" });
   if (art) cv.addImage({ data: art, x: -0.05 * SW, y: -0.09 * SH, w: 0.52 * SW, h: 0.52 * SW, altText: "Cover picture", objectName: "Cover picture" });
-  cv.addText([{ text: ct.t, options: { fontSize: Math.round(ct.ts * 9.6), breakLine: true } }, { text: ct.s, options: { fontSize: Math.round(ct.ss * 9.6) } }],
-    { x: 0.36 * SW + 0.64 * SW * 0.185, y: 0.31 * SH, w: 0.64 * SW * 0.77, h: 0.35 * SH, fontFace: "Arial", bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0, paraSpaceAfter: 6, isTextBox: true, objectName: "Cover title" });
+  var CF = "Century Gothic", bx = 0.36 * SW + 0.64 * SW * 0.185, bwid = 0.64 * SW * 0.77, by = 0.31 * SH, bh = 0.35 * SH;
+  var pt = function (cqw) { return Math.round(cqw * 9.6 * 2) / 2; }, lh = function (p, k) { return p * (k || 1.2) / 72; };
+  var mainLines = ct.wrap ? 2 : 1, hE = ct.eyebrow ? lh(pt(ct.es)) + 0.06 : 0, hM = lh(pt(ct.ts), 1.1) * mainLines, hR = 0.04 + 0.24, hS = lh(pt(ct.ss));
+  var y0 = by + (bh - (hE + hM + hR + hS)) / 2;
+  if (ct.eyebrow) cv.addText(ct.eyebrow.toUpperCase(), { x: bx, y: y0, w: bwid, h: hE, fontFace: CF, fontSize: pt(ct.es), color: "E8F7FF", charSpacing: Math.round(pt(ct.es) * 0.16 * 10) / 10, align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover client" });
+  cv.addText(ct.main, { x: bx, y: y0 + hE, w: bwid, h: hM, fontFace: CF, fontSize: pt(ct.ts), bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover title",
+    shadow: { type: "outer", color: "043C6E", opacity: 0.3, blur: 6, offset: 2, angle: 90 } });
+  cv.addShape(pres.ShapeType.roundRect, { x: bx + bwid / 2 - 0.45, y: y0 + hE + hM + 0.12, w: 0.9, h: 0.04, rectRadius: 0.02, fill: { color: "FFFFFF", transparency: 10 }, line: { color: "FFFFFF", width: 0 }, objectName: "Cover rule" });
+  cv.addText(ct.s, { x: bx, y: y0 + hE + hM + hR, w: bwid, h: hS, fontFace: CF, fontSize: pt(ct.ss), color: "F2FAFF", charSpacing: 0.6, align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Cover months" });
   var lw = 0.22 * SW; cv.addImage({ data: SS_LOGO, x: SW - 0.035 * SW - lw, y: 0.07 * SH, w: lw, h: lw / SS_LOGO_AR, altText: "Solverminds Solutions and Technologies", objectName: "Logo" });
   var px = 0.58 * SW, pw = 0.26 * SW, l2 = pw * 0.78;
   cv.addText("Prepared by", { x: px, y: 0.745 * SH, w: pw, h: 0.4, fontFace: "Calibri", fontSize: 18, bold: true, color: "1B9AD6", align: "center", margin: 0, isTextBox: true, objectName: "Prepared by" });
@@ -1498,7 +1528,7 @@ function ssDeck(P, D, art) {
   if (n > 1) { var sx = 0, sy = 0, sxy = 0, sxx = 0; v2.forEach(function (v, i) { sx += i; sy += v; sxy += i * v; sxx += i * i; }); var sl_ = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1), ic = (sy - sl_ * sx) / n; trend = v2.map(function (v, i) { return Math.max(0, Math.round((ic + sl_ * i) * 10) / 10); }); }
   var cy = 0.95, ch = 2.55, cw3 = 4.1;
   s1.addChart(pres.ChartType.line, ser("Tickets", mt), base("Monthwise incident count", Object.assign(ax(mt), { x: 0.35, y: cy, w: cw3, h: ch, chartColors: ["6E93D6"], lineSize: 3, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t", objectName: "Chart: monthly count" })));
-  s1.addChart([{ type: pres.ChartType.bar, data: ser(ssSel(D.c2).v, v2), options: { chartColors: ["5B83C9"], barGapWidthPct: 90 } },
+  s1.addChart([{ type: pres.ChartType.bar, data: ser(ssSel(D.c2).v, v2), options: { chartColors: ["5B83C9"], barGapWidthPct: 90, showValue: true, dataLabelPosition: "outEnd", dataLabelColor: "FFFFFF", dataLabelFontSize: 9, dataLabelFontBold: true } },
                { type: pres.ChartType.line, data: ser("Trend", trend), options: { chartColors: ["AFC3EA"], lineSize: 2, lineDash: "sysDot", lineDataSymbol: "none" } }],
     base(ssSel(D.c2).v, Object.assign(ax(v2.concat(trend)), { x: 0.35 + cw3 + 0.15, y: cy, w: cw3, h: ch, objectName: "Chart: " + ssSel(D.c2).v })));
   s1.addChart(pres.ChartType.area, ser(ssSel(D.c3).v, v3), base(ssSel(D.c3).v, Object.assign(ax(v3), { x: 0.35 + 2 * (cw3 + 0.15), y: cy, w: cw3, h: ch, chartColors: ["5B83C9"], showValue: true, dataLabelPosition: "ctr", objectName: "Chart: " + ssSel(D.c3).v })));
@@ -1512,7 +1542,7 @@ function ssDeck(P, D, art) {
   s2.addChart([{ type: pres.ChartType.bar, data: [{ name: "Created", labels: L, values: cre }, { name: "Resolved", labels: L, values: res }], options: { chartColors: ["5B83C9", "7FD1A0"], barGapWidthPct: 60, showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 7.5, dataLabelFontBold: false, dataLabelColor: "E6ECF8" } },
                { type: pres.ChartType.line, data: [{ name: "Open at month end", labels: L, values: opn }], options: { chartColors: ["FBBF24"], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t", dataLabelColor: "FDE68A" } }],
     base("Created vs resolved, and open at month end", Object.assign(ax(cre.concat(res, opn)), { x: 0.35, y: 0.95, w: cw2, h: 3.4, showLegend: true, objectName: "Chart: created vs resolved" })));
-  s2.addChart([{ type: pres.ChartType.line, data: [{ name: X.names[0], labels: M3, values: prv }], options: { chartColors: ["94A3B8"], lineSize: 2, lineDash: "dash", lineDataSymbol: "circle", lineDataSymbolSize: 4 } },
+  s2.addChart([{ type: pres.ChartType.line, data: [{ name: X.names[0], labels: M3, values: prv }], options: { chartColors: ["94A3B8"], lineSize: 2, lineDash: "dash", lineDataSymbol: "circle", lineDataSymbolSize: 4, showValue: true, dataLabelPosition: "b", dataLabelColor: "CBD5E1", dataLabelFontSize: 8, dataLabelFontBold: false } },
                { type: pres.ChartType.line, data: [{ name: X.names[1], labels: M3, values: cre }], options: { chartColors: ["6E93D6"], lineSize: 3, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t" } }],
     base("Year on year: " + X.names[0] + " vs " + X.names[1], Object.assign(ax(prv.concat(cre)), { x: 0.35 + cw2 + 0.2, y: 0.95, w: cw2, h: 3.4, showLegend: true, objectName: "Chart: year on year" })));
   table(s2, ["Month"].concat(L, ["Total"]), [["Created"].concat(cre, [cn]), ["Resolved"].concat(res, [sum(res)]), ["Open at end"].concat(opn, ["—"])], { x: 0.35, y: 4.5, w: cw2, first: 0.85, fs: ms.length > 8 ? 6.5 : 8, tight: ms.length > 8, rowH: 0.26, name: "Table: created vs resolved" });
