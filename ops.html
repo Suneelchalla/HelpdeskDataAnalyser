@@ -241,6 +241,9 @@ td .z{color:var(--faint)}
 .ss-t td.click{cursor:pointer}.ss-t td.click:hover{background:#2B4C9B}.ss-t tr.gt td.click:hover,.ss-t td.gt.click:hover{background:#6E6E6E}
 .ss-empty{padding:40px 0;text-align:center;color:#C9D6F2}
 .ss-foot{margin-top:14px;font:800 20px var(--disp);letter-spacing:1px;color:#7FB2FF}.ss-foot span{display:block;font:600 9px var(--sans);letter-spacing:2px;color:#C9D6F2;text-transform:uppercase}
+.ss-tip{margin-top:10px;padding:8px 12px;border-radius:8px;background:#FEF3C7;color:#7A4B00;font-size:12.5px}
+.ss-fld{font:500 11px var(--sans);color:#AFC3EA;margin-top:2px}
+#ssPrintHost .ss-fld{display:none}
 .ss-p2{margin-top:18px}
 .ss-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:14px 0 4px}@media (max-width:1000px){.ss-g2{grid-template-columns:1fr}}
 .ss-box h3{font:500 15px var(--sans);color:#fff;margin:0 0 4px;text-align:center}.ss-sub{font-size:12px;color:#C9D6F2;margin-left:6px}
@@ -255,7 +258,10 @@ td .z{color:var(--faint)}
 .ss-fr b{text-align:right}.ss-fr .pc{color:#C9D6F2;text-align:right}
 @media print{
   body.ssprint > *:not(#ssPrintHost){display:none!important}
-  #ssPrintHost .ss{border-radius:0;break-inside:avoid;page-break-inside:avoid;margin:0}
+  #ssPrintHost .ss{border-radius:0;margin:0;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+  #ssPrintHost .ss-p2 .ss-g2 + .ss-g2{break-before:page;page-break-before:always;padding-top:4px}
+  #ssPrintHost .ss-box,#ssPrintHost .ss-g2{break-inside:avoid;page-break-inside:avoid}
+  #ssPrintHost .ss-head{break-after:avoid}
   #ssPrintHost .ss + .ss{break-before:page;page-break-before:always}
   #ssPrintHost .ss-pick{border:none;-webkit-appearance:none;appearance:none}
   #ssPrintHost .ss-tw{overflow:visible}
@@ -1080,10 +1086,16 @@ function tabQuality(m) {
    Tickets CREATED in each month of the chosen months, counted by root cause (or type of fix); blank = "(blank)".
    All clients, or only the ones picked in the Client filter; the SVM, Request type and Priority filters apply too.
    The period buttons at the top do not: this report has its own From / To month. Settings are remembered in this browser. */
-var SS = { from: "", to: "", by: "rootCause", c2: "", c3: "" }, SS_KEY = "hd-ops-ss", SS_BLANK = "(blank)";
-try { var _ss = JSON.parse(localStorage.getItem(SS_KEY) || "{}"); Object.keys(SS).forEach(function (k) { if (typeof _ss[k] === "string") SS[k] = _ss[k]; }); } catch (e) {}
+/* by = the field of the table; c2 / c3 = "field|value" of the 2nd and 3rd chart (either field). Default Type of fix: the
+   categories of the support slide (System Bug, User Request, Client Clarification, …) are Type of Fix values in Jira. */
+var SS = { from: "", to: "", by: "fix", c2: "", c3: "", v: "2" }, SS_KEY = "hd-ops-ss", SS_BLANK = "(blank)";
+try { var _ss = JSON.parse(localStorage.getItem(SS_KEY) || "{}"); Object.keys(SS).forEach(function (k) { if (typeof _ss[k] === "string") SS[k] = _ss[k]; });
+  if (_ss.v !== "2") { SS.by = "fix"; SS.c2 = SS.c3 = ""; SS.v = "2"; } } catch (e) {}
+var SS_FL = { fix: "Type of fix", rootCause: "Root cause" };
+function ssSortCats(x, y) { return x === SS_BLANK ? 1 : y === SS_BLANK ? -1 : x.localeCompare(y, "en", { sensitivity: "base" }); }
+function ssSel(sel) { var i = String(sel || "").indexOf("|"); return i < 0 ? { f: "", v: String(sel || "") } : { f: sel.slice(0, i), v: sel.slice(i + 1) }; }
 function ssSave() { try { localStorage.setItem(SS_KEY, JSON.stringify(SS)); } catch (e) {} }
-var SS_BY = [["rootCause", "Root cause"], ["fix", "Type of fix"]];
+var SS_BY = [["fix", "Type of fix"], ["rootCause", "Root cause"]];
 var MON_S = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], MON_L = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 function ssMonths() {
   var d = new Date(NOW + IST), y = d.getUTCFullYear(), mo = d.getUTCMonth(), p2 = function (n) { return (n < 10 ? "0" : "") + n; };
@@ -1100,15 +1112,24 @@ function ssData() {
   var R = ssMonths(), ms = R.list, a = ms[0].a, b = ms[ms.length - 1].b, by = SS.by === "fix" ? "fix" : "rootCause";
   var list = scope().filter(function (t) { return t.created >= a && t.created < b; });
   var catOf = function (t) { return t[by] || SS_BLANK; };
-  var cats = Object.keys(countBy(list.map(function (t) { return { c: catOf(t) }; }), "c")).sort(function (x, y) { return x === SS_BLANK ? 1 : y === SS_BLANK ? -1 : x.localeCompare(y, "en", { sensitivity: "base" }); });
+  var cats = Object.keys(countBy(list.map(function (t) { return { c: catOf(t) }; }), "c")).sort(ssSortCats);
   var cell = ms.map(function () { var o = {}; cats.forEach(function (c) { o[c] = []; }); return o; });
   list.forEach(function (t) { for (var i = 0; i < ms.length; i++) if (t.created >= ms[i].a && t.created < ms[i].b) { cell[i][catOf(t)].push(t); break; } });
   var tot = cats.map(function (c) { return cell.reduce(function (s, o) { return s + o[c].length; }, 0); });
-  var pickCat = function (want, rx1, rx2, skip) { if (want && cats.indexOf(want) > -1) return want;
-    var f1 = cats.filter(function (c) { return c !== skip && rx1.test(c); })[0] || cats.filter(function (c) { return c !== skip && rx2.test(c); })[0];
-    return f1 || cats.filter(function (c) { return c !== skip && c !== SS_BLANK; }).sort(function (x, y) { return tot[cats.indexOf(y)] - tot[cats.indexOf(x)]; })[0] || cats[0] || ""; };
+  /* the categories of both fields, for the chart pickers */
+  var catsOf = {}; ["fix", "rootCause"].forEach(function (f) { var o = {}; list.forEach(function (t) { var v = t[f] || SS_BLANK; o[v] = (o[v] || 0) + 1; }); catsOf[f] = { n: o, k: Object.keys(o).sort(ssSortCats) }; });
+  var other = by === "fix" ? "rootCause" : "fix";
+  var pickCat = function (want, rx1, rx2, skip) {
+    var w = ssSel(want), f = w.f || by;
+    if (w.v && catsOf[f] && catsOf[f].n[w.v]) return f + "|" + w.v;
+    var found = null; [by, other].some(function (ff) { var k = catsOf[ff].k.filter(function (c) { return ff + "|" + c !== skip; });
+      var c = k.filter(function (c) { return rx1.test(c); })[0] || k.filter(function (c) { return rx2.test(c); })[0]; if (c) found = ff + "|" + c; return !!c; });
+    if (found) return found;
+    var k = catsOf[by].k.filter(function (c) { return c !== SS_BLANK && by + "|" + c !== skip; }).sort(function (x, y) { return catsOf[by].n[y] - catsOf[by].n[x]; });
+    return k.length ? by + "|" + k[0] : catsOf[by].k.length ? by + "|" + catsOf[by].k[0] : "";
+  };
   var c2 = pickCat(SS.c2, /client clarif/i, /clarif/i, null), c3 = pickCat(SS.c3, /system bug/i, /bug/i, c2);
-  return { R: R, ms: ms, list: list, cats: cats, cell: cell, tot: tot, by: by, c2: c2, c3: c3 };
+  return { R: R, ms: ms, list: list, cats: cats, cell: cell, tot: tot, by: by, c2: c2, c3: c3, catsOf: catsOf };
 }
 /* ── the three charts, drawn in white on the navy panel ── */
 function ssNice(mx) { if (mx <= 5) return { max: 5, step: 1 }; var raw = mx / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / p, st = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; return { max: Math.ceil(mx / st) * st, step: st }; }
@@ -1238,19 +1259,23 @@ function ssPage2(D, clientTxt) {
 function tabStats() {
   var D = ssData(), ms = D.ms, labels = ms.map(function (m) { return m.lbl; }), byL = D.by === "fix" ? "type of fix" : "root cause";
   var monthTot = D.cell.map(function (o) { return D.cats.reduce(function (s, c) { return s + o[c].length; }, 0); }), grand = D.list.length;
-  var catSel = function (k, cur) { return '<select class="ss-pick" data-ss="' + k + '" aria-label="Category for this chart">' + D.cats.map(function (c) { return '<option' + (c === cur ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</select>"; };
-  var catVals = function (c) { return D.cell.map(function (o) { return c && o[c] ? o[c].length : 0; }); };
+  /* chart picker: every value of both fields, the table's field first */
+  var catSel = function (k, cur) { var fs = D.by === "fix" ? ["fix", "rootCause"] : ["rootCause", "fix"];
+    return '<select class="ss-pick" data-ss="' + k + '" aria-label="Category for this chart" title="' + esc(SS_FL[ssSel(cur).f] || "") + '">' + fs.map(function (f) { var ks = D.catsOf[f].k; return ks.length ? '<optgroup label="' + SS_FL[f] + '">' + ks.map(function (c) { var v = f + "|" + c; return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + "</optgroup>" : ""; }).join("") + "</select>" +
+      '<div class="ss-fld">' + esc(SS_FL[ssSel(cur).f] || "") + "</div>"; };
+  var catVals = function (sel) { var x = ssSel(sel); return ms.map(function (m) { return D.list.filter(function (t) { return t.created >= m.a && t.created < m.b && (t[x.f] || SS_BLANK) === x.v; }).length; }); };
   var clientTxt = F.clients.length ? (F.clients.length <= 4 ? F.clients.join(", ") : F.clients.length + " clients") : "All clients";
   var h = '<div class="card pad ss-ctl"><div class="ss-row">' +
     '<label>From <input type="month" class="dinput" id="ssFrom" value="' + esc(D.R.from) + '"></label><label>To <input type="month" class="dinput" id="ssTo" value="' + esc(D.R.to) + '"></label>' +
     '<label>Count by <select class="dinput" id="ssBy">' + SS_BY.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === D.by ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select></label>" +
-    '<span class="sp"></span><button class="btn" id="ssXlsx">Download Excel</button><button class="btn" id="ssPrint">Print / PDF</button></div>' +
-    '<p class="note">Tickets created in each month, by ' + byL + ". " + esc(clientTxt) + ". The Client, SVM in charge, Request type and Priority filters apply; the period buttons do not (this report has its own months)." + (D.R.capped ? " Showing the first 36 months." : "") + " Pick the category of the second and third chart in its title. Page 2 (Support Overview) follows. Click any number or bar for the tickets.</p></div>";
+    '<span class="sp"></span><button class="btn" id="ssPpt" title="Editable PowerPoint: three slides, the charts and tables native PowerPoint">PowerPoint (editable)</button><button class="btn" id="ssPdf" title="Opens the print window: choose “Save as PDF”">PDF</button><button class="btn" id="ssPrint">Print</button><button class="btn" id="ssXlsx">Excel</button></div>' +
+    '<div class="ss-tip hidden" id="ssTip">In the print window, choose <b>Save as PDF</b> as the destination (Printer), landscape. Both pages are included.</div>' +
+    '<p class="note">Tickets created in each month, by ' + byL + " (the second and third chart can show any type of fix or root cause). " + esc(clientTxt) + ". The Client, SVM in charge, Request type and Priority filters apply; the period buttons do not (this report has its own months)." + (D.R.capped ? " Showing the first 36 months." : "") + " Pick the category of the second and third chart in its title. Page 2 (Support Overview) follows. Click any number or bar for the tickets.</p></div>";
   h += '<div id="ssPages"><div class="ss" id="ssPanel"><div class="ss-head"><h1>Support Stats</h1><div class="ss-per">“From ' + esc(ms[0].long) + " to " + esc(ms[ms.length - 1].long) + '”<div class="ss-cl">' + esc(clientTxt) + "</div></div></div>";
   if (!grand) return h + '<div class="ss-empty">No tickets were created in these months with the current filters.</div></div></div>';
   h += '<div class="ss-charts"><div><h3>Monthwise incident count</h3>' + ssChart("line", monthTot, labels, "Tickets per month") + "</div>" +
-    "<div><h3>" + catSel("c2", D.c2) + "</h3>" + ssChart("bar", catVals(D.c2), labels, D.c2 + " per month") + "</div>" +
-    "<div><h3>" + catSel("c3", D.c3) + "</h3>" + ssChart("area", catVals(D.c3), labels, D.c3 + " per month") + "</div></div>";
+    "<div><h3>" + catSel("c2", D.c2) + "</h3>" + ssChart("bar", catVals(D.c2), labels, ssSel(D.c2).v + " per month") + "</div>" +
+    "<div><h3>" + catSel("c3", D.c3) + "</h3>" + ssChart("area", catVals(D.c3), labels, ssSel(D.c3).v + " per month") + "</div></div>";
   var cellTd = function (l, title, cls) { return '<td class="' + (cls || "") + (l.length ? " click" : "") + '"' + (l.length ? ' data-drill="' + dreg(l, title) + '"' : "") + ">" + (l.length ? num(l.length) : "") + "</td>"; };
   h += '<div class="ss-tw"><table class="ss-t"><colgroup><col class="rl">' + D.cats.map(function () { return "<col>"; }).join("") + '<col class="gt"></colgroup><thead><tr><th class="rl">Row Labels</th>' + D.cats.map(function (c) { return "<th>" + esc(c) + "</th>"; }).join("") + '<th class="gt">Grand Total</th></tr></thead><tbody>' +
     ms.map(function (m, i) { var all = []; D.cats.forEach(function (c) { all = all.concat(D.cell[i][c]); });
@@ -1277,6 +1302,119 @@ function ssExcel() {
   sh("Year on year", [["Year on year (created)"], [], ["Month"].concat(ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; }), ["Total"]), [X.names[0]].concat(cnt(X.prev), [tsum(cnt(X.prev))]), [X.names[1]].concat(cnt(X.cre), [tsum(cnt(X.cre))])]);
   XLSX.writeFile(wb, "Support-stats-" + D.R.from + "-to-" + D.R.to + ".xlsx");
 }
+/* ── PowerPoint (editable) export: three 16:9 slides in the support-slide style, every chart a native PowerPoint chart
+   (click it in PowerPoint › Edit Data) and every table a native table. The library is loaded only when it is needed:
+   pptxgen.bundle.js next to this page if it is there, else from jsDelivr (pinned). ── */
+function ssLoadPptx() {
+  if (window.PptxGenJS) return Promise.resolve(window.PptxGenJS);
+  var urls = ["pptxgen.bundle.js", "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js"];
+  return urls.reduce(function (p, u) { return p.catch(function () { return new Promise(function (res, rej) {
+    var s = document.createElement("script"); s.src = u;
+    s.onload = function () { window.PptxGenJS ? res(window.PptxGenJS) : rej(new Error("The PowerPoint library did not load.")); };
+    s.onerror = function () { s.remove(); rej(new Error("The PowerPoint library could not be downloaded (" + u + ").")); };
+    document.head.appendChild(s); }); }); }, Promise.reject(new Error("start")));
+}
+function ssPpt(btn) {
+  var D = ssData(); if (!D.list.length) { alert("There is nothing to export for these months."); return; }
+  var old = btn.textContent; btn.disabled = true; btn.textContent = "Preparing PowerPoint…";
+  var name = "Support-stats-" + D.R.from + "-to-" + D.R.to + ".pptx";
+  ssLoadPptx().then(function (P) { return ssDeck(P, D).write({ outputType: "blob" }); }).then(ssCleanZip).then(function (blob) {
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  })
+    .catch(function (e) { alert("PowerPoint export failed: " + ((e && e.message) || e)); })
+    .then(function () { btn.disabled = false; btn.textContent = old; });
+}
+/* repackage without folder entries: PowerPoint opened through OneDrive / SharePoint / Teams has refused files that have them */
+function ssCleanZip(blob) {
+  var Z = window.JSZip; if (!Z) return Promise.resolve(blob);
+  return Z.loadAsync(blob).then(function (zin) {
+    var zout = new Z(), jobs = [];
+    zin.forEach(function (path, f) { if (!f.dir) jobs.push(f.async("uint8array").then(function (d) { zout.file(path, d, { createFolders: false, binary: true }); })); });
+    return Promise.all(jobs).then(function () { return zout.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", compression: "DEFLATE" }); });
+  }).catch(function () { return blob; });
+}
+function ssDeck(P, D) {
+  var X = ssData2(D), ms = D.ms, pres = new P(), NAVY = "0B2365", GREY = "595959", LINE = "8EA0C8", AX = "E6ECF8", SOFT = "C9D6F2", FONT = "Arial";
+  pres.layout = "LAYOUT_WIDE"; pres.title = "Support Stats"; pres.author = "SVM Help Desk";
+  var period = "From " + ms[0].long + " to " + ms[ms.length - 1].long, clientTxt = F.clients.length ? F.clients.join(", ") : "All clients";
+  var L = ms.map(function (m) { return m.lbl; }), M3 = ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; });
+  var cnt = function (arr) { return arr.map(function (l) { return l.length; }); }, sum = function (a) { return a.reduce(function (q, v) { return q + v; }, 0); };
+  var chg = function (a, b) { if (!a) return b ? "new" : "—"; var p = Math.round((b - a) / a * 100); return (p > 0 ? "▲ " : p < 0 ? "▼ " : "") + Math.abs(p) + "%"; };
+  pres.defineSlideMaster({ title: "SUPPORT", background: { color: NAVY }, objects: [
+    { text: { text: "SOLVERMINDS", options: { x: 0.4, y: 7.05, w: 3, h: 0.3, fontFace: FONT, fontSize: 12, bold: true, color: "7FB2FF", charSpacing: 1, margin: 0 } } },
+    { text: { text: "SOLUTIONS AND TECHNOLOGIES", options: { x: 0.4, y: 7.3, w: 3, h: 0.15, fontFace: FONT, fontSize: 6, color: SOFT, charSpacing: 2, margin: 0 } } }
+  ], slideNumber: { x: 12.6, y: 7.1, w: 0.4, h: 0.3, fontFace: FONT, fontSize: 9, color: SOFT } });
+  var head = function (sl, t) {
+    sl.addText(t, { x: 0.4, y: 0.2, w: 7, h: 0.6, fontFace: FONT, fontSize: 30, bold: true, color: "FFFFFF", margin: 0, isTextBox: true, objectName: "Title" });
+    sl.addText([{ text: "“" + period + "”", options: { bold: true, italic: true, fontSize: 14, color: "FFFFFF", breakLine: true } }, { text: clientTxt, options: { fontSize: 10, color: SOFT } }],
+      { x: 7.4, y: 0.2, w: 5.55, h: 0.6, fontFace: FONT, align: "right", margin: 0, isTextBox: true, objectName: "Period" });
+  };
+  /* chart frame on navy: white labels, no grid clutter — a fresh object every time (pptxgenjs changes option objects) */
+  var base = function (title, o) { return Object.assign({ showTitle: true, title: title, titleColor: "FFFFFF", titleFontFace: FONT, titleFontSize: 13,
+    catAxisLabelColor: AX, valAxisLabelColor: AX, catAxisLabelFontFace: FONT, valAxisLabelFontFace: FONT, catAxisLabelFontSize: 9, valAxisLabelFontSize: 9, catAxisLabelRotate: -45,
+    catAxisLineShow: true, catAxisLineColor: SOFT, valAxisLineShow: false, valGridLine: { color: "1E3A80", size: 0.5 }, catGridLine: { style: "none" },
+    dataLabelColor: "FFFFFF", dataLabelFontFace: FONT, dataLabelFontSize: 9, dataLabelFontBold: true,
+    showLegend: false, legendColor: AX, legendFontFace: FONT, legendFontSize: 9, legendPos: "b", plotArea: { fill: { color: NAVY } } }, o || {}); };
+  var ser = function (name, vals, labels) { return [{ name: name, labels: labels || L, values: vals }]; };
+  /* whole-number value axis, the same steps as the page (no 0.5, 1.5 … with small counts) */
+  var ax = function (vals) { var nc = ssNice(Math.max.apply(null, vals.concat([1]))); return { valAxisMinVal: 0, valAxisMaxVal: nc.max, valAxisMajorUnit: nc.step, valAxisLabelFormatCode: "0" }; };
+  var colTot = function (series) { return L.map(function (x, i) { return series.reduce(function (q, se) { return q + se.l[i].length; }, 0); }); };
+  /* a table on navy: grey header, grey totals */
+  var table = function (sl, headRow, rows, o) {
+    var n = headRow.length, fs = o.fs || 8, w = o.w, first = o.first || 1.0, last = o.noTotal ? 0 : (o.last || 0.62), mid = (w - first - last) / (n - (o.noTotal ? 1 : 2));
+    var cw = headRow.map(function (h, i) { return i === 0 ? first : (!o.noTotal && i === n - 1) ? last : mid; });
+    var B = { type: "solid", pt: 0.5, color: LINE };
+    var cell = function (v, i, kind) { var hd = kind === "h", tot = kind === "t" || (!o.noTotal && i === n - 1);
+      return { text: v == null ? "" : String(v), options: { fontFace: FONT, fontSize: hd ? fs - 0.5 : fs, bold: hd || tot || i === 0, color: "FFFFFF", fill: { color: hd || tot ? GREY : NAVY },
+        align: i === 0 ? "left" : "center", valign: "middle", border: [B, B, B, B], margin: [1, 3, 1, 3] } }; };
+    var data = [headRow.map(function (h, i) { return cell(h, i, "h"); })].concat(rows.map(function (r, ri) { return r.map(function (v, i) { return cell(v, i, o.totalRow && ri === rows.length - 1 ? "t" : ""); }); }));
+    sl.addTable(data, { x: o.x, y: o.y, w: w, colW: cw, rowH: o.rowH || 0.22, autoPage: false, objectName: o.name || "Table" });
+  };
+  var blank0 = function (v) { return v ? v : ""; };
+  /* ── slide 1: Support Stats ── */
+  var s1 = pres.addSlide({ masterName: "SUPPORT" }); head(s1, "Support Stats");
+  var mt = D.cell.map(function (o) { return D.cats.reduce(function (s, c) { return s + o[c].length; }, 0); });
+  var catVals = function (sel) { var x = ssSel(sel); return ms.map(function (m) { return D.list.filter(function (t) { return t.created >= m.a && t.created < m.b && (t[x.f] || SS_BLANK) === x.v; }).length; }); };
+  var v2 = catVals(D.c2), v3 = catVals(D.c3), n = v2.length, trend = v2.slice();
+  if (n > 1) { var sx = 0, sy = 0, sxy = 0, sxx = 0; v2.forEach(function (v, i) { sx += i; sy += v; sxy += i * v; sxx += i * i; }); var sl_ = (n * sxy - sx * sy) / (n * sxx - sx * sx || 1), ic = (sy - sl_ * sx) / n; trend = v2.map(function (v, i) { return Math.max(0, Math.round((ic + sl_ * i) * 10) / 10); }); }
+  var cy = 0.95, ch = 2.55, cw3 = 4.1;
+  s1.addChart(pres.ChartType.line, ser("Tickets", mt), base("Monthwise incident count", Object.assign(ax(mt), { x: 0.35, y: cy, w: cw3, h: ch, chartColors: ["6E93D6"], lineSize: 3, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t", objectName: "Chart: monthly count" })));
+  s1.addChart([{ type: pres.ChartType.bar, data: ser(ssSel(D.c2).v, v2), options: { chartColors: ["5B83C9"], barGapWidthPct: 90 } },
+               { type: pres.ChartType.line, data: ser("Trend", trend), options: { chartColors: ["AFC3EA"], lineSize: 2, lineDash: "sysDot", lineDataSymbol: "none" } }],
+    base(ssSel(D.c2).v, Object.assign(ax(v2.concat(trend)), { x: 0.35 + cw3 + 0.15, y: cy, w: cw3, h: ch, objectName: "Chart: " + ssSel(D.c2).v })));
+  s1.addChart(pres.ChartType.area, ser(ssSel(D.c3).v, v3), base(ssSel(D.c3).v, Object.assign(ax(v3), { x: 0.35 + 2 * (cw3 + 0.15), y: cy, w: cw3, h: ch, chartColors: ["5B83C9"], showValue: true, dataLabelPosition: "ctr", objectName: "Chart: " + ssSel(D.c3).v })));
+  var rows1 = ms.map(function (m, i) { return [m.lbl].concat(D.cats.map(function (c) { return blank0(D.cell[i][c].length); }), [mt[i]]); }).concat([["Grand Total"].concat(D.tot, [D.list.length])]);
+  var many = D.cats.length > 18;
+  table(s1, ["Row Labels"].concat(D.cats, ["Grand Total"]), rows1, { x: 0.35, y: 3.65, w: 12.6, first: 0.78, last: 0.6, fs: many ? 7 : 8, rowH: Math.min(0.24, 3.2 / (rows1.length + 2)), totalRow: true, name: "Table: by " + (D.by === "fix" ? "type of fix" : "root cause") });
+  s1.addNotes("Tickets created in each month, by " + (D.by === "fix" ? "type of fix" : "root cause") + ". " + clientTxt + ". " + period + ".");
+  /* ── slide 2: Support Overview ── */
+  var s2 = pres.addSlide({ masterName: "SUPPORT" }); head(s2, "Support Overview");
+  var cre = cnt(X.cre), res = cnt(X.res), opn = cnt(X.open), prv = cnt(X.prev), cn = sum(cre), pn = sum(prv), cw2 = 6.2;
+  s2.addChart([{ type: pres.ChartType.bar, data: [{ name: "Created", labels: L, values: cre }, { name: "Resolved", labels: L, values: res }], options: { chartColors: ["5B83C9", "7FD1A0"], barGapWidthPct: 60 } },
+               { type: pres.ChartType.line, data: [{ name: "Open at month end", labels: L, values: opn }], options: { chartColors: ["FBBF24"], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t", dataLabelColor: "FDE68A" } }],
+    base("Created vs resolved, and open at month end", Object.assign(ax(cre.concat(res, opn)), { x: 0.35, y: 0.95, w: cw2, h: 3.4, showLegend: true, objectName: "Chart: created vs resolved" })));
+  s2.addChart(pres.ChartType.line, [{ name: X.names[0], labels: M3, values: prv }, { name: X.names[1], labels: M3, values: cre }],
+    base("Year on year: " + X.names[0] + " vs " + X.names[1], Object.assign(ax(prv.concat(cre)), { x: 0.35 + cw2 + 0.2, y: 0.95, w: cw2, h: 3.4, showLegend: true, chartColors: ["94A3B8", "6E93D6"], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 5, showValue: true, dataLabelPosition: "t", objectName: "Chart: year on year" })));
+  table(s2, ["Month"].concat(L, ["Total"]), [["Created"].concat(cre, [cn]), ["Resolved"].concat(res, [sum(res)]), ["Open at end"].concat(opn, ["—"])], { x: 0.35, y: 4.5, w: cw2, first: 0.95, fs: 8, rowH: 0.26, name: "Table: created vs resolved" });
+  table(s2, ["Month"].concat(M3, ["Total"]), [[X.names[0]].concat(prv, [pn]), [X.names[1]].concat(cre, [cn]), ["Change"].concat(cre.map(function (v, i) { return chg(prv[i], v); }), [chg(pn, cn)])], { x: 0.35 + cw2 + 0.2, y: 4.5, w: cw2, first: 0.95, fs: 8, rowH: 0.26, name: "Table: year on year" });
+  s2.addText([{ text: "Resolved " + num(sum(res)) + " of " + num(cn) + " created (" + pct(sum(res), cn) + "%).", options: { breakLine: false } }],
+    { x: 0.35, y: 5.6, w: cw2, h: 0.3, fontFace: FONT, fontSize: 10, color: SOFT, margin: 0, isTextBox: true });
+  s2.addText(pn ? num(cn) + " tickets vs " + num(pn) + " in the same months of " + X.names[0] + " (" + chg(pn, cn) + ")." : "No tickets in the same months one year earlier.",
+    { x: 0.35 + cw2 + 0.2, y: 5.6, w: cw2, h: 0.3, fontFace: FONT, fontSize: 10, color: SOFT, margin: 0, isTextBox: true });
+  /* ── slide 3: request type and priority mix, type of fix ── */
+  var s3 = pres.addSlide({ masterName: "SUPPORT" }); head(s3, "Request Type, Priority and Fix");
+  var stack = function (series, title, x) { s3.addChart(pres.ChartType.bar, series.map(function (se) { return { name: se.name, labels: L, values: cnt(se.l) }; }),
+    base(title, Object.assign(ax(colTot(series)), { x: x, y: 0.95, w: cw2, h: 3.0, barGrouping: "stacked", barGapWidthPct: 55, chartColors: series.map(function (se) { return se.color.replace("#", ""); }), showLegend: true, showValue: true, dataLabelPosition: "ctr", dataLabelFontSize: 8, objectName: "Chart: " + title }))); };
+  stack(X.byType, "Request type mix", 0.35); stack(X.byPri, "Priority mix", 0.35 + cw2 + 0.2);
+  var mix = function (series) { return series.map(function (se) { var c = cnt(se.l); return [se.name].concat(c.map(blank0), [sum(c)]); }); };
+  var rT = mix(X.byType), rP = mix(X.byPri), rn = X.resAll.length;
+  table(s3, ["Request type"].concat(L, ["Total"]), rT, { x: 0.35, y: 4.15, w: 8.4, first: 1.3, fs: 8, rowH: 0.24, name: "Table: request type" });
+  table(s3, ["Priority"].concat(L, ["Total"]), rP, { x: 0.35, y: 4.3 + 0.24 * (rT.length + 1), w: 8.4, first: 1.3, fs: 8, rowH: 0.24, name: "Table: priority" });
+  var fx = X.fixes.slice(0, 12);
+  table(s3, ["Type of fix (resolved)", "Tickets", "Share"], fx.map(function (f) { return [f.name, f.l.length, rn ? pct(f.l.length, rn) + "%" : ""]; }).concat(X.fixes.length > 12 ? [["Others (" + (X.fixes.length - 12) + ")", sum(X.fixes.slice(12).map(function (f) { return f.l.length; })), rn ? pct(sum(X.fixes.slice(12).map(function (f) { return f.l.length; })), rn) + "%" : ""]] : []),
+    { x: 8.95, y: 4.15, w: 4.0, first: 2.3, noTotal: true, fs: 8, rowH: 0.21, name: "Table: type of fix" });
+  return pres;
+}
 function ssPrint() {
   var src = el("ssPages"); if (!src) return;
   var host = document.createElement("div"); host.id = "ssPrintHost"; host.innerHTML = src.innerHTML; document.body.appendChild(host); document.body.classList.add("ssprint");
@@ -1286,14 +1424,15 @@ function ssPrint() {
 document.addEventListener("change", function (e) {
   var t = e.target; if (!t || !t.closest || !t.closest("#view") || F.tab !== "stats") return;
   if (t.id === "ssFrom" || t.id === "ssTo") { SS[t.id === "ssFrom" ? "from" : "to"] = t.value || ""; }
-  else if (t.id === "ssBy") { SS.by = t.value; SS.c2 = SS.c3 = ""; }
+  else if (t.id === "ssBy") { SS.by = t.value; }
   else if (t.dataset && t.dataset.ss) { SS[t.dataset.ss] = t.value; }
   else return;
   ssSave(); DRILL = []; renderTab();
 });
 document.addEventListener("click", function (e) {
   var t = e.target; if (!t || !t.closest) return;
-  if (t.closest("#ssXlsx")) ssExcel(); else if (t.closest("#ssPrint")) ssPrint();
+  if (t.closest("#ssXlsx")) ssExcel(); else if (t.closest("#ssPrint")) ssPrint(); else if (t.closest("#ssPpt")) ssPpt(t.closest("#ssPpt"));
+  else if (t.closest("#ssPdf")) { var tip = el("ssTip"); if (tip) { tip.classList.remove("hidden"); clearTimeout(ssPrint._t); ssPrint._t = setTimeout(function () { tip.classList.add("hidden"); }, 9000); } setTimeout(ssPrint, 60); }
 });
 
 /* ══════════ drill-down modal ══════════ */
