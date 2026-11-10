@@ -2797,7 +2797,7 @@ function openApprList(idx0, gid) {
   document.body.appendChild(ov); ov.querySelector('[data-x="close"]').focus(); document.addEventListener("keydown", key);
 }
 /* the mail to Swire (it can go to Swire's head of department): formal wording, ME ID first, the ticket as a customer portal
-   link (Swire users cannot open the agent view), business user, status, how long it has waited and when it was raised */
+   link (Swire users cannot open the agent view), status, how long it has waited and when it was raised */
 const portalId = () => String(CFG.portalId || "19").trim() || "19";
 const portalUrl = (k) => "https://" + jiraHost() + "/servicedesk/customer/portal/" + encodeURIComponent(portalId()) + "/" + encodeURIComponent(k);
 function apprMail(list, hi, note, g, sign) {
@@ -2805,7 +2805,7 @@ function apprMail(list, hi, note, g, sign) {
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.55"';
   const CELL = "padding:7px 10px;border:1.5pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1.5pt;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
   const withRel = g.id === "rel" && list.some((i) => T[i].rels.length);
-  const HEADS = [["ME ID", 90], ["Ticket", 115]].concat(withRel ? [["Release no.", 115]] : [], [["Summary", 300], ["Business user", 140], ["Status", 170], ["Waiting for approval", 130], ["Created", 95]]);
+  const HEADS = [["ME ID", 90], ["Ticket", 115]].concat(withRel ? [["Release no.", 115]] : [], [["Summary", 340], ["Status", 170], ["Waiting for approval", 130], ["Created", 95]]);
   const W = HEADS.reduce((m, h) => m + h[1], 0);
   const th = ([h, w]) => '<th width="' + w + '" style="' + CELL + "width:" + w + 'px;background:#F7EEF2;color:#5C1730;text-align:left;font-weight:700;white-space:nowrap">' + h + "</th>";
   const td = (h, x) => '<td style="' + CELL + (x || "") + '">' + h + "</td>";
@@ -2814,7 +2814,7 @@ function apprMail(list, hi, note, g, sign) {
   const rows = list.map((i, k) => { const t = T[i], d = days(i);
     return '<tr data-k="' + esc(t.key) + '"' + (k % 2 ? ' style="background:#FDF9FA"' : "") + ">" + td("<b>" + esc(t.meId || "—") + "</b>", "white-space:nowrap;font-size:13px") +
       td('<a href="' + esc(portalUrl(t.key)) + '" style="color:#7A1F3D;font-weight:600;text-decoration:underline;white-space:nowrap">' + esc(t.key) + "</a>", "white-space:nowrap") +
-      (withRel ? td(esc(t.rels.join(", ") || "—"), "white-space:nowrap") : "") + td(esc(t.summary)) + td(esc(t.businessUser || "—")) + td(esc(t.status || "—")) +
+      (withRel ? td(esc(t.rels.join(", ") || "—"), "white-space:nowrap") : "") + td(esc(t.summary)) + td(esc(t.status || "—")) +
       td("<b" + (d >= 7 ? ' style="color:#B4232F"' : "") + ">" + esc(dTxt(i)) + '</b><br><span style="color:#8A7380;font-size:11px">since ' + esc(fday(apprSince(i, g).at)) + "</span>", "white-space:nowrap") +
       td(esc(fday(t.created)), "white-space:nowrap") + "</tr>"; }).join("");
   const n = list.length, nt = (note || "").trim(), name = (hi || "").trim() || "Sir/Madam", sg = (sign || "").trim() || rmSign();
@@ -2835,7 +2835,7 @@ function apprMail(list, hi, note, g, sign) {
     '<p data-slot="ask" ' + P + ">" + esc(paras[3]) + "</p><p " + P + ">" + esc(paras[4]) + "</p>" + gap(4) +
     "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
   const text = "Dear " + name + ",\n\n" + paras[0] + "\n\n" + paras[1] + (nt ? "\n\n" + nt : "") + "\n\n" +
-    list.map((i) => { const t = T[i]; return "- ME ID " + (t.meId || "-") + " | " + t.key + " (" + portalUrl(t.key) + ")" + (withRel ? " | release " + (t.rels.join(", ") || "-") : "") + " | " + t.summary + " | business user " + (t.businessUser || "-") + " | " + t.status + " | waiting " + dTxt(i).toLowerCase() + " (since " + fday(apprSince(i, g).at) + ") | created " + fday(t.created); }).join("\n") +
+    list.map((i) => { const t = T[i]; return "- ME ID " + (t.meId || "-") + " | " + t.key + " (" + portalUrl(t.key) + ")" + (withRel ? " | release " + (t.rels.join(", ") || "-") : "") + " | " + t.summary + " | " + t.status + " | waiting " + dTxt(i).toLowerCase() + " (since " + fday(apprSince(i, g).at) + ") | created " + fday(t.created); }).join("\n") +
     "\n\n" + paras[3] + "\n\n" + paras[4] + "\n\nWarm regards,\n" + sg;
   const subject = "Swire Phoenix Hypercare: " + (n === 1 ? g.one.charAt(0).toUpperCase() + g.one.slice(1) + " pending your approval" : n + " " + g.many + " pending your approval") + ", " + fday(NOW);
   return { html, text, subject };
@@ -2848,7 +2848,7 @@ function openApprMail(listAll, g) {
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amSubj">Subject</label><input class="inp" id="amSubj" style="flex:1"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="amSign">Signature</label><textarea class="inp" id="amSign" rows="2" style="flex:1;resize:vertical" placeholder="Name, SVM Help Desk, Solverminds"></textarea></div>' +
     '<label class="rmlbl" for="amNote">Note (optional, shown above the tickets)</label><textarea class="inp" id="amNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
-    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Only what Swire needs: ME ID, ticket (customer portal link), summary, business user, status, waiting time and created date; no LRPS or internal names. Click ✕ on a row to leave it out; click into the mail to edit any text.</span><span style="flex:1"></span>' +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Only what Swire needs: ME ID, ticket (customer portal link), summary, status, waiting time and created date; no LRPS or internal names. Click ✕ on a row to leave it out; click into the mail to edit any text.</span><span style="flex:1"></span>' +
       '<button type="button" class="btn" id="amRestore" style="display:none"></button><button type="button" class="btn" id="amReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="amPrev" style="max-height:48vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
     '<div class="rmrow"><span class="dim small">To, Cc, Dear and the signature are remembered in this browser. Send it from your own mailbox (R10).</span><span style="flex:1"></span><button type="button" class="btn" id="amEml">Download email draft</button><button type="button" class="btn pri" id="amCopy">Copy email</button></div>', "wide");
