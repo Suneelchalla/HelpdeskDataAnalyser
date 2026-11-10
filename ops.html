@@ -1378,7 +1378,18 @@ function ssExcel() {
   ms.forEach(function (m, i) { var tot = 0; aoa.push([m.lbl].concat(D.cats.map(function (c) { var n = D.cell[i][c].length; tot += n; return n || ""; }), [tot])); });
   aoa.push(["Grand Total"].concat(D.tot, [D.list.length]));
   var ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 12 }].concat(D.cats.map(function (c) { return { wch: Math.max(8, Math.min(18, c.length + 2)) }; }), [{ wch: 11 }]);
-  var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Support stats");
+  var wb = XLSX.utils.book_new();
+  /* first tab: every ticket the report counts (created in these months, same filters), oldest first, key linked to Jira */
+  var tl = D.list.slice().sort(function (a, b) { return a.created - b.created; }), mOf = function (t) { for (var i = 0; i < ms.length; i++) if (t.created >= ms[i].a && t.created < ms[i].b) return ms[i].lbl; return ""; };
+  var dt = function (x) { return x == null ? "" : new Date(x); };
+  var TH = ["Key", "Summary", "Client", "Request type", "Priority", "Status", "Type of fix", "Root cause", "Month", "Created", "Resolved", "Days to resolve", "SVM in charge", "Current worker", "Screen"];
+  var ta = [TH].concat(tl.map(function (t) { return [t.key, t.summary, t.project, t.type, t.priority, t.status, t.fix || SS_BLANK, t.rootCause || SS_BLANK, mOf(t), dt(t.created), t.isRes ? dt(t.doneAt) : "", t.resDays != null ? Math.round(t.resDays * 10) / 10 : "", t.svm, t.worker, t.screen]; }));
+  var tw = XLSX.utils.aoa_to_sheet(ta, { cellDates: true, dateNF: "dd-mmm-yyyy hh:mm" });
+  tl.forEach(function (t, i) { var c = tw[XLSX.utils.encode_cell({ r: i + 1, c: 0 })]; if (c && t.key) c.l = { Target: JIRA + encodeURIComponent(t.key), Tooltip: "Open in Jira" }; });
+  tw["!cols"] = [{ wch: 14 }, { wch: 60 }, { wch: 20 }, { wch: 16 }, { wch: 11 }, { wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 9 }, { wch: 17 }, { wch: 17 }, { wch: 9 }, { wch: 20 }, { wch: 20 }, { wch: 22 }];
+  tw["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(1, tl.length), c: TH.length - 1 } }) };
+  XLSX.utils.book_append_sheet(wb, tw, "All tickets");
+  XLSX.utils.book_append_sheet(wb, ws, "Support stats");
   var X = ssData2(D), L = ms.map(function (m) { return m.lbl; }), cnt = function (arr) { return arr.map(function (l) { return l.length; }); }, sh = function (name, rows) { var w = XLSX.utils.aoa_to_sheet(rows); w["!cols"] = [{ wch: 22 }].concat(L.map(function () { return { wch: 9 }; }), [{ wch: 9 }]); XLSX.utils.book_append_sheet(wb, w, name); };
   var tsum = function (a) { return a.reduce(function (q, v) { return q + v; }, 0); };
   sh("Created vs resolved", [["Created vs resolved, open at month end"], [], ["Month"].concat(L, ["Total"]), ["Created"].concat(cnt(X.cre), [tsum(cnt(X.cre))]), ["Resolved"].concat(cnt(X.res), [tsum(cnt(X.res))]), ["Open at month end"].concat(cnt(X.open))]);
