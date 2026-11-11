@@ -99,7 +99,8 @@
     if (saved.calendars && typeof saved.calendars === "object") Object.keys(saved.calendars).forEach(function (k) {
       var x = saved.calendars[k], ok = /^\d{1,2}:\d{2}$/;
       if (x && ok.test(x.businessStart) && ok.test(x.businessEnd) && Array.isArray(x.workDays) && x.workDays.length)
-        c.calendars[String(k).toUpperCase()] = { businessStart: x.businessStart, businessEnd: x.businessEnd, workDays: x.workDays.slice(), holidays: x.holidays !== false };
+        c.calendars[String(k).toUpperCase()] = { businessStart: x.businessStart, businessEnd: x.businessEnd, workDays: x.workDays.slice(), holidays: x.holidays !== false,
+          from: /^\d{4}-\d{2}-\d{2}$/.test(x.from || "") ? x.from : "", to: /^\d{4}-\d{2}-\d{2}$/.test(x.to || "") ? x.to : "" };
     });
     if (saved.templates) ["soon", "breached"].forEach(function (k) { var v = saved.templates[k]; if (typeof v === "string" && v.trim() && !isLegacy(k, v)) c.templates[k] = v; });
     if (saved.targets) {
@@ -183,11 +184,22 @@
        set.has(prefix)    → does the client have its own? */
   function makeCalendarSet(cfg) {
     var def = makeCalendar(cfg), cache = {}, own = cfg.calendars || {};
+    /* created = the ticket's creation time (ms). A calendar with "from" / "to" (YYYY-MM-DD, IST, both days included)
+       covers only tickets created in that period; tickets created before or after it use the default calendar for their
+       whole life (e.g. 24/7 only during a hypercare). Either date may be empty. Without created: the calendar applies. */
+    var day = function (d, add) { var v = Date.parse(d + "T00:00:00+05:30"); return isNaN(v) ? null : v + (add || 0); };
+    var applies = function (c, created) {
+      if (!c) return false; if (created == null) return true;
+      var f = c.from ? day(c.from) : null, t = c.to ? day(c.to, 864e5) : null;
+      return (f == null || created >= f) && (t == null || created < t);
+    };
     return {
       default: def,
-      has: function (p) { return !!own[p]; },
-      get: function (p) {
-        var c = own[p]; if (!c) return def;
+      has: function (p, created) { return applies(own[p], created); },
+      from: function (p) { return own[p] && own[p].from || ""; },
+      to: function (p) { return own[p] && own[p].to || ""; },
+      get: function (p, created) {
+        var c = own[p]; if (!c || !applies(c, created)) return def;
         return cache[p] || (cache[p] = makeCalendar({ businessStart: c.businessStart, businessEnd: c.businessEnd, workDays: c.workDays, holidays: c.holidays === false ? [] : cfg.holidays }));
       }
     };
@@ -419,8 +431,40 @@
     return { days: cut ? days.slice(cut) : days, truncated: cut };
   }
   /* The rules a ticket was measured by, in plain parts, for "How this was calculated". */
-  function basis(cfg, cals, prefix, sev, r) {
-    var own = cals.has(prefix), cal = cals.get(prefix), oc = own ? cfg.calendars[prefix] : null;
+  /* ── Contract of a ticket, for clients whose own calendar has dates (e.g. 24/7 only during a hypercare) ──
+     null when the client's calendar has no dates (or the client has none): one contract, nothing to split.
+     Otherwise { key, order, own, label }: before the period (default calendar), inside it (own calendar), after it. */
+  var MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function calName(c) {
+    var wd = (c.workDays || []).slice().sort(), all = wd.length === 7, run = wd.length > 1 && wd[wd.length - 1] - wd[0] === wd.length - 1;
+    var full = c.businessStart === "00:00" && (c.businessEnd === "24:00" || c.businessEnd === "23:59");
+    if (all && full) return "24/7";
+    var days = all ? "Every day" : run ? DOW[wd[0]] + "–" + DOW[wd[wd.length - 1]] : wd.map(function (d) { return DOW[d]; }).join(", ");
+    return days + " " + (full ? "24 h" : c.businessStart + "–" + c.businessEnd);
+  }
+  function contractOf(cfg, prefix, created) {
+    var c = cfg && cfg.calendars && cfg.calendars[prefix]; if (!c || (!c.from && !c.to) || created == null) return null;
+    var day = function (d) { return Date.parse(d + "T00:00:00+05:30"); }, nice = function (d) { var x = new Date(day(d) + 19800000); return x.getUTCDate() + " " + MONS[x.getUTCMonth()] + " " + x.getUTCFullYear(); };
+    var f = c.from ? day(c.from) : null, t = c.to ? day(c.to) + 864e5 : null, def = "Office hours (" + calName(cfg) + ")", own = calName(c);
+    if (f != null && created < f) return { key: prefix + "|before", order: 0, own: false, label: def + " · created before " + nice(c.from) };
+    if (t != null && created >= t) return { key: prefix + "|after", order: 2, own: false, label: def + " · created after " + nice(c.to) };
+    return { key: prefix + "|own", order: 1, own: true, label: own + " · created " + (c.from && c.to ? nice(c.from) + " – " + nice(c.to) : c.from ? "from " + nice(c.from) : "up to " + nice(c.to)) };
+  }
+  /* group items by contract: [{key,label,order,own,items}], in time order. Only worth showing when it has 2+ groups.
+     Items of clients with one contract go to a last "Other clients" group (only when the rest is split). */
+  function byContract(items, cfg, prefixOf_, createdOf) {
+    var g = {}, other = [];
+    items.forEach(function (it) { var k = contractOf(cfg, prefixOf_(it), createdOf(it)); if (!k) { other.push(it); return; } (g[k.key] = g[k.key] || Object.assign({ items: [] }, k)).items.push(it); });
+    var out = Object.keys(g).map(function (k) { return g[k]; }).sort(function (a, b) { return a.key.split("|")[0].localeCompare(b.key.split("|")[0]) || a.order - b.order; });
+    if (out.length < 2) return [];
+    if (other.length) out.push({ key: "other", order: 9, own: false, label: "Other clients (one calendar)", items: other });
+    return out;
+  }
+  function basis(cfg, cals, prefix, sev, r, created) {
+    if (created == null && r && r.segs && r.segs.length) created = r.segs[0].start;
+    var own = cals.has(prefix, created), cal = cals.get(prefix, created), oc = own ? cfg.calendars[prefix] : null;
+    var cc = cfg.calendars && cfg.calendars[prefix], later = "", ended = "";
+    if (!own && cc && created != null) { if (cc.from && created < Date.parse(cc.from + "T00:00:00+05:30")) later = cc.from; else if (cc.to) ended = cc.to; }
     var wd = Object.keys(cal.workDays).map(Number).sort(), run = wd.length > 1 && wd[wd.length - 1] - wd[0] === wd.length - 1;
     var pad = function (n) { return (n < 10 ? "0" : "") + n; }, hm = function (m) { return pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60); };
     var days = wd.length === 7 ? "Every day (Sun–Sat)" : run ? DOW[wd[0]] + "–" + DOW[wd[wd.length - 1]] : wd.map(function (d) { return DOW[d]; }).join(", ");
@@ -433,7 +477,7 @@
       inLife = Object.keys(br.holidayDays).sort().map(function (d) { return { date: d, name: names[d] || "" }; }); }
     var ex = cfg.targets.clients && cfg.targets.clients[prefix], tH = null, tSrc = "default";
     if (sev) { if (ex && ex[sev] > 0) { tH = ex[sev]; tSrc = "client"; } else if (cfg.targets.defaults[sev] > 0) tH = cfg.targets.defaults[sev]; }
-    return { own: own, prefix: prefix, days: days, offDays: off, hours: hrs, dayMin: cal.dayMin, is247: wd.length === 7 && cal.dayMin >= 1440,
+    return { own: own, ownFrom: own && oc ? oc.from || "" : "", ownTo: own && oc ? oc.to || "" : "", laterFrom: later, endedTo: ended, prefix: prefix, days: days, offDays: off, hours: hrs, dayMin: cal.dayMin, is247: wd.length === 7 && cal.dayMin >= 1440,
       holidaysSkipped: hol, holidaysListed: Object.keys(cal.holidays).length, holidaysInLife: inLife,
       sev: sev, sevName: sevName(sev), targetH: tH, targetSrc: tSrc, warnPct: cfg.warnPct, dangerPct: cfg.dangerPct };
   }
@@ -443,7 +487,7 @@
     parseTs: parseTs, makeCalendar: makeCalendar, makeCalendarSet: makeCalendarSet, bizMinutes: bizMinutes,
     normSev: normSev, sevName: sevName, sevColor: sevColor, prefixOf: prefixOf,
     targetMin: targetMin, levelOf: levelOf, compute: compute, bucket: bucket, fmtDur: fmtDur,
-    advanceBiz: advanceBiz, breachInfo: breachInfo,
+    advanceBiz: advanceBiz, breachInfo: breachInfo, contractOf: contractOf, byContract: byContract, calName: calName,
     offBreakdown: offBreakdown, dayStrip: dayStrip, basis: basis, nextWorkStart: nextWorkStart, offHoursText: offHoursText
   };
 });
