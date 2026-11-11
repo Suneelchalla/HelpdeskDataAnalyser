@@ -317,6 +317,12 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 .rp-cols{grid-template-columns:250px 1fr}
 @media print{.rp-doc h2,.rp-doc .rp-note{break-after:avoid}.rp-sec{break-inside:auto}.rp-doc .rp-hk{break-inside:avoid}}
 
+.ct-wrap{padding-bottom:14px}.ct-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.ct-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}.ct-tot{background:var(--paper)}
+.ct-t{font-weight:700;font-size:14px}.ct-sub{font-size:11.5px;color:var(--muted);margin-top:2px;min-height:30px}
+.ct-big{font:800 30px var(--disp,inherit);margin:8px 0 6px;line-height:1}.ct-big span{display:block;font:500 11.5px var(--sans,inherit);color:var(--muted);margin-top:4px}
+.ct-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;border-top:1px solid var(--line);padding-top:8px}.ct-s b{display:block;font-size:15px}.ct-s span{font-size:10.5px;color:var(--muted);line-height:1.2;display:block}
+.ct-foot{font-size:11.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
 <body>
@@ -466,8 +472,8 @@ function classify(status) {
 function istDayStart(ms) { var off = 330 * 60000; return Math.floor((ms + off) / 86400000) * 86400000 - off; }
 /* Created-date range. Rolling presets (1M…12M) and "This month / This year" always end NOW, so new tickets are
    included automatically every day; "Last month / Last year" are fixed calendar periods. All in IST. */
-function presetTitle(k) { return { "1m": "Last 1 month, up to today", "3m": "Last 3 months, up to today", "4m": "Last 4 months, up to today", "6m": "Last 6 months, up to today", "12m": "Last 12 months, up to today", mtd: "From the 1st of this month, up to today", lm: "The whole of last month", ytd: "From 1 January this year, up to today", ly: "The whole of last year", custom: "Pick your own dates" }[k] || ""; }
-function presetLabel() { var k = ST.ui.preset; if (k === "custom") return ST.ui.to ? "" : " (to today)"; var t = { mtd: "this month", lm: "last month", ytd: "this year", ly: "last year" }[k]; return t ? " (" + t + ")" : " (last " + parseInt(k, 10) + " month" + (parseInt(k, 10) > 1 ? "s" : "") + ")"; }
+function presetTitle(k) { return { all: "Every ticket in the data, from the oldest up to today", "1m": "Last 1 month, up to today", "3m": "Last 3 months, up to today", "4m": "Last 4 months, up to today", "6m": "Last 6 months, up to today", "12m": "Last 12 months, up to today", mtd: "From the 1st of this month, up to today", lm: "The whole of last month", ytd: "From 1 January this year, up to today", ly: "The whole of last year", custom: "Pick your own dates" }[k] || ""; }
+function presetLabel() { var k = ST.ui.preset; if (k === "custom") return ST.ui.to ? "" : " (to today)"; var t = { mtd: "this month", lm: "last month", ytd: "this year", ly: "last year", all: "all time" }[k]; return t ? " (" + t + ")" : " (last " + parseInt(k, 10) + " month" + (parseInt(k, 10) > 1 ? "s" : "") + ")"; }
 function istYMD(ms) { var d = new Date(ms + 330 * 60000); return { y: d.getUTCFullYear(), m: d.getUTCMonth() }; }
 function istStart(y, m) { return Date.UTC(y, m, 1) - 330 * 60000; }          // 1st of month (m may overflow), 00:00 IST
 function rangeMs() {
@@ -476,6 +482,8 @@ function rangeMs() {
   if (u.preset === "lm") return { from: istStart(c.y, c.m - 1), to: istStart(c.y, c.m) - 1000 };
   if (u.preset === "ytd") return { from: istStart(c.y, 0), to: now };
   if (u.preset === "ly") return { from: istStart(c.y - 1, 0), to: istStart(c.y, 0) - 1000 };
+  /* all time: from the day of the oldest ticket in the data, up to now */
+  if (u.preset === "all") { var mn = null; (ST.tickets || []).forEach(function (t) { if (t.created != null && (mn == null || t.created < mn)) mn = t.created; }); return { from: mn == null ? 0 : istDayStart(mn), to: now }; }
   if (u.preset === "custom") {
     var f = u.from ? Date.parse(u.from + "T00:00:00+05:30") : 0, t = u.to ? Date.parse(u.to + "T23:59:59+05:30") : now;
     return { from: isNaN(f) ? 0 : f, to: isNaN(t) ? now : t };
@@ -652,7 +660,7 @@ function msList(k) {
 function msUpdate(k) { var b = document.querySelector('[data-msb="' + k + '"]'); if (!b) return; b.classList.toggle("has", ST.f[k].length > 0); b.querySelector(".ms-t").textContent = msTxt(k); msList(k); }
 function buildFilters() {
   var u = ST.ui, r = rangeMs();
-  var presets = [["1m", "1M"], ["3m", "3M"], ["4m", "4M"], ["6m", "6M"], ["12m", "12M"]], periods = [["mtd", "This month"], ["lm", "Last month"], ["ytd", "This year"], ["ly", "Last year"], ["custom", "Custom"]];
+  var presets = [["1m", "1M"], ["3m", "3M"], ["4m", "4M"], ["6m", "6M"], ["12m", "12M"]], periods = [["mtd", "This month"], ["lm", "Last month"], ["ytd", "This year"], ["ly", "Last year"], ["all", "All time"], ["custom", "Custom"]];
   var pbtn = function (p) { return '<button data-preset="' + p[0] + '" class="' + (u.preset === p[0] ? "on" : "") + '" title="' + esc(presetTitle(p[0])) + '">' + p[1] + "</button>"; };
   var resChips = [["", "All"], ["open", "Open"], ["closed", "Closed"], ["breached", "Breached / missed"], ["risk", "At risk"], ["paused", "With client"], ["nohist", "No history"]];
   $("filters").innerHTML =
@@ -958,12 +966,20 @@ function stats(v) {
 function contractGroups(v) { return Sla.byContract ? Sla.byContract(v, ST.cfg, function (x) { return x.t.prefix; }, function (x) { return x.t.created; }) : []; }
 function contractPanel(v) {
   var G = contractGroups(v); if (!G.length) return "";
-  var goal = ST.cfg.goalPct, tone = function (c) { return c == null ? "var(--faint)" : c >= goal ? "var(--green)" : c >= goal - 15 ? "#F59E0B" : "var(--rose)"; };
-  var row = function (lbl, s, tot) { return "<tr" + (tot ? ' style="font-weight:600;background:var(--paper)"' : "") + "><td>" + esc(lbl) + '</td><td class="num">' + s.n + '</td><td class="num">' + s.met + '</td><td class="num">' + s.missed + '</td><td class="num">' + s.openBreached + '</td><td class="num">' + s.risk +
-    '</td><td class="num"><b style="color:' + tone(s.comp) + '">' + pctTxt(s.comp) + '</b> <span style="color:var(--faint);font-size:11px">' + s.met + " of " + s.decided + '</span></td><td class="num">' + (s.nEl ? fdur(s.sumEl / s.nEl) : "—") + "</td></tr>"; };
-  return '<div class="card"><h3 style="margin:0 0 4px">SLA by contract</h3><p class="h" style="margin:0 0 8px">Each ticket is measured on the calendar of the contract it was created under (Settings › Client calendars). SLA met = met ÷ decided (met, missed and open already over target).</p>' +
-    '<div class="tw"><table><thead><tr><th>Contract</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Breached, still open</th><th class="num">At risk</th><th class="num">SLA met</th><th class="num">Avg time to resolve</th></tr></thead><tbody>' +
-    G.map(function (g) { return row(g.label, stats(g.items)); }).join("") + row("All", stats(v), true) + "</tbody></table></div></div>";
+  var goal = ST.cfg.goalPct, tone = function (c) { return c == null ? "var(--faint)" : c >= goal ? "var(--green)" : c >= goal - 15 ? "#D97706" : "var(--rose)"; };
+  var per = {}, order = []; G.forEach(function (g) { if (!per[g.prefix]) { per[g.prefix] = []; order.push(g.prefix); } per[g.prefix].push(g); });
+  var card = function (title, sub, s, total) {
+    var st = function (lbl, n) { return '<div class="ct-s"><b>' + n.toLocaleString() + "</b><span>" + lbl + "</span></div>"; };
+    return '<div class="ct-card' + (total ? " ct-tot" : "") + '"><div class="ct-t">' + esc(title) + '</div><div class="ct-sub">' + esc(sub) + "</div>" +
+      '<div class="ct-big" style="color:' + tone(s.comp) + '">' + pctTxt(s.comp) + '<span>SLA met · ' + s.met.toLocaleString() + " of " + s.decided.toLocaleString() + " decided</span></div>" +
+      '<div class="ct-row">' + st("met", s.met) + st("missed", s.missed) + st("breached, still open", s.openBreached) + st("at risk", s.risk) + "</div>" +
+      '<div class="ct-foot">' + s.n.toLocaleString() + " tickets · avg time to resolve " + (s.nEl ? fdur(s.sumEl / s.nEl) : "—") + "</div></div>"; };
+  return order.map(function (p) {
+    var gs = per[p], all = [].concat.apply([], gs.map(function (g) { return g.items; }));
+    return '<div class="card ct-wrap"><h3 style="margin:0 0 2px">' + esc(clientName(p)) + " — SLA by contract</h3>" +
+      '<p class="h" style="margin:0 0 10px">' + esc(clientName(p)) + "’s tickets are measured on the calendar of the contract they were created under (Settings › Client calendars). SLA met = met ÷ decided (met + missed + open already over target). Times are working time on each contract’s own calendar.</p>" +
+      '<div class="ct-grid">' + gs.map(function (g) { return card(g.title, g.cal + " · " + g.period, stats(g.items)); }).join("") + card(clientName(p) + " total", (gs.length === 2 ? "both contracts together" : "all " + gs.length + " contracts together"), stats(all), true) + "</div></div>";
+  }).join("");
 }
 function kpi(label, val, sub, acc, spec, n) {
   var click = spec != null && n > 0;
@@ -1471,7 +1487,7 @@ function rpStage(st) {
 function rpPct(n, d) { return d ? Math.round(n / d * 1000) / 10 : null; }
 function rpPctTxt(p) { return p == null ? "—" : (Math.round(p) === p ? p : p.toFixed(1)) + "%"; }
 function rpTone(p) { var g = ST.cfg.goalPct; return p == null ? "n" : p >= g ? "g" : p >= g - 10 ? "a" : "r"; }
-function rpPeriodName() { var k = ST.ui.preset; return { mtd: "Month to date", lm: "Last month", ytd: "Year to date", ly: "Last year" }[k] || (k === "custom" ? (ST.ui.to ? "Custom period" : "Custom period, to date") : "Last " + parseInt(k, 10) + " month" + (parseInt(k, 10) > 1 ? "s" : "")); }
+function rpPeriodName() { var k = ST.ui.preset; return { mtd: "Month to date", lm: "Last month", ytd: "Year to date", ly: "Last year", all: "All time" }[k] || (k === "custom" ? (ST.ui.to ? "Custom period" : "Custom period, to date") : "Last " + parseInt(k, 10) + " month" + (parseInt(k, 10) > 1 ? "s" : "")); }
 function rpClients(v) { var m = {}; v.forEach(function (x) { m[x.t.prefix] = 1; }); return Object.keys(m).sort(); }
 function rpForName(v) {
   var cs = ST.f.client.length ? ST.f.client : rpClients(v);
@@ -1584,8 +1600,11 @@ function reportHtml(v, o) {
   }
   /* ── 5b. by contract (only when the tickets span two or more contracts, e.g. before / during a 24/7 hypercare) ── */
   var CG = Sla.byContract ? Sla.byContract(H, ST.cfg, function (x) { return x.t.prefix; }, function (x) { return x.t.created; }) : [];
-  if (CG.length) h += '<div class="rp-sec">' + sec("Performance by contract") + '<div class="rp-note">Each ticket is measured on the working calendar of the contract it was created under.</div><table class="rp-t keep">' + rpHead([["Contract", 0]].concat(RP_STD)) + "<tbody>" +
-    CG.map(function (g) { return "<tr><td><b>" + esc(g.label) + "</b></td>" + rpStdCells(rpAgg(g.items)) + "</tr>"; }).join("") + '<tr class="tot"><td>All</td>' + rpStdCells(A) + "</tr></tbody></table></div>";
+  if (CG.length) { var cps = []; CG.forEach(function (g) { if (cps.indexOf(g.prefix) < 0) cps.push(g.prefix); });
+    h += '<div class="rp-sec">' + sec("Performance by contract") + '<div class="rp-note">Each ticket is measured on the working calendar of the contract it was created under.</div><table class="rp-t keep">' + rpHead([["Contract", 0]].concat(RP_STD)) + "<tbody>" +
+      cps.map(function (p) { var gs = CG.filter(function (g) { return g.prefix === p; }), all = [].concat.apply([], gs.map(function (g) { return g.items; }));
+        return gs.map(function (g) { return "<tr><td><b>" + esc((cps.length > 1 ? clientName(p) + " · " : "") + g.title) + '</b><div style="font-size:9.5px;color:#64748B">' + esc(g.cal + " · " + g.period) + "</div></td>" + rpStdCells(rpAgg(g.items)) + "</tr>"; }).join("") +
+          '<tr class="tot"><td>' + esc(clientName(p)) + " total</td>" + rpStdCells(rpAgg(all)) + "</tr>"; }).join("") + "</tbody></table></div>"; }
   /* ── 6. open tickets ── */
   if (o.open && openL.length) {
     var row = function (lab, sub, l) { var b1 = l.filter(function (x) { return x.b === "breached"; }).length, r1 = l.filter(function (x) { return x.b === "warning" || x.b === "danger"; }).length;
