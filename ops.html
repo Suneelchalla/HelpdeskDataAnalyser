@@ -275,7 +275,7 @@ body.oi-sv #view{margin-top:6px}
 .ss-t.ss-pv1{min-width:0}.ss-pv1 td.ss-pvbar{text-align:left}.ss-pv1 td.ss-pvbar i{display:block;height:10px;background:#5B83C9;border-radius:3px}
 #ssPrintHost .ss-pvx{display:none}
 .ss-p2b{margin-top:18px}
-.ss-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin:14px 0 6px}@media (max-width:1000px){.ss-kpis{grid-template-columns:repeat(3,1fr)}}
+.ss-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 6px}@media (max-width:1000px){.ss-kpis{grid-template-columns:repeat(3,1fr)}}
 .ss-kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-left:4px solid var(--kc);border-radius:10px;padding:10px 12px;color:#fff}.ss-kpi.click{cursor:pointer}.ss-kpi.click:hover{background:rgba(255,255,255,.1)}
 .ss-kpi b{display:block;font:800 24px var(--disp);color:var(--kc)}.ss-kpi span{display:block;font:600 12.5px var(--sans);margin-top:2px}.ss-kpi i{display:block;font:normal 11px var(--sans);color:#C9D6F2;margin-top:2px}
 .ss-fix.ss-fix1{grid-template-columns:1fr;gap:10px}.ss-fix.ss-fix1 .ss-fr{grid-template-columns:minmax(90px,130px) minmax(0,1fr) 52px 78px;font-size:13px}.ss-fix.ss-fix1 .ss-fr .bar{height:16px}
@@ -1518,10 +1518,10 @@ function ssPivChartHTML(P, p, kind) {
 /* ══ SLA Performance: the SLA Tracker's numbers (resolution against target, the shared SLA link) for the report's tickets ══
    Closed tickets: Met / Missed → compliance = met ÷ (met + missed). Open: breached, at risk, on track, paused (with client).
    Tickets without a status history yet: "No SLA data"; types the SLA Tracker does not track, or without a target, are left out. */
-var SS_SLA_K = [["met", "Met", "#7FD1A0"], ["missed", "Missed", "#F87171"], ["breached", "Open, breached", "#EF4444"], ["risk", "Open, at risk", "#FBBF24"], ["track", "Open, on track", "#93C5FD"], ["paused", "Open, paused (with client)", "#C4B5FD"], ["nohist", "No SLA data", "#94A3B8"]];
+var SS_SLA_K = [["met", "Met", "#7FD1A0"], ["missed", "Missed", "#F87171"], ["breached", "Open, breached", "#EF4444"], ["open", "Open, not yet breached", "#FBBF24"], ["nohist", "No SLA data", "#94A3B8"]];
 var SS_SLA_L = {}; SS_SLA_K.forEach(function (k) { SS_SLA_L[k[0]] = k[1]; });
 function ssSlaOf(t) { var x = sla(t); if (!x || x.state === "none") return null; if (x.state === "nohist") return "nohist";
-  if (x.state === "met" || x.state === "missed" || x.state === "breached" || x.state === "paused") return x.state; return x.atRisk ? "risk" : "track"; }
+  if (x.state === "met" || x.state === "missed" || x.state === "breached") return x.state; return "open"; }   /* at risk, on track, paused with the client: all still inside target */
 function ssSlaData(D) {
   var ms = D.ms, blank = function () { var o = {}; SS_SLA_K.forEach(function (k) { o[k[0]] = []; }); return o; };
   var byM = ms.map(blank), byP = {}, all = blank(), tracked = [];
@@ -1574,8 +1574,7 @@ function ssSlaPanel(D, clientTxt) {
   var closed = A.met.concat(A.missed);
   h += '<div class="ss-kpis">' + tile("SLA compliance", ssPctTxt(compAll), closed, compAll == null ? "#94A3B8" : compAll >= 90 ? "#7FD1A0" : compAll >= 75 ? "#FBBF24" : "#F87171", "of " + num(closed.length) + " closed tickets") +
     tile("Met", num(A.met.length), A.met, "#7FD1A0", "closed within target") + tile("Missed", num(A.missed.length), A.missed, "#F87171", "closed over target") +
-    tile("Open, breached", num(A.breached.length), A.breached, "#EF4444", "past target, still open") + tile("Open, at risk", num(A.risk.length), A.risk, "#FBBF24", "close to target") +
-    tile("No SLA data", num(A.nohist.length), A.nohist, "#94A3B8", "status history not read") + "</div>";
+    tile("Open, breached", num(A.breached.length), A.breached, "#EF4444", "past target, still open") + tile("Open, not yet breached", num(A.open.length), A.open, "#FBBF24", "still open, inside target") + "</div>";
   /* compliance by priority, as bars */
   var pRows = Q.pris.map(function (p) { var o = Q.byP[p]; return { p: p, o: o, c: Q.comp(o), n: o.met.length + o.missed.length }; });
   h += '<div class="ss-g2"><div class="ss-box"><h3>Closed tickets: SLA met vs missed</h3>' + ssSlaChart(D, Q) + "</div>" +
@@ -1584,9 +1583,9 @@ function ssSlaPanel(D, clientTxt) {
       return '<div class="ss-fr' + (r.n ? " click" : "") + '"' + (r.n ? ' data-drill="' + dreg(r.o.met.concat(r.o.missed), r.p + " — closed tickets") + '"' : "") + '><span class="nm">' + esc(r.p) + '</span><span class="bar"><i style="width:' + (r.c || 0) + "%;background:" + col + '"></i></span><b>' + ssPctTxt(r.c == null ? null : Math.round(r.c)) + '</b><span class="pc">' + (r.n ? r.o.met.length + " of " + r.n : "no closed") + "</span></div>"; }).join("") + "</div>" +
       '<p class="ss-note">Compliance = closed within the SLA target ÷ all closed tickets with SLA data. Targets and working hours are the SLA Tracker’s (per priority and client).</p></div></div>';
   /* tables: by month, by priority */
-  var head = ["Met", "Missed", "Compliance", "Open, breached", "Open, at risk", "Open, on track", "Paused", "No SLA data"];
+  var head = ["Met", "Missed", "Compliance", "Open, breached", "Open, not yet breached"];
   var rowOf = function (label, o, title) { var c = Q.comp(o); return '<tr><th class="rl">' + esc(label) + "</th>" + cnt(o.met, title + " — met") + cnt(o.missed, title + " — missed") + '<td class="gt">' + ssPctTxt(c == null ? null : Math.round(c)) + "</td>" +
-    cnt(o.breached, title + " — open, breached") + cnt(o.risk, title + " — open, at risk") + cnt(o.track, title + " — open, on track") + cnt(o.paused, title + " — paused") + cnt(o.nohist, title + " — no SLA data") + "</tr>"; };
+    cnt(o.breached, title + " — open, breached") + cnt(o.open, title + " — open, not yet breached") + "</tr>"; };
   var tbl = function (first, rows) { return '<div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">' + first + "</th>" + head.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>"; };
   h += '<div class="ss-g2"><div class="ss-box"><h3>By month</h3>' + tbl("Month", ms.map(function (m, i) { return rowOf(m.lbl, Q.byM[i], m.long); }).join("") + rowOf("Total", A, "All months").replace("<tr>", '<tr class="gt">')) + "</div>" +
     '<div class="ss-box"><h3>By priority</h3>' + tbl("Priority", pRows.map(function (r) { return rowOf(r.p, r.o, r.p); }).join("") + rowOf("Total", A, "All priorities").replace("<tr>", '<tr class="gt">')) +
@@ -1683,8 +1682,8 @@ function ssExcel() {
   sh("Year on year", [["Year on year (created)"], [], ["Month"].concat(ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; }), ["Total"]), [X.names[0]].concat(cnt(X.prev), [tsum(cnt(X.prev))]), [X.names[1]].concat(cnt(X.cre), [tsum(cnt(X.cre))])]);
   var Qx = ssSlaData(D);
   if (Qx.ready && Qx.tracked.length) {
-    var SHx = ["Met", "Missed", "Compliance %", "Open, breached", "Open, at risk", "Open, on track", "Paused", "No SLA data"];
-    var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, o.met.length, o.missed.length, c == null ? "" : c, o.breached.length, o.risk.length, o.track.length, o.paused.length, o.nohist.length]; };
+    var SHx = ["Met", "Missed", "Compliance %", "Open, breached", "Open, not yet breached"];
+    var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, o.met.length, o.missed.length, c == null ? "" : c, o.breached.length, o.open.length]; };
     var sa = [["SLA Performance (resolution against the SLA Tracker targets)"], [], ["Month"].concat(SHx)].concat(ms.map(function (m, i) { return rx(m.lbl, Qx.byM[i]); }), [rx("Total", Qx.all)], [[]], [["Priority"].concat(SHx)], Qx.pris.map(function (p) { return rx(p, Qx.byP[p]); }), [rx("Total", Qx.all)]);
     var swk = XLSX.utils.aoa_to_sheet(sa); swk["!cols"] = [{ wch: 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
   }
@@ -1841,7 +1840,7 @@ function ssDeck(P, D, art) {
   if (Q.ready && Q.tracked.length) {
     var sq = pres.addSlide({ masterName: "SUPPORT" }); head(sq, "SLA Performance"); var A = Q.all, cA = Q.comp(A), ok = A.met.length + A.missed.length;
     sq.addText([{ text: "SLA compliance " + ssPctTxt(cA == null ? null : Math.round(cA)), options: { bold: true, color: cA == null ? "C9D6F2" : cA >= 90 ? "7FD1A0" : cA >= 75 ? "FBBF24" : "F87171", fontSize: 16 } },
-      { text: "   of " + num(ok) + " closed  ·  Met " + num(A.met.length) + "  ·  Missed " + num(A.missed.length) + "  ·  Open breached " + num(A.breached.length) + "  ·  At risk " + num(A.risk.length) + "  ·  No SLA data " + num(A.nohist.length), options: { color: "E6ECF8", fontSize: 11 } }],
+      { text: "   of " + num(ok) + " closed  ·  Met " + num(A.met.length) + "  ·  Missed " + num(A.missed.length) + "  ·  Open, breached " + num(A.breached.length) + "  ·  Open, not yet breached " + num(A.open.length), options: { color: "E6ECF8", fontSize: 11 } }],
       { x: 0.35, y: 0.88, w: 12.6, h: 0.4, fontFace: FONT, margin: 0, valign: "middle", isTextBox: true, objectName: "SLA headline" });
     var mm = Q.byM.map(function (o) { return o.met.length; }), mi = Q.byM.map(function (o) { return o.missed.length; });
     sq.addChart(pres.ChartType.bar, [{ name: "Met", labels: L, values: mm }, { name: "Missed", labels: L, values: mi }],
@@ -1849,8 +1848,8 @@ function ssDeck(P, D, art) {
     var pr = Q.pris.filter(function (p) { return Q.comp(Q.byP[p]) != null; }), pv = pr.map(function (p) { return Math.round(Q.comp(Q.byP[p])); });
     if (pr.length) sq.addChart(pres.ChartType.bar, [{ name: "Compliance %", labels: pr.slice().reverse(), values: pv.slice().reverse() }],
       base("SLA compliance by priority (%)", { x: 6.75, y: 1.35, w: 6.2, h: 2.85, barDir: "bar", valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 25, valAxisLabelFormatCode: "0", catAxisLabelRotate: 0, chartColors: ["7FD1A0"], showValue: true, dataLabelPosition: "outEnd", objectName: "Chart: SLA by priority" }));
-    var slaRow = function (lbl, o) { var c = Q.comp(o); return [lbl, o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.breached.length || "", o.risk.length || "", o.track.length || "", o.paused.length || "", o.nohist.length || ""]; };
-    var SH = ["Met", "Missed", "Compliance", "Breached", "At risk", "On track", "Paused", "No data"];
+    var slaRow = function (lbl, o) { var c = Q.comp(o); return [lbl, o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.breached.length || "", o.open.length || ""]; };
+    var SH = ["Met", "Missed", "Compliance", "Open, breached", "Open, not yet breached"];
     table(sq, ["Month"].concat(SH), ms.map(function (m, i) { return slaRow(m.lbl, Q.byM[i]); }).concat([slaRow("Total", A)]), { x: 0.35, y: 4.35, w: 6.2, first: 0.8, noTotal: true, fs: 7, tight: true, rowH: Math.min(0.2, 2.55 / (ms.length + 2)), totalRow: true, name: "Table: SLA by month" });
     table(sq, ["Priority"].concat(SH), Q.pris.map(function (p) { return slaRow(p, Q.byP[p]); }).concat([slaRow("Total", A)]), { x: 6.75, y: 4.35, w: 6.2, first: 0.95, noTotal: true, fs: 7.5, tight: true, rowH: 0.24, totalRow: true, name: "Table: SLA by priority" });
   }
