@@ -89,7 +89,7 @@
     var out;
     if (!L.types[t.type.toLowerCase()]) out = { state: "na", label: "", tip: t.type + " tickets are not tracked for SLA (see SLA Tracker → Settings)." };
     else {
-      var cal = L.cals.get(t.prefix), target = S.targetMin(L.cfg, t.sev, t.prefix);
+      var cal = L.cals.get(t.prefix, t.created), target = S.targetMin(L.cfg, t.sev, t.prefix);
       if (target == null) out = { state: "none", label: "No target", tip: "No SLA target for " + (t.priority || "this severity") + "." };
       else {
         var hc = histCheck(t), e = hc.e;
@@ -147,7 +147,7 @@
   function detail(row) {
     var info = get(row);
     if (!L.loaded || !Sla() || !row) return { info: info };
-    var S = Sla(), t = norm(row), hc = histCheck(t), e = hc.e, cal = L.cals.get(t.prefix);
+    var S = Sla(), t = norm(row), hc = histCheck(t), e = hc.e, cal = L.cals.get(t.prefix, t.created);
     var out = { info: info, t: t, entry: e, check: hc, cal: cal, calText: calText(cal), now: L.now,
       fmt: function (m) { return S.fmtDur(m, cal.dayMin); }, fcal: function (m) { return S.fmtDur(m); }, fdt: fdt,
       classify: classify };
@@ -155,7 +155,7 @@
       out.r = S.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify });
       out.bi = S.breachInfo(out.r, cal, L.now);
       /* explanation: the rules applied + what the calendar did with the time (same as the SLA Tracker's ticket view) */
-      out.basis = S.basis(L.cfg, L.cals, t.prefix, t.sev, out.r);
+      out.basis = S.basis(L.cfg, L.cals, t.prefix, t.sev, out.r, t.created);
       out.life = S.offBreakdown(out.r.segs[0].start, out.r.segs[out.r.segs.length - 1].end, cal);
       out.strip = S.dayStrip(out.r, cal, 400);
       out.off = function (sg) { return S.offBreakdown(sg.start, sg.end, cal); };
@@ -345,6 +345,10 @@
     /* just the validated status history for a row (no SLA calculation): cheap enough to call for every ticket */
     entry: function (row) { if (!L.loaded || !Sla() || !row) return null; var hc = histCheck(norm(row)); return hc.e || null; },
     get: get, detail: detail, lastMove: lastMove, summarize: summarize, missing: missing, bridgeReady: bridgeReady, fetchMissing: fetchMissing,
+    /* contract of a ticket (client calendar with dates), and rows grouped by contract — [] when there is only one */
+    contract: function (row) { var t = norm(row); return Sla().contractOf ? Sla().contractOf(L.cfg, t.prefix, t.created) : null; },
+    byContract: function (rows, rowOf) { var S = Sla(); if (!S.byContract || !L.cfg) return []; rowOf = rowOf || function (x) { return x; };
+      return S.byContract(rows, L.cfg, function (x) { return norm(rowOf(x)).prefix; }, function (x) { return norm(rowOf(x)).created; }); },
     isFetching: function () { return L.fetching; }, config: function () { return L.cfg; },
     autoFetch: autoFetch,
     autoOn: function () { var H = root.HDSlaHistory; return H && H.autoOn ? H.autoOn() : true; },
