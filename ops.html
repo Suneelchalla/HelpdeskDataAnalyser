@@ -268,6 +268,8 @@ body.oi-sv #view{margin-top:6px}
 .ss-pvh .ss-pvx{margin-left:8px}.ss-pvg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;align-items:start}@media (max-width:1000px){.ss-pvg{grid-template-columns:1fr}}
 .ss-pvc{margin-top:10px}
 #ssPrintHost .ss-kind,#ssPrintHost .ss-pvk{display:none}
+.ss-slacalc{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}.ss-slacalc .btn{background:#fff;color:#0B2365;border-color:#fff}
+#ssPrintHost .ss-slacalc{display:none}
 .ss-p3{margin-top:18px}.ss-pv{margin-top:16px;break-inside:avoid;page-break-inside:avoid}.ss-pvh{display:flex;align-items:center;gap:12px;margin-bottom:6px}.ss-pvh h3{font:600 15px var(--sans);color:#fff;margin:0}
 .ss-pvx{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.35);color:#E6ECF8;border-radius:6px;font:500 11.5px var(--sans);padding:3px 9px;cursor:pointer}.ss-pvx:hover{background:rgba(255,255,255,.1)}
 .ss-t.ss-pv1{min-width:0}.ss-pv1 td.ss-pvbar{text-align:left}.ss-pv1 td.ss-pvbar i{display:block;height:10px;background:#5B83C9;border-radius:3px}
@@ -1543,7 +1545,26 @@ function ssSlaChart(D, Q) {
     var c = Q.comp(o); if (c != null) s += '<text x="' + x + '" y="' + (y(acc) - 6) + '" text-anchor="middle" class="ss-val" style="fill:' + (c >= 90 ? "#BBF7D0" : c >= 75 ? "#FDE68A" : "#FCA5A5") + '">' + ssPctTxt(Math.round(c)) + "</text>"; });
   return s + "</svg>" + ssLegend([["Met", "#7FD1A0"], ["Missed", "#F87171"], ["Compliance % on top", "#FDE68A"]]);
 }
+/* the report's own tickets get their status history read: in the background when the view opens (the shared
+   auto-calculate, one page at a time), or at once with the button. Without it, tickets outside the dashboard's
+   period (Last 30 days) stayed "No SLA data". */
+var SS_SLA_RUN = "", SS_AF_SIG = "";
+function ssSlaAuto(D) {
+  if (!L || !L.autoFetch || !D.list.length) return;
+  var sig = D.list.length + "|" + D.list[0].key + "|" + D.list[D.list.length - 1].key + "|" + D.R.from + D.R.to;
+  if (sig === SS_AF_SIG) return; SS_AF_SIG = sig;
+  L.autoFetch(D.list.map(function (t) { return t._raw; }));
+}
+function ssSlaCalc(btn) {
+  var D = ssData(), rows = D.list.map(function (t) { return t._raw; });
+  btn.disabled = true; SS_SLA_RUN = "Starting…"; btn.textContent = SS_SLA_RUN;
+  L.fetchMissing(rows, { label: "Operations Intelligence · Support stats", onProgress: function (done, total) { SS_SLA_RUN = "Calculating… " + (done || 0) + " of " + (total || "?"); var b = el("ssSlaCalc"); if (b) b.textContent = SS_SLA_RUN; } })
+    .then(function (r) { SS_SLA_RUN = ""; if (r && r.failed && r.failed.length) alert(r.failed.length + " ticket(s) could not be read, e.g. " + r.failed[0].key + ": " + r.failed[0].reason); })
+    .catch(function (e) { SS_SLA_RUN = ""; var m = String((e && e.message) || e); alert(/^BUSY:/.test(m) ? m.slice(5) : "SLA calculation failed: " + m); })
+    .then(function () { DRILL = []; renderTab(); });
+}
 function ssSlaPanel(D, clientTxt) {
+  ssSlaAuto(D);
   if (!D.list.length) return "";
   var Q = ssSlaData(D), ms = D.ms, A = Q.all, compAll = Q.comp(A), cnt = function (l, t, cls) { return '<td class="' + (cls || "") + (l.length ? " click" : "") + '"' + (l.length ? ' data-drill="' + dreg(l, t) + '"' : "") + ">" + (l.length ? num(l.length) : "") + "</td>"; };
   var h = '<div class="ss ss-p2b" id="ssPanelSla"><div class="ss-head"><h1>SLA Performance</h1><div class="ss-per">“From ' + esc(ms[0].long) + " to " + esc(ms[ms.length - 1].long) + '”<div class="ss-cl">' + esc(clientTxt) + "</div></div></div>";
@@ -1569,7 +1590,9 @@ function ssSlaPanel(D, clientTxt) {
   var tbl = function (first, rows) { return '<div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">' + first + "</th>" + head.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>"; };
   h += '<div class="ss-g2"><div class="ss-box"><h3>By month</h3>' + tbl("Month", ms.map(function (m, i) { return rowOf(m.lbl, Q.byM[i], m.long); }).join("") + rowOf("Total", A, "All months").replace("<tr>", '<tr class="gt">')) + "</div>" +
     '<div class="ss-box"><h3>By priority</h3>' + tbl("Priority", pRows.map(function (r) { return rowOf(r.p, r.o, r.p); }).join("") + rowOf("Total", A, "All priorities").replace("<tr>", '<tr class="gt">')) +
-    '<p class="ss-note">SLA known for ' + num(Q.tracked.length - A.nohist.length) + " of " + num(Q.tracked.length) + " tracked tickets" + (A.nohist.length ? "; for the other " + num(A.nohist.length) + ", run “Calculate SLA” in the SLA Tracker." : ".") + "</p></div></div>";
+    '<p class="ss-note">SLA known for ' + num(Q.tracked.length - A.nohist.length) + " of " + num(Q.tracked.length) + " tracked tickets" + (A.nohist.length ? "; the other " + num(A.nohist.length) + " have no status history read yet." : ".") + "</p>" +
+    (A.nohist.length ? '<div class="ss-slacalc">' + (L && L.bridgeReady && L.bridgeReady() ? '<button type="button" class="btn" id="ssSlaCalc">' + (SS_SLA_RUN ? esc(SS_SLA_RUN) : "Calculate SLA for these " + num(A.nohist.length) + " tickets") + "</button>" : '<span class="ss-note">Calculating needs the HD Jira Bridge extension.</span>') +
+      '<span class="ss-note">' + (L && L.progress && L.progress() && L.isFetching && L.isFetching() ? "Reading status history in the background…" : "Reads each ticket’s status history from Jira, the same as the SLA Tracker.") + "</span></div>" : "") + "</div></div>";
   return h + '<div class="ss-foot"><img src="' + SS_LOGO_DARK + '" alt="Solverminds Solutions and Technologies"></div></div>';
 }
 function ssPivotPanel(D, clientTxt) {
@@ -1895,6 +1918,7 @@ document.addEventListener("click", function (e) {
     ps.push({ id: ps.reduce(function (m, p) { return Math.max(m, +p.id || 0); }, 0) + 1, r: r_, c: c_ }); ssSavePivots(ps); DRILL = []; renderTab(); var p3 = el("ssPanel3"); if (p3) p3.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   if (px) { ssSavePivots(ssPivots().filter(function (p) { return String(p.id) !== px.dataset.pvx; })); DRILL = []; renderTab(); return; }
   if (t.closest("#ssPicOff")) { try { localStorage.removeItem(SS_PIC_KEY); } catch (x) {} DRILL = []; renderTab(); return; }
+  if (t.closest("#ssSlaCalc")) { ssSlaCalc(t.closest("#ssSlaCalc")); return; }
   if (t.closest("#ssXlsx")) ssExcel(); else if (t.closest("#ssPrint")) ssPrint(); else if (t.closest("#ssPpt")) ssPpt(t.closest("#ssPpt"));
   else if (t.closest("#ssPdf")) { var tip = el("ssTip"); if (tip) { tip.classList.remove("hidden"); clearTimeout(ssPrint._t); ssPrint._t = setTimeout(function () { tip.classList.add("hidden"); }, 9000); } setTimeout(ssPrint, 60); }
 });
