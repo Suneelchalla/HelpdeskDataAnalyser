@@ -348,7 +348,7 @@ function fd(ms) { return ms == null ? "—" : new Date(ms).toLocaleDateString("e
    While a ticket is being drawn, CUR is that ticket's calendar. Totals that span several tickets have no single day
    length, so when clients have different calendars they are shown in hours instead. */
 var CUR = null;
-function calFor(t) { return ST.cals.get(t.prefix); }
+function calFor(t) { return ST.cals.get(t.prefix, t.created); }   /* a client calendar with an "applies from" date covers tickets created from that day */
 function withCal(t, fn) { var prev = CUR; CUR = calFor(t); try { return fn(); } finally { CUR = prev; } }
 function fdur(m) { return Sla.fmtDur(m, CUR ? CUR.dayMin : (ST.mixed ? "h" : (ST.cal ? ST.cal.dayMin : 1440))); }
 function fcal(m) { return Sla.fmtDur(m); }                                              // calendar time: 1d = 24h
@@ -364,7 +364,8 @@ function calText(cal) {
 function calBar() {
   var own = Object.keys(ST.cfg.calendars || {}), txt = calText(ST.cal);
   if (!own.length) return txt;
-  var short = function (p) { var c = ST.cals.get(p); return p + " " + (c.dayMin >= 1440 && Object.keys(c.workDays).length === 7 ? "24/7" : calText(c).replace(/ IST.*/, "")); };
+  var short = function (p) { var c = ST.cals.get(p), f = ST.cals.from ? ST.cals.from(p) : "", u = ST.cals.to ? ST.cals.to(p) : "", D_ = function (x) { return fd(Date.parse(x + "T00:00:00+05:30")); };
+    return p + " " + (c.dayMin >= 1440 && Object.keys(c.workDays).length === 7 ? "24/7" : calText(c).replace(/ IST.*/, "")) + (f && u ? " for tickets created " + D_(f) + " – " + D_(u) : f ? " for tickets created from " + D_(f) : u ? " for tickets created up to " + D_(u) : ""); };
   return txt + " · own hours: " + own.slice(0, 3).map(short).join(", ") + (own.length > 3 ? " +" + (own.length - 3) + " more" : "");
 }
 function pct(n, d) { return d > 0 ? Math.round(n / d * 100) : null; }
@@ -952,6 +953,18 @@ function stats(v) {
   });
   s.bad = s.missed + s.openBreached; s.decided = s.met + s.bad; s.comp = pct(s.met, s.decided); return s;
 }
+/* SLA by contract: a client calendar with dates (e.g. 24/7 only during a hypercare) splits that client's tickets by the
+   contract they were created under. Shown only when the tickets in view span two or more contracts; otherwise nothing. */
+function contractGroups(v) { return Sla.byContract ? Sla.byContract(v, ST.cfg, function (x) { return x.t.prefix; }, function (x) { return x.t.created; }) : []; }
+function contractPanel(v) {
+  var G = contractGroups(v); if (!G.length) return "";
+  var goal = ST.cfg.goalPct, tone = function (c) { return c == null ? "var(--faint)" : c >= goal ? "var(--green)" : c >= goal - 15 ? "#F59E0B" : "var(--rose)"; };
+  var row = function (lbl, s, tot) { return "<tr" + (tot ? ' style="font-weight:600;background:var(--paper)"' : "") + "><td>" + esc(lbl) + '</td><td class="num">' + s.n + '</td><td class="num">' + s.met + '</td><td class="num">' + s.missed + '</td><td class="num">' + s.openBreached + '</td><td class="num">' + s.risk +
+    '</td><td class="num"><b style="color:' + tone(s.comp) + '">' + pctTxt(s.comp) + '</b> <span style="color:var(--faint);font-size:11px">' + s.met + " of " + s.decided + '</span></td><td class="num">' + (s.nEl ? fdur(s.sumEl / s.nEl) : "—") + "</td></tr>"; };
+  return '<div class="card"><h3 style="margin:0 0 4px">SLA by contract</h3><p class="h" style="margin:0 0 8px">Each ticket is measured on the calendar of the contract it was created under (Settings › Client calendars). SLA met = met ÷ decided (met, missed and open already over target).</p>' +
+    '<div class="tw"><table><thead><tr><th>Contract</th><th class="num">Tickets</th><th class="num">Met</th><th class="num">Missed</th><th class="num">Breached, still open</th><th class="num">At risk</th><th class="num">SLA met</th><th class="num">Avg time to resolve</th></tr></thead><tbody>' +
+    G.map(function (g) { return row(g.label, stats(g.items)); }).join("") + row("All", stats(v), true) + "</tbody></table></div></div>";
+}
 function kpi(label, val, sub, acc, spec, n) {
   var click = spec != null && n > 0;
   return "<" + (click ? "button" : "div") + ' class="kpi' + (click ? " clk" : "") + '" style="--acc:' + acc + '"' + (click ? ' data-dr="' + esc(enc(["kpi", spec])) + '" data-n="' + n + '" title="Show the ' + n + " ticket" + (n === 1 ? "" : "s") + '"' : "") + '><span class="kv">' + val + '</span><span class="kl">' + label + "</span>" + (sub ? '<span class="ks">' + sub + "</span>" : "") + "</" + (click ? "button" : "div") + ">";
@@ -1063,7 +1076,7 @@ function renderOverview(v) {
     (function () { var f = frStats(v), acc = f.slaPct == null ? "var(--faint)" : f.slaPct >= goal ? "var(--green)" : f.slaPct >= goal - 15 ? "#F59E0B" : "var(--rose)";
       return kpi("First response SLA", f.slaPct == null ? "—" : f.slaPct + "%", f.dec ? "replied within " + frTxt(frTarget()) + " · typical " + frTxt(f.med) : "no history yet", acc, "frdec", f.dec) +
         kpi("No reply, past " + frTxt(frTarget()), f.breached, f.wait ? f.wait + " waiting for a first reply · oldest " + frTxt(f.oldest) : "every ticket answered", f.breached ? "var(--rose)" : "var(--faint)", "frbr", f.breached); })() + "</div>";
-  h += pendingPanel(pendingView()) + trendPanel(v) + matrixPanel(v);
+  h += contractPanel(v) + pendingPanel(pendingView()) + trendPanel(v) + matrixPanel(v);
   /* who holds the open tickets */
   var hold = ["hd", "engg", "client"].map(function (k) {
     var o = s.by[k], H = function (cat) { return ["hd", k, cat]; }; return "<tr><td>" + kchip(k) + '</td><td class="num">' + drNum(o.n, H("open")) + '</td><td class="num">' + drNum(o.br, H("ob"), o.br ? "color:var(--rose)" : "") + '</td><td class="num">' + drNum(o.risk, H("risk")) + '</td><td class="num">' + drNum(o.n - o.br - o.risk, H("within")) + "</td></tr>"; }).join("");
@@ -1166,10 +1179,10 @@ function whenTxt(sg) {
   return '<span class="nw">' + a + '</span> <span class="nw">→ ' + (p[0] === q[0] ? q[1] : b) + "</span>";
 }
 function basisHtml(t, r) {
-  var cal = calFor(t), B = Sla.basis(ST.cfg, ST.cals, t.prefix, t.sev, r), a = r.segs[0].start, z = r.segs[r.segs.length - 1].end, L = Sla.offBreakdown(a, z, cal);
+  var cal = calFor(t), B = Sla.basis(ST.cfg, ST.cals, t.prefix, t.sev, r, t.created), a = r.segs[0].start, z = r.segs[r.segs.length - 1].end, L = Sla.offBreakdown(a, z, cal);
   var row = function (k, v) { return "<tr><th>" + k + "</th><td>" + v + "</td></tr>"; }, cn = esc(clientName(t.prefix));
   var h = '<div class="basis"><div class="basis-h"><b>How this SLA was calculated</b><button class="quiet" data-tab="settings" title="Open SLA settings">Settings →</button></div><table>';
-  h += row("Calendar", B.own ? "<b>" + cn + "’s own calendar</b> <span class=\"mut\">(Settings → Client calendars · " + esc(t.prefix) + ")</span>" : "<b>Default working calendar</b> <span class=\"mut\">(" + cn + " has no calendar of its own)</span>");
+  h += row("Calendar", B.own ? "<b>" + cn + "’s own calendar</b> <span class=\"mut\">(Settings → Client calendars · " + esc(t.prefix) + (B.ownFrom || B.ownTo ? " · for tickets created " + (B.ownFrom ? "from " + esc(fd(Date.parse(B.ownFrom + "T00:00:00+05:30"))) : "") + (B.ownTo ? (B.ownFrom ? " " : "") + "to " + esc(fd(Date.parse(B.ownTo + "T00:00:00+05:30"))) : "") : "") + ")</span>" : "<b>Default working calendar</b> <span class=\"mut\">(" + (B.laterFrom ? "the ticket was created before " + esc(fd(Date.parse(B.laterFrom + "T00:00:00+05:30"))) + ", when " + cn + "’s own calendar starts" : B.endedTo ? "the ticket was created after " + esc(fd(Date.parse(B.endedTo + "T00:00:00+05:30"))) + ", when " + cn + "’s own calendar ended" : cn + " has no calendar of its own") + ")</span>");
   h += row("Working days", "<b>" + B.days + "</b>" + (B.offDays.length ? ' · <span class="mut">not counted: ' + B.offDays.join(", ") + "</span>" : ' · <span class="mut">weekends count</span>'));
   h += row("Working hours", "<b>" + B.hours + "</b>" + (B.dayMin < 1440 ? ' · <span class="mut">1 working day = ' + fcal(B.dayMin).replace(/ 0m$/, "") + "</span>" : ""));
   h += row("Holidays", B.holidaysSkipped ? "<b>Skipped</b> · " + B.holidaysListed + " listed" + (B.holidaysInLife.length ? " · in this ticket’s life: " + B.holidaysInLife.map(function (x) { return "<b>" + isoNice(x.date) + "</b>" + (x.name ? " " + esc(x.name) : ""); }).join(", ") : ' · <span class="mut">none fell in this ticket’s life</span>') : "<b>Not skipped</b> <span class=\"mut\">(this client’s calendar works on holidays)</span>");
@@ -1569,6 +1582,10 @@ function reportHtml(v, o) {
     var ck = Object.keys(cl).sort(function (a, b) { return cl[b].length - cl[a].length; });
     h += '<div class="rp-sec">' + sec("Performance by client") + '<table class="rp-t">' + rpHead([["Client", 0]].concat(RP_STD)) + "<tbody>" + ck.map(function (k) { return "<tr><td><b>" + esc(clientName(k)) + "</b></td>" + rpStdCells(rpAgg(cl[k])) + "</tr>"; }).join("") + '<tr class="tot"><td>All clients</td>' + rpStdCells(A) + "</tr></tbody></table></div>";
   }
+  /* ── 5b. by contract (only when the tickets span two or more contracts, e.g. before / during a 24/7 hypercare) ── */
+  var CG = Sla.byContract ? Sla.byContract(H, ST.cfg, function (x) { return x.t.prefix; }, function (x) { return x.t.created; }) : [];
+  if (CG.length) h += '<div class="rp-sec">' + sec("Performance by contract") + '<div class="rp-note">Each ticket is measured on the working calendar of the contract it was created under.</div><table class="rp-t keep">' + rpHead([["Contract", 0]].concat(RP_STD)) + "<tbody>" +
+    CG.map(function (g) { return "<tr><td><b>" + esc(g.label) + "</b></td>" + rpStdCells(rpAgg(g.items)) + "</tr>"; }).join("") + '<tr class="tot"><td>All</td>' + rpStdCells(A) + "</tr></tbody></table></div>";
   /* ── 6. open tickets ── */
   if (o.open && openL.length) {
     var row = function (lab, sub, l) { var b1 = l.filter(function (x) { return x.b === "breached"; }).length, r1 = l.filter(function (x) { return x.b === "warning" || x.b === "danger"; }).length;
@@ -1732,12 +1749,15 @@ function renderSettings() {
     '<div class="frow" style="margin-top:10px"><select id="addCliSel" aria-label="Client to add"><option value="">Add a client exception…</option>' + free.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCli">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Default working calendar</h3><p class="h">The days and hours that count towards a target for every client that has no calendar of its own (below). Evaluated in IST. Holidays listed here are skipped.</p><div class="frow"><div class="fld"><label>Day starts</label><input type="text" data-d="bs" value="' + esc(d.businessStart) + '" style="width:80px" placeholder="00:00" aria-label="Day starts"></div><div class="fld"><label>Day ends</label><input type="text" data-d="be" value="' + esc(d.businessEnd) + '" style="width:80px" placeholder="24:00" aria-label="Day ends"></div><div class="fld"><label>Working days</label><div class="daychips">' + days.map(function (n, i) { return '<label><input type="checkbox" data-wd="' + i + '"' + (d.workDays.indexOf(i) > -1 ? " checked" : "") + "> " + n + "</label>"; }).join("") + '</div></div></div><div class="fld" style="margin-top:14px"><label>Holidays — one per line: 2026-01-26 Republic Day</label><textarea id="holTxt" rows="4" style="width:min(420px,100%)" aria-label="Holidays">' + esc(d._hol) + "</textarea></div></div>";
   var calKeys = Object.keys(d.calendars || {}).sort(), freeCal = Object.keys(prefixes).filter(function (p) { return calKeys.indexOf(p) < 0; }).sort();
-  h += '<div class="card set-sec"><h3>Client calendars</h3><p class="h">Give a client its own working days and hours, for example a 24/7 contract. A client’s calendar applies to <b>all</b> of its tickets, past and present, so its earlier tickets are recalculated as soon as you save. Targets stay the same unless you change them under Resolution targets.</p>' +
+  h += '<div class="card set-sec"><h3>Client calendars</h3><p class="h">Give a client its own working days and hours, for example a 24/7 contract. Set <b>Applies to tickets created from / to</b> when the contract covers a period (e.g. hypercare from 1 Nov to 30 Apr): tickets created in that period use this calendar, tickets created before or after it keep the default calendar for their whole life. Both days are included, and either date can stay empty (no start / no end). Leave both empty and the calendar applies to <b>all</b> of the client’s tickets, past and present. Tickets are recalculated as soon as you save. Targets stay the same unless you change them under Resolution targets.</p>' +
     (calKeys.length ? calKeys.map(function (p) { var c = d.calendars[p];
       return '<div class="calrow"><div class="top"><b>' + esc(clientName(p)) + '</b> <span style="color:var(--faint)">' + esc(p) + '</span><span style="flex:1"></span><button class="ghost sm" data-calpre="' + esc(p) + '|247">24/7</button><button class="ghost sm" data-calpre="' + esc(p) + '|def">Same as default</button><button class="quiet" data-calrm="' + esc(p) + '">Remove</button></div>' +
         '<div class="frow"><div class="fld"><label>Day starts</label><input type="text" data-calf="' + esc(p) + '|bs" value="' + esc(c.businessStart) + '" style="width:80px" placeholder="00:00" aria-label="' + esc(p) + ' day starts"></div><div class="fld"><label>Day ends</label><input type="text" data-calf="' + esc(p) + '|be" value="' + esc(c.businessEnd) + '" style="width:80px" placeholder="24:00" aria-label="' + esc(p) + ' day ends"></div>' +
         '<div class="fld"><label>Working days</label><div class="daychips">' + days.map(function (n, i) { return '<label><input type="checkbox" data-calwd="' + esc(p) + '|' + i + '"' + (c.workDays.indexOf(i) > -1 ? " checked" : "") + "> " + n + "</label>"; }).join("") + '</div></div>' +
-        '<div class="fld"><label>Holidays</label><div class="daychips"><label><input type="checkbox" data-calhol="' + esc(p) + '"' + (c.holidays !== false ? " checked" : "") + "> Skip the holiday list</label></div></div></div></div>"; }).join("")
+        '<div class="fld"><label>Holidays</label><div class="daychips"><label><input type="checkbox" data-calhol="' + esc(p) + '"' + (c.holidays !== false ? " checked" : "") + "> Skip the holiday list</label></div></div>" +
+        '<div class="fld"><label>Applies to tickets created from</label><input type="date" data-calf="' + esc(p) + '|from" value="' + esc(c.from || "") + '" aria-label="' + esc(p) + ' calendar applies from"></div>' +
+        '<div class="fld"><label>to (included)</label><input type="date" data-calf="' + esc(p) + '|to" value="' + esc(c.to || "") + '" aria-label="' + esc(p) + ' calendar applies until"><div style="font-size:11px;color:var(--faint);margin-top:3px">' +
+          (c.from || c.to ? "Tickets created " + (c.from ? "before" : "") + (c.from && c.to ? " or " : "") + (c.to ? "after" : "") + " this: default calendar" : "Both empty = all tickets") + "</div></div></div></div>"; }).join("")
       : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">No client has its own calendar — every client uses the default above.</div>') +
     '<div class="frow" style="margin-top:6px"><select id="addCalSel" aria-label="Client to give a calendar"><option value="">Add a client calendar…</option>' + freeCal.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCal">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Due soon from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div><div class="fld"><label>SLA goal</label><input type="number" min="1" max="100" data-d="goal" value="' + esc(d.goalPct) + '"> %</div></div><p class="h" style="margin:10px 0 0">The goal only sets the colours on the SLA % views (green at or above it, amber within 15 points, red below).</p></div>';
@@ -1779,6 +1799,9 @@ function saveSettings() {
   Object.keys(d.calendars || {}).forEach(function (p) { var c = d.calendars[p], ok = /^\d{1,2}:\d{2}$/;
     if (!ok.test(c.businessStart) || !ok.test(c.businessEnd)) err = p + ": enter the day start/end as HH:MM (for example 00:00 and 24:00).";
     else if (!c.workDays.length) err = p + ": choose at least one working day.";
+    else if (c.from && !/^\d{4}-\d{2}-\d{2}$/.test(c.from)) err = p + ": enter the “applies from” date as a date, or leave it empty.";
+    else if (c.to && !/^\d{4}-\d{2}-\d{2}$/.test(c.to)) err = p + ": enter the “to” date as a date, or leave it empty.";
+    else if (c.from && c.to && c.to < c.from) err = p + ": the “to” date must be on or after the “from” date.";
     else if (!(c.businessEnd === "24:00" || c.businessEnd.padStart(5, "0") > c.businessStart.padStart(5, "0"))) err = p + ": the day must end after it starts."; });
   var hol = [], bad = null;
   ($("holTxt").value || "").split("\n").forEach(function (l) { l = l.trim(); if (!l) return; var m = /^(\d{4}-\d{2}-\d{2})\s*(.*)$/.exec(l); if (!m) { bad = l; return; } hol.push({ date: m[1], name: m[2] }); });
@@ -1973,6 +1996,7 @@ function renderInsights(v) {
   var sum = { hd: 0, engg: 0, client: 0 }; H.forEach(function (x) { sum.hd += x.r.hdMin; sum.engg += x.r.enggMin; sum.client += x.r.pausedMin; });
   var h = '<div class="callout ins-intro">Built from the status timeline of <b>' + H.length.toLocaleString() + "</b> tickets (selected range + filters). <b>Click any number</b> to see the tickets behind it, then a ticket for its full timeline. Breaches are " + insTog("blame", I.blame, [["at", "Who held it when it broke"], ["major", "Who used most of the time"]]) + "</div>";
   var pc = function (n) { return nBr ? Math.round(n / nBr * 100) + "% of breaches" : ""; };
+  h += contractPanel(v);
   h += '<div class="kpis k6">' +
     insKpi("Breaches", nBr.toLocaleString(), (dec.length ? Math.round(nBr / dec.length * 100) + "% of " + dec.length.toLocaleString() + " decided" : "nothing decided yet"), "var(--rose)", ["in", "br"], nBr) +
     insKpi(I.blame === "major" ? "Mostly Help Desk time" : "Broke at Help Desk", nHd.toLocaleString(), pc(nHd), "var(--hd2)", ["in", "blame", "hd", "all"], nHd) +
@@ -2157,7 +2181,7 @@ document.addEventListener("input", function (e) {
   if (t.dataset && t.dataset.mss) { msList(t.dataset.mss); return; }
   if (t.id === "sq") return;
   if (t.id === "rmExtra" && ST.rm) { ST.rm.extra = t.value; ST.rm.status = "idle"; refreshRemind(); rmStatusHtml(); return; }
-  if (t.dataset && t.dataset.calf && ST.draft) { var cf = t.dataset.calf.split("|"), cc = ST.draft.calendars[cf[0]]; if (cc) { if (cf[1] === "bs") cc.businessStart = t.value.trim(); else cc.businessEnd = t.value.trim(); } return; }
+  if (t.dataset && t.dataset.calf && ST.draft) { var cf = t.dataset.calf.split("|"), cc = ST.draft.calendars[cf[0]]; if (cc) { if (cf[1] === "bs") cc.businessStart = t.value.trim(); else if (cf[1] === "from") cc.from = t.value.trim(); else if (cf[1] === "to") cc.to = t.value.trim(); else cc.businessEnd = t.value.trim(); } return; }
   if (t.dataset && t.dataset.tpl && ST.draft) { ST.draft.templates[t.dataset.tpl] = t.value; return; }
   if (t.id === "bkExtra" && ST.bk) { ST.bk.extra = t.value; return; }
   if (t.dataset && t.dataset.d && ST.draft) readDraftInput(t);
