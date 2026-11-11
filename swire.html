@@ -915,6 +915,20 @@ function poCell(e) {
   return '<span class="who">' + esc(p.po) + '<span class="r">' + esc(p.module || "") + (p.via === "svm" ? " (SVM In Charge)" : "") + "</span></span>";
 }
 /* SLA state from the shared SLA link: the SLA Tracker's targets and calendar. Cached per render. */
+/* SLA by contract: when Swire's calendar has dates (e.g. 24/7 only during the hypercare), tickets are measured on the
+   calendar of the contract they were created under. These tables appear only when the tickets shown span two or more. */
+function swContracts(idx) { return L && L.byContract ? L.byContract(idx, (i) => T[i]._row) : []; }
+function swContractTable(idx, mode) {
+  const G = swContracts(idx); if (!G.length) return "";
+  const n = (l, t) => '<td class="num">' + (l.length ? dl(l, t) : '<span class="dim">·</span>') + "</td>";
+  const row = (lbl, l, tot) => { const by = (k) => l.filter((i) => slaB(i) === k), cl = l.filter((i) => E[i].stage === "closed"), m = cl.filter((i) => slaB(i) === "met"), x = cl.filter((i) => slaB(i) === "missed"), op = l.filter((i) => E[i].stage !== "closed"), d = m.length + x.length;
+    const ob = (k) => op.filter((i) => slaB(i) === k);
+    return "<tr" + (tot ? ' style="font-weight:600"' : "") + "><td>" + esc(lbl) + "</td>" + (mode === "full" ? n(l, lbl) + n(m, lbl + ", met") + n(x, lbl + ", missed") + '<td class="num"><b>' + (d ? Math.round(m.length / d * 100) + "%" : "—") + "</b></td>" : "") +
+      n(ob("breached"), lbl + ", breached") + n(ob("risk"), lbl + ", about to breach") + n(ob("ontrack"), lbl + ", not yet breached") + (mode === "full" ? n(ob("paused"), lbl + ", paused with Swire") : "") + "</tr>"; };
+  return '<div class="panel ctr"><div class="sec-h" style="margin-top:0">SLA by contract</div><div class="note" style="margin:0 0 6px">Each ticket is measured on the calendar of the contract it was created under (SLA Tracker › Settings › Client calendars).</div><div class="tw"><table><thead><tr><th>Contract</th>' +
+    (mode === "full" ? "<th>Tickets</th><th>Closed: met</th><th>Closed: missed</th><th>Met %</th>" : "") + "<th>Breached</th><th>About to breach</th><th>Not yet breached</th>" + (mode === "full" ? "<th>Paused, with Swire</th>" : "") + "</tr></thead><tbody>" +
+    G.map((g) => row(g.label, g.items)).join("") + row("All", idx, true) + "</tbody></table></div></div>";
+}
 function slaOfT(t) { if (!t) return null; if (SLAC[t.key]) return SLAC[t.key]; const x = L && L.ready() ? L.get(t._row) : { state: "loading" }; SLAC[t.key] = x; return x; }
 function slaOf(i) { return slaOfT(T[i]); }
 function slaB(i) {
@@ -996,7 +1010,7 @@ function viewNow() {
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
     tile("t-cr", "clock", rk, "About to breach", "Due soon or at risk", rk.length / w1, "SLA about to breach, with us") +
     tile("t-ok", "check", ok, "Not yet breached", "Inside the SLA target", ok.length / w1, "SLA not yet breached, with us") +
-    tile("zero", "dash", nd, "No SLA data", "History not read yet, or no target", nd.length / w1, "No SLA data, with us") + "</div>" +
+    tile("zero", "dash", nd, "No SLA data", "History not read yet, or no target", nd.length / w1, "No SLA data, with us") + "</div>" + swContractTable(withUs, "open") +
     '<div class="grp">Needs action, with us</div><div class="tiles">' +
     tile("t-ss", "siren", ss, "Showstoppers", ss.length ? "Phone the PO, or the Engineering head at night" : "None with us", ss.length / w1, "Showstoppers with us") +
     tile("t-cr", "flame", cr, "Critical", "Major function impaired", cr.length / w1, "Criticals with us") +
@@ -2244,7 +2258,7 @@ function viewWeekly() {
       '<div class="wcard"><div class="wct">Open by age <span>oldest ' + Math.floor(oldest) + "d</span></div>" + wSeg(ages, "Open") + ins("<b>" + (ages[2].idx.length + ages[3].idx.length) + "</b> open tickets are over 30 days old" + (ages[3].idx.length ? ", including <b>" + ages[3].idx.length + "</b> beyond 60 days" : "") + ". These are reviewed at the weekly ageing review.") + "</div></div>" +
     wsec("SLA and first response", "Section 10.1") + wcap("SLA position of the tickets with us (SLA Tracker targets and calendar), and first response for the tickets raised this week.") +
     '<div class="grid2"><div class="wcard"><div class="wct">SLA, tickets with SVM <span>' + svm.length + " open</span></div>" + wSeg([{ label: "Breached", color: "#D7263D", idx: br }, { label: "About to breach", color: "#E07A1F", idx: rk }, { label: "Not yet breached", color: "#1F8A4C", idx: ok }, { label: "No SLA data", color: "#D4C7CD", idx: svm.filter((i) => slaB(i) === "nodata") }], "With SVM, SLA") +
-      ins(br.length ? "<b style=\"color:var(--ss)\">" + br.length + "</b> tickets with us are past their SLA target and <b>" + rk.length + "</b> are close to it; these are escalated under Section 10.2." : "No ticket with us has breached its SLA.") + "</div>" +
+      ins(br.length ? "<b style=\"color:var(--ss)\">" + br.length + "</b> tickets with us are past their SLA target and <b>" + rk.length + "</b> are close to it; these are escalated under Section 10.2." : "No ticket with us has breached its SLA.") + swContractTable(svm, "open") + "</div>" +
       '<div class="wcard"><div class="wct">First response this week <span>' + frD.length + " measured</span></div>" + wSeg([{ label: "Within target", color: "#1F8A4C", idx: frM }, { label: "Late or overdue", color: "#D7263D", idx: frD.filter((i) => E[i].frState !== "met") }, { label: "Not yet due", color: "#D4C7CD", idx: raised.filter((i) => E[i].frState === "waiting") }], "First response, " + cur.label) +
       ins(frD.length ? "<b>" + pct(frM.length, frD.length) + "%</b> of the " + frD.length + " tickets raised this week got their first response within target (Showstopper 30 min, Critical and High 1 hour, Medium/Low 4 hours)." : "No first responses to measure for this week yet.") + "</div></div>" +
     wsec("Weekly trends, last " + WEEKS + " weeks") + wcap("How work came in and went out. Weeks are ISO week numbers. Click any bar to list the tickets behind it.") +
@@ -3513,6 +3527,7 @@ function viewSla() {
   const rows = HC.SEVS.map((sv) => { const op = open.filter((i) => T[i].sev === sv.id), cl = closed.filter((i) => T[i].sev === sv.id), m = cl.filter((i) => slaB(i) === "met"), x = cl.filter((i) => slaB(i) === "missed"), cn = cl.filter((i) => slaB(i) === "nodata");
     return "<tr><td>" + prChip({ sev: sv.id, priority: sv.name }) + "</td>" + cats.map(([k, n]) => { const l = op.filter((i) => slaB(i) === k); return '<td class="num">' + (l.length ? dl(l, sv.name + ", open, " + n) : '<span class="dim">·</span>') + "</td>"; }).join("") +
       '<td class="num">' + (m.length ? dl(m, sv.name + ", met") : '<span class="dim">·</span>') + '</td><td class="num">' + (x.length ? dl(x, sv.name + ", missed") : '<span class="dim">·</span>') + '</td><td class="num">' + (cn.length ? dl(cn, sv.name + ", closed, no SLA data yet") : '<span class="dim">·</span>') + '</td><td class="num">' + (m.length + x.length ? Math.round(m.length / (m.length + x.length) * 100) + "%" : "—") + "</td></tr>"; }).join("");
+  h += swContractTable(all, "full");
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">By priority</div><div class="tw"><table><thead><tr><th>Priority</th>' + cats.map(([k, n]) => "<th>Open: " + esc(n) + "</th>").join("") + "<th>Closed: met</th><th>Closed: missed</th><th>Closed: no SLA data yet</th><th>Met %</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
   const brOpen = ob("breached");
   h += '<div class="panel"><div class="sec-h" style="margin-top:0">Where the breached tickets are</div><div class="bar" style="margin:0">' + sides.map(([n, k]) => { const l = brOpen.filter((i) => sideOf(i) === k); return '<span class="pill">' + esc(n) + " <b>" + dl(l, "SLA breached, " + n.toLowerCase()) + "</b></span>"; }).join("") + "</div></div>";
