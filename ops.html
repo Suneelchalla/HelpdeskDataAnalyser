@@ -288,6 +288,7 @@ body.oi-sv #view{margin-top:6px}
 #ssPrintHost .ss-kind,#ssPrintHost .ss-pvk{display:none}
 .ss-slacalc{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}.ss-slacalc .btn{background:#fff;color:#0B2365;border-color:#fff}
 #ssPrintHost .ss-slacalc{display:none}
+.ss-ctr{margin:12px 0 4px}.ss-ctr .ss-mini th.rl{white-space:normal;min-width:260px}
 .ss-p3{margin-top:18px}.ss-pv{margin-top:16px;break-inside:avoid;page-break-inside:avoid}.ss-pvh{display:flex;align-items:center;gap:12px;margin-bottom:6px}.ss-pvh h3{font:600 15px var(--sans);color:#fff;margin:0}
 .ss-pvx{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.35);color:#E6ECF8;border-radius:6px;font:500 11.5px var(--sans);padding:3px 9px;cursor:pointer}.ss-pvx:hover{background:rgba(255,255,255,.1)}
 .ss-t.ss-pv1{min-width:0}.ss-pv1 td.ss-pvbar{text-align:left}.ss-pv1 td.ss-pvbar i{display:block;height:10px;background:#5B83C9;border-radius:3px}
@@ -1579,6 +1580,13 @@ function ssSlaData(D) {
   var comp = function (o) { var d = o.met.length + o.missed.length; return d ? Math.round(o.met.length / d * 1000) / 10 : null; };
   return { byM: byM, byP: byP, pris: pris, all: all, tracked: tracked, comp: comp, ready: !!(L && L.ready && L.ready()) };
 }
+/* the SLA tickets of the report split by contract (a client calendar with dates, e.g. 24/7 only during a hypercare);
+   [] when every ticket is under one contract — then nothing about contracts is shown anywhere */
+function ssSlaContracts(Q) {
+  var SL = window.HDSlaLink; if (!SL || !SL.byContract) return [];
+  var blank = function () { var o = {}; SS_SLA_K.forEach(function (k) { o[k[0]] = []; }); return o; };
+  return SL.byContract(Q.tracked, function (t) { return t._raw; }).map(function (g) { var o = blank(); g.items.forEach(function (t) { var c = ssSlaOf(t); if (c && o[c]) o[c].push(t); }); return { label: g.label, own: g.own, o: o, n: g.items.length }; });
+}
 function ssPctTxt(v) { return v == null ? "—" : (Math.round(v) === v ? v : v.toFixed(1)) + "%"; }
 /* met (green) and missed (red) per month, the compliance % on top */
 function ssSlaChart(D, Q) {
@@ -1622,6 +1630,11 @@ function ssSlaPanel(D, clientTxt) {
   h += '<div class="ss-kpis">' + tile("SLA compliance", ssPctTxt(compAll), closed, compAll == null ? "#94A3B8" : compAll >= 90 ? "#7FD1A0" : compAll >= 75 ? "#FBBF24" : "#F87171", "of " + num(closed.length) + " closed tickets") +
     tile("Met", num(A.met.length), A.met, "#7FD1A0", "closed within target") + tile("Missed", num(A.missed.length), A.missed, "#F87171", "closed over target") +
     tile("Open, breached", num(A.breached.length), A.breached, "#EF4444", "past target, still open") + tile("Open, not yet breached", num(A.open.length), A.open, "#FBBF24", "still open, inside target") + "</div>";
+  var CT = ssSlaContracts(Q);
+  if (CT.length) h += '<div class="ss-box ss-ctr"><h3>SLA by contract <span class="ss-sub">each ticket is measured on the calendar of the contract it was created under</span></h3><div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">Contract</th><th>Tickets</th><th>Met</th><th>Missed</th><th class="gt">Compliance</th><th>Open, breached</th><th>Open, not yet breached</th></tr></thead><tbody>' +
+    CT.map(function (g) { var o = g.o, all = [].concat(o.met, o.missed, o.breached, o.open, o.nohist || []);
+      return '<tr><th class="rl">' + esc(g.label) + "</th>" + cnt(all, g.label) + cnt(o.met, g.label + " — met") + cnt(o.missed, g.label + " — missed") + '<td class="gt">' + ssPctTxt(Q.comp(o)) + "</td>" + cnt(o.breached, g.label + " — open, breached") + cnt(o.open, g.label + " — open, not yet breached") + "</tr>"; }).join("") +
+    '<tr class="gt"><th class="rl">All</th>' + cnt([].concat(A.met, A.missed, A.breached, A.open, A.nohist || []), "All", "gt") + cnt(A.met, "All — met", "gt") + cnt(A.missed, "All — missed", "gt") + '<td class="gt">' + ssPctTxt(compAll) + "</td>" + cnt(A.breached, "All — open, breached", "gt") + cnt(A.open, "All — open, not yet breached", "gt") + "</tr></tbody></table></div></div>";
   /* compliance by priority, as bars */
   var pRows = Q.pris.map(function (p) { var o = Q.byP[p]; return { p: p, o: o, c: Q.comp(o), n: o.met.length + o.missed.length }; });
   h += '<div class="ss-g2"><div class="ss-box"><h3>Closed tickets: SLA met vs missed</h3>' + ssSlaChart(D, Q) + "</div>" +
@@ -1742,7 +1755,8 @@ function ssExcel() {
     var SHx = ["Met", "Missed", "Compliance %", "Open, breached", "Open, not yet breached"];
     var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, o.met.length, o.missed.length, c == null ? "" : c, o.breached.length, o.open.length]; };
     var sa = [["SLA Performance (resolution against the SLA Tracker targets)"], [], ["Month"].concat(SHx)].concat(ms.map(function (m, i) { return rx(m.lbl, Qx.byM[i]); }), [rx("Total", Qx.all)], [[]], [["Priority"].concat(SHx)], Qx.pris.map(function (p) { return rx(p, Qx.byP[p]); }), [rx("Total", Qx.all)]);
-    var swk = XLSX.utils.aoa_to_sheet(sa); swk["!cols"] = [{ wch: 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
+    var CTx = ssSlaContracts(Qx); if (CTx.length) sa = sa.concat([[]], [["Contract"].concat(SHx)], CTx.map(function (g) { return rx(g.label, g.o); }), [rx("All", Qx.all)]);
+    var swk = XLSX.utils.aoa_to_sheet(sa); swk["!cols"] = [{ wch: CTx.length ? 52 : 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
   }
   ssPivots().forEach(function (p, k) {
     var Pv = ssPivot(p, D), rows = p.c
@@ -1911,6 +1925,13 @@ function ssDeck(P, D, art) {
     var SH = ["Met", "Missed", "Compliance", "Open, breached", "Open, not yet breached"];
     table(sq, ["Month"].concat(SH), ms.map(function (m, i) { return slaRow(m.lbl, Q.byM[i]); }).concat([slaRow("Total", A)]), { x: 0.35, y: 4.35, w: 6.2, first: 0.8, noTotal: true, fs: 7, tight: true, rowH: Math.min(0.2, 2.55 / (ms.length + 2)), totalRow: true, name: "Table: SLA by month" });
     table(sq, ["Priority"].concat(SH), Q.pris.map(function (p) { return slaRow(p, Q.byP[p]); }).concat([slaRow("Total", A)]), { x: 6.75, y: 4.35, w: 6.2, first: 0.95, noTotal: true, fs: 7.5, tight: true, rowH: 0.24, totalRow: true, name: "Table: SLA by priority" });
+    var CTp = ssSlaContracts(Q);
+    if (CTp.length) { var sc2 = pres.addSlide({ masterName: "SUPPORT" }); head(sc2, "SLA by Contract");
+      sc2.addText("Each ticket is measured on the calendar of the contract it was created under.", { x: 0.35, y: 0.9, w: 12.6, h: 0.35, fontFace: FONT, fontSize: 12, color: SOFT, margin: 0, isTextBox: true, objectName: "Note" });
+      var cRow = function (lbl, o) { var c = Q.comp(o), n = o.met.length + o.missed.length + o.breached.length + o.open.length; return [lbl, n || "", o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.breached.length || "", o.open.length || ""]; };
+      table(sc2, ["Contract", "Tickets"].concat(SH), CTp.map(function (g) { return cRow(g.label, g.o); }).concat([cRow("All", A)]), { x: 0.35, y: 1.45, w: 12.6, first: 5.0, noTotal: true, fs: 10, rowH: 0.4, totalRow: true, name: "Table: SLA by contract" });
+      sc2.addChart(pres.ChartType.bar, [{ name: "Compliance %", labels: CTp.map(function (g) { return g.label.split(" · ")[0] + " · " + (g.label.split(" · ")[1] || ""); }), values: CTp.map(function (g) { var c = Q.comp(g.o); return c == null ? 0 : Math.round(c); }) }],
+        base("SLA compliance by contract (%)", { x: 0.35, y: 1.65 + 0.4 * (CTp.length + 2), w: 12.6, h: Math.max(2.2, 5.3 - 0.4 * (CTp.length + 2)), barDir: "bar", valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 25, valAxisLabelFormatCode: "0", catAxisLabelRotate: 0, chartColors: ["7FD1A0"], showValue: true, dataLabelPosition: "outEnd", objectName: "Chart: SLA by contract" })); }
   }
   /* ── a slide per custom pivot: native table, and the chart style picked on the page as a native chart
      (rows only: beside the table; two fields: on a slide of its own after the table) ── */
@@ -2028,7 +2049,9 @@ function ssSlaRules(D, t) {
   if (r) r.segs.forEach(function (sg) { if (kinds[sg.kind] && kinds[sg.kind].indexOf(sg.status) < 0) kinds[sg.kind].push(sg.status); });
   var li = function (lbl, k, rule) { return "<li><b>" + lbl + "</b> " + rule + (kinds[k].length ? ' <span class="z">— here: ' + esc(kinds[k].join(", ")) + "</span>" : "") + "</li>"; };
   var h = '<div class="sh-rules"><h4>How SLA is calculated for this ticket</h4><div class="sh-rg">';
-  h += '<div><div class="sh-rl">Client rules</div><p>Ticket prefix <b>' + esc(pre) + "</b> (" + esc(t.project) + "). " + (b && b.own ? "This client has its <b>own SLA calendar</b>." : "This client uses the <b>default SLA calendar</b>.") + "</p>" +
+  h += '<div><div class="sh-rl">Client rules</div><p>Ticket prefix <b>' + esc(pre) + "</b> (" + esc(t.project) + "). " + (b && b.own ? "This client has its <b>own SLA calendar</b>" + (b.ownFrom || b.ownTo ? " for tickets created " + (b.ownFrom ? "from <b>" + esc(fd(Date.parse(b.ownFrom + "T00:00:00+05:30"))) + "</b>" : "") + (b.ownTo ? (b.ownFrom ? " " : "") + "to <b>" + esc(fd(Date.parse(b.ownTo + "T00:00:00+05:30"))) + "</b>" : "") : "") + "." :
+      b && b.laterFrom ? "Measured on the <b>default SLA calendar</b>: the ticket was created before <b>" + esc(fd(Date.parse(b.laterFrom + "T00:00:00+05:30"))) + "</b>, when this client’s own calendar starts." :
+      b && b.endedTo ? "Measured on the <b>default SLA calendar</b>: the ticket was created after <b>" + esc(fd(Date.parse(b.endedTo + "T00:00:00+05:30"))) + "</b>, when this client’s own calendar ended." : "This client uses the <b>default SLA calendar</b>.") + "</p>" +
     '<div class="sh-rl">Target by priority</div><table class="sh-tt"><thead><tr><th>Priority</th><th>Target</th><th>Source</th></tr></thead><tbody>' + rows + "</tbody></table>" +
     (b && b.targetH == null ? '<p class="sh-warn">No target applies to this priority, so the ticket is not measured.</p>' : "") + "</div>";
   h += '<div><div class="sh-rl">Working time (the clock only runs inside it)</div><p>' + (b ? (b.is247 ? "<b>24 × 7</b>: every hour of every day counts." : "<b>" + esc(b.days) + "</b>, <b>" + esc(b.hours) + "</b>" + (b.offDays.length ? "; not counted on " + esc(b.offDays.join(", ")) : "") + ". 1 working day = " + (Math.round(b.dayMin / 60 * 10) / 10) + " hours, so “1d” in the durations here means " + (Math.round(b.dayMin / 60 * 10) / 10) + " working hours.") : esc(D.calText || "")) + "</p>" +
