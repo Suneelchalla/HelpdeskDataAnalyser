@@ -1747,7 +1747,7 @@ function ssExcel() {
   });
   var ex = XLSX.utils.aoa_to_sheet([["SLA columns on the All tickets sheet"], ["Same calculation as the SLA Tracker: resolution SLA, its targets per priority and client, its business calendar, and the clock paused while the ticket is with the client."], [], ["Column", "What it means"]].concat(SS_SLA_XH.map(function (x) { return [x[0], x[1]]; })));
   ex["!cols"] = [{ wch: 30 }, { wch: 120 }]; XLSX.utils.book_append_sheet(wb, ex, "SLA columns explained");
-  XLSX.writeFile(wb, "Support-stats-" + D.R.from + "-to-" + D.R.to + ".xlsx");
+  XLSX.writeFile(wb, ssFileName() + ".xlsx");
 }
 /* ── PowerPoint (editable) export: three 16:9 slides in the support-slide style, every chart a native PowerPoint chart
    (click it in PowerPoint › Edit Data) and every table a native table. The library is loaded only when it is needed:
@@ -1764,7 +1764,7 @@ function ssLoadPptx() {
 function ssPpt(btn) {
   var D = ssData(); if (!D.list.length) { alert("There is nothing to export for these months."); return; }
   var old = btn.textContent; btn.disabled = true; btn.textContent = "Preparing PowerPoint…";
-  var name = "Support-stats-" + D.R.from + "-to-" + D.R.to + ".pptx";
+  var name = ssFileName() + ".pptx";
   ssLoadPptx().then(function (P) { return ssSvgPng(ssCoverArt(ssPic()), 1000, 1000).then(function (art) { return ssDeck(P, D, art).write({ outputType: "blob" }); }); }).then(ssCleanZip).then(function (blob) {
     var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
   })
@@ -1946,6 +1946,8 @@ function ssPrintHTML() {
   /* the cover drawing's gradient / clip ids get their own names in the print copy */
   return src.innerHTML.replace(/(id="|url\(#)(cv[gsc])\b/g, "$1p$2");
 }
+/* the downloads are named like the report: "<Client> Support Stats – January 2026 to November 2026" (the PDF gets it as its title) */
+function ssFileName() { return ssPrintTitle().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 150) || "Support Stats"; }
 function ssPrintTitle() { var D = ssData(), c = ssCoverText(D); return (c.lines ? c.lines.join(" ") : c.t) + " – " + c.s.replace(/^From /, ""); }
 function ssPrint() {
   var body = ssPrintHTML(); if (!body) return;
