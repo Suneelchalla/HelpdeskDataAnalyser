@@ -445,19 +445,20 @@
   function contractOf(cfg, prefix, created) {
     var c = cfg && cfg.calendars && cfg.calendars[prefix]; if (!c || (!c.from && !c.to) || created == null) return null;
     var day = function (d) { return Date.parse(d + "T00:00:00+05:30"); }, nice = function (d) { var x = new Date(day(d) + 19800000); return x.getUTCDate() + " " + MONS[x.getUTCMonth()] + " " + x.getUTCFullYear(); };
-    var f = c.from ? day(c.from) : null, t = c.to ? day(c.to) + 864e5 : null, def = "Office hours (" + calName(cfg) + ")", own = calName(c);
-    if (f != null && created < f) return { key: prefix + "|before", order: 0, own: false, label: def + " · created before " + nice(c.from) };
-    if (t != null && created >= t) return { key: prefix + "|after", order: 2, own: false, label: def + " · created after " + nice(c.to) };
-    return { key: prefix + "|own", order: 1, own: true, label: own + " · created " + (c.from && c.to ? nice(c.from) + " – " + nice(c.to) : c.from ? "from " + nice(c.from) : "up to " + nice(c.to)) };
+    var f = c.from ? day(c.from) : null, t = c.to ? day(c.to) + 864e5 : null, own = calName(c), def = calName(cfg);
+    var ownCal = own === "24/7" ? "24 hours a day, 7 days a week" : own, defCal = "office hours, " + def;
+    var mk = function (phase, order, title, cal, period) { return { key: prefix + "|" + phase, prefix: prefix, phase: phase, order: order, own: phase === "own", title: title, cal: cal, period: period, label: title + " · " + period }; };
+    if (f != null && created < f) return mk("before", 0, "Before the " + own + " contract", defCal, "created before " + nice(c.from));
+    if (t != null && created >= t) return mk("after", 2, "After the " + own + " contract", defCal, "created after " + nice(c.to));
+    return mk("own", 1, own + " contract", ownCal, "created " + (c.from && c.to ? nice(c.from) + " – " + nice(c.to) : c.from ? "from " + nice(c.from) : "up to " + nice(c.to)));
   }
-  /* group items by contract: [{key,label,order,own,items}], in time order. Only worth showing when it has 2+ groups.
-     Items of clients with one contract go to a last "Other clients" group (only when the rest is split). */
+  /* group items by contract, client by client: [{key,prefix,phase,title,cal,period,label,order,own,items}].
+     Only clients whose items fall under two or more contracts are returned (other clients are not part of it). */
   function byContract(items, cfg, prefixOf_, createdOf) {
-    var g = {}, other = [];
-    items.forEach(function (it) { var k = contractOf(cfg, prefixOf_(it), createdOf(it)); if (!k) { other.push(it); return; } (g[k.key] = g[k.key] || Object.assign({ items: [] }, k)).items.push(it); });
-    var out = Object.keys(g).map(function (k) { return g[k]; }).sort(function (a, b) { return a.key.split("|")[0].localeCompare(b.key.split("|")[0]) || a.order - b.order; });
-    if (out.length < 2) return [];
-    if (other.length) out.push({ key: "other", order: 9, own: false, label: "Other clients (one calendar)", items: other });
+    var g = {};
+    items.forEach(function (it) { var k = contractOf(cfg, prefixOf_(it), createdOf(it)); if (!k) return; (g[k.key] = g[k.key] || Object.assign({ items: [] }, k)).items.push(it); });
+    var per = {}; Object.keys(g).forEach(function (k) { var x = g[k]; (per[x.prefix] = per[x.prefix] || []).push(x); });
+    var out = []; Object.keys(per).sort().forEach(function (p) { if (per[p].length > 1) out = out.concat(per[p].sort(function (a, b) { return a.order - b.order; })); });
     return out;
   }
   function basis(cfg, cals, prefix, sev, r, created) {
