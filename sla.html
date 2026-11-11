@@ -1735,6 +1735,7 @@ function searchResults(q) {
 /* ═════════ settings ═════════ */
 function draftFromCfg() { ST.draft = JSON.parse(JSON.stringify(ST.cfg)); ST.draft._hol = (ST.draft.holidays || []).map(function (h) { return (h.date || h) + (h.name ? " " + h.name : ""); }).join("\n"); }
 function allTypes() { var m = {}; ST.tickets.forEach(function (t) { if (t.type) m[t.type] = 1; }); return Object.keys(m).sort(); }
+function calNote(c) { return c.from || c.to ? "Tickets created " + (c.from ? "before" : "") + (c.from && c.to ? " or " : "") + (c.to ? "after" : "") + " this: default calendar" : "Both empty = all tickets"; }
 function renderSettings() {
   if (!ST.draft) draftFromCfg();
   var d = ST.draft, M = $("main"), days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], order = Sla.SEVERITIES;
@@ -1756,8 +1757,7 @@ function renderSettings() {
         '<div class="fld"><label>Working days</label><div class="daychips">' + days.map(function (n, i) { return '<label><input type="checkbox" data-calwd="' + esc(p) + '|' + i + '"' + (c.workDays.indexOf(i) > -1 ? " checked" : "") + "> " + n + "</label>"; }).join("") + '</div></div>' +
         '<div class="fld"><label>Holidays</label><div class="daychips"><label><input type="checkbox" data-calhol="' + esc(p) + '"' + (c.holidays !== false ? " checked" : "") + "> Skip the holiday list</label></div></div>" +
         '<div class="fld"><label>Applies to tickets created from</label><input type="date" data-calf="' + esc(p) + '|from" value="' + esc(c.from || "") + '" aria-label="' + esc(p) + ' calendar applies from"></div>' +
-        '<div class="fld"><label>to (included)</label><input type="date" data-calf="' + esc(p) + '|to" value="' + esc(c.to || "") + '" aria-label="' + esc(p) + ' calendar applies until"><div style="font-size:11px;color:var(--faint);margin-top:3px">' +
-          (c.from || c.to ? "Tickets created " + (c.from ? "before" : "") + (c.from && c.to ? " or " : "") + (c.to ? "after" : "") + " this: default calendar" : "Both empty = all tickets") + "</div></div></div></div>"; }).join("")
+        '<div class="fld"><label>to (included)</label><input type="date" data-calf="' + esc(p) + '|to" value="' + esc(c.to || "") + '" aria-label="' + esc(p) + ' calendar applies until"><div data-calnote="' + esc(p) + '" style="font-size:11px;color:var(--faint);margin-top:3px">' + calNote(c) + "</div></div></div></div>"; }).join("")
       : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">No client has its own calendar — every client uses the default above.</div>') +
     '<div class="frow" style="margin-top:6px"><select id="addCalSel" aria-label="Client to give a calendar"><option value="">Add a client calendar…</option>' + freeCal.map(function (p) { return '<option value="' + esc(p) + '">' + esc(clientName(p) + " (" + p + ")") + "</option>"; }).join("") + '</select><button class="ghost" id="addCal">Add</button></div></div>';
   h += '<div class="card set-sec"><h3>Ticket types &amp; warning levels</h3><p class="h">Only these issue types are measured. Changes are excluded by default because their lifecycle is much longer than incidents and requests.</p><div class="frow"><div class="fld"><label>Included types</label><div class="daychips">' + allTypes().map(function (t) { return '<label><input type="checkbox" data-it="' + esc(t) + '"' + (d.issueTypes.map(function (x) { return x.toLowerCase(); }).indexOf(t.toLowerCase()) > -1 ? " checked" : "") + "> " + esc(t) + "</label>"; }).join("") + '</div></div><div class="fld"><label>At risk from</label><input type="number" min="1" max="99" data-d="warn" value="' + esc(d.warnPct) + '"> %</div><div class="fld"><label>Due soon from</label><input type="number" min="1" max="99" data-d="danger" value="' + esc(d.dangerPct) + '"> %</div><div class="fld"><label>SLA goal</label><input type="number" min="1" max="100" data-d="goal" value="' + esc(d.goalPct) + '"> %</div></div><p class="h" style="margin:10px 0 0">The goal only sets the colours on the SLA % views (green at or above it, amber within 15 points, red below).</p></div>';
@@ -2181,7 +2181,8 @@ document.addEventListener("input", function (e) {
   if (t.dataset && t.dataset.mss) { msList(t.dataset.mss); return; }
   if (t.id === "sq") return;
   if (t.id === "rmExtra" && ST.rm) { ST.rm.extra = t.value; ST.rm.status = "idle"; refreshRemind(); rmStatusHtml(); return; }
-  if (t.dataset && t.dataset.calf && ST.draft) { var cf = t.dataset.calf.split("|"), cc = ST.draft.calendars[cf[0]]; if (cc) { if (cf[1] === "bs") cc.businessStart = t.value.trim(); else if (cf[1] === "from") cc.from = t.value.trim(); else if (cf[1] === "to") cc.to = t.value.trim(); else cc.businessEnd = t.value.trim(); } return; }
+  if (t.dataset && t.dataset.calf && ST.draft) { var cf = t.dataset.calf.split("|"), cc = ST.draft.calendars[cf[0]]; if (cc) { if (cf[1] === "bs") cc.businessStart = t.value.trim(); else if (cf[1] === "from") cc.from = t.value.trim(); else if (cf[1] === "to") cc.to = t.value.trim(); else cc.businessEnd = t.value.trim();
+      if (cf[1] === "from" || cf[1] === "to") { var nt = document.querySelector('[data-calnote="' + cf[0] + '"]'); if (nt) nt.textContent = calNote(cc); } } return; }
   if (t.dataset && t.dataset.tpl && ST.draft) { ST.draft.templates[t.dataset.tpl] = t.value; return; }
   if (t.id === "bkExtra" && ST.bk) { ST.bk.extra = t.value; return; }
   if (t.dataset && t.dataset.d && ST.draft) readDraftInput(t);
