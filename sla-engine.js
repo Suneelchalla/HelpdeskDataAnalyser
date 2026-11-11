@@ -28,12 +28,22 @@
     { id: "medium",      name: "Medium",       color: "#2563EB" },
     { id: "low",         name: "Low",          color: "#6B7A90" }
   ];
+  /* Chennai office holidays 2026 (default holiday list). HOL_SEED marks a saved configuration that already has them:
+     a configuration saved before they existed gets them added once; removing one afterwards (and saving) sticks. */
+  var HOL_SEED = "chennai-2026";
+  var DEFAULT_HOLIDAYS = [
+    { date: "2026-01-01", name: "New Year's Day" }, { date: "2026-01-15", name: "Pongal" }, { date: "2026-01-26", name: "Republic Day" },
+    { date: "2026-03-21", name: "Ramzan" }, { date: "2026-04-03", name: "Good Friday" }, { date: "2026-04-14", name: "Tamil New Year" },
+    { date: "2026-04-23", name: "TN Election Day" }, { date: "2026-05-01", name: "May Day" }, { date: "2026-06-26", name: "Muharram (restricted holiday)" },
+    { date: "2026-08-15", name: "Independence Day" }, { date: "2026-09-04", name: "Janmashtami (restricted holiday)" }, { date: "2026-09-14", name: "Ganesh Chaturthi (restricted holiday)" },
+    { date: "2026-10-02", name: "Gandhi Jayanti" }, { date: "2026-11-08", name: "Diwali" }, { date: "2026-12-25", name: "Christmas" }
+  ];
   var DEFAULT_CONFIG = {
     /* Default working calendar, used by every client that has no calendar of its own. */
     businessStart: "10:00",
     businessEnd: "18:00",
     workDays: [1, 2, 3, 4, 5],
-    holidays: [],                       // [{date:"2026-01-26", name:"Republic Day"}]
+    holidays: DEFAULT_HOLIDAYS.map(function (h) { return { date: h.date, name: h.name }; }),   // Chennai 2026 (above)
     /* Own calendar for specific clients, keyed by ticket-key prefix, e.g. Swire on a 24/7 contract:
          { SWIPHX: { businessStart:"00:00", businessEnd:"24:00", workDays:[0,1,2,3,4,5,6], holidays:false } }
        holidays:true (default) skips the holiday list for that client; false counts holidays as working time.
@@ -73,7 +83,14 @@
     var c = clone(DEFAULT_CONFIG); saved = saved || {};
     ["businessStart", "businessEnd", "warnPct", "dangerPct", "goalPct"].forEach(function (k) { if (saved[k] != null) c[k] = saved[k]; });
     if (Array.isArray(saved.workDays)) c.workDays = saved.workDays.slice();
-    if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice();
+    if (Array.isArray(saved.holidays)) c.holidays = saved.holidays.slice(); else c.holidays = clone(DEFAULT_HOLIDAYS);
+    /* a list saved before the Chennai 2026 holidays existed gets them once (by date, so nothing is doubled) */
+    if (Array.isArray(saved.holidays) && saved.holSeed !== HOL_SEED) {
+      var have = {}; c.holidays.forEach(function (h) { var d = String(typeof h === "string" ? h : (h && h.date) || "").slice(0, 10); if (d) have[d] = 1; });
+      DEFAULT_HOLIDAYS.forEach(function (h) { if (!have[h.date]) c.holidays.push({ date: h.date, name: h.name }); });
+      c.holidays.sort(function (x, y) { var a = String(typeof x === "string" ? x : x.date), b = String(typeof y === "string" ? y : y.date); return a < b ? -1 : a > b ? 1 : 0; });
+    }
+    c.holSeed = HOL_SEED;
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
     /* 60 was the earlier built-in default; a 60 that was never set by hand (no frTargetSet) becomes the real 30-minute SLA */
     if (typeof saved.frTargetMin === "number" && saved.frTargetMin > 0 && (saved.frTargetSet || saved.frTargetMin !== 60)) c.frTargetMin = saved.frTargetMin;
