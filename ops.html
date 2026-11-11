@@ -315,8 +315,19 @@ body.oi-sv #view{margin-top:6px}
   #ssPrintHost .ss-tw{overflow:visible}
   #ssPrintHost .ss-mini th,#ssPrintHost .ss-mini td{font-size:9.5px;padding:2px 2px}
   @page{size:A4 landscape;margin:8mm}
+  /* the same columns as in the app, whatever width the browser gives the paper (narrow-screen rules must not apply) */
+  #ssPrintHost .ss-charts{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  #ssPrintHost .ss-g2,#ssPrintHost .ss-fix,#ssPrintHost .ss-pvg{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #ssPrintHost .ss-pvg{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)!important}
+  #ssPrintHost .ss-kpis{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+  #ssPrintHost .ss-fix.ss-fix1{grid-template-columns:1fr!important}
+  #ssPrintHost .ss-t{min-width:0!important}
+  #ssPrintHost .ss-pvx,#ssPrintHost .ss-pvk,#ssPrintHost .ss-kind,#ssPrintHost .ss-slacalc{display:none!important}
 }
 #ssPrintHost{display:none}body.ssprint #ssPrintHost{display:block}
+/* the print window: the report drawn at the app's width, then scaled to the paper by the browser */
+body.ssprint-win{margin:0;background:#fff}body.ssprint-win #ssPrintHost{display:block;width:1240px;margin:0 auto}
+@media print{body.ssprint-win #ssPrintHost{width:auto;zoom:.84}}
 @media print{body.ssprint{background:#fff!important}}
 </style>
 </head>
@@ -1534,6 +1545,24 @@ var SS_SLA_K = [["met", "Met", "#7FD1A0"], ["missed", "Missed", "#F87171"], ["br
 var SS_SLA_L = {}; SS_SLA_K.forEach(function (k) { SS_SLA_L[k[0]] = k[1]; });
 function ssSlaOf(t) { var x = sla(t); if (!x || x.state === "none") return null; if (x.state === "nohist") return "nohist";
   if (x.state === "met" || x.state === "missed" || x.state === "breached") return x.state; return "open"; }   /* at risk, on track, paused with the client: all still inside target */
+/* the SLA columns of the Excel "All tickets" sheet: [header, explanation, width] */
+var SS_SLA_XH = [
+  ["SLA", "The result: Met (closed within target), Missed (closed over target), Open, breached (still open, already past target), Open, not yet breached (still open, inside target; includes paused with the client), No SLA data (status history not read yet), Not tracked (request type the SLA Tracker does not track, or no target).", 22],
+  ["SLA detail", "The SLA Tracker's short description, e.g. \"Missed · 3d 1h 53m over\" (days of working time, as in the SLA Tracker).", 28],
+  ["SLA target (working h)", "The time allowed for this priority and client, in working hours on the SLA calendar.", 12],
+  ["Working time counted (h)", "Working hours that counted against the target: time with the Help Desk or Engineering. Time with the client and time after closing do not count.", 13],
+  ["% of SLA target used", "Working time counted ÷ SLA target × 100. Under 100 = inside the target (e.g. 20 = used a fifth of the time). 100 = exactly the target. Over 100 = over the target (e.g. 208 = took 2.08 times the allowed time, 108% over).", 12],
+  ["Over target by (h)", "Working hours beyond the target (missed or breached tickets). Empty when inside the target.", 12],
+  ["Time left (h)", "Working hours still left before the target (open tickets), or left unused at closure (met tickets). Empty when over the target.", 11],
+  ["Paused with client (h)", "Working hours the clock was paused because the ticket was with the client (waiting for information, approval, testing…).", 12],
+  ["Help Desk time (h)", "Counted working hours while the Help Desk held the ticket.", 11],
+  ["Engineering time (h)", "Counted working hours while Engineering held the ticket.", 12],
+  ["Times with client", "How many times the ticket went to the client.", 9],
+  ["Reopened", "How many times the ticket was reopened after being closed (the clock restarts each time).", 9],
+  ["Breached at", "Date and time (IST) when the counted time crossed the target. Empty when the target was never crossed.", 17],
+  ["Held by now", "Who has the ticket now: Help Desk, Engineering, With client, or Closed.", 13],
+  ["Working hours used", "The SLA calendar this client's tickets are measured on (working days and hours).", 34]
+];
 function ssSlaData(D) {
   var ms = D.ms, blank = function () { var o = {}; SS_SLA_K.forEach(function (k) { o[k[0]] = []; }); return o; };
   var byM = ms.map(blank), byP = {}, all = blank(), tracked = [];
@@ -1676,12 +1705,22 @@ function ssExcel() {
   /* first tab: every ticket the report counts (created in these months, same filters), oldest first, key linked to Jira */
   var tl = D.list.slice().sort(function (a, b) { return a.created - b.created; }), mOf = function (t) { for (var i = 0; i < ms.length; i++) if (t.created >= ms[i].a && t.created < ms[i].b) return ms[i].lbl; return ""; };
   var dt = function (x) { return x == null ? "" : new Date(x); };
-  var TH = ["Key", "Summary", "Client", "Request type", "Priority", "Status", "Type of fix", "Root cause", "Month", "Created", "Resolved", "Days to resolve", "SVM in charge", "Current worker", "Screen", "SLA", "SLA detail", "% of SLA target used"];
-  var slaCols = function (t) { var c = ssSlaOf(t), x = sla(t); return [c ? SS_SLA_L[c] : "Not tracked", x && x.label ? x.label : "", x && x.pct != null && c && c !== "nohist" ? Math.round(x.pct) : ""]; };
+  var TH = ["Key", "Summary", "Client", "Request type", "Priority", "Status", "Type of fix", "Root cause", "Month", "Created", "Resolved", "Days to resolve", "SVM in charge", "Current worker", "Screen"].concat(SS_SLA_XH.map(function (x) { return x[0]; }));
+  /* every SLA figure of a ticket, from the SLA Tracker's own calculation; times in WORKING hours (the SLA calendar) */
+  var hrs = function (m) { return m == null ? "" : Math.round(m / 60 * 10) / 10; };
+  var slaCols = function (t) {
+    var c = ssSlaOf(t), out = [c ? SS_SLA_L[c] : "Not tracked"], SL = window.HDSlaLink, d = c && c !== "nohist" && SL && SL.detail ? SL.detail(t._raw) : null, r = d && d.r, x = d && d.info;
+    if (!r) return out.concat([x && x.label ? x.label : (c === "nohist" ? "Status history not read yet" : "")], SS_SLA_XH.slice(2).map(function () { return ""; }));
+    var bi = d.bi || {}, KN = { hd: "Help Desk", engg: "Engineering", client: "With client", closed: "Closed" };
+    return out.concat([x.label || "", hrs(r.targetMin), hrs(r.elapsedMin), r.pct != null ? Math.round(r.pct) : "",
+      r.remainingMin != null && r.remainingMin < 0 ? hrs(-r.remainingMin) : "", r.remainingMin != null && r.remainingMin >= 0 ? hrs(r.remainingMin) : "",
+      hrs(r.pausedMin), hrs(r.hdMin), hrs(r.enggMin), r.clientRounds || 0, r.reopens || 0,
+      bi.breachedAt ? new Date(bi.breachedAt) : "", KN[r.currentKind] || r.currentKind || "", d.calText || ""]);
+  };
   var ta = [TH].concat(tl.map(function (t) { return [t.key, t.summary, t.project, t.type, t.priority, t.status, t.fix || SS_BLANK, t.rootCause || SS_BLANK, mOf(t), dt(t.created), t.isRes ? dt(t.doneAt) : "", t.resDays != null ? Math.round(t.resDays * 10) / 10 : "", t.svm, t.worker, t.screen].concat(slaCols(t)); }));
   var tw = XLSX.utils.aoa_to_sheet(ta, { cellDates: true, dateNF: "dd-mmm-yyyy hh:mm" });
   tl.forEach(function (t, i) { var c = tw[XLSX.utils.encode_cell({ r: i + 1, c: 0 })]; if (c && t.key) c.l = { Target: JIRA + encodeURIComponent(t.key), Tooltip: "Open in Jira" }; });
-  tw["!cols"] = [{ wch: 14 }, { wch: 60 }, { wch: 20 }, { wch: 16 }, { wch: 11 }, { wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 9 }, { wch: 17 }, { wch: 17 }, { wch: 9 }, { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 22 }, { wch: 26 }, { wch: 12 }];
+  tw["!cols"] = [{ wch: 14 }, { wch: 60 }, { wch: 20 }, { wch: 16 }, { wch: 11 }, { wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 9 }, { wch: 17 }, { wch: 17 }, { wch: 9 }, { wch: 20 }, { wch: 20 }, { wch: 22 }].concat(SS_SLA_XH.map(function (x) { return { wch: x[2] }; }));
   tw["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(1, tl.length), c: TH.length - 1 } }) };
   XLSX.utils.book_append_sheet(wb, tw, "All tickets");
   XLSX.utils.book_append_sheet(wb, ws, "Support stats");
@@ -1706,6 +1745,8 @@ function ssExcel() {
     var w = XLSX.utils.aoa_to_sheet([[ssPivTitle(p)], []].concat(rows)); w["!cols"] = [{ wch: 26 }].concat(rows[0].slice(1).map(function () { return { wch: 12 }; }));
     XLSX.utils.book_append_sheet(wb, w, ("P" + (k + 1) + " " + SS_DIM_L[p.r] + (p.c ? " x " + SS_DIM_L[p.c] : "")).replace(/[\\\/\?\*\[\]:]/g, "-").slice(0, 31));
   });
+  var ex = XLSX.utils.aoa_to_sheet([["SLA columns on the All tickets sheet"], ["Same calculation as the SLA Tracker: resolution SLA, its targets per priority and client, its business calendar, and the clock paused while the ticket is with the client."], [], ["Column", "What it means"]].concat(SS_SLA_XH.map(function (x) { return [x[0], x[1]]; })));
+  ex["!cols"] = [{ wch: 30 }, { wch: 120 }]; XLSX.utils.book_append_sheet(wb, ex, "SLA columns explained");
   XLSX.writeFile(wb, "Support-stats-" + D.R.from + "-to-" + D.R.to + ".xlsx");
 }
 /* ── PowerPoint (editable) export: three 16:9 slides in the support-slide style, every chart a native PowerPoint chart
@@ -1900,11 +1941,27 @@ function ssDeck(P, D, art) {
   });
   return pres;
 }
+function ssPrintHTML() {
+  var src = el("ssPages"); if (!src) return "";
+  /* the cover drawing's gradient / clip ids get their own names in the print copy */
+  return src.innerHTML.replace(/(id="|url\(#)(cv[gsc])\b/g, "$1p$2");
+}
+function ssPrintTitle() { var D = ssData(), c = ssCoverText(D); return (c.lines ? c.lines.join(" ") : c.t) + " – " + c.s.replace(/^From /, ""); }
 function ssPrint() {
-  var src = el("ssPages"); if (!src) return;
-  var host = document.createElement("div"); host.id = "ssPrintHost";
-  /* the cover drawing's gradient / clip ids get their own names in the print copy: the screen copy is hidden while printing */
-  host.innerHTML = src.innerHTML.replace(/(id="|url\(#)(cv[gsc])\b/g, "$1p$2"); document.body.appendChild(host); document.body.classList.add("ssprint");
+  var body = ssPrintHTML(); if (!body) return;
+  var w = null; try { w = window.open("", "_blank"); } catch (e) { w = null; }
+  if (!w) return ssPrintHere(body);                       /* pop-ups blocked: print from this page instead */
+  var head = Array.prototype.map.call(document.querySelectorAll('link[rel="stylesheet"], style'), function (n) { return n.outerHTML; }).join("\n");
+  w.document.open();
+  w.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' + esc(ssPrintTitle()) + "</title>" + head + '</head><body class="ssprint ssprint-win"><div id="ssPrintHost">' + body + "</div></body></html>");
+  w.document.close();
+  var go = function () { try { w.focus(); w.print(); } catch (e) {} };
+  var ready = w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve();
+  Promise.race([ready, new Promise(function (r) { setTimeout(r, 2500); })]).then(function () { setTimeout(go, 150); });
+  w.onafterprint = function () { setTimeout(function () { try { w.close(); } catch (e) {} }, 300); };
+}
+function ssPrintHere(body) {
+  var host = document.createElement("div"); host.id = "ssPrintHost"; host.innerHTML = body; document.body.appendChild(host); document.body.classList.add("ssprint");
   var off = function () { document.body.classList.remove("ssprint"); var x = el("ssPrintHost"); if (x) x.remove(); window.removeEventListener("afterprint", off); };
   window.addEventListener("afterprint", off); window.print(); setTimeout(off, 1500);
 }
