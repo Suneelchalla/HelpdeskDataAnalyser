@@ -238,6 +238,12 @@ body.oi-sv #view{margin-top:6px}
 .sh-k{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:600;color:var(--kc);background:color-mix(in srgb,var(--kc) 12%,transparent)}
 .sh-tw td.nw{white-space:nowrap}.sh-hit td{background:#FEF2F2}.sh-x{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background:#DC2626;color:#fff;font:600 10.5px var(--sans)}
 .sh-note{font-size:12px;color:var(--muted);margin-top:10px}.sh-none{border:1px dashed var(--line2);border-radius:10px;padding:16px;color:var(--ink2)}.sh-none p{margin:6px 0 0;font-size:13px}
+.sh-rules{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:4px 0 14px;background:var(--paper)}.sh-rules h4{margin:0 0 8px;font:700 13.5px var(--sans);color:var(--ink)}
+.sh-rg{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:18px}@media (max-width:800px){.sh-rg{grid-template-columns:1fr}}
+.sh-rl{font:700 11px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:6px 0 4px}.sh-rules p{margin:0 0 6px;font-size:12.5px;color:var(--ink2);line-height:1.5}
+.sh-tt{width:100%;font-size:12.5px}.sh-tt th{padding:4px 6px;font-size:11px}.sh-tt td{padding:4px 6px;border-bottom:1px solid var(--line)}.sh-on td{background:#EEF6FF;font-weight:600}
+.sh-me{display:inline-block;margin-left:4px;padding:0 6px;border-radius:8px;background:#2563EB;color:#fff;font:600 10px var(--sans)}
+.sh-ul{margin:0 0 6px 16px;padding:0;font-size:12.5px;color:var(--ink2);line-height:1.6}.sh-warn{color:#B45309!important}
 /* ── cover page ── */
 .ss-cover{position:relative;aspect-ratio:16/9;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;font-family:Calibri,"Segoe UI",Arial,sans-serif;container-type:inline-size;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .cv-band{position:absolute;left:36%;right:0;top:31%;height:35%;background:#1BA9E1}
@@ -2008,6 +2014,32 @@ function openDrill(i) {
 }
 /* ══ SLA history of one ticket (for reference, from any ticket list): the SLA Tracker's own calculation —
    verdict, target, counted / paused time, Help Desk vs Engineering, and every status change with what the clock did ══ */
+/* the rules the SLA Tracker applied to this ticket: target (client's own or the default), calendar, holidays, and
+   what each kind of status does to the clock — so every number in the SLA history can be traced to a setting */
+function ssSlaRules(D, t) {
+  var S = window.HDSla, cfg = L && L.config ? L.config() : null; if (!S || !cfg || !D) return "";
+  var b = D.basis, r = D.r, pre = (D.t && D.t.prefix) || S.prefixOf(t.key), sev = D.t && D.t.sev;
+  var f = D.fmt || function (m) { return Math.round(m / 60) + "h"; }, dayH = b ? b.dayMin / 60 : null;
+  var own = cfg.targets && cfg.targets.clients && cfg.targets.clients[pre] || {}, defs = (cfg.targets && cfg.targets.defaults) || {};
+  var tH = function (id) { return own[id] > 0 ? own[id] : defs[id] > 0 ? defs[id] : null; };
+  var hfmt = function (h) { return h == null ? "—" : (dayH && dayH < 24 ? f(h * 60) + ' <span class="z">(' + (Math.round(h * 10) / 10) + " working h)</span>" : f(h * 60)); };
+  var rows = S.SEVERITIES.map(function (s) { var h = tH(s.id); return '<tr' + (s.id === sev ? ' class="sh-on"' : "") + "><td>" + esc(s.name) + (s.id === sev ? ' <span class="sh-me">this ticket</span>' : "") + "</td><td>" + hfmt(h) + "</td><td>" + (h == null ? '<span class="z">no target</span>' : own[s.id] > 0 ? "set for " + esc(pre) : "default") + "</td></tr>"; }).join("");
+  var kinds = { hd: [], engg: [], client: [], closed: [] };
+  if (r) r.segs.forEach(function (sg) { if (kinds[sg.kind] && kinds[sg.kind].indexOf(sg.status) < 0) kinds[sg.kind].push(sg.status); });
+  var li = function (lbl, k, rule) { return "<li><b>" + lbl + "</b> " + rule + (kinds[k].length ? ' <span class="z">— here: ' + esc(kinds[k].join(", ")) + "</span>" : "") + "</li>"; };
+  var h = '<div class="sh-rules"><h4>How SLA is calculated for this ticket</h4><div class="sh-rg">';
+  h += '<div><div class="sh-rl">Client rules</div><p>Ticket prefix <b>' + esc(pre) + "</b> (" + esc(t.project) + "). " + (b && b.own ? "This client has its <b>own SLA calendar</b>." : "This client uses the <b>default SLA calendar</b>.") + "</p>" +
+    '<div class="sh-rl">Target by priority</div><table class="sh-tt"><thead><tr><th>Priority</th><th>Target</th><th>Source</th></tr></thead><tbody>' + rows + "</tbody></table>" +
+    (b && b.targetH == null ? '<p class="sh-warn">No target applies to this priority, so the ticket is not measured.</p>' : "") + "</div>";
+  h += '<div><div class="sh-rl">Working time (the clock only runs inside it)</div><p>' + (b ? (b.is247 ? "<b>24 × 7</b>: every hour of every day counts." : "<b>" + esc(b.days) + "</b>, <b>" + esc(b.hours) + "</b>" + (b.offDays.length ? "; not counted on " + esc(b.offDays.join(", ")) : "") + ". 1 working day = " + (Math.round(b.dayMin / 60 * 10) / 10) + " hours, so “1d” in the durations here means " + (Math.round(b.dayMin / 60 * 10) / 10) + " working hours.") : esc(D.calText || "")) + "</p>" +
+    (b ? "<p>" + (b.holidaysSkipped ? "Holidays are skipped (" + b.holidaysListed + " listed)" + (b.holidaysInLife.length ? ": during this ticket " + b.holidaysInLife.map(function (x) { return esc(fd(Date.parse(x.date)) + (x.name ? " " + x.name : "")); }).join(", ") : "; none fell during this ticket") + "." : "Holidays are <b>not</b> skipped for this client.") + "</p>" : "") +
+    '<div class="sh-rl">What each status does to the clock</div><ul class="sh-ul">' + li("Counts", "hd", "while the Help Desk holds it") + li("Counts", "engg", "while Engineering holds it") + li("Paused", "client", "while it is with the client (waiting for information, approval, testing)") +
+    li("Stops", "closed", "when it is closed; it restarts if the ticket is reopened") + "</ul>" +
+    (r && r.unmapped && r.unmapped.length ? '<p class="sh-warn">Not in Master data, counted as Help Desk: ' + esc(r.unmapped.join(", ")) + ".</p>" : "") +
+    "<p>Request types measured: " + esc((cfg.issueTypes || []).join(", ")) + ". At risk from " + esc(String(cfg.warnPct)) + "% of the target, danger from " + esc(String(cfg.dangerPct)) + "%.</p>" +
+    '<p class="z">These are the SLA Tracker’s settings (SLA Tracker › Settings); status groups come from Master data.</p></div></div></div>';
+  return h;
+}
 function openSlaHist(t) {
   if (!t) return;
   var D = L && L.detail ? L.detail(t._raw) : null, info = (D && D.info) || {}, r = D && D.r, bi = D && D.bi, f = D && D.fmt ? D.fmt : function (m) { return Math.round(m) + "m"; };
@@ -2020,6 +2052,7 @@ function openSlaHist(t) {
   if (!r) {
     h += '<div class="sh-none"><b>' + esc(info.label || (info.state === "na" ? "Not tracked for SLA" : "No SLA data")) + "</b><p>" + esc(info.tip || "The status history of this ticket has not been read yet.") + "</p>" +
       (info.state === "nohist" ? "<p>Use <b>Calculate SLA</b> on the SLA Performance page (or in the SLA Tracker); the history then appears here.</p>" : "") + "</div>";
+    h += ssSlaRules(D, t);
   } else {
     var tone = info.breached ? "#DC2626" : info.atRisk ? "#D97706" : info.state === "met" ? "#059669" : "#2563EB", pctU = Math.min(100, Math.round(r.pct || 0));
     h += '<div class="sh-verdict" style="--vc:' + tone + '"><b>' + esc(info.label || "") + "</b><span>" + esc(info.tip || "") + "</span></div>";
@@ -2029,6 +2062,7 @@ function openSlaHist(t) {
       chip("Help Desk", esc(f(r.hdMin)), "counted") + chip("Engineering", esc(f(r.enggMin)), "counted") +
       chip(bi && bi.breachedAt ? "Breached at" : bi && bi.breachAt ? "Breaches at" : "Reopened", bi && bi.breachedAt ? esc(fdt(bi.breachedAt)) : bi && bi.breachAt ? esc(fdt(bi.breachAt)) : String(r.reopens), bi && (bi.breachedAt || bi.breachAt) ? "IST" : "times") + "</div>";
     h += '<div class="sh-bar"><i style="width:' + pctU + "%;background:" + tone + '"></i><span style="left:' + Math.min(100, 100 / Math.max(1, (r.pct || 0) / 100) ) + '%"></span></div><div class="sh-bart">' + Math.round(r.pct || 0) + "% of the target used" + (r.pct > 100 ? " · the line marks the target" : "") + "</div>";
+    h += ssSlaRules(D, t);
     /* the timeline: one row per status the ticket was in */
     var byAt = {}; ((D.entry && D.entry.transitions) || []).forEach(function (x) { byAt[x.t] = x.by || ""; });
     var crossed = false;
@@ -2039,7 +2073,7 @@ function openSlaHist(t) {
           '<td><span class="sh-k" style="--kc:' + (KC[sg.kind] || "#64748B") + '">' + esc(KN[sg.kind] || sg.kind) + "</span></td><td class=\"nw\">" + esc(fdt(sg.start)) + '</td><td class="nw">' + (sg.open ? (sg.kind === "closed" ? "—" : "now") : esc(fdt(sg.end))) + "</td>" +
           "<td>" + esc(i === 0 ? "created" : (byAt[sg.start] || "—")) + '</td><td class="num">' + (sg.open && sg.kind === "closed" ? '<span class="z">—</span>' : esc(D.fcal ? D.fcal(sg.calMin) : f(sg.calMin))) + '</td><td class="num">' + (sg.counted ? esc(f(sg.bizMin)) : '<span class="z">not counted</span>') + '</td><td class="num"><b>' + esc(f(sg.elapsedAfter)) + "</b>" + (hit ? ' <span class="sh-x">target crossed</span>' : "") + "</td></tr>";
       }).join("") + "</tbody></table></div>";
-    h += '<p class="sh-note">Working time follows ' + esc(D.calText || "the SLA Tracker’s calendar") + ". Time with the client is paused; the clock stops when the ticket is closed and restarts if it is reopened. Same rules as the SLA Tracker.</p>";
+
   }
   h += "</div></div></div>";
   var w = document.createElement("div"); w.innerHTML = h; document.body.appendChild(w.firstChild);
