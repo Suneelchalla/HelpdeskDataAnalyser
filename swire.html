@@ -921,13 +921,13 @@ function swContracts(idx) { return L && L.byContract ? L.byContract(idx, (i) => 
 function swContractTable(idx, mode) {
   const G = swContracts(idx); if (!G.length) return "";
   const n = (l, t) => '<td class="num">' + (l.length ? dl(l, t) : '<span class="dim">·</span>') + "</td>";
-  const row = (lbl, l, tot) => { const by = (k) => l.filter((i) => slaB(i) === k), cl = l.filter((i) => E[i].stage === "closed"), m = cl.filter((i) => slaB(i) === "met"), x = cl.filter((i) => slaB(i) === "missed"), op = l.filter((i) => E[i].stage !== "closed"), d = m.length + x.length;
+  const row = (lb0, l, tot) => { const lbl = typeof lb0 === "object" ? lb0 : lb0, ttl = typeof lb0 === "object" ? lb0.t : lb0, by = (k) => l.filter((i) => slaB(i) === k), cl = l.filter((i) => E[i].stage === "closed"), m = cl.filter((i) => slaB(i) === "met"), x = cl.filter((i) => slaB(i) === "missed"), op = l.filter((i) => E[i].stage !== "closed"), d = m.length + x.length;
     const ob = (k) => op.filter((i) => slaB(i) === k);
-    return "<tr" + (tot ? ' style="font-weight:600"' : "") + "><td>" + esc(lbl) + "</td>" + (mode === "full" ? n(l, lbl) + n(m, lbl + ", met") + n(x, lbl + ", missed") + '<td class="num"><b>' + (d ? Math.round(m.length / d * 100) + "%" : "—") + "</b></td>" : "") +
-      n(ob("breached"), lbl + ", breached") + n(ob("risk"), lbl + ", about to breach") + n(ob("ontrack"), lbl + ", not yet breached") + (mode === "full" ? n(ob("paused"), lbl + ", paused with Swire") : "") + "</tr>"; };
+    return "<tr" + (tot ? ' style="font-weight:600;background:var(--paper)"' : "") + "><td>" + (typeof lbl === "object" ? "<b>" + esc(lbl.t) + '</b><div class="dim small">' + esc(lbl.s) + "</div>" : esc(lbl)) + "</td>" + (mode === "full" ? n(l, ttl) + n(m, ttl + ", met") + n(x, ttl + ", missed") + '<td class="num"><b>' + (d ? Math.round(m.length / d * 100) + "%" : "—") + "</b></td>" : "") +
+      n(ob("breached"), ttl + ", breached") + n(ob("risk"), ttl + ", about to breach") + n(ob("ontrack"), ttl + ", not yet breached") + (mode === "full" ? n(ob("paused"), ttl + ", paused with Swire") : "") + "</tr>"; };
   return '<div class="panel ctr"><div class="sec-h" style="margin-top:0">SLA by contract</div><div class="note" style="margin:0 0 6px">Each ticket is measured on the calendar of the contract it was created under (SLA Tracker › Settings › Client calendars).</div><div class="tw"><table><thead><tr><th>Contract</th>' +
     (mode === "full" ? "<th>Tickets</th><th>Closed: met</th><th>Closed: missed</th><th>Met %</th>" : "") + "<th>Breached</th><th>About to breach</th><th>Not yet breached</th>" + (mode === "full" ? "<th>Paused, with Swire</th>" : "") + "</tr></thead><tbody>" +
-    G.map((g) => row(g.label, g.items)).join("") + row("All", idx, true) + "</tbody></table></div></div>";
+    G.map((g) => row({ t: g.title, s: g.cal + " · " + g.period }, g.items)).join("") + row("Swire Shipping total", [].concat(...G.map((g) => g.items)), true) + "</tbody></table></div></div>";
 }
 function slaOfT(t) { if (!t) return null; if (SLAC[t.key]) return SLAC[t.key]; const x = L && L.ready() ? L.get(t._row) : { state: "loading" }; SLAC[t.key] = x; return x; }
 function slaOf(i) { return slaOfT(T[i]); }
