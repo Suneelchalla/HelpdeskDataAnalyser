@@ -226,6 +226,18 @@ td .z{color:var(--faint)}
 .oi-views button.on{background:#0B2365;color:#fff;box-shadow:0 1px 3px rgba(11,35,101,.3)}.oi-views button:not(.on):hover{color:var(--ink)}
 body.oi-sv #slaBar,body.oi-sv #kpis,body.oi-sv .brief-wrap,body.oi-sv #tabs,body.oi-sv #per,body.oi-sv #cust,body.oi-sv #cmp{display:none!important}
 body.oi-sv #view{margin-top:6px}
+/* ── SLA history of one ticket ── */
+.ov-rows tbody tr[data-ti]{cursor:pointer}.ov-rows tbody tr[data-ti]:hover td{background:var(--paper)}
+.ov2{z-index:410}.sh-b{max-width:1080px}.sh-in{padding:16px 20px 20px;overflow:auto;max-height:calc(100vh - 140px)}
+.sh-sum{font:600 15px var(--sans);color:var(--ink)}.sh-meta{font-size:12.5px;color:var(--muted);margin:4px 0 12px}
+.sh-verdict{border-left:4px solid var(--vc);background:color-mix(in srgb,var(--vc) 8%,transparent);border-radius:8px;padding:10px 14px;margin-bottom:12px}.sh-verdict b{display:block;color:var(--vc);font:700 15px var(--sans)}.sh-verdict span{font-size:12.5px;color:var(--ink2)}
+.sh-chips{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}@media (max-width:900px){.sh-chips{grid-template-columns:repeat(3,1fr)}}
+.sh-chip{border:1px solid var(--line);border-radius:8px;padding:8px 10px}.sh-chip span{display:block;font-size:11px;color:var(--muted)}.sh-chip b{display:block;font:700 14px var(--mono);margin-top:2px}.sh-chip em{display:block;font-style:normal;font-size:11px;color:var(--faint);margin-top:2px}
+.sh-bar{position:relative;height:10px;background:var(--paper);border-radius:6px;margin:14px 0 4px;overflow:visible}.sh-bar i{display:block;height:100%;border-radius:6px}.sh-bar span{position:absolute;top:-3px;width:2px;height:16px;background:var(--ink);transform:translateX(-1px)}
+.sh-bart{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.sh-k{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11.5px;font-weight:600;color:var(--kc);background:color-mix(in srgb,var(--kc) 12%,transparent)}
+.sh-tw td.nw{white-space:nowrap}.sh-hit td{background:#FEF2F2}.sh-x{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background:#DC2626;color:#fff;font:600 10.5px var(--sans)}
+.sh-note{font-size:12px;color:var(--muted);margin-top:10px}.sh-none{border:1px dashed var(--line2);border-radius:10px;padding:16px;color:var(--ink2)}.sh-none p{margin:6px 0 0;font-size:13px}
 /* ── cover page ── */
 .ss-cover{position:relative;aspect-ratio:16/9;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;font-family:Calibri,"Segoe UI",Arial,sans-serif;container-type:inline-size;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .cv-band{position:absolute;left:36%;right:0;top:31%;height:35%;background:#1BA9E1}
@@ -1052,8 +1064,8 @@ function tList(list, cols) {
   cols = cols || ["key", "summary", "project", "svm", "side", "pri", "age", "upd", "sla"];
   var HD = { key: "Key", ctime: "Created", summary: "Summary", project: "Client", svm: "SVM in charge", worker: "Worker", side: "Held by", pri: "Priority", age: "Age", upd: "Last update", sla: "SLA", back: "Came back", res: "Resolved in", rc: "Root cause", fix: "Fix", com: "Comments" };
   var h = '<div class="tw"><table><thead><tr>' + cols.map(function (c) { return '<th' + (/age|upd|res|com/.test(c) ? ' class="num"' : '') + '>' + HD[c] + '</th>'; }).join("") + '</tr></thead><tbody>';
-  list.forEach(function (t) {
-    h += '<tr>' + cols.map(function (c) {
+  list.forEach(function (t, ti) {
+    h += '<tr data-ti="' + ti + '">' + cols.map(function (c) {
       switch (c) {
         case "key": return '<td><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a></td>';
         case "ctime": return '<td class="num" style="white-space:nowrap">' + esc(new Date(t.created + IST).toISOString().slice(11, 16)) + '<div class="z">' + esc(fd(t.created)) + '</div></td>';
@@ -1931,7 +1943,51 @@ function openDrill(i) {
   document.body.appendChild(w.firstChild);
   el("ovX").onclick = closeDrill; el("ov").onclick = function (e) { if (e.target.id === "ov") closeDrill(); };
   el("ovCsv").onclick = function () { csv(d.list, d.title); };
+  el("ov").addEventListener("click", function (e) { if (e.target.closest("a")) return; var tr = e.target.closest("tbody tr[data-ti]"); if (tr) openSlaHist(d.list[+tr.dataset.ti]); });
+  el("ov").classList.add("ov-rows");
   el("ovX").focus();
+}
+/* ══ SLA history of one ticket (for reference, from any ticket list): the SLA Tracker's own calculation —
+   verdict, target, counted / paused time, Help Desk vs Engineering, and every status change with what the clock did ══ */
+function openSlaHist(t) {
+  if (!t) return;
+  var D = L && L.detail ? L.detail(t._raw) : null, info = (D && D.info) || {}, r = D && D.r, bi = D && D.bi, f = D && D.fmt ? D.fmt : function (m) { return Math.round(m) + "m"; };
+  var KN = { hd: "Help Desk", engg: "Engineering", client: "With client · paused", closed: "Closed · stopped" }, KC = { hd: "#0EA5A4", engg: "#6366F1", client: "#D97706", closed: "#64748B" };
+  var fdt = function (ms) { if (ms == null) return "—"; var d = new Date(ms + IST); return fd(ms) + " " + d.toISOString().slice(11, 16); };
+  var h = '<div class="ov ov2" id="ovS" role="dialog" aria-modal="true" aria-label="SLA history ' + esc(t.key) + '"><div class="ovb sh-b"><div class="ovh"><button class="btn" id="ovSBack" title="Back to the list">← Back</button>' +
+    '<h3><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + "</a> · SLA history</h3><span class=\"sp\"></span>" +
+    '<button class="ovx" id="ovSX" aria-label="Close">✕</button></div><div class="sh-in">';
+  h += '<div class="sh-sum">' + esc(t.summary) + '</div><div class="sh-meta">' + [esc(t.project), esc(t.priority || "No priority"), esc(t.type), "Status: <b>" + esc(t.status) + "</b>", "Created " + esc(fdt(t.created)), t.isRes ? "Resolved " + esc(fdt(t.doneAt)) : "Still open"].join(" · ") + "</div>";
+  if (!r) {
+    h += '<div class="sh-none"><b>' + esc(info.label || (info.state === "na" ? "Not tracked for SLA" : "No SLA data")) + "</b><p>" + esc(info.tip || "The status history of this ticket has not been read yet.") + "</p>" +
+      (info.state === "nohist" ? "<p>Use <b>Calculate SLA</b> on the SLA Performance page (or in the SLA Tracker); the history then appears here.</p>" : "") + "</div>";
+  } else {
+    var tone = info.breached ? "#DC2626" : info.atRisk ? "#D97706" : info.state === "met" ? "#059669" : "#2563EB", pctU = Math.min(100, Math.round(r.pct || 0));
+    h += '<div class="sh-verdict" style="--vc:' + tone + '"><b>' + esc(info.label || "") + "</b><span>" + esc(info.tip || "") + "</span></div>";
+    var chip = function (k, v, sub) { return '<div class="sh-chip"><span>' + k + "</span><b>" + v + "</b>" + (sub ? "<em>" + sub + "</em>" : "") + "</div>"; };
+    h += '<div class="sh-chips">' + chip("Target", esc(f(r.targetMin)), esc(t.priority || "") + " · working time") + chip("Counted", esc(f(r.elapsedMin)), Math.round(r.pct || 0) + "% of target") +
+      chip(r.remainingMin >= 0 ? "Left" : "Over by", esc(f(Math.abs(r.remainingMin))), r.isClosed ? "at closure" : "as of now") + chip("Paused with client", esc(f(r.pausedMin)), r.clientRounds + " time" + (r.clientRounds === 1 ? "" : "s") + " with the client") +
+      chip("Help Desk", esc(f(r.hdMin)), "counted") + chip("Engineering", esc(f(r.enggMin)), "counted") +
+      chip(bi && bi.breachedAt ? "Breached at" : bi && bi.breachAt ? "Breaches at" : "Reopened", bi && bi.breachedAt ? esc(fdt(bi.breachedAt)) : bi && bi.breachAt ? esc(fdt(bi.breachAt)) : String(r.reopens), bi && (bi.breachedAt || bi.breachAt) ? "IST" : "times") + "</div>";
+    h += '<div class="sh-bar"><i style="width:' + pctU + "%;background:" + tone + '"></i><span style="left:' + Math.min(100, 100 / Math.max(1, (r.pct || 0) / 100) ) + '%"></span></div><div class="sh-bart">' + Math.round(r.pct || 0) + "% of the target used" + (r.pct > 100 ? " · the line marks the target" : "") + "</div>";
+    /* the timeline: one row per status the ticket was in */
+    var byAt = {}; ((D.entry && D.entry.transitions) || []).forEach(function (x) { byAt[x.t] = x.by || ""; });
+    var crossed = false;
+    h += '<div class="tw sh-tw"><table><thead><tr><th>#</th><th>Status</th><th>Held by · clock</th><th>From</th><th>To</th><th>Changed by</th><th class="num">Time in status</th><th class="num">Counted</th><th class="num">Total counted</th></tr></thead><tbody>' +
+      r.segs.map(function (sg, i) {
+        var hit = !crossed && r.targetMin != null && sg.counted && sg.elapsedAfter >= r.targetMin; if (hit) crossed = true;
+        return '<tr' + (hit ? ' class="sh-hit" title="The SLA target was crossed in this status"' : "") + "><td>" + (i + 1) + "</td><td><b>" + esc(sg.status) + "</b>" + (sg.open ? ' <span class="z">current</span>' : "") + "</td>" +
+          '<td><span class="sh-k" style="--kc:' + (KC[sg.kind] || "#64748B") + '">' + esc(KN[sg.kind] || sg.kind) + "</span></td><td class=\"nw\">" + esc(fdt(sg.start)) + '</td><td class="nw">' + (sg.open ? (sg.kind === "closed" ? "—" : "now") : esc(fdt(sg.end))) + "</td>" +
+          "<td>" + esc(i === 0 ? "created" : (byAt[sg.start] || "—")) + '</td><td class="num">' + (sg.open && sg.kind === "closed" ? '<span class="z">—</span>' : esc(D.fcal ? D.fcal(sg.calMin) : f(sg.calMin))) + '</td><td class="num">' + (sg.counted ? esc(f(sg.bizMin)) : '<span class="z">not counted</span>') + '</td><td class="num"><b>' + esc(f(sg.elapsedAfter)) + "</b>" + (hit ? ' <span class="sh-x">target crossed</span>' : "") + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+    h += '<p class="sh-note">Working time follows ' + esc(D.calText || "the SLA Tracker’s calendar") + ". Time with the client is paused; the clock stops when the ticket is closed and restarts if it is reopened. Same rules as the SLA Tracker.</p>";
+  }
+  h += "</div></div></div>";
+  var w = document.createElement("div"); w.innerHTML = h; document.body.appendChild(w.firstChild);
+  var close = function () { var o = el("ovS"); if (o) o.remove(); var b = el("ovX"); if (b) b.focus(); };
+  el("ovSBack").onclick = close; el("ovSX").onclick = function () { close(); closeDrill(); };
+  el("ovS").onclick = function (e) { if (e.target.id === "ovS") close(); };
+  el("ovSBack").focus();
 }
 function closeDrill() { var o = el("ov"); if (o) o.remove(); }
 function csv(list, title) {
