@@ -289,6 +289,14 @@ body.oi-sv #view{margin-top:6px}
 .ss-slacalc{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}.ss-slacalc .btn{background:#fff;color:#0B2365;border-color:#fff}
 #ssPrintHost .ss-slacalc{display:none}
 .ss-ctr{margin:12px 0 4px}.ss-ctsub{font:normal 10.5px var(--sans);color:#AFC3EA;margin-top:2px}.ss-ctr .ss-mini th.rl{white-space:normal;min-width:260px}
+.ssc{margin:16px 0 6px}.ssc h3{font:600 15px var(--sans);color:#fff;text-align:center;margin:0}.ssc-note{font:12px var(--sans);color:#AFC3EA;text-align:center;margin:2px 0 10px}
+.ssc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.ssc-card{border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-top:3px solid var(--kc);padding:12px 14px;color:#fff}.ssc-tot{background:rgba(255,255,255,.11)}
+.ssc-t{font:700 14px var(--sans)}.ssc-s{font:11.5px var(--sans);color:#AFC3EA;margin-top:2px;min-height:28px}
+.ssc-big{font:800 30px var(--disp);color:var(--kc);margin:8px 0 8px;line-height:1}.ssc-big span{display:block;font:500 11.5px var(--sans);color:#C9D6F2;margin-top:4px}
+.ssc-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;border-top:1px solid rgba(255,255,255,.14);padding-top:8px}
+.ssc-n b{display:block;font:700 16px var(--sans);color:#fff}.ssc-n span{display:block;font:10.5px var(--sans);color:#AFC3EA;line-height:1.2}.ssc-n.click{cursor:pointer;border-radius:6px}.ssc-n.click:hover{background:rgba(255,255,255,.08)}
+#ssPrintHost .ssc-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
 .ss-p3{margin-top:18px}.ss-pv{margin-top:16px;break-inside:avoid;page-break-inside:avoid}.ss-pvh{display:flex;align-items:center;gap:12px;margin-bottom:6px}.ss-pvh h3{font:600 15px var(--sans);color:#fff;margin:0}
 .ss-pvx{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.35);color:#E6ECF8;border-radius:6px;font:500 11.5px var(--sans);padding:3px 9px;cursor:pointer}.ss-pvx:hover{background:rgba(255,255,255,.1)}
 .ss-t.ss-pv1{min-width:0}.ss-pv1 td.ss-pvbar{text-align:left}.ss-pv1 td.ss-pvbar i{display:block;height:10px;background:#5B83C9;border-radius:3px}
@@ -1636,10 +1644,18 @@ function ssSlaPanel(D, clientTxt) {
   h += '<div class="ss-kpis">' + tile("SLA compliance", ssPctTxt(compAll), closed, compAll == null ? "#94A3B8" : compAll >= 90 ? "#7FD1A0" : compAll >= 75 ? "#FBBF24" : "#F87171", "of " + num(closed.length) + " closed tickets") +
     tile("Met", num(A.met.length), A.met, "#7FD1A0", "closed within target") + tile("Missed", num(A.missed.length), A.missed, "#F87171", "closed over target") +
     tile("Open, breached", num(A.breached.length), A.breached, "#EF4444", "past target, still open") + tile("Open, not yet breached", num(A.open.length), A.open, "#FBBF24", "still open, inside target") + "</div>";
+  /* SLA by contract (only when the tickets fall under two or more contracts): one card per contract and the client total */
   var CT = ssSlaContracts(Q);
-  if (CT.length) h += '<div class="ss-box ss-ctr"><h3>SLA by contract <span class="ss-sub">each ticket is measured on the calendar of the contract it was created under; times are working time on that calendar</span></h3><div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">Contract</th><th>Tickets</th><th>Met</th><th>Missed</th><th class="gt">Compliance</th><th>Open, breached</th><th>Open, not yet breached</th></tr></thead><tbody>' +
-    CT.map(function (g) { var o = g.o, all = [].concat(o.met, o.missed, o.breached, o.open, o.nohist || []);
-      return "<tr" + (g.total ? ' class="gt"' : "") + '><th class="rl">' + esc(g.label) + '<div class="ss-ctsub">' + esc(g.sub) + "</div></th>" + cnt(all, g.label) + cnt(o.met, g.label + " — met") + cnt(o.missed, g.label + " — missed") + '<td class="gt">' + ssPctTxt(Q.comp(o)) + "</td>" + cnt(o.breached, g.label + " — open, breached") + cnt(o.open, g.label + " — open, not yet breached") + "</tr>"; }).join("") + "</tbody></table></div></div>";
+  if (CT.length) {
+    var ctTone = function (c) { return c == null ? "#94A3B8" : c >= 90 ? "#7FD1A0" : c >= 75 ? "#FBBF24" : "#F87171"; };
+    var ctN = function (l, lbl, t) { return '<div class="ssc-n' + (l.length ? " click" : "") + '"' + (l.length ? ' data-drill="' + dreg(l, t) + '"' : "") + "><b>" + num(l.length) + "</b><span>" + lbl + "</span></div>"; };
+    h += '<div class="ssc"><h3>SLA by contract</h3><p class="ssc-note">Each ticket is measured on the working calendar of the contract it was created under.</p><div class="ssc-grid">' +
+      CT.map(function (g) { var o = g.o, c = Q.comp(o), closed = o.met.length + o.missed.length;
+        return '<div class="ssc-card' + (g.total ? " ssc-tot" : "") + '" style="--kc:' + ctTone(c) + '"><div class="ssc-t">' + esc(g.label) + '</div><div class="ssc-s">' + esc(g.sub) + "</div>" +
+          '<div class="ssc-big">' + ssPctTxt(c) + '<span>SLA compliance · ' + num(o.met.length) + " of " + num(closed) + " closed</span></div>" +
+          '<div class="ssc-row">' + ctN(o.met, "met", g.label + " — met") + ctN(o.missed, "missed", g.label + " — missed") + ctN(o.breached, "open, breached", g.label + " — open, breached") + ctN(o.open, "open, not yet breached", g.label + " — open, not yet breached") + "</div></div>"; }).join("") +
+      "</div></div>";
+  }
   /* compliance by priority, as bars */
   var pRows = Q.pris.map(function (p) { var o = Q.byP[p]; return { p: p, o: o, c: Q.comp(o), n: o.met.length + o.missed.length }; });
   h += '<div class="ss-g2"><div class="ss-box"><h3>Closed tickets: SLA met vs missed</h3>' + ssSlaChart(D, Q) + "</div>" +
