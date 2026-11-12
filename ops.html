@@ -1743,9 +1743,14 @@ function ssExcel() {
   if (!window.XLSX) { alert("Excel export is not available (the Excel library did not load)."); return; }
   var D = ssData(), ms = D.ms, aoa = [["Support Stats"], ["From " + ms[0].long + " to " + ms[ms.length - 1].long + " · " + (F.clients.length ? F.clients.join(", ") : "All clients") + " · by " + (D.by === "fix" ? "type of fix" : "root cause")], [],
     ["Row Labels"].concat(D.cats, ["Grand Total"])];
-  ms.forEach(function (m, i) { var tot = 0; aoa.push([m.lbl].concat(D.cats.map(function (c) { var n = D.cell[i][c].length; tot += n; return n || ""; }), [tot])); });
-  aoa.push(["Grand Total"].concat(D.tot, [D.list.length]));
-  var ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = [{ wch: 12 }].concat(D.cats.map(function (c) { return { wch: Math.max(8, Math.min(18, c.length + 2)) }; }), [{ wch: 11 }]);
+  /* every number keeps the tickets behind it: DR(list, title) → the count, and a link to those tickets on "Ticket details" */
+  var LINKS = [], SHEETS = {}, DR = function (l, t, blank) { return { __dr: 1, l: l || [], t: t, b: !!blank }; };
+  var fin = function (name, rows) { var k = ssSheetKey(name), on = !SS_INC || !k || ssInc(k);
+    return rows.map(function (r, ri) { return r.map(function (v, ci) { if (v && v.__dr) { if (on && v.l.length) LINKS.push({ s: name, r: ri, c: ci, l: v.l, t: v.t }); return v.l.length || (v.b ? "" : 0); } return v; }); }); };
+  var cat = function (ls) { return [].concat.apply([], ls); };
+  ms.forEach(function (m, i) { aoa.push([m.lbl].concat(D.cats.map(function (c) { return DR(D.cell[i][c], m.long + " — " + c, true); }), [DR(cat(D.cats.map(function (c) { return D.cell[i][c]; })), m.long + " — all")])); });
+  aoa.push(["Grand Total"].concat(D.cats.map(function (c) { return DR(cat(D.cell.map(function (o) { return o[c]; })), c + " — all months"); }), [DR(D.list, "All tickets")]));
+  var ws = XLSX.utils.aoa_to_sheet(fin("Support stats", aoa)); SHEETS["Support stats"] = ws; ws["!cols"] = [{ wch: 12 }].concat(D.cats.map(function (c) { return { wch: Math.max(8, Math.min(18, c.length + 2)) }; }), [{ wch: 11 }]);
   var wb = XLSX.utils.book_new();
   /* first tab: every ticket the report counts (created in these months, same filters), oldest first, key linked to Jira */
   var tl = D.list.slice().sort(function (a, b) { return a.created - b.created; }), mOf = function (t) { for (var i = 0; i < ms.length; i++) if (t.created >= ms[i].a && t.created < ms[i].b) return ms[i].lbl; return ""; };
@@ -1769,30 +1774,54 @@ function ssExcel() {
   tw["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(1, tl.length), c: TH.length - 1 } }) };
   XLSX.utils.book_append_sheet(wb, tw, "All tickets");
   XLSX.utils.book_append_sheet(wb, ws, "Support stats");
-  var X = ssData2(D), L = ms.map(function (m) { return m.lbl; }), cnt = function (arr) { return arr.map(function (l) { return l.length; }); }, sh = function (name, rows) { var w = XLSX.utils.aoa_to_sheet(rows); w["!cols"] = [{ wch: 22 }].concat(L.map(function () { return { wch: 9 }; }), [{ wch: 9 }]); XLSX.utils.book_append_sheet(wb, w, name); };
+  var X = ssData2(D), L = ms.map(function (m) { return m.lbl; }), cnt = function (arr) { return arr.map(function (l) { return l.length; }); }, sh = function (name, rows) { var w = XLSX.utils.aoa_to_sheet(fin(name, rows)); SHEETS[name] = w; w["!cols"] = [{ wch: 22 }].concat(L.map(function () { return { wch: 9 }; }), [{ wch: 9 }]); XLSX.utils.book_append_sheet(wb, w, name); };
   var tsum = function (a) { return a.reduce(function (q, v) { return q + v; }, 0); };
-  sh("Created vs resolved", [["Created vs resolved, open at month end"], [], ["Month"].concat(L, ["Total"]), ["Created"].concat(cnt(X.cre), [tsum(cnt(X.cre))]), ["Resolved"].concat(cnt(X.res), [tsum(cnt(X.res))]), ["Open at month end"].concat(cnt(X.open))]);
-  sh("Request type", [["Request type mix (created)"], [], ["Request type"].concat(L, ["Total"])].concat(X.byType.map(function (se) { var c = cnt(se.l); return [se.name].concat(c, [tsum(c)]); })));
-  sh("Priority", [["Priority mix (created)"], [], ["Priority"].concat(L, ["Total"])].concat(X.byPri.map(function (se) { var c = cnt(se.l); return [se.name].concat(c, [tsum(c)]); })));
-  sh("Type of fix", [["Type of fix (resolved in these months)"], [], ["Type of fix", "Tickets", "Share"]].concat(X.fixes.map(function (f) { return [f.name, f.l.length, X.resAll.length ? Math.round(f.l.length / X.resAll.length * 1000) / 10 + "%" : ""]; })));
-  sh("Year on year", [["Year on year (created)"], [], ["Month"].concat(ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; }), ["Total"]), [X.names[0]].concat(cnt(X.prev), [tsum(cnt(X.prev))]), [X.names[1]].concat(cnt(X.cre), [tsum(cnt(X.cre))])]);
+  var drs = function (arr, what) { return arr.map(function (l, i) { return DR(l, L[i] + " — " + what); }); }, drt = function (arr, what) { return DR(cat(arr), what + " — all months"); };
+  sh("Created vs resolved", [["Created vs resolved, open at month end"], [], ["Month"].concat(L, ["Total"]), ["Created"].concat(drs(X.cre, "created"), [drt(X.cre, "Created")]), ["Resolved"].concat(drs(X.res, "resolved"), [drt(X.res, "Resolved")]), ["Open at month end"].concat(drs(X.open, "open at month end"))]);
+  sh("Request type", [["Request type mix (created)"], [], ["Request type"].concat(L, ["Total"])].concat(X.byType.map(function (se) { return [se.name].concat(drs(se.l, se.name), [drt(se.l, se.name)]); })));
+  sh("Priority", [["Priority mix (created)"], [], ["Priority"].concat(L, ["Total"])].concat(X.byPri.map(function (se) { return [se.name].concat(drs(se.l, se.name), [drt(se.l, se.name)]); })));
+  sh("Type of fix", [["Type of fix (resolved in these months)"], [], ["Type of fix", "Tickets", "Share"]].concat(X.fixes.map(function (f) { return [f.name, DR(f.l, "Type of fix " + f.name + " (resolved)"), X.resAll.length ? Math.round(f.l.length / X.resAll.length * 1000) / 10 + "%" : ""]; })));
+  sh("Year on year", [["Year on year (created)"], [], ["Month"].concat(ms.map(function (m) { return MON_S[new Date(m.a + IST).getUTCMonth()]; }), ["Total"]), [X.names[0]].concat(X.prev.map(function (l, i) { return DR(l, X.pm[i].long + " — created"); }), [DR(cat(X.prev), X.names[0] + " — all months")]), [X.names[1]].concat(X.cre.map(function (l, i) { return DR(l, ms[i].long + " — created"); }), [drt(X.cre, X.names[1])])]);
   var Qx = ssSlaData(D);
   if (Qx.ready && Qx.tracked.length) {
     var SHx = ["Met", "Missed", "Compliance %", "Open, breached", "Open, not yet breached"];
-    var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, o.met.length, o.missed.length, c == null ? "" : c, o.breached.length, o.open.length]; };
+    var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, DR(o.met, lbl + " — SLA met"), DR(o.missed, lbl + " — SLA missed"), c == null ? "" : c, DR(o.breached, lbl + " — open, breached"), DR(o.open, lbl + " — open, not yet breached")]; };
     var sa = [["SLA Performance (resolution against the SLA Tracker targets)"], [], ["Month"].concat(SHx)].concat(ms.map(function (m, i) { return rx(m.lbl, Qx.byM[i]); }), [rx("Total", Qx.all)], [[]], [["Priority"].concat(SHx)], Qx.pris.map(function (p) { return rx(p, Qx.byP[p]); }), [rx("Total", Qx.all)]);
     var CTx = ssInc("contract") ? ssSlaContracts(Qx) : []; if (CTx.length) sa = sa.concat([[]], [["Contract", "Calendar · tickets"].concat(SHx)], CTx.map(function (g) { var r = rx(g.label, g.o); r.splice(1, 0, g.sub); return r; }));
-    var swk = XLSX.utils.aoa_to_sheet(sa); swk["!cols"] = [{ wch: CTx.length ? 52 : 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
+    var swk = XLSX.utils.aoa_to_sheet(fin("SLA", sa)); SHEETS["SLA"] = swk; swk["!cols"] = [{ wch: CTx.length ? 52 : 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
   }
   ssPivots().forEach(function (p, k) {
     var Pv = ssPivot(p, D), rows = p.c
-      ? [[SS_DIM_L[p.r] + " × " + SS_DIM_L[p.c]].concat(Pv.ck, ["Total"])].concat(Pv.rk.map(function (r, i) { return [r].concat(Pv.cell[i].map(function (l) { return l.length || ""; }), [Pv.rowL[i].length]); }), [["Total"].concat(Pv.colL.map(function (l) { return l.length; }), [Pv.all.length])])
-      : [[SS_DIM_L[p.r], "Tickets", "Share"]].concat(Pv.rk.map(function (r, i) { return [r, Pv.rowL[i].length, Pv.all.length ? Math.round(Pv.rowL[i].length / Pv.all.length * 1000) / 10 + "%" : ""]; }), [["Total", Pv.all.length, "100%"]]);
-    var w = XLSX.utils.aoa_to_sheet([[ssPivTitle(p)], []].concat(rows)); w["!cols"] = [{ wch: 26 }].concat(rows[0].slice(1).map(function () { return { wch: 12 }; }));
-    XLSX.utils.book_append_sheet(wb, w, ("P" + (k + 1) + " " + SS_DIM_L[p.r] + (p.c ? " x " + SS_DIM_L[p.c] : "")).replace(/[\\\/\?\*\[\]:]/g, "-").slice(0, 31));
+      ? [[SS_DIM_L[p.r] + " × " + SS_DIM_L[p.c]].concat(Pv.ck, ["Total"])].concat(Pv.rk.map(function (r, i) { return [r].concat(Pv.cell[i].map(function (l, j) { return DR(l, r + " — " + Pv.ck[j], true); }), [DR(Pv.rowL[i], r)]); }), [["Total"].concat(Pv.colL.map(function (l, j) { return DR(l, Pv.ck[j]); }), [DR(Pv.all, "All tickets")])])
+      : [[SS_DIM_L[p.r], "Tickets", "Share"]].concat(Pv.rk.map(function (r, i) { return [r, DR(Pv.rowL[i], SS_DIM_L[p.r] + " " + r), Pv.all.length ? Math.round(Pv.rowL[i].length / Pv.all.length * 1000) / 10 + "%" : ""]; }), [["Total", DR(Pv.all, "All tickets"), "100%"]]);
+    var pname = ("P" + (k + 1) + " " + SS_DIM_L[p.r] + (p.c ? " x " + SS_DIM_L[p.c] : "")).replace(/[\\\/\?\*\[\]:]/g, "-").slice(0, 31);
+    var w = XLSX.utils.aoa_to_sheet(fin(pname, [[ssPivTitle(p)], []].concat(rows))); SHEETS[pname] = w; w["!cols"] = [{ wch: 26 }].concat(rows[0].slice(1).map(function () { return { wch: 12 }; }));
+    XLSX.utils.book_append_sheet(wb, w, pname);
   });
   var ex = XLSX.utils.aoa_to_sheet([["SLA columns on the All tickets sheet"], ["Same calculation as the SLA Tracker: resolution SLA, its targets per priority and client, its business calendar, and the clock paused while the ticket is with the client."], [], ["Column", "What it means"]].concat(SS_SLA_XH.map(function (x) { return [x[0], x[1]]; })));
   ex["!cols"] = [{ wch: 30 }, { wch: 120 }]; XLSX.utils.book_append_sheet(wb, ex, "SLA columns explained");
+  /* "Ticket details": one block per number (title, "← back", the tickets); every number links to its block.
+     A number that is every ticket of the report links to "All tickets" instead of repeating them all. */
+  if (LINKS.length) {
+    var DH = ["Key", "Summary", "Client", "Request type", "Priority", "Status", "Type of fix", "Root cause", "Created", "Resolved", "SLA"], det = [["Ticket details behind every number"], ["Click any number on the other sheets to jump to its tickets here; “← back” returns to that number. The number of rows in a block is the number you clicked."], []], keyRows = [];
+    var ref = function (sn, r, c) { return "#'" + sn.replace(/'/g, "''") + "'!" + XLSX.utils.encode_cell({ r: r, c: c }); };
+    LINKS.forEach(function (x) {
+      if (x.l === D.list) { x.target = ref("All tickets", 0, 0); return; }
+      x.row = det.length; det.push([x.t + " · " + x.l.length.toLocaleString() + " ticket" + (x.l.length === 1 ? "" : "s"), "← back to " + x.s]); det.push(DH);
+      x.l.slice().sort(function (a, b) { return a.created - b.created; }).forEach(function (t) { keyRows.push([det.length, t.key]); var c = ssSlaOf(t);
+        det.push([t.key, t.summary, t.project, t.type, t.priority, t.status, t.fix || SS_BLANK, t.rootCause || SS_BLANK, dt(t.created), t.isRes ? dt(t.doneAt) : "", c ? SS_SLA_L[c] : ""]); });
+      det.push([]);
+    });
+    var dws = XLSX.utils.aoa_to_sheet(det, { cellDates: true, dateNF: "dd-mmm-yyyy hh:mm" });
+    dws["!cols"] = [{ wch: 44 }, { wch: 60 }, { wch: 22 }, { wch: 16 }, { wch: 11 }, { wch: 24 }, { wch: 22 }, { wch: 20 }, { wch: 17 }, { wch: 17 }, { wch: 22 }];
+    keyRows.forEach(function (kr) { var c = dws[XLSX.utils.encode_cell({ r: kr[0], c: 0 })]; if (c) c.l = { Target: JIRA + encodeURIComponent(kr[1]), Tooltip: "Open in Jira" }; });
+    LINKS.forEach(function (x) {
+      var src = SHEETS[x.s] || (x.s === "Support stats" ? ws : null), cell = src && src[XLSX.utils.encode_cell({ r: x.r, c: x.c })];
+      if (cell) cell.l = { Target: x.target || ref("Ticket details", x.row, 0), Tooltip: "Show these " + x.l.length + " tickets" };
+      if (x.row != null) { var bc = dws[XLSX.utils.encode_cell({ r: x.row, c: 1 })]; if (bc) bc.l = { Target: ref(x.s, x.r, x.c), Tooltip: "Back to the number" }; }
+    });
+    XLSX.utils.book_append_sheet(wb, dws, "Ticket details");
+  }
   XLSX.writeFile(wb, ssFileName() + ".xlsx");
 }
 /* ── PowerPoint (editable) export: three 16:9 slides in the support-slide style, every chart a native PowerPoint chart
