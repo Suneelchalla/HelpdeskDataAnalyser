@@ -1790,12 +1790,29 @@ function _mkSheet(rows,widths){
   var ws=XLSX.utils.aoa_to_sheet(aoa);
   rows.forEach(function(r,ri){r.forEach(function(c,ci){
     if(c&&typeof c==="object"&&c.s){var addr=XLSX.utils.encode_cell({r:ri,c:ci});if(ws[addr])ws[addr].s=_ST[c.s]||c.s;}
+    if(c&&typeof c==="object"&&c.dr){_DRQ.push({ws:ws,addr:XLSX.utils.encode_cell({r:ri,c:ci}),dr:c.dr});}
     else{var addr2=XLSX.utils.encode_cell({r:ri,c:ci});if(ws[addr2]&&!ws[addr2].s)ws[addr2].s=_ST.n;}
   });});
   if(widths)ws["!cols"]=widths.map(function(w){return{wch:w};});
   return ws;
 }
 function _v(val,sty){return{v:val==null?"":val,s:sty};}
+/* drill-through: a count that keeps the tickets behind it. In the downloaded file the number links to those tickets:
+   to a sheet that already lists exactly them (go), or to a block on "Ticket Details". val = the number shown, when it
+   is not simply the list's length (kept as it was). _drFinish(wb) adds the sheet and the links. */
+var _DRQ=[];
+function _vd(list,sty,title,go,val){list=list||[];return{v:val==null?list.length:val,s:sty,dr:{l:list,t:title,go:go}};}
+function _drFinish(wb){
+  var q=_DRQ.filter(function(x){return x.dr.l.length||x.dr.go;});_DRQ=[];if(!q.length)return;
+  var nameOf=function(ws){for(var n in wb.Sheets)if(wb.Sheets[n]===ws)return n;return "";};
+  var rows=[[_v("TICKET DETAILS | the tickets behind every number","tt")],[_v("Click a number on the other sheets to jump to its tickets here; \u2190 back returns to it. The rows in a block are the number you clicked.","mt")],[""]];
+  q.forEach(function(x){x.sn=nameOf(x.ws);if(x.dr.go){x.target="#'"+x.dr.go+"'!A1";return;}
+    x.row=rows.length;rows.push([_v(x.dr.t+" | "+x.dr.l.length+" ticket"+(x.dr.l.length===1?"":"s"),"vh"),_v("\u2190 back to "+x.sn,"lk")]);rows.push(_thdr());
+    x.dr.l.slice().sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);}).forEach(function(t,i){rows.push(_trow(t,i%2));});rows.push([""]);});
+  var dws=null;if(q.some(function(x){return x.row!=null;})){dws=_mkSheet(rows,_DW);XLSX.utils.book_append_sheet(wb,dws,"Ticket Details");}
+  q.forEach(function(x){var c=x.ws[x.addr];if(c)c.l={Target:x.target||("#'Ticket Details'!A"+(x.row+1)),Tooltip:x.dr.go?"Open the "+x.dr.go+" sheet":"Show these "+x.dr.l.length+" tickets"};
+    if(x.row!=null&&dws){var b=dws[XLSX.utils.encode_cell({r:x.row,c:1})];if(b)b.l={Target:"#'"+x.sn+"'!"+x.addr,Tooltip:"Back to the number"};}});
+}
 function _xlDl(wb,fname){var out=XLSX.write(wb,{bookType:"xlsx",type:"array"});var b=new Blob([out],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=fname;a.click();URL.revokeObjectURL(u);}
 /* Ticket detail row builder */
 function _trow(t,alt,reason){
@@ -1819,28 +1836,30 @@ function generateEnggReport(p){
   var avgCA=N?Math.round(totCA/N):0,avgUA=N?Math.round(totUA/N):0;
   var icm={};tix.forEach(function(t){var sv=String(t["SVM In Charge"]||"").trim();if(!sv||sv.toLowerCase()==="nan")sv="(Unassigned)";if(!icm[sv])icm[sv]={n:0,bkC:[0,0,0,0,0],tCA:0,tUA:0,pri:{}};var m=icm[sv];m.n++;var ca=ds(t.Created),ua=idle(t);m.bkC[abk(ca)]++;m.tCA+=(ca===999?0:ca);m.tUA+=(ua===999?0:ua);m.pri[t.Priority]=(m.pri[t.Priority]||0)+1;});
   var ick=Object.keys(icm).sort(function(a,b){return icm[b].n-icm[a].n;});
-  var wb=XLSX.utils.book_new();
+  var wb=XLSX.utils.book_new();_DRQ=[];
   /* Summary */
   var s1=[];s1.push([_v("ENGINEERING FOLLOW-UP | Incidents & Service Requests Only | Pending with Engineering","tt"),_v("","tt"),_v("","tt")]);
   s1.push([_v("Generated: "+today,"mt"),_v("","mt"),_v("From: SVM Help Desk | To: Engineering Team","mt")]);
   s1.push([_v("Source: "+fn,"mt"),_v("","mt"),_v("","mt")]);s1.push(["","",""]);
   s1.push([_v("OVERVIEW","sh"),_v("Count","sh"),_v("Notes","sh")]);
-  s1.push([_v("Total with Engineering","b"),_v(N,"lk"),_v("All tickets with dev/engineering")]);
-  s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"a"),_v(fires.length,"lk"),_v(fires.length?"URGENT - see Fires tab":"None","a")]);
-  s1.push([_v("Danger Zone (90+ days)",danger.length?"wa":"a"),_v(danger.length,"lk"),_v("See Danger Zone tab","a")]);
+  s1.push([_v("Total with Engineering","b"),_vd(tix,"lk","Total with Engineering","All Engg Tickets"),_v("All tickets with dev/engineering")]);
+  s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"a"),_vd(fires,"lk","Fires","Fires"),_v(fires.length?"URGENT - see Fires tab":"None","a")]);
+  s1.push([_v("Danger Zone (90+ days)",danger.length?"wa":"a"),_vd(danger,"lk","Danger Zone","Danger Zone"),_v("See Danger Zone tab","a")]);
   s1.push([_v("Avg Age Created / Updated","n"),_v(avgCA+"d / "+avgUA+"d","nr"),""]);
-  s1.push([_v("SLA Breaches","a"),_v(slaBr,"ar"),_v("Same calculation as the SLA Tracker","a")]);s1.push(["","",""]);
+  s1.push([_v("SLA Breaches","a"),_vd(tix.filter(function(t){return checkSLA(t).anyBreach;}),"ar","SLA breaches"),_v("Same calculation as the SLA Tracker","a")]);s1.push(["","",""]);
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
-  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_vd(tix.filter(function(t){return t.Priority===pr;}),sr,"Priority "+pr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
   s1.push(["","",""]);s1.push([_v("AGING (Created)","sh"),_v("Count","sh"),_v("%","sh")]);
-  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(l,si),_v(bkC[i],sr),_v(N?Math.round(bkC[i]/N*100)+"%":"0%",sr)]);});
+  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(l,si),_vd(tix.filter(function(t){return abk(ds(t.Created))===i;}),sr,"Age (created) "+l),_v(N?Math.round(bkC[i]/N*100)+"%":"0%",sr)]);});
   s1.push(["","",""]);s1.push([_v("AGING (Updated)","sh"),_v("Count","sh"),_v("%","sh")]);
-  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(l,si),_v(bkU[i],sr),_v(N?Math.round(bkU[i]/N*100)+"%":"0%",sr)]);});
+  ["< 7d","7-30d","31-60d","61-90d","90+d"].forEach(function(l,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(l,si),_vd(tix.filter(function(t){return abk(idle(t))===i;}),sr,"Age (updated) "+l),_v(N?Math.round(bkU[i]/N*100)+"%":"0%",sr)]);});
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,14,55]),"Summary");
   /* InCharge Summary */
   var s2=[];s2.push([_v("SVM In Charge","tl"),_v("Total","th"),_v("Show Stopper","th"),_v("Critical","th"),_v("High","th"),_v("Medium","th"),_v("Low","th"),_v("<7d","th"),_v("7-30d","th"),_v("31-60d","th"),_v("61-90d","th"),_v("90+d","th"),_v("Avg Created","th"),_v("Avg Updated","th")]);
-  ick.forEach(function(k,i){var m=icm[k],si=i%2?"a":"n",sr=i%2?"ar":"nr";s2.push([_v(k,si),_v(m.n,i%2?"lka":"lk"),_v(m.pri["Show Stopper"]||0,sr),_v(m.pri["Critical"]||0,sr),_v(m.pri["High"]||0,sr),_v(m.pri["Medium"]||0,sr),_v(m.pri["Low"]||0,sr),_v(m.bkC[0],sr),_v(m.bkC[1],sr),_v(m.bkC[2],sr),_v(m.bkC[3],sr),_v(m.bkC[4],sr),_v((m.n?Math.round(m.tCA/m.n):0)+"d",sr),_v((m.n?Math.round(m.tUA/m.n):0)+"d",sr)]);});
-  s2.push([_v("TOTAL","tot"),_v(N,"totr"),_v(pri["Show Stopper"]||0,"totr"),_v(pri["Critical"]||0,"totr"),_v(pri["High"]||0,"totr"),_v(pri["Medium"]||0,"totr"),_v(pri["Low"]||0,"totr"),_v(bkC[0],"totr"),_v(bkC[1],"totr"),_v(bkC[2],"totr"),_v(bkC[3],"totr"),_v(bkC[4],"totr"),_v(avgCA+"d","totr"),_v(avgUA+"d","totr")]);
+  var _ic=function(t){var sv=String(t["SVM In Charge"]||"").trim();return !sv||sv.toLowerCase()==="nan"?"(Unassigned)":sv;},_PR=["Show Stopper","Critical","High","Medium","Low"],_AB=["<7d","7-30d","31-60d","61-90d","90+d"];
+  var _row=function(L,lbl,sty){return _PR.map(function(pr){return _vd(L.filter(function(t){return t.Priority===pr;}),sty,lbl+" \u2014 "+pr);}).concat(_AB.map(function(ab,n){return _vd(L.filter(function(t){return abk(ds(t.Created))===n;}),sty,lbl+" \u2014 created "+ab);}));};
+  ick.forEach(function(k,i){var m=icm[k],si=i%2?"a":"n",sr=i%2?"ar":"nr",L=tix.filter(function(t){return _ic(t)===k;});s2.push([_v(k,si),_vd(L,i%2?"lka":"lk",k)].concat(_row(L,k,sr),[_v((m.n?Math.round(m.tCA/m.n):0)+"d",sr),_v((m.n?Math.round(m.tUA/m.n):0)+"d",sr)]));});
+  s2.push([_v("TOTAL","tot"),_vd(tix,"totr","All tickets","All Engg Tickets")].concat(_row(tix,"All","totr"),[_v(avgCA+"d","totr"),_v(avgUA+"d","totr")]));
   XLSX.utils.book_append_sheet(wb,_mkSheet(s2,[22,7,10,8,6,8,5,5,6,7,7,6,11,11]),"InCharge Summary");
   /* InCharge Details */
   var s3=[];ick.forEach(function(name){var m=icm[name];s3.push(Array(14).fill(""));
@@ -1857,6 +1876,7 @@ function generateEnggReport(p){
   /* All */
   var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return idle(b)-idle(a);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
   XLSX.utils.book_append_sheet(wb,_mkSheet(sa,_DW),"All Engg Tickets");
+  _drFinish(wb);
   _xlDl(wb,"Engg-Followup-"+new Date().toISOString().slice(0,10)+".xlsx");
 }
 
@@ -1865,20 +1885,20 @@ function generateDailyReport(p){
   var flt=p.flt,st=p.st,slaData=p.slaData,prioDist=p.prioDist,fn=p.fn;
   var today=new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   var fires=[].concat(st.hd,st.cl,st.eng).filter(function(t){var pr=t.Priority;return(pr==="Show Stopper"||pr==="Critical")&&idle(t)>14;}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);});
-  var wb=XLSX.utils.book_new();
+  var wb=XLSX.utils.book_new();_DRQ=[];
   /* Summary */
   var s1=[];s1.push([_v("HD FOLLOW-UP | DAILY STATUS REPORT","ttb"),_v("","ttb"),_v("","ttb")]);
   s1.push([_v("Generated: "+today+" | Source: "+fn,"mt"),_v("","mt"),_v("","mt")]);s1.push(["","",""]);
   s1.push([_v("OVERVIEW","sh"),_v("Count","sh"),_v("Notes","sh")]);
-  s1.push([_v("Total Open","b"),_v(st.n,"lk"),_v("All non-closed tickets")]);
-  s1.push([_v("HD Action Required","a"),_v(st.hd.length,"lka"),_v("Needs our action","a")]);
-  s1.push([_v("Client Follow-up","n"),_v(st.cl.length,"lk"),_v("Awaiting client")]);
-  s1.push([_v("Engineering Follow-up","a"),_v(st.eng.length,"lka"),_v("With dev team","a")]);
+  s1.push([_v("Total Open","b"),_vd(flt,"lk","Total open","All Open",st.n),_v("All non-closed tickets")]);
+  s1.push([_v("HD Action Required","a"),_vd(st.hd,"lka","HD action","HD Action"),_v("Needs our action","a")]);
+  s1.push([_v("Client Follow-up","n"),_vd(st.cl,"lk","Client follow-up","Client Followup"),_v("Awaiting client")]);
+  s1.push([_v("Engineering Follow-up","a"),_vd(st.eng,"lka","Engineering follow-up","Engineering"),_v("With dev team","a")]);
   s1.push([_v("On-Hold / Invoice","n"),_v(st.hold.length+" / "+st.inv.length,"nr"),""]);
-  s1.push([_v("Danger Zone (90+d)","a"),_v(st.dng,"lka"),_v("","a")]);
+  s1.push([_v("Danger Zone (90+d)","a"),_vd(flt.filter(function(t){return idle(t)>=90;}),"lka","Danger Zone","Danger Zone",st.dng),_v("","a")]);
   s1.push([_v("Average Age","n"),_v(st.avg+"d","nr"),""]);s1.push(["","",""]);
   s1.push([_v("ATTENTION","sh"),_v("Count","sh"),_v("","sh")]);
-  s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"n"),_v(fires.length,"lk"),fires.length?"Immediate escalation needed":"None"]);s1.push(["","",""]);
+  s1.push([_v("Fires (Crit/SS > 14d)",fires.length?"wa":"n"),_vd(fires,"lk","Fires","Fires"),fires.length?"Immediate escalation needed":"None"]);s1.push(["","",""]);
   s1.push([_v("SLA","sh"),_v("","sh"),_v("","sh")]);
   var so=slaData.open||{breached:0,atRisk:0,paused:0,onTrack:0,nohist:0},sr=slaData.range||{};
   s1.push([_v("Open — breached","a"),_v(so.breached,"ar"),_v("Over target, still open","a")]);
@@ -1896,6 +1916,7 @@ function generateDailyReport(p){
   var sd=[];if(dg.length){sd.push(_thdr("oth","otl","Why Danger"));dg.forEach(function(t){var ca=ds(t.Created),ua=idle(t);sd.push(_trow(t,false,ca+"d old | Not updated "+ua+"d"));});}else sd.push([_v("None","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(sd,_DW),"Danger Zone");
   dsh("All Open",flt.slice());
+  _drFinish(wb);
   _xlDl(wb,"HD-Daily-Report-"+new Date().toISOString().slice(0,10)+".xlsx");
 }
 
@@ -1906,20 +1927,21 @@ function generateClientReport(p){
   var pri={"Show Stopper":0,"Critical":0,"High":0,"Medium":0,"Low":0},bkU=[0,0,0,0,0],totUA=0;
   tix.forEach(function(t){pri[t.Priority]=(pri[t.Priority]||0)+1;var ua=idle(t);bkU[abk(ua)]++;totUA+=(ua===999?0:ua);});
   var urgent=tix.filter(function(t){return t.Priority==="Show Stopper"||t.Priority==="Critical"||t.Priority==="High";}).sort(function(a,b){return prioRank(a.Priority)-prioRank(b.Priority)||idle(b)-idle(a);});
-  var wb=XLSX.utils.book_new();
+  var wb=XLSX.utils.book_new();_DRQ=[];
   var s1=[];s1.push([_v("PENDING TICKETS | "+project+" - Awaiting Your Response","tto"),_v("","tto"),_v("","tto")]);
   s1.push([_v("Generated: "+today+" | From: SVM Help Desk","mt"),_v("","mt"),_v("","mt")]);s1.push(["","",""]);
   s1.push([_v("STATUS","sh"),_v("Count","sh"),_v("","sh")]);
-  s1.push([_v("Total Pending","b"),_v(N,"lk"),_v("All tickets awaiting your response")]);
-  s1.push([_v("Urgent (High+)","a"),_v(urgent.length,"lka"),_v("Needs immediate attention","a")]);s1.push(["","",""]);
+  s1.push([_v("Total Pending","b"),_vd(tix,"lk","Total pending","All Tickets"),_v("All tickets awaiting your response")]);
+  s1.push([_v("Urgent (High+)","a"),_vd(urgent,"lka","Urgent","Urgent"),_v("Needs immediate attention","a")]);s1.push(["","",""]);
   s1.push([_v("PRIORITY","sh"),_v("Count","sh"),_v("%","sh")]);
-  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_v(pri[pr]||0,sr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
+  ["Show Stopper","Critical","High","Medium","Low"].forEach(function(pr,i){var si=i%2?"a":"n",sr=i%2?"ar":"nr";s1.push([_v(pr,si),_vd(tix.filter(function(t){return t.Priority===pr;}),sr,"Priority "+pr),_v(N?Math.round((pri[pr]||0)/N*100)+"%":"0%",sr)]);});
   XLSX.utils.book_append_sheet(wb,_mkSheet(s1,[34,12,40]),"Summary");
   var su=[];su.push(_thdr("rth","rtl","Action Needed"));urgent.forEach(function(t,i){su.push(_trow(t,i%2,"Please respond - "+t.Priority+", "+idle(t)+"d since last update"));});
   if(!urgent.length)su.push([_v("No urgent tickets","ok")]);
   XLSX.utils.book_append_sheet(wb,_mkSheet(su,_DW),"Urgent");
   var sa=[];sa.push(_thdr());tix.slice().sort(function(a,b){return idle(b)-idle(a);}).forEach(function(t,i){sa.push(_trow(t,i%2));});
   XLSX.utils.book_append_sheet(wb,_mkSheet(sa,_DW),"All Tickets");
+  _drFinish(wb);
   _xlDl(wb,project.replace(/[^a-zA-Z0-9]/g,"-").substring(0,30)+"-Pending-"+new Date().toISOString().slice(0,10)+".xlsx");
 }
 
