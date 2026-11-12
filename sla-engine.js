@@ -30,7 +30,7 @@
   ];
   /* Chennai office holidays 2026 (default holiday list). HOL_SEED marks a saved configuration that already has them:
      a configuration saved before they existed gets them added once; removing one afterwards (and saving) sticks. */
-  var HOL_SEED = "chennai-2026";
+  var HOL_SEED = "chennai-2026", HOURS_SEED = "0930-1830";
   var DEFAULT_HOLIDAYS = [
     { date: "2026-01-01", name: "New Year's Day" }, { date: "2026-01-15", name: "Pongal" }, { date: "2026-01-26", name: "Republic Day" },
     { date: "2026-03-21", name: "Ramzan" }, { date: "2026-04-03", name: "Good Friday" }, { date: "2026-04-14", name: "Tamil New Year" },
@@ -40,8 +40,8 @@
   ];
   var DEFAULT_CONFIG = {
     /* Default working calendar, used by every client that has no calendar of its own. */
-    businessStart: "10:00",
-    businessEnd: "18:00",
+    businessStart: "09:30",             // office hours 09:30–18:30 IST (1 working day = 9 h)
+    businessEnd: "18:30",
     workDays: [1, 2, 3, 4, 5],
     holidays: DEFAULT_HOLIDAYS.map(function (h) { return { date: h.date, name: h.name }; }),   // Chennai 2026 (above)
     /* Own calendar for specific clients, keyed by ticket-key prefix, e.g. Swire on a 24/7 contract:
@@ -91,6 +91,10 @@
       c.holidays.sort(function (x, y) { var a = String(typeof x === "string" ? x : x.date), b = String(typeof y === "string" ? y : y.date); return a < b ? -1 : a > b ? 1 : 0; });
     }
     c.holSeed = HOL_SEED;
+    /* office hours changed from 10:00–18:00 to 09:30–18:30: a configuration still on the old default moves once;
+       hours anyone chose themselves (anything else, or set again after this) are kept */
+    if (saved.hoursSeed !== HOURS_SEED && c.businessStart === "10:00" && c.businessEnd === "18:00") { c.businessStart = "09:30"; c.businessEnd = "18:30"; }
+    c.hoursSeed = HOURS_SEED;
     if (Array.isArray(saved.issueTypes) && saved.issueTypes.length) c.issueTypes = saved.issueTypes.slice();
     /* 60 was the earlier built-in default; a 60 that was never set by hand (no frTargetSet) becomes the real 30-minute SLA */
     if (typeof saved.frTargetMin === "number" && saved.frTargetMin > 0 && (saved.frTargetSet || saved.frTargetMin !== 60)) c.frTargetMin = saved.frTargetMin;
