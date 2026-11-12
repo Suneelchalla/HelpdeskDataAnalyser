@@ -1917,7 +1917,7 @@ async function hoWorkbook(d) {
         { v: Math.round((ageOf(t) || 0) / 144) / 10, s: S.num }, updDays(t) === "" ? "" : { v: updDays(t), s: S.num }]; })) };
   /* ── pivots: row labels × column labels, every count a COUNTIFS on a list sheet (cached value filled in too) ── */
   const SRC = { open: { name: "All open", C, n: Math.max(2, open.length + 1), idx: open }, esc: { name: "Escalations", C: EC, n: Math.max(2, escIdx.length + 1), idx: escIdx } };
-  const rows = [];
+  const rows = [], DRL = [];   /* DRL: every count with the tickets behind it → a link to them on "Ticket details" */
   const push = (r) => { rows.push(r); return rows.length; };
   push([{ v: "Swire Phoenix Hypercare handover" + (d.w.general ? "" : ", " + d.w.label), s: S.title }]);
   push([{ v: "Position at " + fdt(NOW) + " IST. Counts as at the handover time. The tickets are on the “Pending with Help Desk” and “Pending with Engineering” sheets.", s: S.sub }]);
@@ -1928,7 +1928,8 @@ async function hoWorkbook(d) {
     rowVals.forEach((rv) => {
       const r = rows.length + 1, cells = [{ v: rv, s: S.lbl }];
       colVals.forEach((cv, k) => {
-        cells.push({ v: src.idx.filter((i) => rowTest(i, rv) && colTest(i, cv)).length, s: S.cellInt });
+        const L = src.idx.filter((i) => rowTest(i, rv) && colTest(i, cv)), cell = { v: L.length, s: S.cellInt };
+        if (L.length) DRL.push({ cell, list: L, title: rv + " — " + cv, r, c: k + 1 }); cells.push(cell);
       });
       cells.push({ f: "SUM(B" + r + ":" + XL.col(colVals.length) + r + ")", v: cells.slice(1).reduce((m, c) => m + c.v, 0), s: S.totInt });
       push(cells);
@@ -1946,8 +1947,10 @@ async function hoWorkbook(d) {
   push([]); push([{ v: "Ticket count", s: S.title }]);
   push([{ v: "Tab", s: S.phead }, { v: "Tickets", s: S.phead }]);
   const c0 = rows.length + 1;
-  push([{ v: "Pending with Help Desk", s: S.lbl }, { v: d.hd.length, s: S.cellInt }]);
-  push([{ v: "Pending with Engineering", s: S.lbl }, { v: d.engg.length, s: S.cellInt }]);
+  const goHd = { v: d.hd.length, s: S.cellInt }, goEn = { v: d.engg.length, s: S.cellInt };
+  if (d.hd.length) DRL.push({ cell: goHd, go: "Pending with Help Desk" }); if (d.engg.length) DRL.push({ cell: goEn, go: "Pending with Engineering" });
+  push([{ v: "Pending with Help Desk", s: S.lbl }, goHd]);
+  push([{ v: "Pending with Engineering", s: S.lbl }, goEn]);
   push([{ v: "Total pending with SVM", s: S.totLbl }, { f: "SUM(B" + c0 + ":B" + (c0 + 1) + ")", v: d.hd.length + d.engg.length, s: S.totInt }]);
   if (d.hd.length) pivot("1. Pending with Help Desk by SVM In Charge × priority", "Same tickets as the “Pending with Help Desk” tab.", SRC.open, "SVM In Charge", uniq(d.hd, svmOf), "Priority", SEV, null, (i, v) => side(i) === "Help Desk" && svmOf(i) === v, pr);
   pivot((d.hd.length ? "2" : "1") + ". Pending with Engineering by SVM In Charge × priority", "Same tickets as the “Pending with Engineering” tab.", SRC.open, "SVM In Charge", uniq(d.engg, svmOf), "Priority", SEV, null, (i, v) => side(i) === "Engineering" && svmOf(i) === v, pr);
@@ -1971,6 +1974,18 @@ async function hoWorkbook(d) {
   };
   const sheets = [summary, bySvm("Pending with Help Desk", d.hd), bySvm("Pending with Engineering", d.engg)];
   if (!d.w.general) sheets.splice(1, 0, listSheet("Created this shift", d.created), listSheet("Closed this shift", d.closed.slice().sort(bySevAge)));
+  /* "Ticket details": one block per number on the Summary (title, ← back, the tickets); each number links to its block */
+  if (DRL.length) {
+    const q = (n) => n.replace(/'/g, "''"), dr = [[{ v: "Ticket details behind every number", s: S.title }], [{ v: "Click a number on the Summary sheet to see its tickets here; ← back returns to it. The rows in a block are the number you clicked.", s: S.sub }], []];
+    DRL.forEach((x) => {
+      if (x.go) { x.cell.f = "HYPERLINK(\"#'" + q(x.go) + "'!A1\"," + x.cell.v + ")"; return; }
+      const at = dr.length + 1;
+      dr.push([{ v: x.title + " · " + x.list.length + " ticket" + (x.list.length === 1 ? "" : "s"), s: S.title }, { f: "HYPERLINK(\"#'Summary'!" + XL.col(x.c) + x.r + "\",\"← back\")", v: "← back", s: S.link }]);
+      dr.push(HEAD.map((h) => ({ v: h, s: S.head }))); x.list.slice().sort(bySevAge).forEach((i) => dr.push(row(i))); dr.push([]);
+      x.cell.f = "HYPERLINK(\"#'Ticket details'!A" + at + "\"," + x.cell.v + ")";
+    });
+    if (dr.length > 3) sheets.push({ name: "Ticket details", rows: dr, cols: WID });
+  }
   return { bytes: await XL.build(sheets), file: hoFileBase(d) + ".xlsx", sheets: sheets.map((s) => s.name + (s.name === "Summary" ? "" : " (" + (s.rows.length - 1) + ")")) };
 }
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
