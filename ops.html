@@ -244,6 +244,9 @@ body.oi-sv #view{margin-top:6px}
 .sh-tt{width:100%;font-size:12.5px}.sh-tt th{padding:4px 6px;font-size:11px}.sh-tt td{padding:4px 6px;border-bottom:1px solid var(--line)}.sh-on td{background:#EEF6FF;font-weight:600}
 .sh-me{display:inline-block;margin-left:4px;padding:0 6px;border-radius:8px;background:#2563EB;color:#fff;font:600 10px var(--sans)}
 .sh-ul{margin:0 0 6px 16px;padding:0;font-size:12.5px;color:var(--ink2);line-height:1.6}.sh-warn{color:#B45309!important}
+.ssp-b{max-width:560px}.ssp-in{padding:14px 18px 16px}.ssp-h{margin:0 0 10px;font-size:13px;color:var(--muted)}.ssp-tools{display:flex;gap:8px;align-items:center;margin-bottom:8px}.ssp-n{margin-left:auto;font-size:12px;color:var(--muted)}
+.ssp-list{display:flex;flex-direction:column;gap:6px;max-height:52vh;overflow:auto}.ssp-it{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer}.ssp-it:hover{background:var(--paper)}
+.ssp-it input{margin-top:3px;width:16px;height:16px}.ssp-it b{display:block;font-size:13.5px}.ssp-it em{display:block;font-style:normal;font-size:12px;color:var(--muted)}.ssp-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 /* ── cover page ── */
 .ss-cover{position:relative;aspect-ratio:16/9;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px;font-family:Calibri,"Segoe UI",Arial,sans-serif;container-type:inline-size;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .cv-band{position:absolute;left:36%;right:0;top:31%;height:35%;background:#1BA9E1}
@@ -1735,6 +1738,8 @@ function tabStats() {
   return h;
 }
 function ssExcel() {
+  if (window.XLSX && XLSX.utils && !XLSX.utils.__ssWrapped) { var app = XLSX.utils.book_append_sheet;
+    XLSX.utils.book_append_sheet = function (w, sh, n) { var k = ssSheetKey(n); if (SS_INC && k && !ssInc(k)) return; return app.call(this, w, sh, n); }; XLSX.utils.__ssWrapped = true; }
   if (!window.XLSX) { alert("Excel export is not available (the Excel library did not load)."); return; }
   var D = ssData(), ms = D.ms, aoa = [["Support Stats"], ["From " + ms[0].long + " to " + ms[ms.length - 1].long + " · " + (F.clients.length ? F.clients.join(", ") : "All clients") + " · by " + (D.by === "fix" ? "type of fix" : "root cause")], [],
     ["Row Labels"].concat(D.cats, ["Grand Total"])];
@@ -1776,7 +1781,7 @@ function ssExcel() {
     var SHx = ["Met", "Missed", "Compliance %", "Open, breached", "Open, not yet breached"];
     var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, o.met.length, o.missed.length, c == null ? "" : c, o.breached.length, o.open.length]; };
     var sa = [["SLA Performance (resolution against the SLA Tracker targets)"], [], ["Month"].concat(SHx)].concat(ms.map(function (m, i) { return rx(m.lbl, Qx.byM[i]); }), [rx("Total", Qx.all)], [[]], [["Priority"].concat(SHx)], Qx.pris.map(function (p) { return rx(p, Qx.byP[p]); }), [rx("Total", Qx.all)]);
-    var CTx = ssSlaContracts(Qx); if (CTx.length) sa = sa.concat([[]], [["Contract", "Calendar · tickets"].concat(SHx)], CTx.map(function (g) { var r = rx(g.label, g.o); r.splice(1, 0, g.sub); return r; }));
+    var CTx = ssInc("contract") ? ssSlaContracts(Qx) : []; if (CTx.length) sa = sa.concat([[]], [["Contract", "Calendar · tickets"].concat(SHx)], CTx.map(function (g) { var r = rx(g.label, g.o); r.splice(1, 0, g.sub); return r; }));
     var swk = XLSX.utils.aoa_to_sheet(sa); swk["!cols"] = [{ wch: CTx.length ? 52 : 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
   }
   ssPivots().forEach(function (p, k) {
@@ -1860,7 +1865,7 @@ function ssDeck(P, D, art) {
   var blank0 = function (v) { return v ? v : ""; };
   /* ── cover: the same layout as the cover page (positions from its CSS, on the 13.333" × 7.5" slide) ── */
   pres.defineSlideMaster({ title: "COVER", background: { color: "FFFFFF" } });
-  var cv = pres.addSlide({ masterName: "COVER" }), ct = ssCoverText(D), SW = 13.333, SH = 7.5, BLUE = "1BA9E1";
+  var cv = ssSlide(pres, "cover", { masterName: "COVER" }), ct = ssCoverText(D), SW = 13.333, SH = 7.5, BLUE = "1BA9E1";
   cv.addShape(pres.ShapeType.rect, { x: 0.36 * SW, y: 0.31 * SH, w: 0.64 * SW, h: 0.35 * SH, fill: { color: BLUE }, line: { color: BLUE, width: 0 }, objectName: "Title band" });
   if (art) cv.addImage({ data: art, x: -0.05 * SW, y: -0.09 * SH, w: 0.52 * SW, h: 0.52 * SW, altText: "Cover picture", objectName: "Cover picture" });
   var CF = "Century Gothic", bx = 0.36 * SW + 0.64 * SW * 0.185, bwid = 0.64 * SW * 0.77, by = 0.31 * SH, bh = 0.35 * SH;
@@ -1878,7 +1883,7 @@ function ssDeck(P, D, art) {
   var bh = 0.34, bw2 = bh * SS_BADGES_AR; cv.addImage({ data: SS_BADGES, x: 0.54 * SW, y: SH - 0.032 * SH - bh, w: bw2, h: bh, altText: "CMMI DEV/3 and ISO/IEC 27001 certified", objectName: "Certifications" });
   cv.addText("All Rights Reserved. Solverminds Solutions & Technologies Pvt. Ltd.", { x: 0.54 * SW + bw2 + 0.25, y: SH - 0.032 * SH - bh, w: SW - (0.54 * SW + bw2 + 0.25) - 0.03 * SW, h: bh, fontFace: "Calibri", fontSize: 8.5, bold: true, color: "8C8C8C", valign: "middle", margin: 0, fit: "shrink", isTextBox: true, objectName: "Rights" });
   /* ── slide 1: Support Stats ── */
-  var s1 = pres.addSlide({ masterName: "SUPPORT" }); head(s1, "Support Stats");
+  var s1 = ssSlide(pres, "stats", { masterName: "SUPPORT" }); head(s1, "Support Stats");
   var mt = D.cell.map(function (o) { return D.cats.reduce(function (s, c) { return s + o[c].length; }, 0); });
   var catVals = function (sel) { var x = ssSel(sel); return ms.map(function (m) { return D.list.filter(function (t) { return t.created >= m.a && t.created < m.b && (t[x.f] || SS_BLANK) === x.v; }).length; }); };
   var v2 = catVals(D.c2), v3 = catVals(D.c3), n = v2.length, trend = v2.slice();
@@ -1903,7 +1908,7 @@ function ssDeck(P, D, art) {
   table(s1, ["Row Labels"].concat(D.cats, ["Grand Total"]), rows1, { x: 0.35, y: 3.65, w: 12.6, first: 0.78, last: 0.6, fs: many ? 7 : 8, rowH: Math.min(0.24, 3.2 / (rows1.length + 2)), totalRow: true, name: "Table: by " + (D.by === "fix" ? "type of fix" : "root cause") });
   s1.addNotes("Tickets created in each month, by " + (D.by === "fix" ? "type of fix" : "root cause") + ". " + clientTxt + ". " + period + ".");
   /* ── slide 2: Support Overview ── */
-  var s2 = pres.addSlide({ masterName: "SUPPORT" }); head(s2, "Support Overview");
+  var s2 = ssSlide(pres, "overview", { masterName: "SUPPORT" }); head(s2, "Support Overview");
   var cre = cnt(X.cre), res = cnt(X.res), opn = cnt(X.open), prv = cnt(X.prev), cn = sum(cre), pn = sum(prv), cw2 = 6.2;
   s2.addChart([{ type: pres.ChartType.bar, data: [{ name: "Created", labels: L, values: cre }, { name: "Resolved", labels: L, values: res }], options: { chartColors: ["5B83C9", "7FD1A0"], barGapWidthPct: 60, showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 7.5, dataLabelFontBold: false, dataLabelColor: "E6ECF8" } },
                { type: pres.ChartType.line, data: [{ name: "Open at month end", labels: L, values: opn }], options: { chartColors: ["FBBF24"], lineSize: 2.5, lineDataSymbol: "circle", lineDataSymbolSize: 6, showValue: true, dataLabelPosition: "t", dataLabelColor: "FDE68A" } }],
@@ -1918,7 +1923,7 @@ function ssDeck(P, D, art) {
   s2.addText(pn ? num(cn) + " tickets vs " + num(pn) + " in the same months of " + X.names[0] + " (" + chg(pn, cn) + ")." : "No tickets in the same months one year earlier.",
     { x: 0.35 + cw2 + 0.2, y: 5.6, w: cw2, h: 0.3, fontFace: FONT, fontSize: 10, color: SOFT, margin: 0, isTextBox: true });
   /* ── slide 3: request type and priority mix, type of fix ── */
-  var s3 = pres.addSlide({ masterName: "SUPPORT" }); head(s3, "Request Type, Priority and Fix");
+  var s3 = ssSlide(pres, "mix", { masterName: "SUPPORT" }); head(s3, "Request Type, Priority and Fix");
   var stack = function (series, title, x) { s3.addChart(pres.ChartType.bar, series.map(function (se) { return { name: se.name, labels: L, values: cnt(se.l) }; }),
     base(title, Object.assign(ax(colTot(series)), { x: x, y: 0.95, w: cw2, h: 3.0, barGrouping: "stacked", barGapWidthPct: 55, chartColors: series.map(function (se) { return se.color.replace("#", ""); }), showLegend: true, showValue: true, dataLabelPosition: "ctr", dataLabelFontSize: 8, objectName: "Chart: " + title }))); };
   stack(X.byType, "Request type mix", 0.35); stack(X.byPri, "Priority mix", 0.35 + cw2 + 0.2);
@@ -1932,7 +1937,7 @@ function ssDeck(P, D, art) {
   /* ── SLA Performance: headline line, met/missed per month (native stacked columns), compliance by priority (native bars), two tables ── */
   var Q = ssSlaData(D);
   if (Q.ready && Q.tracked.length) {
-    var sq = pres.addSlide({ masterName: "SUPPORT" }); head(sq, "SLA Performance"); var A = Q.all, cA = Q.comp(A), ok = A.met.length + A.missed.length;
+    var sq = ssSlide(pres, "sla", { masterName: "SUPPORT" }); head(sq, "SLA Performance"); var A = Q.all, cA = Q.comp(A), ok = A.met.length + A.missed.length;
     sq.addText([{ text: "SLA compliance " + ssPctTxt(cA == null ? null : Math.round(cA)), options: { bold: true, color: cA == null ? "C9D6F2" : cA >= 90 ? "7FD1A0" : cA >= 75 ? "FBBF24" : "F87171", fontSize: 16 } },
       { text: "   of " + num(ok) + " closed  ·  Met " + num(A.met.length) + "  ·  Missed " + num(A.missed.length) + "  ·  Open, breached " + num(A.breached.length) + "  ·  Open, not yet breached " + num(A.open.length), options: { color: "E6ECF8", fontSize: 11 } }],
       { x: 0.35, y: 0.88, w: 12.6, h: 0.4, fontFace: FONT, margin: 0, valign: "middle", isTextBox: true, objectName: "SLA headline" });
@@ -1947,7 +1952,7 @@ function ssDeck(P, D, art) {
     table(sq, ["Month"].concat(SH), ms.map(function (m, i) { return slaRow(m.lbl, Q.byM[i]); }).concat([slaRow("Total", A)]), { x: 0.35, y: 4.35, w: 6.2, first: 0.8, noTotal: true, fs: 7, tight: true, rowH: Math.min(0.2, 2.55 / (ms.length + 2)), totalRow: true, name: "Table: SLA by month" });
     table(sq, ["Priority"].concat(SH), Q.pris.map(function (p) { return slaRow(p, Q.byP[p]); }).concat([slaRow("Total", A)]), { x: 6.75, y: 4.35, w: 6.2, first: 0.95, noTotal: true, fs: 7.5, tight: true, rowH: 0.24, totalRow: true, name: "Table: SLA by priority" });
     var CTp = ssSlaContracts(Q);
-    if (CTp.length) { var sc2 = pres.addSlide({ masterName: "SUPPORT" }); head(sc2, "SLA by Contract");
+    if (CTp.length) { var sc2 = ssSlide(pres, "contract", { masterName: "SUPPORT" }); head(sc2, "SLA by Contract");
       sc2.addText("Each ticket is measured on the calendar of the contract it was created under.", { x: 0.35, y: 0.9, w: 12.6, h: 0.35, fontFace: FONT, fontSize: 12, color: SOFT, margin: 0, isTextBox: true, objectName: "Note" });
       var cRow = function (lbl, o) { var c = Q.comp(o), n = o.met.length + o.missed.length + o.breached.length + o.open.length; return [lbl, n || "", o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.breached.length || "", o.open.length || ""]; };
       table(sc2, ["Contract", "Tickets"].concat(SH), CTp.map(function (g) { return cRow(g.label + "\n" + g.sub, g.o); }), { x: 0.35, y: 1.45, w: 12.6, first: 5.0, noTotal: true, fs: 10, rowH: 0.5, totalRow: true, name: "Table: SLA by contract" });
@@ -1971,13 +1976,13 @@ function ssDeck(P, D, art) {
         showValue: true, dataLabelPosition: st ? "ctr" : "outEnd", dataLabelFontSize: 8, dataLabelColor: st ? "0B2365" : "FFFFFF" })));
   };
   ssPivots().forEach(function (p) {
-    var Pv = ssPivot(p, D), title = ssPivTitle(p), kind = ssPivKind(p), sl = pres.addSlide({ masterName: "SUPPORT" }); head(sl, "More Analysis");
+    var Pv = ssPivot(p, D), title = ssPivTitle(p), kind = ssPivKind(p), sl = ssSlide(pres, "pivot:" + p.id, { masterName: "SUPPORT" }); head(sl, "More Analysis");
     sl.addText(title, { x: 0.35, y: 0.88, w: 12.6, h: 0.35, fontFace: FONT, fontSize: 15, bold: true, color: "FFFFFF", margin: 0, isTextBox: true, objectName: "Pivot title" });
     var rows = Pv.rk.length, rh = Math.min(0.26, 5.5 / (rows + 2)), fsz = rows > 22 || Pv.ck.length > 9 ? 7 : 8;
     if (p.c) {
       table(sl, [SS_DIM_L[p.r]].concat(Pv.ck, ["Total"]), Pv.rk.map(function (r, i) { return [r].concat(Pv.cell[i].map(function (l) { return l.length || ""; }), [Pv.rowL[i].length]); }).concat([["Total"].concat(Pv.colL.map(function (l) { return l.length; }), [Pv.all.length])]),
         { x: 0.35, y: 1.35, w: 12.6, first: Pv.ck.length > 8 ? 1.7 : 2.4, last: 0.7, fs: fsz, rowH: rh, totalRow: true, tight: Pv.ck.length > 9, name: "Table: " + title });
-      if (kind !== "none") { var sc = pres.addSlide({ masterName: "SUPPORT" }); head(sc, "More Analysis");
+      if (kind !== "none") { var sc = ssSlide(pres, "pivot:" + p.id, { masterName: "SUPPORT" }); head(sc, "More Analysis");
         sc.addText(title, { x: 0.35, y: 0.88, w: 12.6, h: 0.35, fontFace: FONT, fontSize: 15, bold: true, color: "FFFFFF", margin: 0, isTextBox: true, objectName: "Pivot title" });
         pvChart(sc, Pv, p, kind, { x: 0.35, y: 1.3, w: 12.6, h: 5.55 }, title); }
     } else {
@@ -1989,10 +1994,81 @@ function ssDeck(P, D, art) {
   });
   return pres;
 }
+/* ══ "Choose what to include": a window before every PDF / Print / PowerPoint / Excel ══
+   Lists the report's pages (and, for Excel, its sheets); unticked ones are left out. The choice is remembered per
+   format (as the pages left OUT, so a new pivot is included until it is unticked). SS_INC = the current choice. */
+var SS_INC = null, SS_PICK_KEY = "hd-ops-ss-pick-";
+function ssInc(k) { return !SS_INC || SS_INC[k] !== false; }
+function ssPickItems(kind) {
+  var D = ssData(), items = [];
+  if (kind === "xlsx") items.push(["tickets", "All tickets", "every ticket with its SLA details (and the sheet explaining the SLA columns)"]);
+  else items.push(["cover", "Cover page", "title, client and period"]);
+  items.push(["stats", "Support Stats", kind === "xlsx" ? "the month × " + (D.by === "fix" ? "type of fix" : "root cause") + " table" : "three charts and the month × " + (D.by === "fix" ? "type of fix" : "root cause") + " table"]);
+  items.push(["overview", "Support Overview", "created vs resolved, open at month end, year on year"]);
+  items.push(["mix", "Request type, priority and type of fix", "the mix charts and tables"]);
+  items.push(["sla", "SLA Performance", "tiles, met vs missed by month, by priority, by month"]);
+  var Q = typeof ssSlaData === "function" ? ssSlaData(D) : null;
+  if (Q && ssSlaContracts(Q).length) items.push(["contract", "SLA by contract", "the clients whose calendar changed on a date"]);
+  ssPivots().forEach(function (p) { items.push(["pivot:" + p.id, ssPivTitle(p), "custom pivot"]); });
+  return items;
+}
+function ssPick(kind, go) {
+  var names = { pdf: "PDF", print: "Print", ppt: "PowerPoint", xlsx: "Excel" }, items = ssPickItems(kind), off = {};
+  try { off = JSON.parse(localStorage.getItem(SS_PICK_KEY + kind) || "{}") || {}; } catch (e) { off = {}; }
+  var ov = document.createElement("div"); ov.className = "ov"; ov.id = "ssPick";
+  ov.innerHTML = '<div class="ovb ssp-b" role="dialog" aria-modal="true" aria-label="Choose what to include"><div class="ovh"><h3>' + esc(names[kind]) + ": choose what to include</h3><span class=\"sp\"></span><button class=\"ovx\" data-sp=\"x\" aria-label=\"Close\">✕</button></div>" +
+    '<div class="ssp-in"><p class="ssp-h">Untick the ' + (kind === "xlsx" ? "sheets" : "pages") + ' you do not need. Your choice is remembered for ' + esc(names[kind]) + ".</p>" +
+    '<div class="ssp-tools"><button type="button" class="btn" data-sp="all">Select all</button><button type="button" class="btn" data-sp="none">Clear all</button><span class="ssp-n" id="sspN"></span></div><div class="ssp-list">' +
+    items.map(function (it) { return '<label class="ssp-it"><input type="checkbox" data-k="' + esc(it[0]) + '"' + (off[it[0]] ? "" : " checked") + '><span><b>' + esc(it[1]) + "</b><em>" + esc(it[2]) + "</em></span></label>"; }).join("") + "</div>" +
+    '<div class="ssp-foot"><button type="button" class="btn" data-sp="x">Cancel</button><button type="button" class="btn pri" data-sp="go">Create ' + esc(names[kind]) + "</button></div></div></div>";
+  document.body.appendChild(ov);
+  var boxes = function () { return Array.prototype.slice.call(ov.querySelectorAll("input[data-k]")); };
+  var count = function () { var n = boxes().filter(function (b) { return b.checked; }).length; el("sspN").textContent = n + " of " + items.length + " selected"; ov.querySelector('[data-sp="go"]').disabled = !n; };
+  ov.addEventListener("change", count); count();
+  ov.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-sp]"); if (e.target === ov) return ov.remove(); if (!b) return; var a = b.dataset.sp;
+    if (a === "x") return ov.remove();
+    if (a === "all" || a === "none") { boxes().forEach(function (x) { x.checked = a === "all"; }); return count(); }
+    if (a === "go") { var inc = {}, offN = {}; boxes().forEach(function (x) { inc[x.dataset.k] = x.checked; if (!x.checked) offN[x.dataset.k] = 1; });
+      try { localStorage.setItem(SS_PICK_KEY + kind, JSON.stringify(offN)); } catch (x) {}
+      ov.remove(); SS_INC = inc; go(); }   /* SS_INC stays until the next download: PowerPoint is built after its library has loaded */
+  });
+  ov.querySelector('[data-sp="go"]').focus();
+}
+/* PowerPoint: a slide that is left out is created on a stand-in that ignores everything drawn on it */
+var SS_NOSLIDE = { addText: function () {}, addShape: function () {}, addChart: function () {}, addTable: function () {}, addImage: function () {}, addNotes: function () {} };
+function ssSlide(pres, key, opts) { return ssInc(key) ? pres.addSlide(opts) : SS_NOSLIDE; }
+/* Excel: which part of the report a sheet belongs to */
+function ssSheetKey(n) {
+  if (n === "All tickets" || n === "SLA columns explained") return "tickets";
+  if (n === "Support stats") return "stats";
+  if (n === "Created vs resolved" || n === "Year on year") return "overview";
+  if (n === "Request type" || n === "Priority" || n === "Type of fix") return "mix";
+  if (n === "SLA") return "sla";
+  var m = /^P(\d+) /.exec(n); if (m) { var p = ssPivots()[+m[1] - 1]; return p ? "pivot:" + p.id : null; }
+  return null;
+}
+/* PDF / Print: the report pages without the parts left out */
+function ssPrintFilter(root) {
+  if (!SS_INC) return;
+  var rm = function (n) { if (n && n.parentNode) n.parentNode.removeChild(n); };
+  if (!ssInc("cover")) rm(root.querySelector("#ssCover"));
+  if (!ssInc("stats")) rm(root.querySelector("#ssPanel"));
+  var p2 = root.querySelector("#ssPanel2");
+  if (p2) { var g2 = p2.querySelectorAll(":scope > .ss-g2"), fx = p2.querySelectorAll(":scope > .ss-box");
+    if (!ssInc("overview") && g2[0]) rm(g2[0]);
+    if (!ssInc("mix")) { if (g2[1]) rm(g2[1]); Array.prototype.forEach.call(fx, rm); }
+    if (!ssInc("overview") && !ssInc("mix")) rm(p2); }
+  if (!ssInc("sla")) rm(root.querySelector("#ssPanelSla")); else if (!ssInc("contract")) rm(root.querySelector("#ssPanelSla .ssc"));
+  var p3 = root.querySelector("#ssPanel3");
+  if (p3) { Array.prototype.forEach.call(p3.querySelectorAll(".ss-pv"), function (pv) { var x = pv.querySelector("[data-pvx]"); if (x && !ssInc("pivot:" + x.dataset.pvx)) rm(pv); });
+    if (!p3.querySelector(".ss-pv")) rm(p3); }
+}
 function ssPrintHTML() {
   var src = el("ssPages"); if (!src) return "";
   /* the cover drawing's gradient / clip ids get their own names in the print copy */
-  return src.innerHTML.replace(/(id="|url\(#)(cv[gsc])\b/g, "$1p$2");
+  var copy = src.cloneNode(true); ssPrintFilter(copy);
+  return copy.innerHTML.replace(/(id="|url\(#)(cv[gsc])\b/g, "$1p$2");
 }
 /* the downloads are named like the report: "<Client> Support Stats – January 2026 to November 2026" (the PDF gets it as its title) */
 function ssFileName() { return ssPrintTitle().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 150) || "Support Stats"; }
@@ -2037,8 +2113,8 @@ document.addEventListener("click", function (e) {
   if (px) { ssSavePivots(ssPivots().filter(function (p) { return String(p.id) !== px.dataset.pvx; })); DRILL = []; renderTab(); return; }
   if (t.closest("#ssPicOff")) { try { localStorage.removeItem(SS_PIC_KEY); } catch (x) {} DRILL = []; renderTab(); return; }
   if (t.closest("#ssSlaCalc")) { ssSlaCalc(t.closest("#ssSlaCalc")); return; }
-  if (t.closest("#ssXlsx")) ssExcel(); else if (t.closest("#ssPrint")) ssPrint(); else if (t.closest("#ssPpt")) ssPpt(t.closest("#ssPpt"));
-  else if (t.closest("#ssPdf")) { var tip = el("ssTip"); if (tip) { tip.classList.remove("hidden"); clearTimeout(ssPrint._t); ssPrint._t = setTimeout(function () { tip.classList.add("hidden"); }, 9000); } setTimeout(ssPrint, 60); }
+  if (t.closest("#ssXlsx")) ssPick("xlsx", ssExcel); else if (t.closest("#ssPrint")) ssPick("print", ssPrint); else if (t.closest("#ssPpt")) { var pb = t.closest("#ssPpt"); ssPick("ppt", function () { ssPpt(pb); }); }
+  else if (t.closest("#ssPdf")) { var tip = el("ssTip"); if (tip) { tip.classList.remove("hidden"); clearTimeout(ssPrint._t); ssPrint._t = setTimeout(function () { tip.classList.add("hidden"); }, 9000); } ssPick("pdf", ssPrint); }
 });
 
 /* ══════════ drill-down modal ══════════ */
