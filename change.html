@@ -396,6 +396,20 @@ details.mvms[open]>summary{border-color:var(--vi);box-shadow:0 0 0 3px rgba(79,7
 .mvms-dd label i{width:7px;height:7px;border-radius:50%;flex:none}
 .mvms-dd label span{flex:1}
 .mvms-dd label em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+/* ── Report tab ── */
+.rp-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:14px}.rp-bar-r{display:flex;align-items:center;gap:10px}.rp-bar select{padding:6px 8px;border:1px solid var(--line2);border-radius:8px;font:inherit}
+#rpDoc{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 26px}
+.rp-head{display:flex;justify-content:space-between;border-bottom:3px solid var(--vi);padding-bottom:12px;margin-bottom:14px}.rp-head h1{margin:2px 0 4px;font-size:24px;color:var(--ink)}.rp-kicker{font:700 11px inherit;text-transform:uppercase;letter-spacing:.08em;color:var(--vi)}
+.rp-dim{color:var(--muted);font-size:12.5px}.rp-note{color:var(--muted);font-size:12.5px;margin:6px 0 10px}
+.rp-ks{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px}.rp-mv{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.rp-k{border:1px solid var(--line);border-left:4px solid var(--kc);border-radius:10px;padding:10px 12px}.rp-k b{display:block;font-size:22px;color:var(--ink)}.rp-k span{display:block;font-size:12.5px;font-weight:600;color:var(--ink2)}.rp-k em{display:block;font-style:normal;font-size:11px;color:var(--faint)}
+.rp-sh{margin:22px 0 8px;break-after:avoid;page-break-after:avoid}.rp-sh h2{font-size:16px;margin:0;color:var(--ink)}.rp-sh p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+.rp-t{width:100%;border-collapse:collapse;font-size:12.5px;break-inside:auto}.rp-t th{background:#F1F4F8;color:var(--ink2);text-align:left;font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line2)}.rp-t td{padding:6px 8px;border-bottom:1px solid var(--line)}.rp-t tr{break-inside:avoid;page-break-inside:avoid}
+.rp-tot td{font-weight:700;background:#F8FAFC}.rp-cur td{background:#EEF2FF}.rp-sum{max-width:420px}.rp-sm{font-size:11.5px;color:var(--muted)}.rp-list a{color:var(--vi);font-weight:600;text-decoration:none}
+.rp-n{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--vi);cursor:pointer}.rp-n:hover{text-decoration:underline}.rp-n.bad{color:#DC2626}.rp-k .rp-n{font-size:22px;color:var(--ink)}.rp-z{color:var(--faint)}
+.rp-pipe{display:flex;flex-direction:column;gap:6px}.rp-pr{display:grid;grid-template-columns:170px 1fr 50px 170px;align-items:center;gap:10px;font-size:12.5px}.rp-pbar{display:flex;height:14px;background:#F1F4F8;border-radius:4px;overflow:hidden}.rp-pbar i{display:block;height:100%}.rp-pn{text-align:right;font-weight:700}.rp-ps{color:var(--muted)}
+.rp-lg{font-size:11.5px;color:var(--muted);margin-top:4px}.rp-lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
+.rp-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.rp-svg{width:100%;max-width:820px;height:auto;display:block;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -1010,6 +1024,176 @@ function renderCharge(){
 }
 
 /* ═══════════════════════ RENDER ═══════════════════════ */
+/* ═══════════════════════ REPORT TAB ═══════════════════════
+   Weekly CR status report, for the client in the Client filter or for every client (with an all-clients page).
+   The week runs Monday 00:00 – Sunday 24:00 IST (ISO week). "Open" = open at the end of the week (for the current
+   week: now). The stage and side (SVM / client) at the end of a past week come from the Jira status history
+   (the shared cache); without a history the ticket's current status is used and the report says how many.
+   Age (days) = days since the Assigned date (or Created when there is none) up to the end of the week.
+   Every number opens its tickets; PDF (print window) and Excel downloads. */
+var RP={week:null,lists:[]};
+function rpReg(list,title){RP.lists.push({l:list,t:title});return RP.lists.length-1;}
+function rpN(list,title,cls){return list.length?'<button type="button" class="rp-n'+(cls?' '+cls:'')+'" data-rpl="'+rpReg(list,title)+'">'+list.length.toLocaleString()+'</button>':'<span class="rp-z">·</span>';}
+function rpIsoWeek(ms){var d=new Date(ms+MV_IST+3*MV_DAY),y=d.getUTCFullYear(),j=Date.UTC(y,0,4),w0=j-((new Date(j).getUTCDay()+6)%7)*MV_DAY;return {w:1+Math.floor((Date.UTC(y,d.getUTCMonth(),d.getUTCDate())-w0)/(7*MV_DAY)),y:y};}
+function rpWeekLabel(a){var w=rpIsoWeek(a);return "Week "+w.w+", "+w.y;}
+function rpRangeTxt(a){return mvFd(a)+" – "+mvFday(a+6*MV_DAY).replace(/^\w+, /,"");}
+/* status of a ticket at a moment: from its history; else (no history) its current status */
+function rpStatusAt(t,ms){
+  var e=mvEntry(t); if(!e) return {s:t.status,h:false};
+  var tr=(e.transitions||[]).slice().sort(function(a,b){return a.t-b.t;}),s=null;
+  tr.forEach(function(x){if(x.t<ms)s=x.to;});
+  if(s==null)s=tr.length?tr[0].from:t.status; return {s:s,h:true};
+}
+function rpSnap(t,end){
+  var live=end>=Date.now(), at=live?{s:t.status,h:true}:rpStatusAt(t,end), st=at.s, closedNow=isClosed(st);
+  var side=closedNow?"closed":(live?ownerOf(t):(CLIENT_STATUS[String(st).toLowerCase()]?"client":"svm"));
+  var start=t.assigned||t.created, age=start?Math.max(0,Math.floor((Math.min(end,Date.now())-start)/MV_DAY)):null;
+  return {t:t,status:st,stage:stageOf(st),side:side,age:age,hist:at.h};
+}
+function rpOpenAt(list,end){return list.filter(function(t){return isOpenAt(t,end);}).map(function(t){return rpSnap(t,end);}).filter(function(x){return x.side!=="closed";});}
+function rpMovesIn(list,a,b){var mv=[];list.forEach(function(t){var e=mvEntry(t);if(!e)return;(e.transitions||[]).forEach(function(x){if(x.t>=a&&x.t<b)mv.push({t:t,x:x,from:stageOf(x.from),to:stageOf(x.to)});});});return mv;}
+function rpData(){
+  var now=Date.now(), a=RP.week!=null?RP.week:mvWeek0(now), b=a+7*MV_DAY, end=Math.min(b,now), L=FILTERED;
+  var open=rpOpenAt(L,end), svm=open.filter(function(x){return x.side==="svm";}), cli=open.filter(function(x){return x.side==="client";});
+  var inW=function(d){return d&&+d>=a&&+d<b;};
+  var created=L.filter(function(t){return inW(t.created);}), delivered=L.filter(function(t){return inW(t.delivered);}), closed=L.filter(function(t){return inW(closedOn(t));});
+  var weeks=[];for(var k=4;k>=0;k--){var wa=a-k*7*MV_DAY,wb=wa+7*MV_DAY,we=Math.min(wb,now),o=rpOpenAt(L,we);
+    weeks.push({a:wa,open:o,svm:o.filter(function(x){return x.side==="svm";}),cli:o.filter(function(x){return x.side==="client";}),
+      created:L.filter(function(t){return t.created&&+t.created>=wa&&+t.created<wb;}),delivered:L.filter(function(t){return t.delivered&&+t.delivered>=wa&&+t.delivered<wb;}),
+      closed:L.filter(function(t){var c=closedOn(t);return c&&+c>=wa&&+c<wb;})});}
+  var ages=open.map(function(x){return x.age;}).filter(function(v){return v!=null;}).sort(function(p,q){return p-q;});
+  return {a:a,b:b,end:end,live:b>now,L:L,open:open,svm:svm,cli:cli,created:created,delivered:delivered,closed:closed,weeks:weeks,moves:rpMovesIn(L,a,b),
+    noHist:open.filter(function(x){return !x.hist;}).length,avgAge:ages.length?Math.round(ages.reduce(function(s,v){return s+v;},0)/ages.length*10)/10:null,medAge:ages.length?ages[Math.floor(ages.length/2)]:null,
+    clients:distinctSorted("project").filter(function(c){return L.some(function(t){return t.project===c;});})};
+}
+var RP_BUCKETS=[["0–7 days",0,7],["8–14 days",8,14],["15–30 days",15,30],["31–60 days",31,60],["Over 60 days",61,1e9]];
+var RP_PROD=/\b(prod|production)\b/i;
+function rpTs(x){return x.map(function(y){return y.t;});}
+function renderReport(){
+  RP.lists=[]; var D=rpData(), cl=S.proj||"All clients", one=!!S.proj, now=Date.now();
+  var weeksSel=[];for(var k=0;k<16;k++)weeksSel.push(mvWeek0(now)-k*7*MV_DAY);
+  var h='<div class="rp-bar card"><div><b>CR status report</b> <span class="rp-dim">for '+esc(cl)+' · the filters above apply (pick a client in Client for one client’s report)</span></div>'+
+    '<div class="rp-bar-r"><label>Week <select id="rpWeek">'+weeksSel.map(function(w){return '<option value="'+w+'"'+(w===D.a?' selected':'')+'>'+esc(rpWeekLabel(w)+" · "+rpRangeTxt(w))+(w===mvWeek0(now)?" (this week)":"")+'</option>';}).join("")+'</select></label>'+
+    '<button type="button" class="ghost" id="rpPdf">PDF</button><button type="button" class="ghost" id="rpXlsx">Excel</button></div></div>';
+  h+='<div id="rpDoc">'+rpDocHTML(D,cl,one)+'</div>';
+  return h;
+}
+function rpDocHTML(D,cl,one){
+  var h="", sec=function(t,sub){return '<div class="rp-sh"><h2>'+esc(t)+'</h2>'+(sub?'<p>'+sub+'</p>':'')+'</div>';};
+  var title=(one?cl:"All clients")+" — CR Status Report";
+  h+='<div class="rp-head"><div><div class="rp-kicker">Change requests · '+esc(rpWeekLabel(D.a))+'</div><h1>'+esc(title)+'</h1><div class="rp-dim">'+esc(rpRangeTxt(D.a))+(D.live?" · as of "+esc(mvFdt(Date.now()))+" IST":"")+' · prepared by the SVM Help Desk</div></div></div>';
+  /* 1. headline */
+  var k=function(lbl,list,sub,c){return '<div class="rp-k" style="--kc:'+(c||"#4F46E5")+'"><b>'+(list?rpN(list,lbl):"—")+'</b><span>'+esc(lbl)+'</span>'+(sub?'<em>'+esc(sub)+'</em>':'')+'</div>';};
+  var over30=D.open.filter(function(x){return x.age!=null&&x.age>30;});
+  h+='<div class="rp-ks">'+k("Open CRs",rpTs(D.open),"at the end of the week")+k("Waiting on SVM",rpTs(D.svm),"next action: SVM","#7C3AED")+k("Waiting on client",rpTs(D.cli),"next action: client","#DB2777")+
+    k("New this week",D.created,"raised","#0891B2")+k("Delivered this week",D.delivered,"Delivered date in the week","#D97706")+k("Closed this week",D.closed,"","#059669")+
+    '<div class="rp-k" style="--kc:#64748B"><b>'+(D.avgAge==null?"—":D.avgAge)+'</b><span>Average age (days)</span><em>median '+(D.medAge==null?"—":D.medAge)+'</em></div>'+k("Open over 30 days",rpTs(over30),"since assigned","#DC2626")+'</div>';
+  if(D.noHist&&!D.live) h+='<p class="rp-note">'+D.noHist+' open CR'+(D.noHist>1?"s have":" has")+' no status history read yet, so '+(D.noHist>1?"their":"its")+' current status is used for this week. Open the Movement tab once to read the missing histories.</p>';
+  /* 2. all clients (only when all clients are shown) */
+  if(!one&&D.clients.length>1){
+    var rows=D.clients.map(function(c){var f=function(l){return l.filter(function(t){return (t.t||t).project===c;});};var o=f(D.open),ag=o.map(function(x){return x.age;}).filter(function(v){return v!=null;});
+      return {c:c,o:o,s:f(D.svm),cl:f(D.cli),n:f(D.created),d:f(D.delivered),x:f(D.closed),avg:ag.length?Math.round(ag.reduce(function(s,v){return s+v;},0)/ag.length):null,o30:o.filter(function(x){return x.age!=null&&x.age>30;})};}).sort(function(p,q){return q.o.length-p.o.length;});
+    h+=sec("All clients at a glance","Open CRs at the end of the week, and what came in, was delivered and closed during it.")+'<table class="rp-t"><thead><tr><th>Client</th><th>Open</th><th>Waiting on SVM</th><th>Waiting on client</th><th>New</th><th>Delivered</th><th>Closed</th><th>Avg age (days)</th><th>Open over 30 days</th></tr></thead><tbody>'+
+      rows.map(function(r){return '<tr><td><b>'+esc(r.c)+'</b></td><td>'+rpN(rpTs(r.o),r.c+" — open")+'</td><td>'+rpN(rpTs(r.s),r.c+" — waiting on SVM")+'</td><td>'+rpN(rpTs(r.cl),r.c+" — waiting on client")+'</td><td>'+rpN(r.n,r.c+" — new")+'</td><td>'+rpN(r.d,r.c+" — delivered")+'</td><td>'+rpN(r.x,r.c+" — closed")+'</td><td>'+(r.avg==null?"—":r.avg)+'</td><td>'+rpN(rpTs(r.o30),r.c+" — open over 30 days","bad")+'</td></tr>';}).join("")+
+      '<tr class="rp-tot"><td>All clients</td><td>'+rpN(rpTs(D.open),"Open")+'</td><td>'+rpN(rpTs(D.svm),"Waiting on SVM")+'</td><td>'+rpN(rpTs(D.cli),"Waiting on client")+'</td><td>'+rpN(D.created,"New")+'</td><td>'+rpN(D.delivered,"Delivered")+'</td><td>'+rpN(D.closed,"Closed")+'</td><td>'+(D.avgAge==null?"—":Math.round(D.avgAge))+'</td><td>'+rpN(rpTs(over30),"Open over 30 days","bad")+'</td></tr></tbody></table>';
+  }
+  /* 3. pipeline */
+  var stages=STAGE_ORDER.concat(["Other"]).filter(function(s){return s!=="Closed"&&D.open.some(function(x){return x.stage===s;});}), mx=Math.max.apply(null,stages.map(function(s){return D.open.filter(function(x){return x.stage===s;}).length;}).concat([1]));
+  h+=sec("Where the open CRs are","By lifecycle stage, split by who has the next action.")+'<div class="rp-pipe">'+stages.map(function(s){var all=D.open.filter(function(x){return x.stage===s;}),sv=all.filter(function(x){return x.side==="svm";}),c=all.filter(function(x){return x.side==="client";});
+    return '<div class="rp-pr"><span class="rp-pl">'+esc((STAGE_ICON[s]||"")+" "+s)+'</span><span class="rp-pbar"><i style="width:'+(sv.length/mx*100)+'%;background:#7C3AED" title="SVM '+sv.length+'"></i><i style="width:'+(c.length/mx*100)+'%;background:#DB2777" title="Client '+c.length+'"></i></span><span class="rp-pn">'+rpN(rpTs(all),s)+'</span><span class="rp-ps">SVM '+rpN(rpTs(sv),s+" — SVM")+' · Client '+rpN(rpTs(c),s+" — client")+'</span></div>';}).join("")+
+    '<div class="rp-lg"><i style="background:#7C3AED"></i>Waiting on SVM <i style="background:#DB2777"></i>Waiting on client</div></div>';
+  /* 4. per SVM in charge */
+  var ppl={};D.open.forEach(function(x){var p=x.t.svm||"(not set)";(ppl[p]=ppl[p]||[]).push(x);});
+  var pk=Object.keys(ppl).sort(function(p,q){return ppl[q].length-ppl[p].length;});
+  h+=sec("Open CRs per SVM in charge","Every open CR under its SVM in charge, whoever has the next action.")+'<table class="rp-t"><thead><tr><th>SVM in charge</th><th>Open</th><th>Waiting on SVM</th><th>Waiting on client</th><th>Avg age (days)</th><th>Oldest (days)</th><th>Main stages</th></tr></thead><tbody>'+
+    pk.map(function(p){var l=ppl[p],ag=l.map(function(x){return x.age;}).filter(function(v){return v!=null;}),st={};l.forEach(function(x){st[x.stage]=(st[x.stage]||0)+1;});
+      return '<tr><td><b>'+esc(p)+'</b></td><td>'+rpN(rpTs(l),p)+'</td><td>'+rpN(rpTs(l.filter(function(x){return x.side==="svm";})),p+" — waiting on SVM")+'</td><td>'+rpN(rpTs(l.filter(function(x){return x.side==="client";})),p+" — waiting on client")+'</td><td>'+(ag.length?Math.round(ag.reduce(function(s,v){return s+v;},0)/ag.length):"—")+'</td><td>'+(ag.length?Math.max.apply(null,ag):"—")+'</td><td class="rp-sm">'+Object.keys(st).sort(function(p2,q2){return st[q2]-st[p2];}).slice(0,3).map(function(s){return esc(s)+" "+st[s];}).join(" · ")+'</td></tr>';}).join("")+'</tbody></table>';
+  /* 5. ageing */
+  h+=sec("How long the open CRs have been open","Days since assigned (or created), at the end of the week.")+'<table class="rp-t"><thead><tr><th>Age</th><th>Open</th><th>Waiting on SVM</th><th>Waiting on client</th></tr></thead><tbody>'+
+    RP_BUCKETS.map(function(bk){var l=D.open.filter(function(x){return x.age!=null&&x.age>=bk[1]&&x.age<=bk[2];});return '<tr><td><b>'+bk[0]+'</b></td><td>'+rpN(rpTs(l),"Age "+bk[0])+'</td><td>'+rpN(rpTs(l.filter(function(x){return x.side==="svm";})),"Age "+bk[0]+" — SVM")+'</td><td>'+rpN(rpTs(l.filter(function(x){return x.side==="client";})),"Age "+bk[0]+" — client")+'</td></tr>';}).join("")+'</tbody></table>';
+  /* 6. by module */
+  var md={};D.open.forEach(function(x){(x.t.components.length?x.t.components:["(no module)"]).forEach(function(c){(md[c]=md[c]||[]).push(x);});});
+  var mk=Object.keys(md).sort(function(p,q){return md[q].length-md[p].length;}).slice(0,15);
+  h+=sec("Open CRs by module","A CR with several modules counts once in each. The 15 largest.")+'<table class="rp-t"><thead><tr><th>Module</th><th>Open</th><th>Waiting on SVM</th><th>Waiting on client</th></tr></thead><tbody>'+
+    mk.map(function(m){var l=md[m];return '<tr><td><b>'+esc(m)+'</b></td><td>'+rpN(rpTs(l),m)+'</td><td>'+rpN(rpTs(l.filter(function(x){return x.side==="svm";})),m+" — SVM")+'</td><td>'+rpN(rpTs(l.filter(function(x){return x.side==="client";})),m+" — client")+'</td></tr>';}).join("")+'</tbody></table>';
+  /* 7. last 5 weeks */
+  h+=sec("Last 5 weeks","Open at the end of each week, and what came in, was delivered and closed in it.")+rpTrendSvg(D.weeks)+'<table class="rp-t"><thead><tr><th>Week</th><th>Open</th><th>Waiting on SVM</th><th>Waiting on client</th><th>New</th><th>Delivered</th><th>Closed</th></tr></thead><tbody>'+
+    D.weeks.map(function(w){var lb=rpWeekLabel(w.a).replace(/, \d+$/,"");return '<tr'+(w.a===D.a?' class="rp-cur"':'')+'><td><b>'+esc(lb)+'</b> <span class="rp-dim">'+esc(rpRangeTxt(w.a))+'</span></td><td>'+rpN(rpTs(w.open),lb+" — open")+'</td><td>'+rpN(rpTs(w.svm),lb+" — SVM")+'</td><td>'+rpN(rpTs(w.cli),lb+" — client")+'</td><td>'+rpN(w.created,lb+" — new")+'</td><td>'+rpN(w.delivered,lb+" — delivered")+'</td><td>'+rpN(w.closed,lb+" — closed")+'</td></tr>';}).join("")+'</tbody></table>';
+  /* 8. movement this week */
+  var fw=D.moves.filter(function(m){return mvDir({from:m.x.from,to:m.x.to})>0;}),bw=D.moves.filter(function(m){return mvDir({from:m.x.from,to:m.x.to})<0;}),into={};
+  D.moves.forEach(function(m){if(m.from!==m.to)(into[m.to]=into[m.to]||[]).push(m.t);});
+  h+=sec("Movement this week","Status changes made during the week, from the Jira status history.")+(D.moves.length?
+    '<div class="rp-mv">'+'<div class="rp-k" style="--kc:#059669"><b>'+rpN(fw.map(function(m){return m.t;}),"Moved forward")+'</b><span>moved forward</span></div><div class="rp-k" style="--kc:#DC2626"><b>'+rpN(bw.map(function(m){return m.t;}),"Moved back")+'</b><span>moved back a stage</span></div>'+
+      STAGE_ORDER.filter(function(s){return into[s];}).map(function(s){var u=into[s].filter(function(t,i,arr){return arr.indexOf(t)===i;});return '<div class="rp-k" style="--kc:'+(STAGE_COLOR[s]||"#64748B")+'"><b>'+rpN(u,"Moved into "+s)+'</b><span>into '+esc(s)+'</span></div>';}).join("")+'</div>'
+    :'<p class="rp-note">No status changes this week'+(MV.loaded?"":" (status history still loading)")+'.</p>');
+  /* 9. release plans */
+  var bySt=function(p,q){return p.status.localeCompare(q.status)||(q.age||0)-(p.age||0);};
+  var prod=D.open.filter(function(x){return RP_PROD.test(x.status)&&x.stage!=="Delivery";}).sort(bySt), uat=D.open.filter(function(x){return x.stage==="UAT & Testing"&&!RP_PROD.test(x.status);}).sort(bySt);
+  h+=sec("Production release plan","Open CRs on their way to production (production release plan, approval or deployment).")+rpTable(prod,["key","summary","status","side","svm","age","module"]);
+  h+=sec("UAT release plan","Open CRs in UAT and testing.")+rpTable(uat,["key","summary","status","side","svm","age","module"]);
+  /* 10. effort and commercial */
+  var sz={},chg={},fpa=0,apr=0,fpaN=0,aprN=0;D.open.forEach(function(x){var s=x.t.size&&SIZE_CLASS[x.t.size]?x.t.size:"Unsized";(sz[s]=sz[s]||[]).push(x.t);(chg[x.t.charge||"(not set)"]=chg[x.t.charge||"(not set)"]||[]).push(x.t);if(x.t.fpaDays!=null){fpa+=x.t.fpaDays;fpaN++;}if(x.t.apprDays!=null){apr+=x.t.apprDays;aprN++;}});
+  h+=sec("Effort and commercial view","The open CRs by T-shirt size and by chargeable status, with their man-days.")+'<div class="rp-2"><table class="rp-t"><thead><tr><th>T-shirt size</th><th>Open</th></tr></thead><tbody>'+SIZE_ORDER.concat(["Unsized"]).filter(function(s){return sz[s];}).map(function(s){return '<tr><td><b>'+esc(s)+'</b></td><td>'+rpN(sz[s],"Size "+s)+'</td></tr>';}).join("")+'</tbody></table>'+
+    '<table class="rp-t"><thead><tr><th>Chargeable</th><th>Open</th></tr></thead><tbody>'+Object.keys(chg).sort(function(p,q){return chg[q].length-chg[p].length;}).map(function(c){return '<tr><td><b>'+esc(c)+'</b></td><td>'+rpN(chg[c],c)+'</td></tr>';}).join("")+'</tbody></table></div>'+
+    '<p class="rp-note">FPA man-days on the open CRs: <b>'+(fpaN?Math.round(fpa*10)/10:"—")+'</b> ('+fpaN+' CRs with a value) · approved man-days: <b>'+(aprN?Math.round(apr*10)/10:"—")+'</b> ('+aprN+' CRs).</p>';
+  /* 11. new and delivered */
+  h+=sec("New this week",D.created.length+" CR"+(D.created.length===1?"":"s")+" raised.")+rpTable(D.created.map(function(t){return rpSnap(t,D.end);}),["key","summary","status","side","svm","module","created"]);
+  h+=sec("Delivered this week",D.delivered.length+" CR"+(D.delivered.length===1?"":"s")+" with a Delivered date in the week.")+rpTable(D.delivered.map(function(t){return rpSnap(t,D.end);}),["key","summary","status","svm","module","delivered"]);
+  /* 12. all open, oldest first */
+  h+=sec("All open CRs, oldest first","Age in days since assigned (or created), at the end of the week.")+rpTable(D.open.slice().sort(function(p,q){return (q.age==null?-1:q.age)-(p.age==null?-1:p.age);}),["key","summary","stage","status","side","svm","age","module","size","created","assigned","updated"]);
+  return h;
+}
+var RP_COLS={key:["Key",function(x){return '<a href="'+esc(jiraUrl(x.t.key))+'" target="_blank" rel="noreferrer">'+esc(x.t.key)+'</a>';},function(x){return x.t.key;}],
+  summary:["Summary",function(x){return esc(x.t.summary);},function(x){return x.t.summary;}],stage:["Stage",function(x){return esc(x.stage);},function(x){return x.stage;}],
+  status:["Status",function(x){return esc(x.status);},function(x){return x.status;}],side:["Next action",function(x){return x.side==="client"?"Client":x.side==="svm"?"SVM":"—";},function(x){return x.side==="client"?"Client":x.side==="svm"?"SVM":"";}],
+  svm:["SVM in charge",function(x){return esc(x.t.svm||"—");},function(x){return x.t.svm;}],age:["Age (days)",function(x){return x.age==null?"—":x.age;},function(x){return x.age==null?"":x.age;}],
+  module:["Module",function(x){return esc(x.t.componentsRaw||"—");},function(x){return x.t.componentsRaw;}],size:["Size",function(x){return esc(x.t.size||"—");},function(x){return x.t.size;}],
+  created:["Created",function(x){return fmtD(x.t.created);},function(x){return x.t.created||"";}],assigned:["Assigned",function(x){return fmtD(x.t.assigned);},function(x){return x.t.assigned||"";}],
+  updated:["Updated",function(x){return fmtD(x.t.updated);},function(x){return x.t.updated||"";}],delivered:["Delivered",function(x){return fmtD(x.t.delivered);},function(x){return x.t.delivered||"";}]};
+function jiraUrl(k){return "https://svmhelpdesk.atlassian.net/browse/"+encodeURIComponent(k);}
+function rpTable(list,cols){
+  if(!list.length) return '<p class="rp-note">None.</p>';
+  return '<table class="rp-t rp-list"><thead><tr>'+cols.map(function(c){return '<th>'+RP_COLS[c][0]+'</th>';}).join("")+'</tr></thead><tbody>'+list.map(function(x){return '<tr>'+cols.map(function(c){return '<td'+(c==="summary"?' class="rp-sum"':'')+'>'+RP_COLS[c][1](x)+'</td>';}).join("")+'</tr>';}).join("")+'</tbody></table>';
+}
+function rpTrendSvg(W){
+  var w=760,hh=190,pl=58,pr=110,pt=18,pb=34,n=W.length,cw=(w-pl-pr)/Math.max(1,n-1),ser=[["Open","#4F46E5",function(x){return x.open.length;}],["New","#0891B2",function(x){return x.created.length;}],["Delivered","#D97706",function(x){return x.delivered.length;}],["Closed","#059669",function(x){return x.closed.length;}]];
+  var mx=1;W.forEach(function(x){ser.forEach(function(s){mx=Math.max(mx,s[2](x));});});var step=Math.pow(10,Math.floor(Math.log10(mx)));if(mx/step>5)step*=2;var top=Math.ceil(mx/step)*step,y=function(v){return pt+(hh-pt-pb)*(1-v/top);};
+  var s='<svg viewBox="0 0 '+w+' '+hh+'" class="rp-svg" role="img" aria-label="Last 5 weeks">';
+  for(var g=0;g<=top+1e-9;g+=step)s+='<line x1="'+pl+'" x2="'+(w-pr)+'" y1="'+y(g)+'" y2="'+y(g)+'" stroke="#E3E8EE"/><text x="'+(pl-6)+'" y="'+(y(g)+4)+'" text-anchor="end" font-size="10" fill="#6B7A90">'+g+'</text>';
+  W.forEach(function(x,i){s+='<text x="'+(pl+cw*i)+'" y="'+(hh-12)+'" text-anchor="middle" font-size="10.5" fill="#3E4C63">'+esc(rpWeekLabel(x.a).replace(/, \d+$/,"").replace("Week ","W"))+'</text>';});
+  ser.forEach(function(sr,k){var pts=W.map(function(x,i){return (pl+cw*i).toFixed(1)+","+y(sr[2](x)).toFixed(1);}).join(" ");s+='<polyline points="'+pts+'" fill="none" stroke="'+sr[1]+'" stroke-width="2.4" stroke-linejoin="round"/>';
+    W.forEach(function(x,i){var v=sr[2](x);s+='<circle cx="'+(pl+cw*i)+'" cy="'+y(v)+'" r="3" fill="'+sr[1]+'"/>'+(k===0?'<text x="'+(pl+cw*i)+'" y="'+(y(v)-7)+'" text-anchor="middle" font-size="10.5" font-weight="700" fill="'+sr[1]+'">'+v+'</text>':'');});
+    s+='<rect x="'+(w-pr+16)+'" y="'+(pt+k*18)+'" width="10" height="10" rx="2" fill="'+sr[1]+'"/><text x="'+(w-pr+32)+'" y="'+(pt+k*18+9)+'" font-size="11" fill="#3E4C63">'+sr[0]+'</text>';});
+  return s+'</svg>';
+}
+function rpBind(){
+  var ws=el("rpWeek");if(ws)ws.onchange=function(){RP.week=+ws.value;render();};
+  var doc=el("rpDoc");if(doc)doc.addEventListener("click",function(e){var b=e.target.closest&&e.target.closest("[data-rpl]");if(!b)return;var it=RP.lists[+b.dataset.rpl];if(it)openModal(it.t,it.l);});
+  var pdf=el("rpPdf");if(pdf)pdf.onclick=rpPrint;var xl=el("rpXlsx");if(xl)xl.onclick=rpExcel;
+  if(!MV.loaded)mvLoad().then(function(){if(S.tab==="report")render();});
+}
+function rpTitle(){var D=rpData();return (S.proj||"All clients")+" CR Status Report – "+rpWeekLabel(D.a)+" ("+rpRangeTxt(D.a)+")";}
+function rpPrint(){
+  var doc=el("rpDoc");if(!doc)return;var w=null;try{w=window.open("","_blank");}catch(e){}
+  if(!w){alert("Allow pop-ups for this site to print or save the report as PDF.");return;}
+  var css=Array.prototype.map.call(document.querySelectorAll('link[rel="stylesheet"], style'),function(n){return n.outerHTML;}).join("\n");
+  w.document.open();w.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>'+esc(rpTitle())+'</title>'+css+'<style>body{background:#fff;margin:0}#rpDoc{max-width:1180px;margin:0 auto;padding:18px}.rp-n{pointer-events:none}@page{size:A4 landscape;margin:10mm}</style></head><body><div id="rpDoc">'+doc.innerHTML+'</div></body></html>');
+  w.document.close();setTimeout(function(){try{w.focus();w.print();}catch(e){}},500);w.onafterprint=function(){setTimeout(function(){try{w.close();}catch(e){}},300);};
+}
+function rpExcel(){
+  if(!window.XLSX||!XLSX.utils){alert("The Excel library did not load.");return;}
+  var D=rpData(),wb=XLSX.utils.book_new(),add=function(name,aoa,w){var s=XLSX.utils.aoa_to_sheet(aoa);s["!cols"]=(w||[]).map(function(x){return {wch:x};});XLSX.utils.book_append_sheet(wb,s,name.slice(0,31));};
+  var row=function(x,cols){return cols.map(function(c){var v=RP_COLS[c][2](x);return v instanceof Date?v:v;});};
+  add("Summary",[[(S.proj||"All clients")+" — CR Status Report"],[rpWeekLabel(D.a)+" · "+rpRangeTxt(D.a)],[],["Open CRs",D.open.length],["Waiting on SVM",D.svm.length],["Waiting on client",D.cli.length],["New this week",D.created.length],["Delivered this week",D.delivered.length],["Closed this week",D.closed.length],["Average age (days)",D.avgAge==null?"":D.avgAge],["Median age (days)",D.medAge==null?"":D.medAge]],[28,16]);
+  if(!S.proj&&D.clients.length>1) add("By client",[["Client","Open","Waiting on SVM","Waiting on client","New","Delivered","Closed"]].concat(D.clients.map(function(c){var f=function(l){return l.filter(function(t){return (t.t||t).project===c;}).length;};return [c,f(D.open),f(D.svm),f(D.cli),f(D.created),f(D.delivered),f(D.closed)];})),[28,8,14,16,8,10,8]);
+  add("Last 5 weeks",[["Week","Dates","Open","Waiting on SVM","Waiting on client","New","Delivered","Closed"]].concat(D.weeks.map(function(w){return [rpWeekLabel(w.a),rpRangeTxt(w.a),w.open.length,w.svm.length,w.cli.length,w.created.length,w.delivered.length,w.closed.length];})),[16,24,8,14,16,8,10,8]);
+  var all=["key","summary","stage","status","side","svm","age","module","size","created","assigned","updated"];
+  add("Open CRs",[all.map(function(c){return RP_COLS[c][0];})].concat(D.open.slice().sort(function(p,q){return (q.age||0)-(p.age||0);}).map(function(x){return row(x,all);})),[14,60,16,24,11,20,10,24,9,12,12,12]);
+  add("New this week",[all.map(function(c){return RP_COLS[c][0];})].concat(D.created.map(function(t){return row(rpSnap(t,D.end),all);})),[14,60,16,24,11,20,10,24,9,12,12,12]);
+  var dc=["key","summary","status","svm","module","delivered"];add("Delivered this week",[dc.map(function(c){return RP_COLS[c][0];})].concat(D.delivered.map(function(t){return row(rpSnap(t,D.end),dc);})),[14,60,24,20,24,12]);
+  add("Movement this week",[["Key","Summary","When (IST)","From status","To status","From stage","To stage"]].concat(D.moves.map(function(m){return [m.t.key,m.t.summary,mvFdt(m.x.t),m.x.from,m.x.to,m.from,m.to];})),[14,50,16,24,24,16,16]);
+  XLSX.writeFile(wb,rpTitle().replace(/[\\/:*?"<>|]+/g,"-")+".xlsx");
+}
 function render(){
   applyFilters();
   if(!RAW.length){renderLanding();return;}
@@ -1028,7 +1212,7 @@ function render(){
     '<div class="divider"></div>'+
     '<div class="tabs" id="tabs">'+
       tabBtn("overview","Overview")+tabBtn("pipeline","Pipeline")+tabBtn("trend","Trends")+
-      tabBtn("pivots","Pivots")+tabBtn("charge","Chargeable")+tabBtn("tickets","Tickets",FILTERED.length)+tabBtn("movement","Movement")+
+      tabBtn("pivots","Pivots")+tabBtn("charge","Chargeable")+tabBtn("tickets","Tickets",FILTERED.length)+tabBtn("movement","Movement")+tabBtn("report","Report")+
     '</div><div class="hspace"></div>'+
     '<div class="hactions"><button class="ghost" id="resetBtn">↺ Reset filters</button></div>'+
   '</div>'+
@@ -1060,7 +1244,7 @@ function render(){
   var deliv=FILTERED.filter(function(t){return t.delivered;}).length;
   var client=FILTERED.filter(function(t){return t.owner==="client";}).length;
   var closed=FILTERED.filter(function(t){return t.closed;}).length;
-  if(S.tab!=="movement") h+='<div class="kpis up">'+
+  if(S.tab!=="movement"&&S.tab!=="report") h+='<div class="kpis up">'+
     kpiCard("total","Total Changes",total,"","🧩","")+
     kpiCard("open","Open",open,pct(open,total),"🔵","border-left-color:var(--vi)")+
     kpiCard("uat","In UAT / Testing",uat,pct(uat,total),"🧪","border-left-color:var(--major)")+
@@ -1076,6 +1260,7 @@ function render(){
   else if(S.tab==="charge") h+=renderCharge();
   else if(S.tab==="tickets") h+=renderTickets();
     else if(S.tab==="movement") h+=renderMovement();
+  else if(S.tab==="report") h+=renderReport();
 
   h+='<div class="footer"><b>'+esc(FILENAME)+'</b> · '+RAW.length.toLocaleString()+' change tickets loaded · '+FILTERED.length.toLocaleString()+' in scope · HD Change Tracker</div></main>';
   el("app").innerHTML=h;
@@ -1942,7 +2127,7 @@ function bindMovement(){
 }
 
 function bindAll(){
-  bindMovement();
+  bindMovement(); if(S.tab==="report") rpBind();
   document.querySelectorAll("[data-tab]").forEach(function(b){b.onclick=function(){S.tab=b.dataset.tab;S.page=0;S.search="";render();if(S.tab==="movement")mvSchedule(300);};});
   var gs=el("gsearch");if(gs){
     gs.oninput=function(){
