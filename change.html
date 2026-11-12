@@ -1182,16 +1182,32 @@ function rpPrint(){
 }
 function rpExcel(){
   if(!window.XLSX||!XLSX.utils){alert("The Excel library did not load.");return;}
-  var D=rpData(),wb=XLSX.utils.book_new(),add=function(name,aoa,w){var s=XLSX.utils.aoa_to_sheet(aoa);s["!cols"]=(w||[]).map(function(x){return {wch:x};});XLSX.utils.book_append_sheet(wb,s,name.slice(0,31));};
-  var row=function(x,cols){return cols.map(function(c){var v=RP_COLS[c][2](x);return v instanceof Date?v:v;});};
-  add("Summary",[[(S.proj||"All clients")+" — CR Status Report"],[rpWeekLabel(D.a)+" · "+rpRangeTxt(D.a)],[],["Open CRs",D.open.length],["Waiting on SVM",D.svm.length],["Waiting on client",D.cli.length],["New this week",D.created.length],["Delivered this week",D.delivered.length],["Closed this week",D.closed.length],["Average age (days)",D.avgAge==null?"":D.avgAge],["Median age (days)",D.medAge==null?"":D.medAge]],[28,16]);
-  if(!S.proj&&D.clients.length>1) add("By client",[["Client","Open","Waiting on SVM","Waiting on client","New","Delivered","Closed"]].concat(D.clients.map(function(c){var f=function(l){return l.filter(function(t){return (t.t||t).project===c;}).length;};return [c,f(D.open),f(D.svm),f(D.cli),f(D.created),f(D.delivered),f(D.closed)];})),[28,8,14,16,8,10,8]);
-  add("Last 5 weeks",[["Week","Dates","Open","Waiting on SVM","Waiting on client","New","Delivered","Closed"]].concat(D.weeks.map(function(w){return [rpWeekLabel(w.a),rpRangeTxt(w.a),w.open.length,w.svm.length,w.cli.length,w.created.length,w.delivered.length,w.closed.length];})),[16,24,8,14,16,8,10,8]);
+  /* every number links to the CRs behind it: a sheet that lists exactly them (go), or a block on "CR details" */
+  var D=rpData(),wb=XLSX.utils.book_new(),SH={},LK=[],DR=function(l,t,go,val){return {__dr:1,l:l||[],t:t,go:go,v:val};};
+  var add=function(name,aoa,w){name=name.slice(0,31);var rows=aoa.map(function(r,ri){return r.map(function(v,ci){if(v&&v.__dr){if(v.l.length||v.go)LK.push({s:name,r:ri,c:ci,l:v.l,t:v.t,go:v.go});return v.v!=null?v.v:v.l.length;}return v;});});
+    var s=XLSX.utils.aoa_to_sheet(rows,{cellDates:true,dateNF:"dd-mmm-yyyy"});s["!cols"]=(w||[]).map(function(x){return {wch:x};});XLSX.utils.book_append_sheet(wb,s,name);SH[name]=s;return s;};
+  var row=function(x,cols){return cols.map(function(c){return RP_COLS[c][2](x);});};
+  var by=function(l,c){return l.filter(function(t){return (t.t||t).project===c;});},T=function(l){return l.map(function(x){return x.t||x;});};
+  var lbl=(S.proj||"All clients"),over30=D.open.filter(function(x){return x.age!=null&&x.age>30;});
+  add("Summary",[[lbl+" — CR Status Report"],[rpWeekLabel(D.a)+" · "+rpRangeTxt(D.a)],["Click any number to see its CRs."],[],
+    ["Open CRs",DR(T(D.open),"Open CRs","Open CRs")],["Waiting on SVM",DR(T(D.svm),"Waiting on SVM")],["Waiting on client",DR(T(D.cli),"Waiting on client")],["New this week",DR(D.created,"New this week","New this week")],
+    ["Delivered this week",DR(D.delivered,"Delivered this week","Delivered this week")],["Closed this week",DR(D.closed,"Closed this week")],["Average age (days)",D.avgAge==null?"":D.avgAge],["Median age (days)",D.medAge==null?"":D.medAge],["Open over 30 days",DR(T(over30),"Open over 30 days")]],[28,16]);
+  if(!S.proj&&D.clients.length>1) add("By client",[["Client","Open","Waiting on SVM","Waiting on client","New","Delivered","Closed"]].concat(D.clients.map(function(c){return [c,DR(T(by(D.open,c)),c+" — open"),DR(T(by(D.svm,c)),c+" — waiting on SVM"),DR(T(by(D.cli,c)),c+" — waiting on client"),DR(by(D.created,c),c+" — new"),DR(by(D.delivered,c),c+" — delivered"),DR(by(D.closed,c),c+" — closed")];})),[28,8,14,16,8,10,8]);
+  add("Last 5 weeks",[["Week","Dates","Open","Waiting on SVM","Waiting on client","New","Delivered","Closed"]].concat(D.weeks.map(function(w){var k=rpWeekLabel(w.a);return [k,rpRangeTxt(w.a),DR(T(w.open),k+" — open"),DR(T(w.svm),k+" — waiting on SVM"),DR(T(w.cli),k+" — waiting on client"),DR(w.created,k+" — new"),DR(w.delivered,k+" — delivered"),DR(w.closed,k+" — closed")];})),[16,24,8,14,16,8,10,8]);
   var all=["key","summary","stage","status","side","svm","age","module","size","created","assigned","updated"];
   add("Open CRs",[all.map(function(c){return RP_COLS[c][0];})].concat(D.open.slice().sort(function(p,q){return (q.age||0)-(p.age||0);}).map(function(x){return row(x,all);})),[14,60,16,24,11,20,10,24,9,12,12,12]);
   add("New this week",[all.map(function(c){return RP_COLS[c][0];})].concat(D.created.map(function(t){return row(rpSnap(t,D.end),all);})),[14,60,16,24,11,20,10,24,9,12,12,12]);
   var dc=["key","summary","status","svm","module","delivered"];add("Delivered this week",[dc.map(function(c){return RP_COLS[c][0];})].concat(D.delivered.map(function(t){return row(rpSnap(t,D.end),dc);})),[14,60,24,20,24,12]);
   add("Movement this week",[["Key","Summary","When (IST)","From status","To status","From stage","To stage"]].concat(D.moves.map(function(m){return [m.t.key,m.t.summary,mvFdt(m.x.t),m.x.from,m.x.to,m.from,m.to];})),[14,50,16,24,24,16,16]);
+  /* CR details: one block per number */
+  var ref=function(sn,r,c){return "#'"+sn.replace(/'/g,"''")+"'!"+XLSX.utils.encode_cell({r:r,c:c});};
+  var det=[["CR details behind every number"],["Click a number on the other sheets to jump to its CRs here; \u2190 back returns to it. The rows in a block are the number you clicked."],[]],keyRows=[];
+  LK.forEach(function(x){if(x.go)return;x.row=det.length;det.push([x.t+" · "+x.l.length+" CR"+(x.l.length===1?"":"s"),"\u2190 back to "+x.s]);det.push(all.map(function(c){return RP_COLS[c][0];}));
+    x.l.slice().sort(function(p,q){return (p.created||0)-(q.created||0);}).forEach(function(t){keyRows.push([det.length,t.key]);det.push(row(rpSnap(t,D.end),all));});det.push([]);});
+  var dws=null;if(LK.some(function(x){return !x.go;})){dws=XLSX.utils.aoa_to_sheet(det,{cellDates:true,dateNF:"dd-mmm-yyyy"});dws["!cols"]=[14,60,16,24,11,20,10,24,9,12,12,12].map(function(x){return {wch:x};});XLSX.utils.book_append_sheet(wb,dws,"CR details");}
+  keyRows.forEach(function(k){var c=dws&&dws[XLSX.utils.encode_cell({r:k[0],c:0})];if(c)c.l={Target:jiraUrl(k[1]),Tooltip:"Open in Jira"};});
+  LK.forEach(function(x){var c=SH[x.s]&&SH[x.s][XLSX.utils.encode_cell({r:x.r,c:x.c})];if(c)c.l={Target:x.go?ref(x.go,0,0):ref("CR details",x.row,0),Tooltip:x.go?"Open the "+x.go+" sheet":"Show these "+x.l.length+" CRs"};
+    if(x.row!=null&&dws){var b=dws[XLSX.utils.encode_cell({r:x.row,c:1})];if(b)b.l={Target:ref(x.s,x.r,x.c),Tooltip:"Back to the number"};}});
   XLSX.writeFile(wb,rpTitle().replace(/[\\/:*?"<>|]+/g,"-")+".xlsx");
 }
 function render(){
