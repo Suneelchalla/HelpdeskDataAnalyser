@@ -309,6 +309,10 @@ body.oi-sv #view{margin-top:6px}
 .ss-kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-left:4px solid var(--kc);border-radius:10px;padding:10px 12px;color:#fff}.ss-kpi.click{cursor:pointer}.ss-kpi.click:hover{background:rgba(255,255,255,.1)}
 .ss-kpi b{display:block;font:800 24px var(--disp);color:var(--kc)}.ss-kpi span{display:block;font:600 12.5px var(--sans);margin-top:2px}.ss-kpi i{display:block;font:normal 11px var(--sans);color:#C9D6F2;margin-top:2px}
 .ss-fix.ss-fix1{grid-template-columns:1fr;gap:10px}.ss-fix.ss-fix1 .ss-fr{grid-template-columns:minmax(90px,130px) minmax(0,1fr) 52px 78px;font-size:13px}.ss-fix.ss-fix1 .ss-fr .bar{height:16px}
+.ss-thanks{margin-top:18px}.ty-logo{left:50%;right:auto;transform:translateX(-50%);top:9%;width:26%}
+.ty-band{position:absolute;left:0;right:0;top:33%;height:36%;background:#1BA9E1}.ty-title{left:5%;width:90%}
+.ty-foot{left:0;right:0;justify-content:center}
+#ssPrintHost .ss-thanks{break-before:page;page-break-before:always;margin:0;border:none;border-radius:0}
 .ss-p2{margin-top:18px}
 .ss-g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:14px 0 4px}@media (max-width:1000px){.ss-g2{grid-template-columns:1fr}}
 .ss-box h3{font:500 15px var(--sans);color:#fff;margin:0 0 4px;text-align:center}.ss-sub{font-size:12px;color:#C9D6F2;margin-left:6px}
@@ -1418,6 +1422,14 @@ function ssCoverArt(pic) {
   }
   return s + '<circle cx="500" cy="500" r="452" fill="none" stroke="#FFFFFF" stroke-width="26"/></svg>';
 }
+/* closing page: "Thank you" in the cover style (same band, fonts and logo), last page of the PDF and last slide */
+function ssThanksHTML(D) {
+  var c = ssCoverText(D), who = c.eyebrow || (F.clients.length === 1 ? F.clients[0] : "");
+  return '<div class="ss-cover ss-thanks" id="ssThanks"><img class="cv-logo ty-logo" src="' + SS_LOGO + '" alt="Solverminds Solutions and Technologies">' +
+    '<div class="ty-band"><div class="cv-title ty-title">' + (who ? '<i class="cv-eye" style="font-size:2.1cqw">' + esc(who) + "</i>" : "") + '<b class="cv-main" style="font-size:6.2cqw">Thank you</b>' +
+    '<span class="cv-sub" style="font-size:1.9cqw">For any questions on this report, please contact the SVM Help Desk.</span></div></div>' +
+    '<div class="cv-foot ty-foot"><img src="' + SS_BADGES + '" alt="CMMI DEV/3 and ISO/IEC 27001 certified"><span>All Rights Reserved. Solverminds Solutions &amp; Technologies Pvt. Ltd.</span></div></div>';
+}
 function ssCoverHTML(D) {
   var c = ssCoverText(D);
   return '<div class="ss-cover" id="ssCover"><div class="cv-band"><div class="cv-title">' + (c.eyebrow ? '<i class="cv-eye" style="font-size:' + c.es.toFixed(2) + 'cqw">' + esc(c.eyebrow) + "</i>" : "") +
@@ -1734,7 +1746,7 @@ function tabStats() {
       return '<tr><th class="rl">' + esc(m.lbl) + "</th>" + D.cats.map(function (c) { return cellTd(D.cell[i][c], m.long + " — " + c, ""); }).join("") + cellTd(all, m.long + " — all", "gt") + "</tr>"; }).join("") +
     '<tr class="gt"><th class="rl">Grand Total</th>' + D.cats.map(function (c) { var l = []; D.cell.forEach(function (o) { l = l.concat(o[c]); }); return cellTd(l, c + " — " + ms[0].lbl + " to " + ms[ms.length - 1].lbl, "gt"); }).join("") + cellTd(D.list, "All tickets — " + ms[0].lbl + " to " + ms[ms.length - 1].lbl, "gt") + "</tr></tbody></table></div>" +
     '<div class="ss-foot"><img src="' + SS_LOGO_DARK + '" alt="Solverminds Solutions and Technologies"></div></div>';
-  h += ssPage2(D, clientTxt).html + ssSlaPanel(D, clientTxt) + ssPivotPanel(D, clientTxt) + "</div>";
+  h += ssPage2(D, clientTxt).html + ssSlaPanel(D, clientTxt) + ssPivotPanel(D, clientTxt) + ssThanksHTML(D) + "</div>";
   return h;
 }
 function ssExcel() {
@@ -2021,6 +2033,16 @@ function ssDeck(P, D, art) {
       if (kind !== "none") pvChart(sl, Pv, p, kind, { x: 6.0, y: 1.3, w: 7.0, h: 5.5 }, title);
     }
   });
+  /* ── closing slide: "Thank you", in the cover style ── */
+  var TW = 13.333, TH = 7.5, TB = "1BA9E1", ty = ssSlide(pres, "thanks", { masterName: "COVER" }), tyWho = ct.eyebrow || (F.clients.length === 1 ? F.clients[0] : "");
+  ty.addShape(pres.ShapeType.rect, { x: 0, y: 0.33 * TH, w: TW, h: 0.36 * TH, fill: { color: TB }, line: { color: TB, width: 0 }, objectName: "Band" });
+  var tlw = 0.26 * TW; ty.addImage({ data: SS_LOGO, x: (TW - tlw) / 2, y: 0.09 * TH, w: tlw, h: tlw / SS_LOGO_AR, altText: "Solverminds Solutions and Technologies", objectName: "Logo" });
+  if (tyWho) ty.addText(tyWho.toUpperCase(), { x: 0.5, y: 0.33 * TH + 0.25, w: TW - 1, h: 0.4, fontFace: "Century Gothic", fontSize: 20, color: "E8F7FF", charSpacing: 3, align: "center", margin: 0, isTextBox: true, objectName: "Client" });
+  ty.addText("Thank you", { x: 0.5, y: 0.33 * TH + (tyWho ? 0.65 : 0.45), w: TW - 1, h: 1.1, fontFace: "Century Gothic", fontSize: 60, bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "Thank you",
+    shadow: { type: "outer", color: "043C6E", opacity: 0.3, blur: 6, offset: 2, angle: 90 } });
+  ty.addText("For any questions on this report, please contact the SVM Help Desk.", { x: 0.5, y: 0.33 * TH + (tyWho ? 1.8 : 1.6), w: TW - 1, h: 0.4, fontFace: "Century Gothic", fontSize: 18, color: "F2FAFF", align: "center", margin: 0, isTextBox: true, objectName: "Note" });
+  var tbh = 0.34, tbw = tbh * SS_BADGES_AR; ty.addImage({ data: SS_BADGES, x: TW / 2 - tbw - 0.15, y: TH - 0.032 * TH - tbh, w: tbw, h: tbh, altText: "CMMI DEV/3 and ISO/IEC 27001 certified", objectName: "Certifications" });
+  ty.addText("All Rights Reserved. Solverminds Solutions & Technologies Pvt. Ltd.", { x: TW / 2 + 0.05, y: TH - 0.032 * TH - tbh, w: 5.2, h: tbh, fontFace: "Calibri", fontSize: 8.5, bold: true, color: "8C8C8C", valign: "middle", margin: 0, isTextBox: true, objectName: "Rights" });
   return pres;
 }
 /* ══ "Choose what to include": a window before every PDF / Print / PowerPoint / Excel ══
@@ -2039,6 +2061,7 @@ function ssPickItems(kind) {
   var Q = typeof ssSlaData === "function" ? ssSlaData(D) : null;
   if (Q && ssSlaContracts(Q).length) items.push(["contract", "SLA by contract", "the clients whose calendar changed on a date"]);
   ssPivots().forEach(function (p) { items.push(["pivot:" + p.id, ssPivTitle(p), "custom pivot"]); });
+  if (kind !== "xlsx") items.push(["thanks", "Thank you page", "closing page with the logo"]);
   return items;
 }
 function ssPick(kind, go) {
@@ -2082,6 +2105,7 @@ function ssPrintFilter(root) {
   if (!SS_INC) return;
   var rm = function (n) { if (n && n.parentNode) n.parentNode.removeChild(n); };
   if (!ssInc("cover")) rm(root.querySelector("#ssCover"));
+  if (!ssInc("thanks")) rm(root.querySelector("#ssThanks"));
   if (!ssInc("stats")) rm(root.querySelector("#ssPanel"));
   var p2 = root.querySelector("#ssPanel2");
   if (p2) { var g2 = p2.querySelectorAll(":scope > .ss-g2"), fx = p2.querySelectorAll(":scope > .ss-box");
