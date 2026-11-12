@@ -323,6 +323,9 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 .ct-big{font:800 30px var(--disp,inherit);margin:8px 0 6px;line-height:1}.ct-big span{display:block;font:500 11.5px var(--sans,inherit);color:var(--muted);margin-top:4px}
 .ct-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;border-top:1px solid var(--line);padding-top:8px}.ct-s b{display:block;font-size:15px}.ct-s span{font-size:10.5px;color:var(--muted);line-height:1.2;display:block}
 .ct-foot{font-size:11.5px;color:var(--muted);margin-top:8px}
+.ct-tabs{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 10px;padding:3px;background:var(--paper);border-radius:9px;width:fit-content;max-width:100%}
+.ct-tabs button{border:0;background:transparent;padding:5px 11px;border-radius:7px;font:600 12px inherit;color:var(--muted);cursor:pointer}.ct-tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}.ct-tabs button:not(.on):hover{color:var(--ink)}
+.ct-grid{grid-template-columns:repeat(auto-fill,minmax(400px,560px))!important}.ct-card .ct-t{font-size:16px}
 </style>
 </head>
 <body>
@@ -965,22 +968,30 @@ function stats(v) {
 /* SLA by contract: a client calendar with dates (e.g. 24/7 only during a hypercare) splits that client's tickets by the
    contract they were created under. Shown only when the tickets in view span two or more contracts; otherwise nothing. */
 function contractGroups(v) { return Sla.byContract ? Sla.byContract(v, ST.cfg, function (x) { return x.t.prefix; }, function (x) { return x.t.created; }) : []; }
+/* one card per client with dated contracts; tabs inside: the client total first, then each contract. CT_TAB keeps the
+   tab picked per client while the page is open. */
+var CT_TAB = {};
 function contractPanel(v) {
   var G = contractGroups(v); if (!G.length) return "";
   var goal = ST.cfg.goalPct, tone = function (c) { return c == null ? "var(--faint)" : c >= goal ? "var(--green)" : c >= goal - 15 ? "#D97706" : "var(--rose)"; };
   var per = {}, order = []; G.forEach(function (g) { if (!per[g.prefix]) { per[g.prefix] = []; order.push(g.prefix); } per[g.prefix].push(g); });
-  var card = function (title, sub, s, total) {
+  var body = function (sub, s) {
     var st = function (lbl, n) { return '<div class="ct-s"><b>' + n.toLocaleString() + "</b><span>" + lbl + "</span></div>"; };
-    return '<div class="ct-card' + (total ? " ct-tot" : "") + '"><div class="ct-t">' + esc(title) + '</div><div class="ct-sub">' + esc(sub) + "</div>" +
+    return '<div class="ct-sub">' + esc(sub) + "</div>" +
       '<div class="ct-big" style="color:' + tone(s.comp) + '">' + pctTxt(s.comp) + '<span>SLA met · ' + s.met.toLocaleString() + " of " + s.decided.toLocaleString() + " decided</span></div>" +
       '<div class="ct-row">' + st("met", s.met) + st("missed", s.missed) + st("breached, still open", s.openBreached) + st("at risk", s.risk) + "</div>" +
-      '<div class="ct-foot">' + s.n.toLocaleString() + " tickets · avg time to resolve " + (s.nEl ? fdur(s.sumEl / s.nEl) : "—") + "</div></div>"; };
-  return order.map(function (p) {
-    var gs = per[p], all = [].concat.apply([], gs.map(function (g) { return g.items; }));
-    return '<div class="card ct-wrap"><h3 style="margin:0 0 2px">' + esc(clientName(p)) + " — SLA by contract</h3>" +
-      '<p class="h" style="margin:0 0 10px">' + esc(clientName(p)) + "’s tickets are measured on the calendar of the contract they were created under (Settings › Client calendars). SLA met = met ÷ decided (met + missed + open already over target). Times are working time on each contract’s own calendar.</p>" +
-      '<div class="ct-grid">' + gs.map(function (g) { return card(g.title, g.cal + " · " + g.period, stats(g.items)); }).join("") + card(clientName(p) + " total", (gs.length === 2 ? "both contracts together" : "all " + gs.length + " contracts together"), stats(all), true) + "</div></div>";
-  }).join("");
+      '<div class="ct-foot">' + s.n.toLocaleString() + " tickets · avg time to resolve " + (s.nEl ? fdur(s.sumEl / s.nEl) : "—") + "</div>"; };
+  var cards = order.map(function (p) {
+    var gs = per[p], all = [].concat.apply([], gs.map(function (g) { return g.items; })), name = clientName(p);
+    var tabs = [{ k: "total", t: "Total", sub: (gs.length === 2 ? "both contracts together" : "all " + gs.length + " contracts together"), items: all }].concat(gs.map(function (g) { return { k: g.phase, t: g.title, sub: g.cal + " · " + g.period, items: g.items }; }));
+    var cur = tabs.filter(function (x) { return x.k === CT_TAB[p]; })[0] || tabs[0];
+    return '<div class="ct-card"><div class="ct-t">' + esc(name) + '</div><div class="ct-tabs" role="tablist" aria-label="' + esc(name) + ' contracts">' +
+      tabs.map(function (x) { return '<button type="button" role="tab" aria-selected="' + (x === cur) + '" class="' + (x === cur ? "on" : "") + '" data-ctab="' + esc(p + "|" + x.k) + '">' + esc(x.t) + "</button>"; }).join("") + "</div>" +
+      body(cur.sub, stats(cur.items)) + "</div>";
+  });
+  return '<div class="card ct-wrap"><h3 style="margin:0 0 2px">SLA by contract</h3>' +
+    '<p class="h" style="margin:0 0 10px">For clients whose calendar changed on a date, each ticket is measured on the calendar of the contract it was created under (Settings › Client calendars). SLA met = met ÷ decided (met + missed + open already over target). Times are working time on each contract’s own calendar.</p>' +
+    '<div class="ct-grid">' + cards.join("") + "</div></div>";
 }
 function kpi(label, val, sub, acc, spec, n) {
   var click = spec != null && n > 0;
@@ -2125,6 +2136,7 @@ function setStatusOverride(status, val) {
 document.addEventListener("click", function (e) {
   var t = e.target, q = function (sel) { return t.closest ? t.closest(sel) : null; }, x;
   if (!q(".ms")) document.querySelectorAll(".ms-dd.open").forEach(function (d) { d.classList.remove("open"); });
+  if ((x = q("[data-ctab]"))) { var ct = x.dataset.ctab.split("|"); CT_TAB[ct[0]] = ct[1]; renderAll(); return; }
   if ((x = q("[data-msb]"))) { var k = x.dataset.msb, dd = $("ms-" + k), was = dd.classList.contains("open"); document.querySelectorAll(".ms-dd.open").forEach(function (d) { d.classList.remove("open"); }); if (!was) { dd.classList.add("open"); var si = dd.querySelector(".ms-s"); si.value = ""; msList(k); si.focus(); } return; }
   if ((x = q("[data-msall]"))) { var k1 = x.dataset.msall; ST.f[k1] = ST.opts[k1].map(function (o) { return o.v; }); msUpdate(k1); ST.page = 1; renderAll(); return; }
   if ((x = q("[data-msnone]"))) { var k2 = x.dataset.msnone; ST.f[k2] = []; msUpdate(k2); ST.page = 1; renderAll(); return; }
