@@ -1700,7 +1700,7 @@ if(HS){
     var t=new Date(st.at+330*60000), hm=("0"+t.getUTCHours()).slice(-2)+":"+("0"+t.getUTCMinutes()).slice(-2);
     box.innerHTML='<span class="sw-bar" title="Open box, Help Desk, Engineering, waiting on Swire, delivered for billing">'+seg(st.hd,"#B5486F")+seg(st.engg,"#5C1730")+seg(st.client,"#D9A35B")+seg(st.billing,"#9A8AA3")+'</span>'+
       k(st.open,"open","#5C1730")+k(st.hd,"with Help Desk","#A33A5E")+k(st.engg,"with Engineering","#5C1730")+k(st.client,"waiting on Swire","#B5651D")+
-      k(st.cr+(st.ss||0),(st.ss?st.ss+" Showstopper, ":"")+"Critical open",(st.ss?"#C8102E":"#C2680A"))+'<span class="sw-asof">as of '+hm+'</span>';
+      (st.ss?k(st.ss,"Showstopper open","#C8102E"):"")+k(st.cr,"Critical open","#C2680A")+'<span class="sw-asof">as of '+hm+'</span>';   /* separate: a Showstopper has its own (4 h) SLA */
   }
   paint();
   window.addEventListener("storage",function(e){ if(e.key==="hd-swire-stats") paint(); });
