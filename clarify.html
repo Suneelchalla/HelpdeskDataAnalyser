@@ -995,12 +995,13 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   var SIM = {};            // ticket idx → { sim, changes, best, sig, top }
   var CUR = [];            // what the rail currently lists (tickets, search matches or hotspots)
   var SEARCH = [], SEARCH_MS = 0;
-  var PRI_C = { c: "var(--p-crit)", h: "var(--p-high)", m: "var(--p-med)", l: "var(--p-low)", "": "var(--line2)" };
-  var PRI_N = { c: 0, h: 1, m: 2, l: 3, "": 4 };
-  var PRI_L = { c: "Critical", h: "High", m: "Medium", l: "Low" };
+  var PRI_C = { s: "#BE123C", c: "var(--p-crit)", h: "var(--p-high)", m: "var(--p-med)", l: "var(--p-low)", "": "var(--line2)" };
+  var PRI_N = { s: 0, c: 1, h: 2, m: 3, l: 4, "": 5 };
+  var PRI_L = { s: "Show Stopper",  c: "Critical", h: "High", m: "Medium", l: "Low" };
 
   function isWaiting(t) { var s = t.status.toLowerCase(); return s.indexOf("analysis & study") > -1 || s === "acknowledged" || s === "open"; }
-  function priKey(p) { p = (p || "").toLowerCase(); if (!p) return ""; if (p.indexOf("critical") > -1 || p.indexOf("show") > -1 || p === "highest") return "c"; if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) return "h"; if (p.indexOf("medium") > -1 || p === "normal") return "m"; return "l"; }
+  function priKey(p) { p = (p || "").toLowerCase(); if (!p) return ""; if (p.indexOf("show") > -1) return "s";   /* Show Stopper: its own priority (its SLA target differs from Critical's) */
+    if (p.indexOf("critical") > -1 || p === "highest") return "c"; if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) return "h"; if (p.indexOf("medium") > -1 || p === "normal") return "m"; return "l"; }
   function prioHTML(p) { var k = priKey(p); return p ? '<span class="prio"><i style="background:' + PRI_C[k] + '"></i>' + esc(p) + '</span>' : ""; }
   function ts(v) { if (!v) return 0; var d = v instanceof Date ? v : new Date(v), x = d.getTime(); return isNaN(x) ? 0 : x; }
   function age(v) { var x = ts(v); if (!x) return ""; var d = Math.floor((Date.now() - x) / 864e5); return d < 1 ? "today" : d < 60 ? d + "d" : d < 730 ? Math.round(d / 30) + "mo" : Math.round(d / 365) + "y"; }
@@ -1046,7 +1047,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   /* ══════════ pulse line + mode counts ══════════ */
   function renderPulse() {
     var g = IX.tickets.filter(passesGlobal), total = g.length, res = 0, wait = 0, crit = 0, chg = 0, chgOpen = 0;
-    g.forEach(function (t) { if (t.isResolved) res++; else { if (priKey(t.priority) === "c") crit++; } if (isWaiting(t)) wait++; if (t.isChange) { chg++; if (!t.isResolved) chgOpen++; } });
+    g.forEach(function (t) { if (t.isResolved) res++; else { if (priKey(t.priority) === "s" || priKey(t.priority) === "c") crit++; } if (isWaiting(t)) wait++; if (t.isChange) { chg++; if (!t.isResolved) chgOpen++; } });
     var open = total - res, rp = total ? Math.round(res / total * 100) : 0;
     el("nQueue").textContent = num(wait); el("nOpen").textContent = num(open);
     if (!CL) CL = buildClusters();
@@ -1074,7 +1075,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     return IX.tickets.filter(function (t) {
       if (!passesGlobal(t)) return false;
       if (F.mode === "queue" ? !isWaiting(t) : t.isResolved) return false;
-      if (F.qpri && priKey(t.priority) !== F.qpri) return false;
+      if (F.qpri && (F.qpri === "sc" ? ["s", "c"].indexOf(priKey(t.priority)) < 0 : priKey(t.priority) !== F.qpri)) return false;   /* sc = Show Stopper or Critical */
       return true;
     });
   }
@@ -1099,7 +1100,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
     el("railTools").innerHTML =
       '<div class="cx-rrow">' + chip("all", "All") + chip("incident", "Incidents") + chip("sr", "Service requests") + (cnt.change ? chip("change", "Changes") : "") + '</div>' +
       '<div class="cx-rrow">' +
-        '<select class="rsel" id="qPri" aria-label="Priority"><option value="">Any priority</option>' + ["c", "h", "m", "l"].map(function (k) { return '<option value="' + k + '"' + (F.qpri === k ? " selected" : "") + '>' + PRI_L[k] + '</option>'; }).join("") + '</select>' +
+        '<select class="rsel" id="qPri" aria-label="Priority"><option value="">Any priority</option>' + ["s", "c", "sc", "h", "m", "l"].map(function (k) { return '<option value="' + k + '"' + (F.qpri === k ? " selected" : "") + '>' + (k === "sc" ? "Show Stopper or Critical" : PRI_L[k]) + '</option>'; }).join("") + '</select>' +
         '<select class="rsel" id="qSort" aria-label="Sort"><option value="newest"' + (F.qsort === "newest" ? " selected" : "") + '>Newest first</option><option value="priority"' + (F.qsort === "priority" ? " selected" : "") + '>Priority first</option><option value="fix"' + (F.qsort === "fix" ? " selected" : "") + '>Known fix first</option></select>' +
         '<button class="rchip fixonly' + (F.known ? " on" : "") + '" id="qKnown" title="Only tickets a similar solved ticket can help with">Known fix only</button>' +
       '</div>' +
@@ -1349,7 +1350,7 @@ button.stf-obj b{font-weight:700;color:var(--cy);white-space:nowrap}
   el("modeBar").addEventListener("click", function (e) { var b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
   el("pulse").addEventListener("click", function (e) {
     var b = e.target.closest("[data-pulse]"); if (!b) return;
-    if (b.dataset.pulse === "crit") { F.qpri = "c"; setMode("open"); } else { F.qpri = ""; setMode(b.dataset.pulse); }
+    if (b.dataset.pulse === "crit") { F.qpri = "sc"; setMode("open"); } else { F.qpri = ""; setMode(b.dataset.pulse); }
   });
   el("railTools").addEventListener("click", function (e) {
     var c = e.target.closest("[data-qt]"); if (c) { F.qt = c.dataset.qt; F.limit = 150; renderRail(); return; }
