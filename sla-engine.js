@@ -276,6 +276,22 @@
     var cfg = opts.cfg, cal = opts.cal, now = opts.now, classify = opts.classify;
     transitions = (transitions || []).slice().sort(function (a, b) { return a.t - b.t; });
     var created = ticket.created;
+    /* closed by Jira but the history does not end in that status (closed by an automation without a logged status
+       change, a status renamed, an incomplete changelog): the missing change is taken from Jira's Resolved date —
+       last logged status → current status at the moment Jira closed it. With no status changes at all: Open at
+       creation → current status at the Resolved date. Marked inferredClose so every page can say so. */
+    var inferredClose = null;
+    /* ONLY for a history flagged unverified (opts.inferClose — the caller passes the saved history's "suspect"
+       flag). Every other ticket is calculated exactly as before, whatever its Resolved date. */
+    if (opts.inferClose && ticket.resolved != null && ticket.status && classify(ticket.status).kind === "closed") {
+      var lastTo = transitions.length ? transitions[transitions.length - 1].to : null;
+      if (lastTo !== ticket.status) {
+        var lastT = transitions.length ? transitions[transitions.length - 1].t : created;
+        var at = Math.max(ticket.resolved, lastT || 0, created || 0), from = lastTo || "Open";
+        transitions.push({ t: at, from: from, to: ticket.status, by: "(inferred from the Jira Resolved date)", inferred: true });
+        inferredClose = { at: at, from: from, to: ticket.status, noHistory: !lastTo };
+      }
+    }
     var cur = transitions.length && transitions[0].from ? transitions[0].from : (ticket.status || "Open");
     var curStart = created, raw = [], i;
     for (i = 0; i < transitions.length; i++) {
@@ -314,7 +330,7 @@
     var closedAt = null;
     if (isClosed) closedAt = last.start;
     return {
-      segs: segs, byKind: byKind, ageCalMin: (Math.max(now, created) - created) / MIN, elapsedMin: elapsed, pausedMin: paused, hdMin: hd, enggMin: engg,
+      inferredClose: inferredClose, segs: segs, byKind: byKind, ageCalMin: (Math.max(now, created) - created) / MIN, elapsedMin: elapsed, pausedMin: paused, hdMin: hd, enggMin: engg,
       unmappedMin: unmappedMin, unmapped: Object.keys(unmapped),
       clientRounds: clientRounds, reopens: reopens,
       isClosed: isClosed, closedAt: closedAt,
