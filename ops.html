@@ -305,7 +305,7 @@ body.oi-sv #view{margin-top:6px}
 .ss-t.ss-pv1{min-width:0}.ss-pv1 td.ss-pvbar{text-align:left}.ss-pv1 td.ss-pvbar i{display:block;height:10px;background:#5B83C9;border-radius:3px}
 #ssPrintHost .ss-pvx{display:none}
 .ss-p2b{margin-top:18px}
-.ss-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:14px 0 6px}@media (max-width:1000px){.ss-kpis{grid-template-columns:repeat(3,1fr)}}
+.ss-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0 6px}@media (max-width:1000px){.ss-kpis{grid-template-columns:repeat(3,1fr)}}
 .ss-kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-left:4px solid var(--kc);border-radius:10px;padding:10px 12px;color:#fff}.ss-kpi.click{cursor:pointer}.ss-kpi.click:hover{background:rgba(255,255,255,.1)}
 .ss-kpi b{display:block;font:800 24px var(--disp);color:var(--kc)}.ss-kpi span{display:block;font:600 12.5px var(--sans);margin-top:2px}.ss-kpi i{display:block;font:normal 11px var(--sans);color:#C9D6F2;margin-top:2px}
 .ss-fix.ss-fix1{grid-template-columns:1fr;gap:10px}.ss-fix.ss-fix1 .ss-fr{grid-template-columns:minmax(90px,130px) minmax(0,1fr) 52px 78px;font-size:13px}.ss-fix.ss-fix1 .ss-fr .bar{height:16px}
@@ -548,7 +548,7 @@ function setView(v) {
   try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
   renderTab(); window.scrollTo(0, 0);
 }
-var PRI = ["Critical", "High", "Medium", "Low"], PRI_C = { c: "#7C3AED", h: "#E11D48", m: "#D97706", l: "#64748B", "": "#C3CCD8" };
+var PRI = ["Show Stopper", "Critical", "High", "Medium", "Low"], PRI_C = { s: "#BE123C", c: "#7C3AED", h: "#E11D48", m: "#D97706", l: "#64748B", "": "#C3CCD8" };
 var SIDE_C = { hd: "var(--hd)", engg: "var(--engg)", client: "var(--client)" }, SIDE_L = { hd: "Help Desk", engg: "Engineering", client: "With client", closed: "Closed" };
 
 /* ── helpers ── */
@@ -562,8 +562,9 @@ function day0(ms) { return Math.floor((ms + IST) / DAY) * DAY - IST; }
 function median(a) { if (!a.length) return null; a = a.slice().sort(function (x, y) { return x - y; }); var m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; }
 function quant(a, q) { if (!a.length) return null; a = a.slice().sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(q * a.length))]; }
 function dur(d) { return d == null ? "—" : d < 1 ? Math.round(d * 24) + "h" : d < 10 ? d.toFixed(1) + "d" : Math.round(d) + "d"; }
-function priKey(p) { p = (p || "").toLowerCase(); if (!p) return ""; if (p.indexOf("critical") > -1 || p.indexOf("show") > -1 || p === "highest") return "c"; if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) return "h"; if (p.indexOf("medium") > -1 || p === "normal") return "m"; return "l"; }
-var PK_L = { c: "Critical", h: "High", m: "Medium", l: "Low", "": "" };
+function priKey(p) { p = (p || "").toLowerCase(); if (!p) return ""; if (p.indexOf("show") > -1) return "s";   /* Show Stopper: its own priority (it used to be merged into Critical) */
+  if (p.indexOf("critical") > -1 || p === "highest") return "c"; if (p.indexOf("high") > -1 || p.indexOf("urgent") > -1) return "h"; if (p.indexOf("medium") > -1 || p === "normal") return "m"; return "l"; }
+var PK_L = { s: "Show Stopper", c: "Critical", h: "High", m: "Medium", l: "Low", "": "" };
 function sideOf(status) { var C = window.HDClass; if (!C) return "hd"; if (C.isTerminal(status)) return "closed"; var k = C.classify3(status); return k === "client" ? "client" : k === "engg" ? "engg" : "hd"; }
 function delta(cur, prev, goodWhenUp) {
   if (prev == null) return '<div class="d flat">&nbsp;</div>';
@@ -748,8 +749,8 @@ function findings(m) {
       });
   }
   /* on our side: critical, aging, silent */
-  var critOld = m.ours.filter(function (t) { return (t.pk === "c" || t.pk === "h") && NOW - t.created > 7 * DAY; });
-  if (critOld.length) add(critOld.some(function (t) { return t.pk === "c"; }) ? 3 : 2, plural(critOld.length, "critical or high ticket has", "critical or high tickets have") + " been with us over a week",
+  var critOld = m.ours.filter(function (t) { return (t.pk === "s" || t.pk === "c" || t.pk === "h") && NOW - t.created > 7 * DAY; });
+  if (critOld.length) add(critOld.some(function (t) { return t.pk === "s" || t.pk === "c"; }) ? 3 : 2, plural(critOld.length, "critical or high ticket has", "critical or high tickets have") + " been with us over a week",
     "The oldest is <b>" + critOld.reduce(function (o, t) { return t.created < o.created ? t : o; }).key + "</b> at " + plural(Math.floor((NOW - critOld.reduce(function (o, t) { return Math.min(o, t.created); }, NOW)) / DAY), "day") + topBy(critOld, "svm", ". Most sit with ") + ".", critOld.sort(function (a, b) { return a.created - b.created; }), "Critical / high, on our side for over 7 days");
   var silent = m.ours.filter(function (t) { return t.updated != null && NOW - t.updated > 7 * DAY; });
   if (silent.length >= 3) add(2, plural(silent.length, "ticket on our side has", "tickets on our side have") + " had no update for a week", "Nobody has touched them in Jira for 7+ days" + topBy(silent, "svm", "; most are with ") + ". The client sees silence.", silent.sort(function (a, b) { return a.updated - b.updated; }), "On our side, no update for 7+ days");
@@ -833,7 +834,7 @@ function renderKpis(m) {
     h += tile("SLA met", met == null ? "—" : met + "%", met == null ? "" : num(m.sla.met) + " of " + num(m.sla.met + m.sla.missed), met != null && m.sla.pMetPct != null ? (function () { var d = met - m.sla.pMetPct; return d === 0 ? '<div class="d flat">same as before</div>' : '<div class="d ' + (d > 0 ? "gup" : "gdn") + '">' + (d > 0 ? "▲ " : "▼ ") + Math.abs(d) + ' pts vs before</div>'; })() : '<div class="d flat">of tickets resolved in period</div>', "", dreg(m.resolved.filter(function (t) { var x = sla(t); return x && x.state === "missed"; }), "Resolved over the SLA target"));
     h += tile("SLA breached", num(m.sla.breached.length), "open", '<div class="d ' + (m.sla.risk.length ? "up" : "flat") + '">' + num(m.sla.risk.length) + ' more at risk</div>', "", dreg(m.sla.breached.concat(m.sla.risk), "Open: breached or at risk of breaching SLA"));
   } else {
-    var crit = m.ours.filter(function (t) { return t.pk === "c" || t.pk === "h"; });
+    var crit = m.ours.filter(function (t) { return t.pk === "s" || t.pk === "c" || t.pk === "h"; });
     h += tile("Critical / high on our side", num(crit.length), "", '<div class="d flat">open now</div>', "", dreg(crit, "Critical / high, on our side"));
     h += '<div class="card kpi"><div class="l">SLA</div><div class="v" style="font-size:16px;letter-spacing:0;margin-top:8px">Not available</div><div class="d flat">Open the SLA Tracker once to set it up</div></div>';
   }
@@ -1029,7 +1030,7 @@ function tabClients(m) {
   var rows = names.map(function (p) {
     var mine = m.sc.filter(function (t) { return t.project === p; }), open = mine.filter(function (t) { return !t.isRes; }), ours = open.filter(function (t) { return t.ours; });
     var cr = m.created.filter(function (t) { return t.project === p; }), rs = m.resolved.filter(function (t) { return t.project === p; }), pcr = m.pc ? m.pc.filter(function (t) { return t.project === p; }).length : null;
-    var br = m.sla ? m.sla.breached.filter(function (t) { return t.project === p; }) : [], old = ours.filter(function (t) { return NOW - t.created > 30 * DAY; }), crit = ours.filter(function (t) { return t.pk === "c" || t.pk === "h"; });
+    var br = m.sla ? m.sla.breached.filter(function (t) { return t.project === p; }) : [], old = ours.filter(function (t) { return NOW - t.created > 30 * DAY; }), crit = ours.filter(function (t) { return t.pk === "s" || t.pk === "c" || t.pk === "h"; });
     var met = 0, mis = 0; if (m.sla) rs.forEach(function (t) { var x = sla(t); if (x && x.state === "met") met++; else if (x && x.state === "missed") mis++; });
     var r = { name: p, open: open.length, ours: ours.length, client: open.length - ours.length, cr: cr.length, pcr: pcr, rs: rs.length, med: median(rs.map(function (t) { return t.resDays; }).filter(function (x) { return x != null; })), met: met + mis ? Math.round(met / (met + mis) * 100) : null, br: br.length, old: old.length, crit: crit.length, open_l: open, ours_l: ours };
     r.growth = pcr != null ? r.cr - pcr : 0;
@@ -1062,7 +1063,7 @@ function tabTeam(m) {
   var key = F.teamBy || "svm", names = Object.keys(countBy(m.sc.filter(function (t) { return !t.isRes || inR(t.doneAt, m.R.a, m.R.b); }), key));
   var rows = names.map(function (p) {
     var ours = m.ours.filter(function (t) { return t[key] === p; }), rs = m.resolved.filter(function (t) { return t[key] === p; }), prs = m.pr ? m.pr.filter(function (t) { return t[key] === p; }).length : null;
-    var r = { name: p, ours: ours.length, crit: ours.filter(function (t) { return t.pk === "c" || t.pk === "h"; }).length, old: ours.filter(function (t) { return NOW - t.created > 30 * DAY; }).length,
+    var r = { name: p, ours: ours.length, crit: ours.filter(function (t) { return t.pk === "s" || t.pk === "c" || t.pk === "h"; }).length, old: ours.filter(function (t) { return NOW - t.created > 30 * DAY; }).length,
       silent: ours.filter(function (t) { return t.updated != null && NOW - t.updated > 7 * DAY; }).length, rs: rs.length, prs: prs, med: median(rs.map(function (t) { return t.resDays; }).filter(function (x) { return x != null; })),
       br: m.sla ? m.sla.breached.filter(function (t) { return t[key] === p && t.ours; }).length : 0, back: m.back.filter(function (t) { return t[key] === p; }).length, noRc: rs.filter(function (t) { return !t.rootCause; }).length, list: ours };
     r.oldest = ours.length ? Math.floor((NOW - Math.min.apply(null, ours.map(function (t) { return t.created; }))) / DAY) : null;
@@ -1128,7 +1129,7 @@ function tabRisks(m) {
     R.push(["breached", "SLA breached", "Open tickets past their SLA target, worst first.", m.sla.breached.slice().sort(function (a, b) { return (sla(b).overByMin || 0) - (sla(a).overByMin || 0); }), "var(--rose)"]);
     R.push(["risk", "Close to breaching", "At the warning level or due soon — act today.", m.sla.risk.slice().sort(function (a, b) { return (sla(a).remainingMin || 0) - (sla(b).remainingMin || 0); }), "#F59E0B"]);
   }
-  R.push(["crit", "Critical and high on our side", "Oldest first.", m.ours.filter(function (t) { return t.pk === "c" || t.pk === "h"; }).sort(function (a, b) { return a.created - b.created; }), "var(--violet)"]);
+  R.push(["crit", "Critical and high on our side", "Oldest first.", m.ours.filter(function (t) { return t.pk === "s" || t.pk === "c" || t.pk === "h"; }).sort(function (a, b) { return a.created - b.created; }), "var(--violet)"]);
   R.push(["silent", "Silent on our side", "No update in Jira for 7+ days, while it is our move.", m.ours.filter(function (t) { return t.updated != null && NOW - t.updated > 7 * DAY; }).sort(function (a, b) { return a.updated - b.updated; }), "#F59E0B"]);
   R.push(["old", "Older than 30 days on our side", "Long-running work — check it is still moving.", m.ours.filter(function (t) { return NOW - t.created > 30 * DAY; }).sort(function (a, b) { return a.created - b.created; }), "#F59E0B"]);
   R.push(["wait", "Waiting on the client for 14+ days", "Chase or close with a note.", m.client.filter(function (t) { return t.updated != null && NOW - t.updated > 14 * DAY; }).sort(function (a, b) { return a.updated - b.updated; }), "#93A4B8"]);
@@ -1260,7 +1261,7 @@ function ssChart(kind, vals, labels, label) {
    of the month and not resolved by then (the current month: as of now). Type of fix = tickets RESOLVED in these months.
    Year on year = tickets created in the same months one year earlier. Same filters as page 1. */
 var SS_PAL = ["#5B83C9", "#7FD1A0", "#FBBF24", "#F87171", "#C4B5FD", "#67E8F9", "#94A3B8"];
-var SS_PRI = [["c", "Critical", "#C4B5FD"], ["h", "High", "#F87171"], ["m", "Medium", "#FBBF24"], ["l", "Low", "#93C5FD"], ["", "No priority", "#94A3B8"]];
+var SS_PRI = [["s", "Show Stopper", "#F472B6"], ["c", "Critical", "#C4B5FD"], ["h", "High", "#F87171"], ["m", "Medium", "#FBBF24"], ["l", "Low", "#93C5FD"], ["", "No priority", "#94A3B8"]];
 function ssData2(D) {
   var ms = D.ms, sc = scope(), a = ms[0].a, b = ms[ms.length - 1].b, mi = function (ms_) { for (var i = 0; i < ms.length; i++) if (ms_ >= ms[i].a && ms_ < ms[i].b) return i; return -1; };
   var cre = ms.map(function () { return []; }), res = ms.map(function () { return []; }), open = ms.map(function () { return []; });
@@ -1576,13 +1577,14 @@ function ssPivChartHTML(P, p, kind) {
 /* ══ SLA Performance: the SLA Tracker's numbers (resolution against target, the shared SLA link) for the report's tickets ══
    Closed tickets: Met / Missed → compliance = met ÷ (met + missed). Open: breached, at risk, on track, paused (with client).
    Tickets without a status history yet: "No SLA data"; types the SLA Tracker does not track, or without a target, are left out. */
-var SS_SLA_K = [["met", "Met", "#7FD1A0"], ["missed", "Missed", "#F87171"], ["breached", "Open, breached", "#EF4444"], ["open", "Open, not yet breached", "#FBBF24"], ["nohist", "No SLA data", "#94A3B8"]];
+/* the report shows an open ticket only as "Open": it is met or missed once it is closed (no breached / not yet breached while open) */
+var SS_SLA_K = [["met", "Met", "#7FD1A0"], ["missed", "Missed", "#F87171"], ["open", "Open", "#FBBF24"], ["nohist", "No SLA data", "#94A3B8"]];
 var SS_SLA_L = {}; SS_SLA_K.forEach(function (k) { SS_SLA_L[k[0]] = k[1]; });
 function ssSlaOf(t) { var x = sla(t); if (!x || x.state === "none") return null; if (x.state === "nohist") return "nohist";
-  if (x.state === "met" || x.state === "missed" || x.state === "breached") return x.state; return "open"; }   /* at risk, on track, paused with the client: all still inside target */
+  if (x.state === "met" || x.state === "missed") return x.state; return "open"; }   /* at risk, on track, paused with the client: all still inside target */
 /* the SLA columns of the Excel "All tickets" sheet: [header, explanation, width] */
 var SS_SLA_XH = [
-  ["SLA", "The result: Met (closed within target), Missed (closed over target), Open, breached (still open, already past target), Open, not yet breached (still open, inside target; includes paused with the client), No SLA data (status history not read yet), Not tracked (request type the SLA Tracker does not track, or no target).", 22],
+  ["SLA", "The result: Met (closed within target), Missed (closed over target), Open (not closed yet — it becomes Met or Missed once it is closed), No SLA data (status history not read yet), Not tracked (request type the SLA Tracker does not track, or no target).", 22],
   ["SLA detail", "The SLA Tracker's short description, e.g. \"Missed · 3d 1h 53m over\" (days of working time, as in the SLA Tracker).", 28],
   ["SLA target (working h)", "The time allowed for this priority and client, in working hours on the SLA calendar.", 12],
   ["Working time counted (h)", "Working hours that counted against the target: time with the Help Desk or Engineering. Time with the client and time after closing do not count.", 13],
@@ -1663,7 +1665,7 @@ function ssSlaPanel(D, clientTxt) {
   var closed = A.met.concat(A.missed);
   h += '<div class="ss-kpis">' + tile("SLA compliance", ssPctTxt(compAll), closed, compAll == null ? "#94A3B8" : compAll >= 90 ? "#7FD1A0" : compAll >= 75 ? "#FBBF24" : "#F87171", "of " + num(closed.length) + " closed tickets") +
     tile("Met", num(A.met.length), A.met, "#7FD1A0", "closed within target") + tile("Missed", num(A.missed.length), A.missed, "#F87171", "closed over target") +
-    tile("Open, breached", num(A.breached.length), A.breached, "#EF4444", "past target, still open") + tile("Open, not yet breached", num(A.open.length), A.open, "#FBBF24", "still open, inside target") + "</div>";
+    tile("Open", num(A.open.length), A.open, "#FBBF24", "not closed yet: met or missed once closed") + "</div>";
   /* SLA by contract (only when the tickets fall under two or more contracts): one card per contract and the client total */
   var CT = ssSlaContracts(Q);
   if (CT.length) {
@@ -1673,7 +1675,7 @@ function ssSlaPanel(D, clientTxt) {
       CT.map(function (g) { var o = g.o, c = Q.comp(o), closed = o.met.length + o.missed.length;
         return '<div class="ssc-card' + (g.total ? " ssc-tot" : "") + '" style="--kc:' + ctTone(c) + '"><div class="ssc-t">' + esc(g.label) + '</div><div class="ssc-s">' + esc(g.sub) + "</div>" +
           '<div class="ssc-big">' + ssPctTxt(c) + '<span>SLA compliance · ' + num(o.met.length) + " of " + num(closed) + " closed</span></div>" +
-          '<div class="ssc-row">' + ctN(o.met, "met", g.label + " — met") + ctN(o.missed, "missed", g.label + " — missed") + ctN(o.breached, "open, breached", g.label + " — open, breached") + ctN(o.open, "open, not yet breached", g.label + " — open, not yet breached") + "</div></div>"; }).join("") +
+          '<div class="ssc-row">' + ctN(o.met, "met", g.label + " — met") + ctN(o.missed, "missed", g.label + " — missed") + ctN(o.open, "open", g.label + " — open") + "</div></div>"; }).join("") +
       "</div></div>";
   }
   /* compliance by priority, as bars */
@@ -1684,9 +1686,9 @@ function ssSlaPanel(D, clientTxt) {
       return '<div class="ss-fr' + (r.n ? " click" : "") + '"' + (r.n ? ' data-drill="' + dreg(r.o.met.concat(r.o.missed), r.p + " — closed tickets") + '"' : "") + '><span class="nm">' + esc(r.p) + '</span><span class="bar"><i style="width:' + (r.c || 0) + "%;background:" + col + '"></i></span><b>' + ssPctTxt(r.c == null ? null : Math.round(r.c)) + '</b><span class="pc">' + (r.n ? r.o.met.length + " of " + r.n : "no closed") + "</span></div>"; }).join("") + "</div>" +
       '<p class="ss-note">Compliance = closed within the SLA target ÷ all closed tickets with SLA data. Targets and working hours are the SLA Tracker’s (per priority and client).</p></div></div>';
   /* tables: by month, by priority */
-  var head = ["Met", "Missed", "Compliance", "Open, breached", "Open, not yet breached"];
+  var head = ["Met", "Missed", "Compliance", "Open"];
   var rowOf = function (label, o, title) { var c = Q.comp(o); return '<tr><th class="rl">' + esc(label) + "</th>" + cnt(o.met, title + " — met") + cnt(o.missed, title + " — missed") + '<td class="gt">' + ssPctTxt(c == null ? null : Math.round(c)) + "</td>" +
-    cnt(o.breached, title + " — open, breached") + cnt(o.open, title + " — open, not yet breached") + "</tr>"; };
+    cnt(o.open, title + " — open") + "</tr>"; };
   var tbl = function (first, rows) { return '<div class="ss-tw"><table class="ss-t ss-mini"><thead><tr><th class="rl">' + first + "</th>" + head.map(function (x) { return "<th>" + x + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>"; };
   h += '<div class="ss-g2"><div class="ss-box"><h3>By month</h3>' + tbl("Month", ms.map(function (m, i) { return rowOf(m.lbl, Q.byM[i], m.long); }).join("") + rowOf("Total", A, "All months").replace("<tr>", '<tr class="gt">')) + "</div>" +
     '<div class="ss-box"><h3>By priority</h3>' + tbl("Priority", pRows.map(function (r) { return rowOf(r.p, r.o, r.p); }).join("") + rowOf("Total", A, "All priorities").replace("<tr>", '<tr class="gt">')) +
@@ -1801,8 +1803,8 @@ function ssExcel() {
   sh("Year on year", [["Year on year (created)"], [], ["Month"].concat(X.yoyL, ["Total"]), [X.names[0]].concat(X.prev.map(function (l, i) { return DR(l, X.pm[i].long + " — created"); }), [DR(cat(X.prev), X.names[0] + " — all months")]), [X.names[1]].concat(X.cre.map(function (l, i) { return DR(l, ms[i].long + " — created"); }), [drt(X.cre, X.names[1])])]);
   var Qx = ssSlaData(D);
   if (Qx.ready && Qx.tracked.length) {
-    var SHx = ["Met", "Missed", "Compliance %", "Open, breached", "Open, not yet breached"];
-    var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, DR(o.met, lbl + " — SLA met"), DR(o.missed, lbl + " — SLA missed"), c == null ? "" : c, DR(o.breached, lbl + " — open, breached"), DR(o.open, lbl + " — open, not yet breached")]; };
+    var SHx = ["Met", "Missed", "Compliance %", "Open"];
+    var rx = function (lbl, o) { var c = Qx.comp(o); return [lbl, DR(o.met, lbl + " — SLA met"), DR(o.missed, lbl + " — SLA missed"), c == null ? "" : c, DR(o.open, lbl + " — open")]; };
     var sa = [["SLA Performance (resolution against the SLA Tracker targets)"], [], ["Month"].concat(SHx)].concat(ms.map(function (m, i) { return rx(m.lbl, Qx.byM[i]); }), [rx("Total", Qx.all)], [[]], [["Priority"].concat(SHx)], Qx.pris.map(function (p) { return rx(p, Qx.byP[p]); }), [rx("Total", Qx.all)]);
     var CTx = ssInc("contract") ? ssSlaContracts(Qx) : []; if (CTx.length) sa = sa.concat([[]], [["Contract", "Calendar · tickets"].concat(SHx)], CTx.map(function (g) { var r = rx(g.label, g.o); r.splice(1, 0, g.sub); return r; }));
     var swk = XLSX.utils.aoa_to_sheet(fin("SLA", sa)); SHEETS["SLA"] = swk; swk["!cols"] = [{ wch: CTx.length ? 52 : 14 }].concat(SHx.map(function () { return { wch: 14 }; })); XLSX.utils.book_append_sheet(wb, swk, "SLA");
@@ -1985,7 +1987,7 @@ function ssDeck(P, D, art) {
   if (Q.ready && Q.tracked.length) {
     var sq = ssSlide(pres, "sla", { masterName: "SUPPORT" }); head(sq, "SLA Performance"); var A = Q.all, cA = Q.comp(A), ok = A.met.length + A.missed.length;
     sq.addText([{ text: "SLA compliance " + ssPctTxt(cA == null ? null : Math.round(cA)), options: { bold: true, color: cA == null ? "C9D6F2" : cA >= 90 ? "7FD1A0" : cA >= 75 ? "FBBF24" : "F87171", fontSize: 16 } },
-      { text: "   of " + num(ok) + " closed  ·  Met " + num(A.met.length) + "  ·  Missed " + num(A.missed.length) + "  ·  Open, breached " + num(A.breached.length) + "  ·  Open, not yet breached " + num(A.open.length), options: { color: "E6ECF8", fontSize: 11 } }],
+      { text: "   of " + num(ok) + " closed  ·  Met " + num(A.met.length) + "  ·  Missed " + num(A.missed.length) + "  ·  Open " + num(A.open.length), options: { color: "E6ECF8", fontSize: 11 } }],
       { x: 0.35, y: 0.88, w: 12.6, h: 0.4, fontFace: FONT, margin: 0, valign: "middle", isTextBox: true, objectName: "SLA headline" });
     var mm = Q.byM.map(function (o) { return o.met.length; }), mi = Q.byM.map(function (o) { return o.missed.length; });
     sq.addChart(pres.ChartType.bar, [{ name: "Met", labels: L, values: mm }, { name: "Missed", labels: L, values: mi }],
@@ -1993,14 +1995,14 @@ function ssDeck(P, D, art) {
     var pr = Q.pris.filter(function (p) { return Q.comp(Q.byP[p]) != null; }), pv = pr.map(function (p) { return Math.round(Q.comp(Q.byP[p])); });
     if (pr.length) sq.addChart(pres.ChartType.bar, [{ name: "Compliance %", labels: pr.slice().reverse(), values: pv.slice().reverse() }],
       base("SLA compliance by priority (%)", { x: 6.75, y: 1.35, w: 6.2, h: 2.85, barDir: "bar", valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 25, valAxisLabelFormatCode: "0", catAxisLabelRotate: 0, chartColors: ["7FD1A0"], showValue: true, dataLabelPosition: "outEnd", objectName: "Chart: SLA by priority" }));
-    var slaRow = function (lbl, o) { var c = Q.comp(o); return [lbl, o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.breached.length || "", o.open.length || ""]; };
-    var SH = ["Met", "Missed", "Compliance", "Open, breached", "Open, not yet breached"];
+    var slaRow = function (lbl, o) { var c = Q.comp(o); return [lbl, o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.open.length || ""]; };
+    var SH = ["Met", "Missed", "Compliance", "Open"];
     table(sq, ["Month"].concat(SH), ms.map(function (m, i) { return slaRow(m.lbl, Q.byM[i]); }).concat([slaRow("Total", A)]), { x: 0.35, y: 4.35, w: 6.2, first: 0.8, noTotal: true, fs: 7, tight: true, rowH: Math.min(0.2, 2.55 / (ms.length + 2)), totalRow: true, name: "Table: SLA by month" });
     table(sq, ["Priority"].concat(SH), Q.pris.map(function (p) { return slaRow(p, Q.byP[p]); }).concat([slaRow("Total", A)]), { x: 6.75, y: 4.35, w: 6.2, first: 0.95, noTotal: true, fs: 7.5, tight: true, rowH: 0.24, totalRow: true, name: "Table: SLA by priority" });
     var CTp = ssSlaContracts(Q);
     if (CTp.length) { var sc2 = ssSlide(pres, "contract", { masterName: "SUPPORT" }); head(sc2, "SLA by Contract");
       sc2.addText("Each ticket is measured on the calendar of the contract it was created under.", { x: 0.35, y: 0.9, w: 12.6, h: 0.35, fontFace: FONT, fontSize: 12, color: SOFT, margin: 0, isTextBox: true, objectName: "Note" });
-      var cRow = function (lbl, o) { var c = Q.comp(o), n = o.met.length + o.missed.length + o.breached.length + o.open.length; return [lbl, n || "", o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.breached.length || "", o.open.length || ""]; };
+      var cRow = function (lbl, o) { var c = Q.comp(o), n = o.met.length + o.missed.length + o.open.length; return [lbl, n || "", o.met.length || "", o.missed.length || "", ssPctTxt(c == null ? null : Math.round(c)), o.open.length || ""]; };
       table(sc2, ["Contract", "Tickets"].concat(SH), CTp.map(function (g) { return cRow(g.label + "\n" + g.sub, g.o); }), { x: 0.35, y: 1.45, w: 12.6, first: 5.0, noTotal: true, fs: 10, rowH: 0.5, totalRow: true, name: "Table: SLA by contract" });
       sc2.addChart(pres.ChartType.bar, [{ name: "Compliance %", labels: CTp.map(function (g) { return g.label; }), values: CTp.map(function (g) { var c = Q.comp(g.o); return c == null ? 0 : Math.round(c); }) }],
         base("SLA compliance by contract (%)", { x: 0.35, y: 1.65 + 0.5 * (CTp.length + 1), w: 12.6, h: Math.max(2.2, 5.3 - 0.5 * (CTp.length + 1)), barDir: "bar", valAxisMinVal: 0, valAxisMaxVal: 100, valAxisMajorUnit: 25, valAxisLabelFormatCode: "0", catAxisLabelRotate: 0, chartColors: ["7FD1A0"], showValue: true, dataLabelPosition: "outEnd", objectName: "Chart: SLA by contract" })); }
