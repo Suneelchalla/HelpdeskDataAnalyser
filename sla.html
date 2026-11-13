@@ -326,6 +326,8 @@ tr.tot td{background:var(--paper);border-top:1.5px solid var(--line2)}
 .ct-tabs{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 10px;padding:3px;background:var(--paper);border-radius:9px;width:fit-content;max-width:100%}
 .ct-tabs button{border:0;background:transparent;padding:5px 11px;border-radius:7px;font:600 12px inherit;color:var(--muted);cursor:pointer}.ct-tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}.ct-tabs button:not(.on):hover{color:var(--ink)}
 .ct-grid{grid-template-columns:repeat(auto-fill,minmax(400px,560px))!important}.ct-card .ct-t{font-size:16px}
+.sus-box{margin-top:10px;display:flex;flex-direction:column;gap:8px}.sus-g{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#FFFBEB}.sus-g b{font-size:12.5px}
+.sus-h{display:block;font-size:11.5px;color:var(--muted);margin:2px 0 4px}.sus-g ul{margin:0;padding-left:18px;font-size:12px;color:var(--ink2)}.sus-act{display:flex;align-items:center;gap:10px}
 </style>
 </head>
 <body>
@@ -503,6 +505,26 @@ function scope() {
    "Updated" stamp alone is not enough: the stamp saved with a history is the row's at fetch time, and if Jira
    had moved on in between, a newer history would be judged against an older row (e.g. "Paused" shown while
    the row is in an Engineering status). e.status is Jira's own status when the history was fetched. */
+/* why a saved history is "unverified" (sla-history.js flags it when the history does not end in the ticket's status):
+   none = Jira returned no status changes · ends = the last change ends in another status than the ticket is in now ·
+   unchecked = the check of the ticket on its own did not get an answer, so only the quick read was kept */
+function susWhy(t) {
+  var e = histFor(t); if (!e) return null; var tr = e.transitions || [], last = tr.length ? tr[tr.length - 1] : null;
+  if (e.src === "search" && !e.verified) return { k: "unchecked", txt: "the check of this ticket on its own did not get an answer" };
+  if (!tr.length) return { k: "none", txt: "Jira returned no status changes, although the ticket is now “" + (e.status || t.status) + "”" };
+  return { k: "ends", txt: "Jira’s last status change goes to “" + last.to + "” on " + fdtw(last.t) + ", but the ticket is now “" + (e.status || t.status) + "”" };
+}
+function susReasons(list) {
+  var g = { none: [], ends: [], unchecked: [] }; list.forEach(function (x) { var w = susWhy(x.t); if (w) g[w.k].push({ t: x.t, w: w }); });
+  var block = function (k, title, help) { var a = g[k]; if (!a.length) return "";
+    return '<div class="sus-g"><b>' + esc(title) + " · " + a.length + '</b><span class="sus-h">' + esc(help) + '</span><ul>' + a.slice(0, 12).map(function (y) { return "<li><b>" + esc(y.t.key) + "</b> — " + esc(y.w.txt) + "</li>"; }).join("") + (a.length > 12 ? "<li>… and " + (a.length - 12) + " more</li>" : "") + "</ul></div>"; };
+  ST.susKeys = list.map(function (x) { return x.t.key; });
+  return '<div class="sus-box">' +
+    block("ends", "History ends in a different status", "Usually a status changed without a transition being logged (e.g. by an automation such as JMWE, a status renamed in the workflow, or the ticket moved between projects). Check the History tab in Jira: if the status really was changed, the SLA Tracker’s numbers for it are reliable up to the last logged change.") +
+    block("none", "No status changes returned", "Jira sent back no status changes for the ticket. If its History tab does show status changes, re-check it below.") +
+    block("unchecked", "Not checked on its own yet", "The per-ticket check did not get an answer (extension or network). Re-check it below.") +
+    '<div class="sus-act"><button class="ghost" id="drRecheck"' + (BR.ready ? "" : " disabled") + ">Re-check these " + list.length + " in Jira</button><span class=\"sus-h\">Reads just these tickets again, each on its own. Tickets whose history now adds up drop off this list.</span></div></div>";
+}
 function histFor(t) {
   var e = ST.hist.tickets[t.key]; if (!e) return null;
   var last = e.transitions.length ? e.transitions[e.transitions.length - 1].to : e.status, jiraSt = e.status || last;
@@ -526,7 +548,7 @@ function staleWhy(t) {
 function getResult(t) {
   if (Object.prototype.hasOwnProperty.call(ST.results, t.key)) return ST.results[t.key];
   var e = histFor(t), r = null;
-  if (e) r = Sla.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: ST.cfg, cal: calFor(t), now: ST.now, classify: classify });
+  if (e) r = Sla.compute({ created: t.created, resolved: t.resolved, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: ST.cfg, cal: calFor(t), now: ST.now, classify: classify, inferClose: !!e.suspect });
   ST.results[t.key] = r; return r;
 }
 function bucketOf(r) { return r ? Sla.bucket(r) : "nohist"; }
@@ -697,10 +719,11 @@ function renderBar() {
   var sc = fetchScope(), n = sc.length, inRange = ST.scope.length, active = filtersActive();
   var mk = missingKeys(false), miss = mk.length, stale = mk.filter(function (k) { return ST.hist.tickets[k]; }).length, bad = sc.filter(function (t) { return !histFor(t) && ST.failedSet[t.key]; }), ready = n - miss - bad.length;
   var missAll = active ? missingKeys(false, true).length : miss;
-  var sus = sc.filter(function (t) { var e = histFor(t); return e && e.suspect; }).length;
+  var sus = sc.filter(histSuspect).length, inf = sc.filter(histInferred).length;
   var mism = sc.filter(function (t) { var r = getResult(t); return r && r.statusMismatch; }).length;
   var fail = bad.length ? '<br><span style="color:var(--rose)"><b>' + drNum(bad.length, ["bar", "bad"]) + " ticket" + (bad.length > 1 ? "s" : "") + " could not be fetched</b> — " + esc(bad[0].key + ": " + ST.failedSet[bad[0].key]) + (bad.length > 1 ? " (and " + (bad.length - 1) + " more)" : "") + "</span>" : "";
-  var warn = (mism ? '<br><span style="color:var(--ink2)">ⓘ ' + drNum(mism, ["bar", "mism"], "", mism.toLocaleString()) + " ticket" + (mism > 1 ? "s’" : "’s") + " Jira history ends in a different status than the ticket is in now (usually a status renamed in the workflow). The current status is used from the last recorded change, so who holds it matches the Follow-up Tracker.</span>" : "") + (sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + drNum(sus, ["bar", "sus"], "", sus.toLocaleString()) + " ticket" + (sus > 1 ? "s" : "") + "</b> show no status changes even after checking each one in Jira, so their numbers may be wrong. They are marked “unverified”.</span>" : "");
+  var infLine = inf ? '<br><span style="color:var(--ink2)">ⓘ ' + drNum(inf, ["bar", "inf"], "", inf.toLocaleString()) + " closed ticket" + (inf > 1 ? "s have" : " has") + " no logged status change into the closed status; " + (inf > 1 ? "their" : "its") + " SLA clock stops at Jira’s Resolved date.</span>" : "";
+  var warn = infLine + (mism ? '<br><span style="color:var(--ink2)">ⓘ ' + drNum(mism, ["bar", "mism"], "", mism.toLocaleString()) + " ticket" + (mism > 1 ? "s’" : "’s") + " Jira history ends in a different status than the ticket is in now (usually a status renamed in the workflow). The current status is used from the last recorded change, so who holds it matches the Follow-up Tracker.</span>" : "") + (sus ? '<br><span style="color:var(--amber)"><b>⚠ ' + drNum(sus, ["bar", "sus"], "", sus.toLocaleString()) + " ticket" + (sus > 1 ? "s" : "") + "</b> have a Jira status history that does not add up (no status changes, or it ends in a different status than the ticket is in now), so their numbers may be wrong. They are marked “unverified” — click the number to see why and re-check them.</span>" : "");
   var older = olderPend(true).length, nIn = n - older;
   var head = active ? drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket matches" : "tickets match") + " your filters (of " + inRange.toLocaleString() + " created " + fd(r.from) + " – " + fd(r.to) + ")" : drNum(nIn, ["bar", "range"], "", nIn.toLocaleString()) + " " + (nIn === 1 ? "ticket" : "tickets") + " created " + fd(r.from) + " – " + fd(r.to);
   if (older) {
@@ -907,7 +930,9 @@ function drillList(spec) {
       var sc = fetchScope().map(function (t) { var rr = getResult(t); return { t: t, r: rr, b: bucketOf(rr) }; });
       if (p[1] === "all") { r.list = sc; r.title = "Everything Fetch covers"; r.sub = "Tickets created in the selected range that match your filters, plus any older open tickets with Help Desk or Engineering."; }
       else if (p[1] === "mism") { r.list = sc.filter(function (x) { return x.r && x.r.statusMismatch; }); r.title = "History ends in a different status"; r.sub = "Jira’s status history for these tickets ends in a status that is not their current status (usually a status renamed in the workflow — the history keeps the old name). The current status is used from the last recorded change. Open a ticket to see both names."; }
-      else if (p[1] === "sus") { r.list = sc.filter(function (x) { var e = histFor(x.t); return e && e.suspect; }); r.title = "Unverified: no status changes found in Jira"; r.sub = "Jira returned no status changes for these tickets, even after checking each one on its own, although their current status says they have moved. Their SLA numbers may be wrong. Open a ticket in Jira to check its history; if it does have status changes, use Re-fetch these from Jira (or the ticket’s own re-fetch) to read it again."; }
+      else if (p[1] === "inf") { r.list = sc.filter(function (x) { return histInferred(x.t); }); r.title = "Closing taken from Jira’s Resolved date"; r.sub = "These closed tickets have no logged status change into their closed status (for example closed by an automation such as JMWE), so the SLA clock stops at the moment Jira resolved them: the time from the last logged status change up to the Resolved date counts as the status the ticket was in then. Their SLA is calculated as usual."; }
+      else if (p[1] === "sus") { r.list = sc.filter(function (x) { return histSuspect(x.t); }); r.title = "Unverified: Jira’s status history does not add up";
+        r.extra = susReasons(r.list); r.sub = "Jira returned no status changes for these tickets, even after checking each one on its own, although their current status says they have moved. Their SLA numbers may be wrong. Open a ticket in Jira to check its history; if it does have status changes, use Re-fetch these from Jira (or the ticket’s own re-fetch) to read it again."; }
       else if (p[1] === "range") { r.list = sc.filter(function (x) { return ST.scopeKeys[x.t.key]; }); r.title = "Tickets created in the selected range"; r.sub = "Created " + fd(rangeMs().from) + " – " + fd(rangeMs().to) + " and matching your filters."; }
       else if (p[1] === "older") { r.list = sc.filter(function (x) { return !ST.scopeKeys[x.t.key]; }); r.title = "Open tickets outside the range with Help Desk or Engineering"; r.sub = "Created before " + fd(rangeMs().from) + " or after " + fd(rangeMs().to) + " and still open, held by Help Desk or Engineering by their current status. They are added to the fetch so the SVM pending table (which is not limited by the Created range) is complete."; }
       else if (p[1] === "ready") { r.list = sc.filter(function (x) { return x.r; }); r.title = "Status history ready"; r.sub = "Their SLA clock is calculated."; }
@@ -947,7 +972,7 @@ function renderDrill() {
   var pages = Math.max(1, Math.ceil(list.length / 15)); if (d.page > pages) d.page = pages;
   var pg = list.slice((d.page - 1) * 15, d.page * 15), elig = list.some(canRemind);
   Object.keys(d.sel).forEach(function (k) { if (!list.some(function (x) { return x.t.key === k && canRemind(x); })) delete d.sel[k]; });    // selection only ever holds tickets that are in this list and can be reminded
-  var h = '<div class="modal" style="width:min(1400px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + esc(r.title) + ' <span class="chip2 x" id="drCount">' + list.length.toLocaleString() + " ticket" + (list.length === 1 ? "" : "s") + '</span></h2><div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(r.sub) + '</div></div>' +
+  var h = '<div class="modal" style="width:min(1400px,100%)"><div class="mh"><div style="flex:1;min-width:0"><h2 style="font-size:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + esc(r.title) + ' <span class="chip2 x" id="drCount">' + list.length.toLocaleString() + " ticket" + (list.length === 1 ? "" : "s") + '</span></h2><div style="font-size:12px;color:var(--muted);margin-top:4px">' + esc(r.sub) + "</div>" + (r.extra || "") + '</div>' +
     (r.tab ? '<button class="ghost" id="drTab" data-rs="' + r.tab + '">Show in Tickets tab</button>' : "") + '<button class="ghost" id="drExport">Export to Excel</button><button class="x" data-closedrill aria-label="Close">✕</button></div><div class="mb">' +
     (list.length ? '<div style="font-size:12px;color:var(--ink2);margin-bottom:10px">' + mixChips(list) + "</div>" + drToolbar(list) + '<div class="tw"><table><thead><tr>' + ticketHead("dr", elig, exTh) + "</tr></thead><tbody>" + pg.map(function (x) { return ticketRowHtml(x, elig ? d.sel : null, exFn); }).join("") + '</tbody></table></div><div class="pager"><button id="drPrev"' + (d.page <= 1 ? " disabled" : "") + '>Previous</button><span>Page ' + d.page + " of " + pages + '</span><button id="drNext"' + (d.page >= pages ? " disabled" : "") + ">Next</button></div>" : '<div class="empty">No tickets.</div>') + "</div></div>";
   overlay("drill", h); drSelUpdate();
@@ -1138,7 +1163,8 @@ function remindCell(x) {
   var n = notesGet()[x.t.key];
   return '<button class="ghost sm" data-remind="' + esc(x.t.key) + '" title="Preview and send an SLA reminder as an internal note">🔔 Remind</button>' + (n ? '<div class="sub2">sent ' + agoText(n.at) + "</div>" : "");
 }
-function histSuspect(t) { var e = histFor(t); return !!(e && e.suspect); }
+function histInferred(t) { var r = getResult(t); return !!(r && r.inferredClose); }
+function histSuspect(t) { var e = histFor(t); return !!(e && e.suspect) && !histInferred(t); }   /* closed with a Resolved date: calculated, not unverified */
 function sortVal(x, k) {
   var r = x.r;
   switch (k) {
@@ -1158,7 +1184,7 @@ function ticketHead(mode, selectable, extraTh) { return (selectable ? '<th class
 function ticketRowHtml(x, sel, extra) { return withCal(x.t, function () { return ticketRowInner(x, sel, extra); }); }
 function ticketRowInner(x, sel, extra) {
   var t = x.t, r = x.r, picked = sel && sel[t.key];
-  return '<tr class="row-click' + (picked ? " picked" : "") + '" tabindex="0" data-open="' + esc(t.key) + '">' + (sel ? '<td class="selc">' + (canRemind(x) ? '<input type="checkbox" data-sel="' + esc(t.key) + '"' + (picked ? " checked" : "") + ' aria-label="Select ' + esc(t.key) + ' for a reminder">' : "") + "</td>" : "") + '<td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="No status changes found even after checking this ticket in Jira">unverified</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + '</td><td class="num" style="white-space:nowrap">' + frCell(t) + "</td>" + (extra ? extra(x) : "") + "<td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
+  return '<tr class="row-click' + (picked ? " picked" : "") + '" tabindex="0" data-open="' + esc(t.key) + '">' + (sel ? '<td class="selc">' + (canRemind(x) ? '<input type="checkbox" data-sel="' + esc(t.key) + '"' + (picked ? " checked" : "") + ' aria-label="Select ' + esc(t.key) + ' for a reminder">' : "") + "</td>" : "") + '<td>' + keyLink(t.key) + '</td><td class="ell" title="' + esc(t.summary) + '">' + esc(t.summary) + "</td><td class=\"tdn\">" + sevLabel(t) + "</td><td>" + esc(t.status) + (histSuspect(t) ? ' <span class="chip2 a" title="The Jira status history does not add up and the closing could not be taken from the Resolved date">unverified</span>' : histInferred(t) ? ' <span class="chip2" title="No logged status change into the closed status: the SLA clock stops at Jira’s Resolved date">closed date from Jira</span>' : "") + "</td><td>" + (r ? kchip(r.currentKind) : "—") + '</td><td class="num" style="white-space:nowrap">' + frCell(t) + "</td>" + (extra ? extra(x) : "") + "<td>" + esc(t.worker || "—") + '</td><td class="num">' + (r && r.targetMin != null ? fdur(r.targetMin) : "—") + '</td><td class="num">' + (r ? fdur(r.elapsedMin) : "—") + "</td><td>" + bar(r) + "</td><td>" + breakCell(x) + "</td><td>" + chip(x.b) + "</td><td>" + remindCell(x) + "</td></tr>";
 }
 function renderTickets(v) {
   var M = $("main");
@@ -1263,7 +1289,8 @@ function renderDetailInner() {
     var notYet = !r.isClosed && !r.isPaused && r.elapsedMin < 0.5, nws = notYet ? Sla.nextWorkStart(ST.now, calFor(t)) : null;
     h += '<div class="sr">' + (notYet && nws ? "<b>No working time has passed yet</b> — the ticket was raised outside working hours, so the clock starts <b>" + fdtw(nws) + " IST</b>. " : "") + breachSentence(bi) + (r.isClosed ? "Closed " + fdt(r.closedAt) + ". " : "") + "Created <b>" + fcal(r.ageCalMin) + "</b> ago on the calendar. Only working time counts (" + esc(calText(calFor(t))) + "), which came to <b>" + fdur(r.elapsedMin) + "</b>" + dayNote + (r.targetMin != null ? " against a target of <b>" + fdur(r.targetMin) + "</b>" : "") + ". " +
       (r.pausedMin > 0 ? "<b>" + fdur(r.pausedMin) + "</b> of working time was spent with the client and was <b>not</b> counted. " : "This ticket has not been with the client. ") +
-      (e && e.suspect ? '<br><span style="color:var(--amber)"><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</span> ' : "") +
+      (r && r.inferredClose ? '<br><span style="color:var(--ink2)"><b>ⓘ Closing taken from Jira’s Resolved date:</b> ' + esc(r.inferredClose.from) + " → " + esc(r.inferredClose.to) + " at " + esc(fdtw(r.inferredClose.at)) + (r.inferredClose.noHistory ? " (Jira has no status changes for this ticket, so it counts as open from creation until then)" : " (no status change into “" + esc(r.inferredClose.to) + "” is logged in Jira)") + ".</span>" : "") +
+      (e && e.suspect && !(r && r.inferredClose) ? '<br><span style="color:var(--amber)"><b>⚠ Unverified:</b> Jira returned no status changes for this ticket even when checked one by one, so it is shown as one status for its whole life. Compare with the History tab in Jira.</span> ' : "") +
       (r.statusMismatch ? '<br><span style="color:var(--amber)">ⓘ Jira’s history ends in <b>“' + esc(r.statusMismatch.history) + "”</b>, but the ticket is now in <b>“" + esc(r.statusMismatch.current) + "”</b> (Jira’s own status). The time since the last recorded change is counted under the current status.</span>" : "") +
       (r.unmapped.length ? '<br><span style="color:var(--amber)">Status(es) not in Master Data (counted as running): <b>' + esc(r.unmapped.join(", ")) + "</b>.</span>" : "") + "</div>";
     h += basisHtml(t, r);
@@ -1301,7 +1328,7 @@ var SLA_MARK = "SLA reminder · HD SLA Tracker";
 var GENERIC = { "svm help desk": 1, "svm helpdesk": 1, "jira misc": 1, "jiramisc": 1, "unassigned": 1, "": 1, "nan": 1 };
 function liveOf(t) {
   var e = histFor(t); if (!e) return null; var now = Date.now();
-  var r = Sla.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: ST.cfg, cal: calFor(t), now: now, classify: classify });
+  var r = Sla.compute({ created: t.created, resolved: t.resolved, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: ST.cfg, cal: calFor(t), now: now, classify: classify, inferClose: !!e.suspect });
   return { r: r, bi: Sla.breachInfo(r, calFor(t), now), now: now, e: e };
 }
 var TPL_LABEL = { soon: "About to breach", breached: "Breached" };
@@ -2185,6 +2212,7 @@ document.addEventListener("click", function (e) {
   if (q("#btnBack")) { location.href = "index.html"; return; }
   if (q("#btnFetch")) { runFetch(missingKeys(false)); return; }
   if (q("#btnRefetch")) { runFetch(missingKeys(true)); return; }
+  if (q("#drRecheck")) { var ks = (ST.susKeys || []).slice(); if (ks.length) runFetch(ks).then(function () { if (ST.dr) renderDrill(); }); return; }
   if (q("#btnCancel")) { ST.cancel = true; return; }
   if (q("#btnFetchOne")) { runFetch([ST.detail]); return; }
   if (q("#btnExport")) { exportXlsx(); return; }
