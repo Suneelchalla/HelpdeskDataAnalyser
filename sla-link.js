@@ -51,7 +51,7 @@
     var S = Sla(), key = String(pick(row, ["Key"]) || "").trim(), pr = String(pick(row, ["Priority"]) || "").trim();
     return { key: key, status: String(pick(row, ["Status"]) || "").trim(), priority: pr, sev: S.normSev(pr),
       type: String(pick(row, ["Issue Type"]) || "").trim(), created: S.parseTs(pick(row, ["Created"])),
-      updated: S.parseTs(pick(row, ["Updated"])), prefix: S.prefixOf(key) };
+      updated: S.parseTs(pick(row, ["Updated"])), resolved: S.parseTs(pick(row, ["Resolved"])), prefix: S.prefixOf(key) };
   }
 
   /* ── cached history is valid only while it describes the ticket as it is in this row ──
@@ -97,7 +97,7 @@
           tip: hc.why === "status"
             ? "The saved status history ends in “" + hc.jiraStatus + "” (Jira, " + fdt(hc.fetchedAt) + " IST) but this data shows “" + t.status + "”. The two are from different moments, so no SLA is shown. Refresh the data from the launcher, then use “Calculate SLA”."
             : "Status history not fetched yet, or the ticket changed in Jira since. Use “Calculate SLA” or open the SLA Tracker." };
-        else out = describe(S.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify }), cal, e);
+        else out = describe(S.compute({ created: t.created, resolved: t.resolved, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify, inferClose: !!e.suspect }), cal, e);
       }
     }
     L.cache[ck] = out; return out;
@@ -152,7 +152,7 @@
       fmt: function (m) { return S.fmtDur(m, cal.dayMin); }, fcal: function (m) { return S.fmtDur(m); }, fdt: fdt,
       classify: classify };
     if (e && L.types[t.type.toLowerCase()] && S.targetMin(L.cfg, t.sev, t.prefix) != null) {
-      out.r = S.compute({ created: t.created, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify });
+      out.r = S.compute({ created: t.created, resolved: t.resolved, status: t.status, severity: t.sev, prefix: t.prefix }, e.transitions, { cfg: L.cfg, cal: cal, now: L.now, classify: classify, inferClose: !!e.suspect });
       out.bi = S.breachInfo(out.r, cal, L.now);
       /* explanation: the rules applied + what the calendar did with the time (same as the SLA Tracker's ticket view) */
       out.basis = S.basis(L.cfg, L.cals, t.prefix, t.sev, out.r, t.created);
