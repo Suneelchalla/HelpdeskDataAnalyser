@@ -1005,7 +1005,214 @@
     var n = Object.keys(seen), has = Object.keys(window.HD_ENGINEERS || {}).length > 0, all2 = Object.assign({}, seen, histPeople(all));
     return { total: Object.keys(all2).length, newN: has ? n.filter(function (a) { return !engKind(a); }).length : n.length, hasList: has }; }
   function checkCount(open, all) { return runChecks(open || [], all || []).reduce(function (a, x) { return a + (x.info ? 0 : x.list.length); }, 0); }
+
+  /* ═══ Client follow-up reminders, every client (the Swire module's "Waiting on Swire" window, for all clients) ═══
+     HDX.openClientWait(rows) opens a window in two steps:
+       1. the client-side statuses of these tickets, each once with its count, what kind of wait it is, the oldest and
+          how many are not reminded yet;
+       2. the tickets of one status, oldest created first, each with a Mail button.
+     The mail is formal, worded for the status, dates only, no bold and no links (it is pasted as a reply on the client's
+     own mail thread). "Dear <client> Team" is remembered per client. "Mark as sent" records the reminder: the list shows
+     who was reminded and when, and the next mail for the same wait is a follow-up ("Second reminder"). The log is shared
+     with the Swire module (same browser storage), so a ticket reminded in either place shows in both. */
+  var CR_LOG = "hd-client-remind-log", CR_OLD = "hd-swire-cwlog", CR_BOOK = "hd-client-remind-mail", CR_SIGN = "hd-reminder-sign";
+  var CR_DB = ["CLIENT Approval (DB Script)"], CR_REL = ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)"];
+  var CR_KINDS = [
+    { id: "info", label: "Information needed", st: ["Waiting for customer"] },
+    { id: "clarify", label: "Clarification needed", st: ["Doubt Clarification", "Clarification (Dev)"] },
+    { id: "confirm", label: "Confirmation of resolution", st: ["Resolved With Clarification", "Resolved", "Confirmation", "Get Confirmation", "Completed", "Published"] },
+    { id: "delivered", label: "Fix delivered, to verify", st: ["Delivered", "DB Script Delivered", "Script Delivered", "Release Move to Production", "Release moved to production"] },
+    { id: "test", label: "Testing by the client", st: ["Client Hotfix Testing", "Client UAT Testing"] },
+    { id: "deploy", label: "Deployment by the client", st: ["Client Deployment (PROD)"] },
+    { id: "approval", label: "Approval by the client", st: CR_DB.concat(CR_REL) },
+    { id: "rejected", label: "Rejected by the client", st: ["Client Rejected (DB Script)"] },
+    { id: "onhold", label: "On hold", st: ["On-Hold"] },
+    { id: "other", label: "Waiting on the client", st: [] }
+  ];
+  var CR_CLOSABLE = { info: 1, clarify: 1, confirm: 1, delivered: 1, other: 1 };
+  var crBy = function (id) { return CR_KINDS.filter(function (x) { return x.id === id; })[0]; };
+  function crKind(status) {
+    var k = stKey(status), hit = CR_KINDS.filter(function (x) { return x.st.some(function (s) { return stKey(s) === k; }); })[0];
+    if (hit) return hit;
+    if (/approv/.test(k)) return crBy("approval"); if (/reject/.test(k)) return crBy("rejected"); if (/test/.test(k)) return crBy("test");
+    if (/deploy/.test(k)) return crBy("deploy"); if (/deliver|moved? to prod/.test(k)) return crBy("delivered");
+    if (/resolv|confirm|complet|publish/.test(k)) return crBy("confirm"); if (/clarif|doubt|query/.test(k)) return crBy("clarify");
+    if (/hold/.test(k)) return crBy("onhold"); if (/wait|customer|client/.test(k)) return crBy("info");
+    return crBy("other");
+  }
+  var crOrder = function (k) { return CR_KINDS.indexOf(k); };
+  function crDay(t) { if (t == null) return "—"; var d = new Date(t + IST), M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return d.getUTCDate() + " " + M[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
+  var crMidnight = function (t) { var d = new Date(t + IST); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - IST; };
+  /* since when the ticket is in its current status: the last move into it (status history), else its last update (approx.) */
+  function crSince(t) {
+    var e = null; try { e = window.HDSlaLink && HDSlaLink.entry ? HDSlaLink.entry(t.r) : null; } catch (x) {}
+    var tr = (e && e.transitions) || [], k = stKey(t.status);
+    for (var n = tr.length - 1; n >= 0; n--) if (stKey(tr[n].to) === k) return { at: tr[n].t, src: "history" };
+    return { at: t.updated != null ? t.updated : t.created, src: "updated" };
+  }
+  var crDays = function (t) { return Math.max(0, Math.floor((Date.now() - (crSince(t).at || Date.now())) / DAY)); };
+  var crByCreated = function (a, b) { return (a.created || 0) - (b.created || 0) || bySevAge(a, b); };
+  /* the reminder log, shared with the Swire module; its earlier own log is merged in once */
+  function crLog() {
+    var l = {}; try { l = JSON.parse(localStorage.getItem(CR_LOG) || "{}") || {}; } catch (e) {}
+    try { var old = localStorage.getItem(CR_OLD); if (old) { var o = JSON.parse(old) || {}; Object.keys(o).forEach(function (k) { var s = {}; (l[k] || []).concat(o[k] || []).forEach(function (x) { s[x] = 1; }); l[k] = Object.keys(s).map(Number).sort(function (a, b) { return a - b; }); });
+      localStorage.setItem(CR_LOG, JSON.stringify(l)); localStorage.removeItem(CR_OLD); } } catch (e) {}
+    return l;
+  }
+  function crSaveLog(l) { try { localStorage.setItem(CR_LOG, JSON.stringify(l)); } catch (e) {} }
+  function crPrev(t) { var s = crSince(t), from = s.src === "history" ? s.at : 0; return (crLog()[t.key] || []).filter(function (x) { return x >= from; }).sort(function (a, b) { return a - b; }); }
+  function crMark(key) { var l = crLog(), a = l[key] = l[key] || [], today = dayKey(Date.now()); if (!a.some(function (x) { return dayKey(x) === today; })) a.push(Date.now()); crSaveLog(l); }
+  function crUnmark(key) { var l = crLog(), today = dayKey(Date.now()); if (!l[key]) return; l[key] = l[key].filter(function (x) { return dayKey(x) !== today; }); if (!l[key].length) delete l[key]; crSaveLog(l); }
+  window.addEventListener("storage", function (e) { if (e.key === CR_LOG) bump(); });
+  function crBook() { var d = { dear: {}, closeOn: false, closeDays: 3 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(CR_BOOK) || "{}")); } catch (e) { return d; } }
+  function crSaveBook(b) { try { localStorage.setItem(CR_BOOK, JSON.stringify(b)); } catch (e) {} }
+  function crSign() { try { var v = localStorage.getItem(CR_SIGN); return v && v.trim() ? v : "SVM Help Desk"; } catch (e) { return "SVM Help Desk"; } }
+  function crSetSign(v) { try { if (v && v.trim() && v.trim() !== "SVM Help Desk") localStorage.setItem(CR_SIGN, v.trim()); else localStorage.removeItem(CR_SIGN); } catch (e) {} }
+  /* "Dear … Team": remembered per client; first time, from the client (Project) name */
+  function crDear(project) { var b = crBook(), p = project || ""; if (b.dear && b.dear[p]) return b.dear[p]; if (/swire/i.test(p)) return "Swire Team"; return (p && p !== "(No Project)" ? p + " " : "") + "Team"; }
+  var CR_ORD = ["Reminder", "Second reminder", "Third reminder"];
+  function crMail(t, o) {
+    var k = crKind(t.status), s = crSince(t), raised = crDay(t.created), since = crDay(s.at), st = stKey(t.status), now = Date.now();
+    var prev = crPrev(t).filter(function (x) { return dayKey(x) !== dayKey(now); }), num = prev.length + 1, last = prev[prev.length - 1];
+    var script = /script/.test(st), rel = CR_REL.some(function (x) { return stKey(x) === st; }) || /release/.test(st);
+    var W = {
+      info:      { what: "awaiting information from your end", line: "To proceed further, we require some additional information from your end. The ticket has been awaiting your response since " + since + ".",
+                   ask: "We kindly request you to provide the required details by replying to this email or updating the ticket at your earliest convenience." },
+      clarify:   { what: "awaiting your clarification", line: "We have raised a query on this ticket and have been awaiting your clarification since " + since + ".",
+                   ask: "We kindly request you to review the query and provide your clarification at your earliest convenience, so that we may proceed further." },
+      confirm:   { what: "awaiting your confirmation", line: "The resolution for this ticket was shared on " + since + ", and we are awaiting your confirmation.",
+                   ask: "We kindly request you to review the resolution and confirm whether the issue has been resolved, so that we may proceed with the closure of the ticket. Should any point still require attention, please let us know." },
+      delivered: { what: (script ? "data script" : "fix") + " delivered, awaiting your confirmation",
+                   line: (/prod/.test(st) ? "The fix was moved to production on " : script ? "The data script was delivered on " : "The fix was delivered on ") + since + ".",
+                   ask: "We kindly request you to verify it at your end and confirm that it is working as expected, so that we may proceed with the closure of the ticket. Should you observe any issue, please let us know." },
+      test:      { what: "awaiting your testing", line: "The fix has been made available for your testing since " + since + ".",
+                   ask: "We kindly request you to complete the testing and share the results at your earliest convenience, so that we may proceed with the move to production." },
+      deploy:    { what: "awaiting deployment at your end", line: "The release has been ready for deployment in production at your end since " + since + ".",
+                   ask: "We kindly request you to confirm once the deployment is completed, or to share the planned deployment date, so that we may follow up accordingly." },
+      approval:  { what: (rel ? "release" : "data script") + " pending your approval sign-off in Jira",
+                   line: "The " + (rel ? "release" : "data script") + " for this ticket has been awaiting your approval since " + since + ". " + (rel ? "The release notes are attached to the ticket in Jira." : "The data script and its release notes are attached to the ticket in Jira."),
+                   ask: "We kindly request you to review the attachment and provide your approval sign-off in Jira, so that we may proceed with " + (rel ? "moving the release to production." : "the execution in production.") },
+      rejected:  { what: (script ? "data script" : "delivery") + " rejected, awaiting your feedback", line: "The " + (script ? "data script" : "delivery") + " for this ticket was marked as rejected on " + since + ".",
+                   ask: "We kindly request you to share the reason for the rejection or the corrections required, so that we may revise it and resubmit it for your approval." },
+      onhold:    { what: "on hold, awaiting your advice", line: "This ticket has been on hold since " + since + ".",
+                   ask: "We kindly request you to advise whether we may resume work on it, or whether it may be closed." },
+      other:     { what: "awaiting your response", line: "The ticket has been awaiting your response since " + since + " (status: " + t.status + ").",
+                   ask: "We kindly request you to provide an update at your earliest convenience, so that we may proceed further." }
+    }[k.id];
+    var ref = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + t.summary + "\u201d" : "");
+    var intro = num === 1 ? "We would like to bring to your kind attention that ticket " + ref + ", raised on " + raised + ", is currently pending at your end."
+      : "Further to our earlier reminder dated " + crDay(last) + ", we would like to follow up on ticket " + ref + ", raised on " + raised + ", which is still pending at your end.";
+    var close = o.closeOn && CR_CLOSABLE[k.id] ? "Kindly note that if we do not receive a response by " + crDay(crMidnight(now) + Math.max(1, +o.closeDays || 3) * DAY) + ", we shall proceed with the closure of the ticket." : "";
+    var name = (o.hi || "").trim() || "Team", sg = (o.sign || "").trim() || crSign(), nt = (o.note || "").trim();
+    var F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#1E293B;margin:0 0 10px;line-height:1.55"';
+    var paras = ["Dear " + name + ",", "Greetings of the day.", intro, W.line].concat(nt ? [nt] : [], [W.ask], close ? [close] : [], ["Thank you for your continued support and cooperation."]);
+    var html = '<div style="' + F + '">' + paras.map(function (p) { return "<p " + P + ">" + esc(p).replace(/\n/g, "<br>") + "</p>"; }).join("") + "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
+    var text = paras.join("\n\n") + "\n\nWarm regards,\n" + sg;
+    var subject = (CR_ORD[num - 1] || "Reminder " + num) + ": " + t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + ", " + W.what + ", raised " + raised;
+    return { html: html, text: text, subject: subject, num: num, kind: k };
+  }
+  function openCrMail(t, onDone) {
+    var m = modal("narrow"), k = crKind(t.status), s = crSince(t), prev = crPrev(t), bk = crBook();
+    m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder<span class="n">' + esc(t.key) + '</span></h3><button type="button" class="hdx-btn" data-c="close">Cancel</button></div>' +
+      '<p class="hdx-sub" style="margin-top:0"><b style="color:#0F172A">' + esc(t.status) + "</b> · " + esc(k.label) + " · " + esc(t.project) + " · raised " + esc(crDay(t.created)) + " · in this status since " + esc(crDay(s.at)) +
+        (s.src !== "history" ? ' <span style="color:#C2410C" title="Status history not read yet: this is the ticket’s last update">(approx.)</span>' : "") +
+        (prev.length ? " · reminded " + prev.length + "×, last " + esc(crDay(prev[prev.length - 1])) : "") + "</p>" +
+      '<div class="hdx-row"><label for="crHi">Dear</label><input class="hdx-inp" id="crHi" style="width:260px"><span class="hdx-note">remembered for ' + esc(t.project) + "</span></div>" +
+      '<div class="hdx-row"><label for="crSubj">Subject</label><input class="hdx-inp" id="crSubj" style="flex:1"></div>' +
+      '<div class="hdx-row" style="align-items:flex-start"><label for="crSign" style="padding-top:7px">Signature</label><textarea class="hdx-inp" id="crSign" rows="2" style="flex:1;resize:vertical" placeholder="Name, SVM Help Desk, Solverminds"></textarea></div>' +
+      '<div class="hdx-row" style="align-items:flex-start"><label for="crNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="crNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown after the status line"></textarea></div>' +
+      (CR_CLOSABLE[k.id] ? '<div class="hdx-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600"><input type="checkbox" id="crClose"> Say we will close the ticket if there is no reply within</label><input class="hdx-inp" id="crDays" style="width:56px" inputmode="numeric"><span class="hdx-note">days</span></div>' : "") +
+      '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Worded for <b>' + esc(k.label.toLowerCase()) + '</b>, dates only. Click into the mail to edit any text.</span><span style="flex:1"></span><button type="button" class="hdx-btn sm" data-c="reset" id="crReset" style="display:none">Undo text edits</button></div>' +
+      '<div class="hdx-prev" id="crPrev" style="max-height:42vh"></div>' +
+      '<div class="hdx-row" style="margin-top:10px"><span class="hdx-note">Copy the email, reply on the client’s own mail thread for this ticket, then click <b>Mark as sent</b>.</span><span style="flex:1"></span>' +
+        '<button type="button" class="hdx-btn" data-c="copy">Copy email</button><button type="button" class="hdx-btn" data-c="eml" title="An unsent .eml: opens in Outlook as a draft">Download email draft</button><button type="button" class="hdx-btn pri" data-c="sent" title="Record that this reminder was sent today">Mark as sent</button></div>';
+    var q = function (id) { return m.box.querySelector("#" + id); }, subjEdited = false;
+    q("crHi").value = crDear(t.project); q("crSign").value = crSign();
+    if (q("crClose")) { q("crClose").checked = !!bk.closeOn; q("crDays").value = bk.closeDays || 3; }
+    var opts = function () { return { hi: q("crHi").value, sign: q("crSign").value, note: q("crNote").value, closeOn: q("crClose") ? q("crClose").checked : false, closeDays: q("crDays") ? q("crDays").value : 3 }; };
+    var cur = function () { return crMail(t, opts()); };
+    var keep = function () { var b = crBook(); b.dear = b.dear || {}; var hi = q("crHi").value.trim(); if (hi) b.dear[t.project || ""] = hi;
+      if (q("crClose")) { b.closeOn = q("crClose").checked; b.closeDays = Math.max(1, parseInt(q("crDays").value, 10) || 3); } crSaveBook(b); crSetSign(q("crSign").value); };
+    var ed = mailEditor(q("crPrev"), function () {});
+    ed.onEdit = function () { q("crReset").style.display = ""; };
+    function paint() { var x = cur(); if (!subjEdited) q("crSubj").value = x.subject; ed.render(x.html); q("crReset").style.display = "none"; }
+    var reb = function () { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
+    ["crHi", "crNote", "crSign", "crDays"].forEach(function (id) { if (q(id)) q(id).addEventListener("change", function () { keep(); setTimeout(reb, 120); }); });
+    if (q("crClose")) q("crClose").addEventListener("change", function () { keep(); reb(); });
+    q("crSubj").addEventListener("input", function () { subjEdited = true; });
+    m.box.addEventListener("click", function (e) { var b = e.target.closest("[data-c]"); if (!b) return; var c = b.dataset.c;
+      if (c === "close") return m.close();
+      if (c === "reset") return paint();
+      keep();
+      if (c === "copy") return copyRich(ed.html(), ed.edited ? ed.text() : cur().text, b, "Copy email");
+      if (c === "eml") { eml(q("crSubj").value.trim() || cur().subject, ed.html(), "Reminder-" + t.key + "-" + dayKey(Date.now()) + ".eml", "", null, ""); var l = b.textContent; b.textContent = "Draft downloaded"; setTimeout(function () { b.textContent = l; }, 1800); return; }
+      if (c === "sent") { crMark(t.key); m.close(); if (onDone) onDone(); bump(); } });
+    paint(); q("crNote").focus();
+  }
+  function openClientWait(rows) {
+    var m = modal(), S = { st: null }, groups = [], cur = [], all;
+    function build() {
+      all = rows.map(T).filter(function (t) { return side(t) === "client"; });
+      var g = {}; all.forEach(function (t) { var s = t.status || "(blank)"; (g[s] = g[s] || []).push(t); });
+      groups = Object.keys(g).map(function (s) { return { s: s, k: crKind(s), ts: g[s].slice().sort(crByCreated) }; })
+        .sort(function (a, b) { return crOrder(a.k) - crOrder(b.k) || b.ts.length - a.ts.length || a.s.localeCompare(b.s); });
+    }
+    var notRem = function (ts) { return ts.filter(function (t) { return !crPrev(t).length; }).length; };
+    var today = function (ts) { return ts.filter(function (t) { return crPrev(t).some(function (x) { return dayKey(x) === dayKey(Date.now()); }); }).length; };
+    var clientsOf = function (ts) { var c = {}; ts.forEach(function (t) { c[t.project] = (c[t.project] || 0) + 1; }); return Object.keys(c).sort(function (a, b) { return c[b] - c[a]; }).map(function (p) { return [p, c[p]]; }); };
+    function remCell(t) { var p = crPrev(t); if (!p.length) return '<span class="hdx-dim">not yet</span>';
+      var last = p[p.length - 1], td = dayKey(last) === dayKey(Date.now());
+      return '<b style="color:' + (td ? "#059669" : "#0F172A") + '">' + p.length + "×</b><div class=\"hdx-dim\" style=\"white-space:nowrap\">" + (td ? 'sent today · <button type="button" class="hdx-lnk" style="padding:0 6px" data-cu="' + esc(t.key) + '" title="Remove today’s Mark as sent">undo</button>' : esc(crDay(last))) + "</div>"; }
+    function sinceCell(t) { var s = crSince(t), d = crDays(t);
+      return '<span style="white-space:nowrap">' + esc(crDay(s.at)) + "</span>" + (s.src !== "history" ? ' <span style="color:#C2410C;font-size:11px" title="Status history not read yet: this is the ticket’s last update">approx.</span>' : "") +
+        '<div style="font-size:11px;' + (d >= 7 ? "color:#E11D48;font-weight:700" : d >= 3 ? "color:#C2410C" : "color:#94A3B8") + '">' + (d < 1 ? "today" : d + " day" + (d === 1 ? "" : "s")) + "</div>"; }
+    function paint() {
+      var keepY = m.box.querySelector(".hdx-tw") ? m.box.querySelector(".hdx-tw").scrollTop : 0;
+      build();
+      var allMode = S.st === "*", grp = !allMode && S.st != null ? groups.filter(function (x) { return x.s === S.st; })[0] : null;
+      if (S.st != null && !allMode && !grp) S.st = null;
+      var head, body;
+      if (S.st == null) {
+        cur = all; head = "Client follow-up reminders";
+        var cl = clientsOf(all);
+        body = '<p class="hdx-sub">' + all.length.toLocaleString() + " open tickets waiting on the client" + (cl.length > 1 ? " across " + cl.length + " clients" : cl.length ? " (" + esc(cl[0][0]) + ")" : "") + ", in " + groups.length + " status" + (groups.length === 1 ? "" : "es") +
+            " · <b>" + notRem(all) + "</b> not reminded yet" + (today(all) ? " · " + today(all) + " reminded today" : "") + ". Pick a status: its tickets open oldest first, each with a Mail button.</p>" +
+          '<div class="hdx-cards">' + groups.map(function (x, n) { var w7 = x.ts.filter(function (t) { return crDays(t) >= 7; }).length, nr = notRem(x.ts), c = clientsOf(x.ts);
+            return '<button type="button" class="hdx-card" style="--c:' + (w7 ? "#E11D48" : "#D97706") + '" data-cst="' + n + '"><div class="v">' + x.ts.length.toLocaleString() + '</div><div class="t">' + esc(x.s) + '</div><div class="d">' + esc(x.k.label) +
+              " · oldest raised " + esc(crDay(x.ts[0].created)) + (w7 ? " · " + w7 + " in this status 7+ days" : "") + " · " + (nr ? nr + " not reminded" : "all reminded") +
+              (c.length > 1 ? " · " + c.length + " clients" : c.length ? " · " + esc(c[0][0]) : "") + "</div></button>"; }).join("") + "</div>";
+      } else {
+        cur = allMode ? groups.reduce(function (a, x) { return a.concat(x.ts); }, []) : grp.ts;
+        head = allMode ? "Client follow-up reminders, all statuses" : "Client follow-up reminders: " + grp.s;
+        body = '<div class="hdx-crumb"><button type="button" class="hdx-lnk" data-c="home">All statuses</button> › <b>' + esc(allMode ? "Every ticket" : grp.s) + "</b></div>" +
+          '<p class="hdx-sub">' + (allMode ? "By status, then oldest created first." : esc(grp.k.label) + ". Oldest created first.") + " <b>" + notRem(cur) + "</b> not reminded yet. Mail opens a draft worded for the status, addressed to the client’s team.</p>" +
+          '<div class="hdx-tw"><table><thead><tr><th></th><th>Reminded</th><th>Ticket</th><th>Client</th><th>Type</th><th>Priority</th>' + (allMode ? "<th>Status</th>" : "") + "<th>Summary</th><th>Raised on</th><th>In status since</th></tr></thead><tbody>" +
+          (cur.length ? cur.map(function (t) { return "<tr>" +
+            '<td><button type="button" class="hdx-btn pri sm" data-cm="' + esc(t.key) + '" title="Draft a reminder mail for ' + esc(t.key) + '">Mail</button></td><td>' + remCell(t) + "</td>" +
+            '<td><a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a></td><td>" + esc(t.project) + "</td><td>" + esc(typeTxt(t)) + "</td><td>" + esc(t.priority || "—") + "</td>" +
+            (allMode ? '<td><span class="hdx-st">' + esc(t.status) + "</span></td>" : "") +
+            '<td><span style="display:inline-block;min-width:240px">' + esc(t.summary) + "</span>" + (t.meId ? '<div class="hdx-dim">' + esc(t.meId) + "</div>" : "") + "</td>" +
+            '<td style="white-space:nowrap">' + esc(crDay(t.created)) + '<div class="hdx-dim">' + esc(fmt(ageMin(t)).replace(/ \d+[hm]$/, "")) + " ago</div></td><td>" + sinceCell(t) + "</td></tr>"; }).join("")
+            : '<tr><td colspan="10" class="hdx-dim">No tickets.</td></tr>') + "</tbody></table></div>";
+      }
+      m.box.innerHTML = '<div class="hdx-hd"><h3>' + esc(head) + '<span class="n">' + cur.length.toLocaleString() + "</span></h3>" +
+        (S.st == null ? '<button type="button" class="hdx-btn" data-c="all">All tickets</button>' : '<button type="button" class="hdx-btn" data-c="back">Back</button>') +
+        '<button type="button" class="hdx-btn" data-c="close">Close</button></div>' + body;
+      var tw = m.box.querySelector(".hdx-tw"); if (tw && keepY) tw.scrollTop = keepY;
+    }
+    m.onEsc = function () { if (S.st != null) { S.st = null; paint(); return true; } return false; };
+    m.box.addEventListener("click", function (e) {
+      var u = e.target.closest("[data-cu]"); if (u) { crUnmark(u.dataset.cu); return paint(); }
+      var b = e.target.closest("[data-cm]"); if (b) { var t = cur.filter(function (x) { return x.key === b.dataset.cm; })[0]; if (t) openCrMail(t, paint); return; }
+      var s = e.target.closest("[data-cst]"); if (s) { S.st = groups[+s.dataset.cst].s; return paint(); }
+      var c = e.target.closest("[data-c]"); if (!c) return; var x = c.dataset.c;
+      if (x === "close") return m.close(); if (x === "back" || x === "home") { S.st = null; return paint(); } if (x === "all") { S.st = "*"; return paint(); }
+    });
+    paint();
+  }
   window.HDX = {
+    openClientWait: function (rows) { openClientWait(rows || []); },
+    remindedCount: function (rows) { return (rows || []).map(T).filter(function (t) { return side(t) === "client" && crPrev(t).length; }).length; },
     openMismatch: function (open, all) { openMismatch(open || [], all || []); },
     openHandover: function (open) { openHandover(open || []); },
     openSla: function (open, all) { openSla(open || [], all || []); },
@@ -2557,6 +2764,7 @@ function CategoryDetailModal({data,activeTab,onTabChange,onClose,onReport,onMail
           {data.showReport&&onReport&&<button onClick={function(){onReport();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--violet)",background:"var(--violet-bg)",fontSize:12,fontWeight:700,color:"var(--violet)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Engg Report</button>}
           {data.showReport&&onMail&&<button onClick={function(){onMail();}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Engg Mail</button>}
           {data.showClientReport&&<select value={clientProj} onChange={function(e){setClientProj(e.target.value);}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",minWidth:180,fontFamily:"inherit"}}><option value="">-- Select Client --</option>{clientProjects.map(function(cp){return <option key={cp[0]} value={cp[0]}>{cp[0]} ({cp[1]})</option>;})}</select>}
+          {data.showClientReport&&window.HDX&&window.HDX.openClientWait&&<button onClick={function(){window.HDX.openClientWait(viewTix);}} title="Status by status, oldest first: a formal reminder mail for each ticket, and Mark as sent to keep track" style={{padding:"8px 14px",borderRadius:8,border:"none",background:"#D97706",fontSize:12,fontWeight:800,color:"#fff",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Mail reminders</button>}
           {data.showClientReport&&clientProj&&onClientReport&&<button onClick={function(){onClientReport(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--amber-border)",background:"var(--amber-bg)",fontSize:12,fontWeight:700,color:"var(--amber)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>📊 Client Report</button>}
           {data.showClientReport&&clientProj&&onClientMail&&<button onClick={function(){onClientMail(clientProj,clientTix);}} style={{padding:"8px 14px",borderRadius:8,border:"1px solid var(--blue)",background:"var(--blue-bg)",fontSize:12,fontWeight:700,color:"var(--blue)",display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>✉️ Client Mail</button>}
           <SlaFetchBtn rows={tix}/>
