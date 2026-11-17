@@ -1071,10 +1071,41 @@
   /* "Dear … Team": remembered per client; first time, from the client (Project) name */
   function crDear(project) { var b = crBook(), p = project || ""; if (b.dear && b.dear[p]) return b.dear[p]; if (/swire/i.test(p)) return "Swire Team"; return (p && p !== "(No Project)" ? p + " " : "") + "Team"; }
   var CR_ORD = ["Reminder", "Second reminder", "Third reminder"];
+  var ACC_RE = /\b(access|it set ?up|set ?up form|new (?:shipping )?staff|new (?:user|joiner|employee)|user (?:id|creation|account|access)|create (?:a )?user|log ?in|sso|okta|password|unlock|permission|rights|role|onboard)/i;
+  var isAccess = function (t) { return /service/i.test(t.type || "") && ACC_RE.test(cleanSum(t.summary)); };
+  /* a summary without the mail clutter: (ID : ##478605##), Re: / Fw:, ME Ref: 479333 … */
+  function cleanSum(s) {
+      var orig = String(s || "").trim(); var x = orig;
+    x = x.replace(/[\(\[]\s*(?:request\s*)?(?:id|me(?:\s*ref)?)\s*:?\s*#*\s*\d*\s*#*\s*[\)\]]/gi, " ")      // (ID : ##478605##)  [Request ID :##76##]
+         .replace(/\b(?:request\s*)?id\s*:\s*#+\s*\d+\s*#+/gi, " ")                                     // ID: ##478492 ##
+         .replace(/#+\s*\d+\s*#+/g, " ")
+         .replace(/\bme(?:\s*ref)?\s*[:.]?\s*\d{5,7}\b/gi, " ")                                         // ME Ref: 479333 · ME: 479330 · ME 479073
+         .replace(/(^\s*|[\-–|:]\s*)(?:(?:re|fw|fwd)\s*:\s*)+/gi, "$1")                                    // Re: / Fw: / RE: at the start or after a dash
+         .replace(/(?:\s*[\-–|:]\s*){2,}/g, " - ")                                                      // " - - " left behind
+         .replace(/^[\s\-–|:,.]+|[\s\-–|:,]+$/g, "").replace(/\s{2,}/g, " ").trim();
+    return x || orig;
+  }
+  
   function crMail(t, o) {
     var k = crKind(t.status), s = crSince(t), raised = crDay(t.created), since = crDay(s.at), st = stKey(t.status), now = Date.now();
     var prev = crPrev(t).filter(function (x) { return dayKey(x) !== dayKey(now); }), num = prev.length + 1, last = prev[prev.length - 1];
+    var sr = /service/i.test(t.type || ""), noun = sr ? "service request " : "ticket ";
     var script = /script/.test(st), rel = CR_REL.some(function (x) { return stKey(x) === st; }) || /release/.test(st);
+  /* service requests (access, setup, data requests …): "your request", not "the issue" */
+      var SRW = {
+      info:      { line: "To proceed with your request, we require some additional information from your end. The request has been awaiting your response since " + since + ".",
+                   ask: "We kindly request you to provide the required details by replying to this email or updating the ticket at your earliest convenience, so that we may proceed with your request." },
+      clarify:   { line: "We have raised a query on this request and have been awaiting your clarification since " + since + ".",
+                   ask: "We kindly request you to review the query and provide your clarification at your earliest convenience, so that we may proceed with your request." },
+      confirm:   { what: "request completed, awaiting your confirmation", line: "Your request was completed on " + since + ", and we are awaiting your confirmation.",
+                   ask: "We kindly request you to verify that the request has been fulfilled as expected and confirm the same, so that we may proceed with the closure of the ticket. Should anything further be required, please let us know." },
+      delivered: { what: "request delivered, awaiting your confirmation",
+                   line: (script ? "The data script for your request was delivered on " : /prod/.test(st) ? "The change for your request was moved to production on " : "The change for your request was delivered on ") + since + ".",
+                   ask: "We kindly request you to verify it at your end and confirm that it meets your requirement, so that we may proceed with the closure of the ticket. Should anything further be required, please let us know." },
+      test:      { line: "The change for your request has been made available for your testing since " + since + "." },
+      other:     { line: "Your request has been awaiting your response since " + since + " (status: " + t.status + ").",
+                   ask: "We kindly request you to provide an update at your earliest convenience, so that we may proceed with your request." }
+    };
     var W = {
       info:      { what: "awaiting information from your end", line: "To proceed further, we require some additional information from your end. The ticket has been awaiting your response since " + since + ".",
                    ask: "We kindly request you to provide the required details by replying to this email or updating the ticket at your earliest convenience." },
@@ -1099,9 +1130,12 @@
       other:     { what: "awaiting your response", line: "The ticket has been awaiting your response since " + since + " (status: " + t.status + ").",
                    ask: "We kindly request you to provide an update at your earliest convenience, so that we may proceed further." }
     }[k.id];
-    var ref = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + t.summary + "\u201d" : "");
-    var intro = num === 1 ? "We would like to bring to your kind attention that ticket " + ref + ", raised on " + raised + ", is currently pending at your end."
-      : "Further to our earlier reminder dated " + crDay(last) + ", we would like to follow up on ticket " + ref + ", raised on " + raised + ", which is still pending at your end.";
+    if (sr && SRW[k.id]) W = Object.assign({}, W, SRW[k.id]);
+    if (sr && isAccess(t) && k.id === "confirm") W = Object.assign({}, W, { what: "access provided, awaiting your confirmation", line: "The requested access was provided on " + since + ", and we are awaiting your confirmation.",
+      ask: "We kindly request you to confirm that the user is able to log in and access the system as expected, so that we may proceed with the closure of the ticket. Should any further access be required, please let us know." });
+    var ref = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + cleanSum(t.summary) + "\u201d" : "");
+    var intro = num === 1 ? "We would like to bring to your kind attention that " + (sr ? "your " : "") + noun + ref + ", raised on " + raised + ", is currently pending at your end."
+      : "Further to our earlier reminder dated " + crDay(last) + ", we would like to follow up on " + (sr ? "your " : "") + noun + ref + ", raised on " + raised + ", which is still pending at your end.";
     var close = o.closeOn && CR_CLOSABLE[k.id] ? "Kindly note that if we do not receive a response by " + crDay(crMidnight(now) + Math.max(1, +o.closeDays || 3) * DAY) + ", we shall proceed with the closure of the ticket." : "";
     var name = (o.hi || "").trim() || "Team", sg = (o.sign || "").trim() || crSign(), nt = (o.note || "").trim();
     var F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#1E293B;margin:0 0 10px;line-height:1.55"';
@@ -1178,7 +1212,7 @@
         body = '<p class="hdx-sub">' + all.length.toLocaleString() + " open tickets waiting on the client" + (cl.length > 1 ? " across " + cl.length + " clients" : cl.length ? " (" + esc(cl[0][0]) + ")" : "") + ", in " + groups.length + " status" + (groups.length === 1 ? "" : "es") +
             " · <b>" + notRem(all) + "</b> not reminded yet" + (today(all) ? " · " + today(all) + " reminded today" : "") + ". Pick a status: its tickets open oldest first, each with a Mail button.</p>" +
           '<div class="hdx-cards">' + groups.map(function (x, n) { var w7 = x.ts.filter(function (t) { return crDays(t) >= 7; }).length, nr = notRem(x.ts), c = clientsOf(x.ts);
-            return '<button type="button" class="hdx-card" style="--c:' + (w7 ? "#E11D48" : "#D97706") + '" data-cst="' + n + '"><div class="v">' + x.ts.length.toLocaleString() + '</div><div class="t">' + esc(x.s) + '</div><div class="d">' + esc(x.k.label) +
+            return '<button type="button" class="hdx-card" style="--c:' + (w7 ? "#E11D48" : "#D97706") + '" data-cst="' + n + '"><div class="v">' + x.ts.length.toLocaleString() + '</div><div class="t">' + esc(x.s) + '</div><div class="d">' + esc(x.k.label) + (function () { var a = x.ts.filter(isAccess).length; return a ? " · " + a + " access request" + (a === 1 ? "" : "s") : ""; })() +
               " · oldest raised " + esc(crDay(x.ts[0].created)) + (w7 ? " · " + w7 + " in this status 7+ days" : "") + " · " + (nr ? nr + " not reminded" : "all reminded") +
               (c.length > 1 ? " · " + c.length + " clients" : c.length ? " · " + esc(c[0][0]) : "") + "</div></button>"; }).join("") + "</div>";
       } else {
@@ -1191,7 +1225,7 @@
             '<td><button type="button" class="hdx-btn pri sm" data-cm="' + esc(t.key) + '" title="Draft a reminder mail for ' + esc(t.key) + '">Mail</button></td><td>' + remCell(t) + "</td>" +
             '<td><a class="hdx-key" href="' + jiraUrl(t.key) + '" target="_blank" rel="noopener">' + esc(t.key) + "</a></td><td>" + esc(t.project) + "</td><td>" + esc(typeTxt(t)) + "</td><td>" + esc(t.priority || "—") + "</td>" +
             (allMode ? '<td><span class="hdx-st">' + esc(t.status) + "</span></td>" : "") +
-            '<td><span style="display:inline-block;min-width:240px">' + esc(t.summary) + "</span>" + (t.meId ? '<div class="hdx-dim">' + esc(t.meId) + "</div>" : "") + "</td>" +
+            '<td><span style="display:inline-block;min-width:240px" title="' + esc(t.summary) + '">' + esc(cleanSum(t.summary)) + "</span>" + (t.meId || isAccess(t) ? '<div class="hdx-dim">' + esc(t.meId) + (isAccess(t) ? ' <span style="color:#2563EB;font-weight:700">access</span>' : "") + "</div>" : "") + "</td>" +
             '<td style="white-space:nowrap">' + esc(crDay(t.created)) + '<div class="hdx-dim">' + esc(fmt(ageMin(t)).replace(/ \d+[hm]$/, "")) + " ago</div></td><td>" + sinceCell(t) + "</td></tr>"; }).join("")
             : '<tr><td colspan="10" class="hdx-dim">No tickets.</td></tr>') + "</tbody></table></div>";
       }
