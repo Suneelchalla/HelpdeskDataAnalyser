@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-<script src="hd-store.js"></script>
+<script src="hd-store.js?v=20261118a"></script>
 <script src="sla-engine.js"></script>
 <script src="sla-history.js"></script>
 <script src="sla-link.js"></script>
@@ -1016,7 +1016,7 @@
      who was reminded and when, and the next mail for the same wait is a follow-up ("Second reminder"). The log is shared
      with the Swire module (same browser storage), so a ticket reminded in either place shows in both. */
   var CR_LOG = "hd-client-remind-log", CR_OLD = "hd-swire-cwlog", CR_BOOK = "hd-client-remind-mail", CR_SIGN = "hd-reminder-sign";
-  var CR_DB = ["CLIENT Approval (DB Script)"], CR_REL = ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)"];
+  var CR_DB = ["CLIENT Approval (DB Script)"], CR_REL = ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)", "Client Approval (PROD)"];
   var CR_KINDS = [
     { id: "info", label: "Information needed", st: ["Waiting for customer"] },
     { id: "clarify", label: "Clarification needed", st: ["Doubt Clarification", "Clarification (Dev)"] },
