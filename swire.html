@@ -3026,14 +3026,14 @@ function cwMail(i, o) {
   const tail = num === 1 ? ", raised on " + raised + ", is currently pending at your end." : ", raised on " + raised + ", which is still pending at your end.";
   const intro = lead + refTxt + tail, introHtml = esc(lead) + refHtml + esc(tail);
   const close = o.closeOn && CW_CLOSABLE[k.id] ? "Kindly note that if we do not receive a response by " + fday(HC.istMidnight(NOW) + Math.max(1, +o.closeDays || 3) * DAY) + ", we shall proceed with the closure of the ticket." : "";
-  const name = (o.hi || "").trim() || "Sir/Madam", sg = (o.sign || "").trim() || rmSign(), nt = (o.note || "").trim();
+  const name = (o.hi || "").trim() || "Swire Team", sg = (o.sign || "").trim() || rmSign(), nt = (o.note || "").trim();
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.55"';
   const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
-  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(4) + "<p " + P + ">Greetings from the SVM Help Desk.</p>" +
+  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(4) + "<p " + P + ">Greetings of the day.</p>" +
     "<p " + P + ">" + introHtml + "</p><p " + P + ">" + esc(w.line) + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<p " + P + ">" + esc(w.ask) + "</p>" + (close ? "<p " + P + ">" + esc(close) + "</p>" : "") + "<p " + P + ">Thank you for your continued support and cooperation.</p>" + gap(4) +
     "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
-  const text = "Dear " + name + ",\n\nGreetings from the SVM Help Desk.\n\n" + intro + "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? "\n\n" + close : "") + "\n\nThank you for your continued support and cooperation.\n\nWarm regards,\n" + sg;
+  const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + intro + "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? "\n\n" + close : "") + "\n\nThank you for your continued support and cooperation.\n\nWarm regards,\n" + sg;
   const subject = (CW_ORD[num - 1] || "Reminder " + num) + ": Swire Phoenix " + t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + ", " + w.what + ", raised " + raised;
   return { html, text, subject, num, last, kind: k };
 }
@@ -3060,7 +3060,7 @@ function openCwMail(i, onDone) {
       '<button type="button" class="btn" id="cwCopy">Copy email</button><button type="button" class="btn" id="cwEml" title="An unsent .eml: opens in Outlook as a draft, with the formatting">Download email draft</button>' +
       '<button type="button" class="btn pri" id="cwSent" title="Record that this reminder was sent today">Mark as sent</button></div>', "wide");
   const q = (id) => m.ov.querySelector("#" + id);
-  q("cwTo").value = cwEmail(who); q("cwHi").value = cwDear(who); q("cwCc").value = bk.cc || ""; q("cwSign").value = bk.sign || rmSign();
+  q("cwTo").value = cwEmail(who); q("cwHi").value = "Swire Team"; q("cwCc").value = bk.cc || ""; q("cwSign").value = bk.sign || rmSign();
   if (q("cwClose")) { q("cwClose").checked = !!bk.closeOn; q("cwDays").value = bk.closeDays || 3; }
   let subjEdited = false;
   const opts = () => ({ hi: q("cwHi").value, sign: q("cwSign").value, note: q("cwNote").value, closeOn: q("cwClose") ? q("cwClose").checked : false, closeDays: q("cwDays") ? q("cwDays").value : 3 });
