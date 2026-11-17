@@ -2994,10 +2994,40 @@ function cwDear(who) {
 }
 const CW_ORD = ["Reminder", "Second reminder", "Third reminder"];
 /* the mail for one ticket. o: { hi, sign, note, closeOn, closeDays } */
+/* access requests (user setup, login, SSO, permissions …): they mostly wait in Confirmation once the access is given */
+const ACC_RE = /\b(access|it set ?up|set ?up form|new (?:shipping )?staff|new (?:user|joiner|employee)|user (?:id|creation|account|access)|create (?:a )?user|log ?in|sso|okta|password|unlock|permission|rights|role|onboard)/i;
+const isAccess = (t) => /service/i.test(t.type || "") && ACC_RE.test(cleanSum(t.summary));
+/* a summary without the mail clutter: (ID : ##478605##), Re: / Fw:, ME Ref: 479333 … (used in the client mails) */
+function cleanSum(s) {
+  const orig = String(s || "").trim(); let x = orig;
+  x = x.replace(/[\(\[]\s*(?:request\s*)?(?:id|me(?:\s*ref)?)\s*:?\s*#*\s*\d*\s*#*\s*[\)\]]/gi, " ")      // (ID : ##478605##)  [Request ID :##76##]
+       .replace(/\b(?:request\s*)?id\s*:\s*#+\s*\d+\s*#+/gi, " ")                                     // ID: ##478492 ##
+       .replace(/#+\s*\d+\s*#+/g, " ")
+       .replace(/\bme(?:\s*ref)?\s*[:.]?\s*\d{5,7}\b/gi, " ")                                         // ME Ref: 479333 · ME: 479330 · ME 479073
+       .replace(/(^\s*|[\-–|:]\s*)(?:(?:re|fw|fwd)\s*:\s*)+/gi, "$1")                                    // Re: / Fw: / RE: at the start or after a dash
+       .replace(/(?:\s*[\-–|:]\s*){2,}/g, " - ")                                                      // " - - " left behind
+       .replace(/^[\s\-–|:,.]+|[\s\-–|:,]+$/g, "").replace(/\s{2,}/g, " ").trim();
+  return x || orig;
+}
 function cwMail(i, o) {
   const t = T[i], k = cwKind(t.status), s = cwSince(i), raised = fday(t.created), since = fday(s.at), st = stKey(t.status);
   const prev = cwPrev(i).filter((ms) => HC.dayKey(ms) !== HC.dayKey(NOW)), num = prev.length + 1, last = prev[prev.length - 1];
-  const script = /script/.test(st), g = k.g || apprGroups()[0];
+  const script = /script/.test(st), g = k.g || apprGroups()[0], sr = /service/i.test(t.type || ""), noun = sr ? "service request " : "ticket ";
+  /* service requests (access, setup, data requests …): "your request", not "the issue" */
+  const SRW = {
+    info:      { line: "To proceed with your request, we require some additional information from your end. The request has been awaiting your response since " + since + ".",
+                 ask: "We kindly request you to provide the required details by replying to this email or updating the ticket at your earliest convenience, so that we may proceed with your request." },
+    clarify:   { line: "We have raised a query on this request and have been awaiting your clarification since " + since + ".",
+                 ask: "We kindly request you to review the query and provide your clarification at your earliest convenience, so that we may proceed with your request." },
+    confirm:   { what: "request completed, awaiting your confirmation", line: "Your request was completed on " + since + ", and we are awaiting your confirmation.",
+                 ask: "We kindly request you to verify that the request has been fulfilled as expected and confirm the same, so that we may proceed with the closure of the ticket. Should anything further be required, please let us know." },
+    delivered: { what: "request delivered, awaiting your confirmation",
+                 line: (script ? "The data script for your request was delivered on " : /prod/.test(st) ? "The change for your request was moved to Phoenix production on " : "The change for your request was delivered on ") + since + ".",
+                 ask: "We kindly request you to verify it at your end and confirm that it meets your requirement, so that we may proceed with the closure of the ticket. Should anything further be required, please let us know." },
+    test:      { line: "The change for your request has been made available for your testing since " + since + "." },
+    other:     { line: "Your request has been awaiting your response since " + since + " (status: " + t.status + ").",
+                 ask: "We kindly request you to provide an update at your earliest convenience, so that we may proceed with your request." }
+  };
   /* formal wording. A sign-off in Jira is asked for only where Swire approves an attachment (DB script, release) */
   const rel = g.id === "rel";
   const W = {
@@ -3024,11 +3054,14 @@ function cwMail(i, o) {
     other:     { what: "awaiting your response", line: "The ticket has been awaiting your response since " + since + " (status: " + t.status + ").",
                  ask: "We kindly request you to provide an update at your earliest convenience, so that we may proceed further." }
   }[k.id] || null;
-  const w = W || { what: "awaiting your response", line: "", ask: "" };
+  const ACW = { confirm: { what: "access provided, awaiting your confirmation", line: "The requested access was provided on " + since + ", and we are awaiting your confirmation.",
+    ask: "We kindly request you to confirm that the user is able to log in and access the system as expected, so that we may proceed with the closure of the ticket. Should any further access be required, please let us know." } };
+  const w0 = W && sr && SRW[k.id] ? Object.assign({}, W, SRW[k.id]) : W, w1 = w0 && sr && isAccess(t) && ACW[k.id] ? Object.assign({}, w0, ACW[k.id]) : w0;
+  const w = w1 || { what: "awaiting your response", line: "", ask: "" };
   /* the ticket is named in the opening line (no details table): key (customer portal link), ME ID, summary, raised date */
-  const refTxt = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + t.summary + "\u201d" : "");
+  const refTxt = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + cleanSum(t.summary) + "\u201d" : "");
   const refHtml = esc(refTxt);                       // plain text: no link, no bold (the mail goes on the client's own thread)
-  const lead = num === 1 ? "We would like to bring to your kind attention that ticket " : "Further to our earlier reminder dated " + fday(last) + ", we would like to follow up on ticket ";
+  const lead = num === 1 ? "We would like to bring to your kind attention that " + (sr ? "your " : "") + noun : "Further to our earlier reminder dated " + fday(last) + ", we would like to follow up on " + (sr ? "your " : "") + noun;
   const tail = num === 1 ? ", raised on " + raised + ", is currently pending at your end." : ", raised on " + raised + ", which is still pending at your end.";
   const intro = lead + refTxt + tail, introHtml = esc(lead) + refHtml + esc(tail);
   const close = o.closeOn && CW_CLOSABLE[k.id] ? "Kindly note that if we do not receive a response by " + fday(HC.istMidnight(NOW) + Math.max(1, +o.closeDays || 3) * DAY) + ", we shall proceed with the closure of the ticket." : "";
@@ -3100,6 +3133,7 @@ function openCwMail(i, onDone) {
   (q("cwTo").value ? q("cwNote") : q("cwTo")).focus();
 }
 /* the window behind the "Waiting on Swire" tile: statuses first, then the tickets of one status */
+COLS.cwSum = { h: "Summary", s: (t) => cleanSum(t.summary).toLowerCase(), c: (t) => '<div class="sum" title="' + esc(t.summary) + '">' + esc(cleanSum(t.summary)) + "</div>" + (t.meId ? '<span class="mono dim small">' + esc(t.meId) + "</span>" : "") + (isAccess(t) ? ' <span class="small" style="color:#2563EB;font-weight:600">access</span>' : "") };
 COLS.cwBy = { h: "Swire user", s: (t) => cwWho(t).name, c: (t) => { const w = cwWho(t); return w.name ? esc(w.name) + (w.via !== "Raised by" ? '<div class="dim small">' + esc(w.via) + "</div>" : "") : '<span class="small" style="color:var(--ss)">none</span>'; } };
 COLS.cwCreated = { h: "Raised on", s: (t) => t.created || 0, c: (t) => '<span class="nw">' + esc(fday(t.created)) + '</span><div class="dim small">' + esc(fmt(ageOf(t)).replace(/ \d+[hm]$/, "")) + " ago</div>" };
 COLS.cwSince = { h: "In status since", s: (t, e) => cwSinceTE(t, e).at || 0, c: (t, e) => { const s = cwSinceTE(t, e), d = Math.max(0, Math.floor((NOW - (s.at || NOW)) / DAY));
@@ -3231,14 +3265,14 @@ function openClientWait(idxAll) {
           (remToday(idxAll) ? " · " + remToday(idxAll) + " reminded today" : "") + ". Pick a status: its tickets open oldest first, each with a Mail button.</p>" +
         '<div class="tiles">' + groups.map((x, n) => { const old = x.idx[0], w7 = x.idx.filter((i) => cwDays(i) >= 7).length, nr = notRem(x.idx);
           return '<button type="button" class="tile ' + (w7 ? "t-cr" : "t-ink") + '" data-cst="' + n + '"><span class="ic">' + ICON[x.k.id === "approval" ? "bill" : x.k.id === "onhold" ? "pause" : x.k.id === "confirm" || x.k.id === "delivered" ? "check" : "toSwire"] + "</span>" +
-            '<span class="nm">' + x.idx.length.toLocaleString() + '</span><span class="tt">' + esc(x.s) + '</span><span class="ds">' + esc(x.k.label) + " · oldest raised " + esc(fday(T[old].created)) +
+            '<span class="nm">' + x.idx.length.toLocaleString() + '</span><span class="tt">' + esc(x.s) + '</span><span class="ds">' + esc(x.k.label) + (x.idx.some((i) => isAccess(T[i])) ? " · " + x.idx.filter((i) => isAccess(T[i])).length + " access request" + (x.idx.filter((i) => isAccess(T[i])).length === 1 ? "" : "s") : "") + " · oldest raised " + esc(fday(T[old].created)) +
             (w7 ? " · " + w7 + " in this status 7+ days" : "") + " · " + (nr ? nr + " not reminded" : "all reminded") + '</span><span class="mt"><span style="width:' + Math.round((x.idx.length - nr) / x.idx.length * 100) + '%" title="Share reminded"></span></span></button>'; }).join("") + "</div>";
     } else {
       cur = all ? groups.reduce((m, x) => m.concat(x.idx), []) : grp.idx;
       head = all ? "Waiting on Swire, all statuses" : "Waiting on Swire: " + grp.s;
       body = '<div class="small" style="margin:-2px 0 6px"><button type="button" class="lnk sm" data-cw="home">All statuses</button> › <b>' + esc(all ? "Every ticket" : grp.s) + "</b></div>" +
-        '<p class="sub" style="margin:0 0 10px">' + (all ? "By status, then oldest created first." : esc(grp.k.label) + ". Oldest created first.") + " <b>" + notRem(cur) + "</b> not reminded yet. Mail opens a draft worded for the status, to the Swire user who raised the ticket.</p>" +
-        table(cur, ["key", "type", "pri", "sum"].concat(all ? ["status"] : [], ["cwBy", "cwCreated", "cwSince"]), { sortable: false, limit: 2000, empty: "No tickets.", front: mailFront, extra: { h: "Remarks", c: (i) => cwRemInput(i) } });
+        '<p class="sub" style="margin:0 0 10px">' + (all ? "By status, then oldest created first." : esc(grp.k.label) + ". Oldest created first.") + " <b>" + notRem(cur) + "</b> not reminded yet. Mail opens a draft to the Swire Team, worded for the status (service and access requests have their own wording).</p>" +
+        table(cur, ["key", "type", "pri", "cwSum"].concat(all ? ["status"] : [], ["cwBy", "cwCreated", "cwSince"]), { sortable: false, limit: 2000, empty: "No tickets.", front: mailFront, extra: { h: "Remarks", c: (i) => cwRemInput(i) } });
     }
     box.innerHTML = '<div class="lhead"><h3>' + esc(head) + ' <span class="dim num">' + cur.length.toLocaleString() + "</span></h3>" +
       (S.st == null ? '<button type="button" class="btn" data-cw="all">All tickets</button>' : '<button type="button" class="btn" data-cw="back">Back</button>') +
