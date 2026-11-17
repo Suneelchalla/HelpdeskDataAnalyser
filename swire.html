@@ -770,7 +770,7 @@ function sigL(cls, idx, k, h, title, kind) {
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("[data-list]"); if (!b) return;
   const x = LISTS[b.dataset.list]; if (!x) return;
-  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else if (x.kind === "chk") openCheck(x.extra.cid, x.title, x.idx); else if (x.kind === "appr") openApprList(x.idx, x.extra && x.extra.gid); else if (x.kind === "svmby") openSvmBy(x.idx, x.title); else openList(x.title, x.idx, x.extra, x.mail);
+  e.preventDefault(); e.stopPropagation(); if (x.kind === "engg") openEngg(x.idx); else if (x.kind === "client") openClientWait(x.idx); else if (x.kind === "chk") openCheck(x.extra.cid, x.title, x.idx); else if (x.kind === "appr") openApprList(x.idx, x.extra && x.extra.gid); else if (x.kind === "svmby") openSvmBy(x.idx, x.title); else openList(x.title, x.idx, x.extra, x.mail);
 }, true);
 /* Escape closes only the overlay on top (list, ticket details, Engineering window, reminder) */
 function isTop(ov) { const all = document.querySelectorAll(".ov"); return all.length && all[all.length - 1] === ov; }
@@ -997,14 +997,14 @@ function viewNow() {
   const tot = Math.max(1, open.length), pct = (n) => n ? (n / tot * 100 < 1 ? "<1%" : Math.round(n / tot * 100) + "%") : "0%";
   const hero = '<section class="hero"><div class="hero-top"><div><div class="hero-eye">' + DN[pd.dow] + ", " + pd.d + " " + MN[pd.mo] + '</div><div class="hero-title">' + greet + '</div><div class="hero-sub">Swire Shipping right now: ' + (hd.length + engg.length).toLocaleString() + " with us (" + box.length + " in the open box), " + cl.length.toLocaleString() + " waiting on Swire.</div></div>" +
     '<button type="button" class="hero-total" data-list="' + reg(open, "All open tickets") + '"><div class="n">' + open.length.toLocaleString() + '</div><div class="l">open tickets</div></button></div>' +
-    '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : null) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
+    '<div class="pipe" role="group" aria-label="Where the open tickets are">' + parts.filter((x) => x[1].length).map(([n, l, c]) => '<button type="button" style="flex:' + l.length + ' 1 0;background:' + c + '" data-list="' + reg(l, n, null, n === "With Engineering" ? "engg" : n === "Waiting on Swire" ? "client" : null) + '" title="' + esc(n) + ": " + l.length + " (" + pct(l.length) + ')" aria-label="' + esc(n) + " " + l.length + '"></button>').join("") + "</div>" +
     '<div class="legend2">' + misPill() + '<button type="button" class="lgpdf" id="withUsPdf" title="PDF of the open box, Help Desk and Engineering tickets"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15l3 3 3-3"/></svg>PDF</button></div></section>';
   const w1 = Math.max(1, withUs.length);
   const sideBox = '<div class="grp">Where the open tickets are</div><div class="tiles five">' +
     sideTile("#C2577E", "inbox", box, "Open box", "Not triaged yet · " + pct(box.length) + " of open", box.length / tot) +
     sideTile("#B5486F", "desk", hdTriaged, "With Help Desk", "Triaged, with us · " + pct(hdTriaged.length) + " of open", hdTriaged.length / tot) +
     sideTile("#5C1730", "toEngg", engg, "With Engineering", "LRPS with the engineers · " + pct(engg.length) + " of open", engg.length / tot, "engg") +
-    sideTile("#B7791F", "toSwire", cl, "Waiting on Swire", "Counted, not chased by us · " + pct(cl.length) + " of open", cl.length / tot) +
+    sideTile("#B7791F", "toSwire", cl, "Waiting on Swire", "Open to remind each Swire user · " + pct(cl.length) + " of open", cl.length / tot, "client") +
     sideTile("#7E6C8A", "bill", bill, "Delivered, billing", "With Receivables · " + pct(bill.length) + " of open", bill.length / tot) + "</div>";
   return hero + sideBox + '<div class="grp">SLA, tickets with us (open box, Help Desk and Engineering)</div><div class="tiles">' +
     tile("t-ss", "siren", br, "Breached", "Past the SLA target, still with us", br.length / w1, "SLA breached, with us") +
@@ -2904,6 +2904,263 @@ function openApprMail(listAll, g) {
   q("amCopy").onclick = (e) => { keep(); copyRich(ed.html(), ed.edited ? ed.text() : cur().text, e.target, "Copy email"); };
   q("amEml").onclick = () => { keep(); emlDownload(q("amSubj").value.trim() || cur().subject, ed.html(), "Swire-" + (g.id === "db" ? "DB-script" : "release") + "-approval-" + HC.dayKey(NOW) + ".eml", q("amTo").value.trim(), q("amCc").value.trim()); };
   paint(); (bk.to ? q("amNote") : q("amTo")).focus();
+}
+/* ══ Waiting on Swire: a reminder mail to the client user, one ticket at a time ══
+   The "Waiting on Swire" tile (and its bar in the pipeline) opens a window in two steps:
+     1. the client-side statuses, each once with its tickets, what kind of wait it is and how many are not reminded yet;
+     2. the tickets of one status, oldest created first, each with a Mail button in front.
+   Mail = a draft to the Swire user who raised the ticket (Reporter; the Business User when the reporter is not a Swire
+   user), worded for the kind of status (information needed, confirmation, delivered fix, testing, approval, on hold …),
+   with dates only (raised on, in this status since). Every mail made here is logged in this browser: the list shows
+   who was reminded and when, and the next mail for the same wait is worded as a follow-up ("Second reminder"). */
+const CW_LOG = "hd-swire-cwlog", CW_BOOK = "hd-swire-cwmail";
+const CW_KINDS = [
+  { id: "info", label: "Information needed", st: ["Waiting for customer"] },
+  { id: "clarify", label: "Clarification needed", st: ["Doubt Clarification", "Clarification (Dev)"] },
+  { id: "confirm", label: "Confirmation of resolution", st: ["Resolved With Clarification", "Resolved", "Confirmation", "Get Confirmation", "Completed", "Published"] },
+  { id: "delivered", label: "Fix delivered, to verify", st: ["Delivered", "DB Script Delivered", "Script Delivered", "Release Move to Production", "Release moved to production"] },
+  { id: "test", label: "Testing by Swire", st: ["Client Hotfix Testing", "Client UAT Testing"] },
+  { id: "deploy", label: "Deployment by Swire", st: ["Client Deployment (PROD)"] },
+  { id: "approval", label: "Approval by Swire", st: [] },                    // statuses: Master data › approval statuses
+  { id: "rejected", label: "Rejected by Swire", st: ["Client Rejected (DB Script)"] },
+  { id: "onhold", label: "On hold", st: ["On-Hold"] },
+  { id: "other", label: "Waiting on Swire", st: [] }
+];
+const CW_CLOSABLE = { info: 1, clarify: 1, confirm: 1, delivered: 1, other: 1 };       // kinds where "we will close it" makes sense
+function cwKind(status) {
+  const k = stKey(status), g = apprGroups().find((x) => apprSet(x).has(k));
+  if (g) return Object.assign({}, CW_KINDS.find((x) => x.id === "approval"), { g });
+  const hit = CW_KINDS.find((x) => x.st.some((s) => stKey(s) === k)); if (hit) return hit;
+  const by = (id) => CW_KINDS.find((x) => x.id === id);
+  if (/approv/.test(k)) return Object.assign({}, by("approval"), { g: apprGroups()[/release/.test(k) ? 1 : 0] });
+  if (/reject/.test(k)) return by("rejected");
+  if (/test/.test(k)) return by("test");
+  if (/deploy/.test(k)) return by("deploy");
+  if (/deliver|moved? to prod/.test(k)) return by("delivered");
+  if (/resolv|confirm|complet|publish/.test(k)) return by("confirm");
+  if (/clarif|doubt|query/.test(k)) return by("clarify");
+  if (/hold/.test(k)) return by("onhold");
+  if (/wait|customer|client/.test(k)) return by("info");
+  return by("other");
+}
+const cwOrder = (k) => CW_KINDS.findIndex((x) => x.id === k.id);
+/* since when the ticket is in its current status: the last move into it (status history), else its last update (approx.) */
+function cwSinceTE(t, e) {
+  const k = stKey(t.status), tr = (e && e.tr) || [];
+  for (let n = tr.length - 1; n >= 0; n--) if (stKey(tr[n].to) === k) return { at: tr[n].t, src: "history" };
+  return { at: t.updated != null ? t.updated : t.created, src: "updated" };
+}
+const cwSince = (i) => cwSinceTE(T[i], E[i]);
+const cwDays = (i) => Math.max(0, Math.floor((NOW - (cwSince(i).at || NOW)) / DAY));
+const cwByCreated = (a, b) => (T[a].created || 0) - (T[b].created || 0) || bySevAge(a, b);
+/* reminders already made for this wait (a ticket that went back to us and came back starts again) */
+function cwLog() { try { return JSON.parse(localStorage.getItem(CW_LOG) || "{}") || {}; } catch (e) { return {}; } }
+function cwPrevTE(t, e) { const s = cwSinceTE(t, e), from = s.src === "history" ? s.at : 0; return (cwLog()[t.key] || []).filter((ms) => ms >= from).sort((a, b) => a - b); }
+const cwPrev = (i) => cwPrevTE(T[i], E[i]);
+function cwMark(key) {
+  const l = cwLog(), a = l[key] = l[key] || [], today = HC.dayKey(Date.now());
+  if (!a.some((ms) => HC.dayKey(ms) === today)) a.push(Date.now());
+  try { localStorage.setItem(CW_LOG, JSON.stringify(l)); } catch (e) {}
+}
+function cwBook() { const d = { to: {}, cc: "", sign: "", closeOn: false, closeDays: 3 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(CW_BOOK) || "{}")); } catch (e) { return d; } }
+function cwSaveBook(b) { try { localStorage.setItem(CW_BOOK, JSON.stringify(b)); } catch (e) {} }
+const cwIsMail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
+/* the Swire user to write to: whoever raised the ticket; the Business User when the reporter is one of us or a bot */
+function cwWho(t) {
+  const ours = (n) => !n || /svm|solverminds|help ?desk|automation|\bjira\b|jmwe|^former user$/i.test(n) || ["team", "auto", "nomod"].indexOf(engKind(n)) > -1 || !!engMaster(n);
+  if (!ours(t.reporter)) return { name: t.reporter, via: "Raised by" };
+  if (!ours(t.businessUser)) return { name: t.businessUser, via: "Business user" };
+  return { name: "", via: "" };
+}
+function cwEmail(who) { if (!who.name) return ""; if (cwIsMail(who.name)) return who.name.trim(); return (cwBook().to || {})[who.name.toLowerCase()] || ""; }
+function cwSaveEmail(who, v) { if (!who.name || cwIsMail(who.name)) return; const b = cwBook(); b.to = b.to || {}; b.to[who.name.toLowerCase()] = String(v || "").trim(); cwSaveBook(b); }
+/* "daryl.peter@swireshipping.com" → "Daryl Peter" */
+function cwDear(who) {
+  const n = String(who.name || "").trim(); if (!n) return "";
+  if (!cwIsMail(n)) return n;
+  const p = n.split("@")[0].split(/[._-]+/).filter((x) => /^[a-z]+$/i.test(x));
+  return p.length ? p.map((x) => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase()).join(" ") : "";
+}
+const CW_ORD = ["Reminder", "Second reminder", "Third reminder"];
+/* the mail for one ticket. o: { hi, sign, note, closeOn, closeDays } */
+function cwMail(i, o) {
+  const t = T[i], k = cwKind(t.status), s = cwSince(i), raised = fday(t.created), since = fday(s.at), st = stKey(t.status);
+  const prev = cwPrev(i).filter((ms) => HC.dayKey(ms) !== HC.dayKey(NOW)), num = prev.length + 1, last = prev[prev.length - 1];
+  const script = /script/.test(st), g = k.g || apprGroups()[0];
+  const W = {
+    info:      { what: "awaiting information from you", line: "We are waiting for some information from you to continue working on this ticket. It has been with you since " + since + ".",
+                 ask: "Kindly share the requested details by replying on the ticket or to this email, so that we can proceed further." },
+    clarify:   { what: "awaiting your clarification", line: "We have raised a query on this ticket and have been waiting for your clarification since " + since + ".",
+                 ask: "Kindly go through the query on the ticket and share your clarification, so that we can proceed further." },
+    confirm:   { what: "awaiting your confirmation", line: "We shared the resolution on this ticket on " + since + " and are waiting for your confirmation.",
+                 ask: "Kindly review it and confirm whether the issue is resolved, so that we can close the ticket. If anything still needs attention, please let us know on the ticket." },
+    delivered: { what: (script ? "data script" : "fix") + " delivered, awaiting your confirmation",
+                 line: (/prod/.test(st) ? "The fix was moved to Phoenix production on " : script ? "The data script was delivered on " : "The fix was delivered on ") + since + ".",
+                 ask: "Kindly verify it at your end and confirm that it works as expected, so that we can close the ticket. If you notice anything, please let us know on the ticket." },
+    test:      { what: "awaiting your testing", line: "The fix has been available for your testing since " + since + ".",
+                 ask: "Kindly complete the testing and share the results or your sign-off on the ticket, so that we can proceed with the move to Phoenix production." },
+    deploy:    { what: "awaiting deployment at your end", line: "The release has been ready for deployment in production at your end since " + since + ".",
+                 ask: "Kindly confirm once it is deployed, or share the planned deployment date, so that we can follow up accordingly." },
+    approval:  { what: g.one + " pending your approval", line: "The " + g.one + " on this ticket has been awaiting your approval since " + since + ". " + g.att1, ask: g.ask1 },
+    rejected:  { what: (script ? "data script" : "delivery") + " rejected, awaiting your feedback", line: "The " + (script ? "data script" : "delivery") + " on this ticket was marked as rejected on " + since + ".",
+                 ask: "Kindly share the reason or the corrections needed, so that we can revise it and send it back for your approval." },
+    onhold:    { what: "on hold, awaiting your go-ahead", line: "This ticket has been on hold since " + since + ".",
+                 ask: "Kindly let us know whether we may resume work on it, or whether it can be closed." },
+    other:     { what: "awaiting your response", line: "The ticket has been waiting for your response since " + since + " (status: " + t.status + ").",
+                 ask: "Kindly share an update on the ticket, so that we can proceed further." }
+  }[k.id] || null;
+  const w = W || { what: "awaiting your response", line: "", ask: "" };
+  const intro = num === 1 ? "This is a gentle reminder regarding the ticket below, raised on " + raised + "."
+    : "We are following up on our earlier reminder of " + fday(last) + " regarding the ticket below, raised on " + raised + ".";
+  const close = o.closeOn && CW_CLOSABLE[k.id] ? "If we do not hear from you by " + fday(HC.istMidnight(NOW) + Math.max(1, +o.closeDays || 3) * DAY) + ", we will proceed to close the ticket." : "";
+  const name = (o.hi || "").trim() || "Sir/Madam", sg = (o.sign || "").trim() || rmSign(), nt = (o.note || "").trim();
+  const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.55"';
+  const CELL = "padding:6px 10px;border:1.5pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1.5pt;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
+  const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
+  const facts = [["ME ID", t.meId ? "<b>" + esc(t.meId) + "</b>" : "—"],
+    ["Ticket", '<a href="' + esc(portalUrl(t.key)) + '" style="color:#7A1F3D;font-weight:600;text-decoration:underline">' + esc(t.key) + "</a>"],
+    ["Summary", esc(t.summary)], ["Priority", esc(t.priority || "—")], ["Raised on", esc(raised)], ["Status", esc(t.status || "—")], ["In this status since", esc(since)]];
+  const tbl = '<table width="560" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:560px;' + F + '">' +
+    facts.map(([a, b]) => '<tr><td width="150" style="' + CELL + 'width:150px;background:#F7EEF2;color:#5C1730;font-weight:700;white-space:nowrap">' + a + '</td><td style="' + CELL + '">' + b + "</td></tr>").join("") + "</table>";
+  const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(4) + "<p " + P + ">Greetings from the SVM Help Desk.</p>" +
+    "<p " + P + ">" + esc(intro) + "</p>" + gap(4) + tbl + gap(10) + "<p " + P + ">" + esc(w.line) + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
+    "<p " + P + ">" + esc(w.ask) + (close ? " " + esc(close) : "") + "</p><p " + P + ">Thank you for your continued support.</p>" + gap(4) +
+    "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
+  const text = "Dear " + name + ",\n\nGreetings from the SVM Help Desk.\n\n" + intro + "\n\n" + facts.map(([a]) => a).map((a, n) => a + ": " + [t.meId || "-", t.key + " (" + portalUrl(t.key) + ")", t.summary, t.priority || "-", raised, t.status || "-", since][n]).join("\n") +
+    "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? " " + close : "") + "\n\nThank you for your continued support.\n\nWarm regards,\n" + sg;
+  const subject = (CW_ORD[num - 1] || "Reminder " + num) + ": Swire Phoenix " + t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + ", " + w.what + ", raised " + raised;
+  return { html, text, subject, num, last, kind: k };
+}
+/* the mail window for one ticket */
+function openCwMail(i, onDone) {
+  const t = T[i], who = cwWho(t), bk = cwBook(), k = cwKind(t.status), prev = cwPrev(i);
+  const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(t.key) + "</span></h3><button type=\"button\" class=\"btn\" data-rmx>Cancel</button></div>" +
+    '<p class="small" style="margin:0 0 6px;color:var(--muted)"><b style="color:var(--ink)">' + esc(t.status) + "</b> · " + esc(k.label) + " · raised " + esc(fday(t.created)) + " · in this status since " + esc(fday(cwSince(i).at)) +
+      (cwSince(i).src !== "history" ? ' <span title="Status history not read yet: this is the ticket’s last update" style="color:var(--cr)">(approx.)</span>' : "") +
+      (who.name ? " · " + esc(who.via) + " <b style=\"color:var(--ink)\">" + esc(who.name) + "</b>" : ' · <span style="color:var(--ss)">no Swire user on the ticket</span>') +
+      (prev.length ? " · reminded " + prev.length + "×, last " + esc(fday(prev[prev.length - 1])) : "") + "</p>" +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="cwTo">To</label><input class="inp" id="cwTo" placeholder="user@swireshipping.com" style="flex:1;min-width:240px">' +
+      '<label class="rmlbl" for="cwHi">Dear</label><input class="inp" id="cwHi" style="width:220px"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="cwCc">Cc</label><input class="inp" id="cwCc" style="flex:1" placeholder="SVM Help Desk, Swire IT, …"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="cwSubj">Subject</label><input class="inp" id="cwSubj" style="flex:1"></div>' +
+    '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="cwSign">Signature</label><textarea class="inp" id="cwSign" rows="2" style="flex:1;resize:vertical" placeholder="Name, SVM Help Desk, Solverminds"></textarea></div>' +
+    '<label class="rmlbl" for="cwNote">Note (optional, shown after the ticket)</label><textarea class="inp" id="cwNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
+    (CW_CLOSABLE[k.id] ? '<div class="rmrow" style="border:none;margin:6px 0 0;padding:0;gap:6px"><label class="small" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cwClose"> Say we will close the ticket if there is no reply within</label>' +
+      '<input class="inp" id="cwDays" style="width:56px" inputmode="numeric"><span class="small">days</span></div>' : "") +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Worded for <b>' + esc(k.label.toLowerCase()) + "</b>, dates only. Click into the mail to edit any text.</span><span style=\"flex:1\"></span>" +
+      '<button type="button" class="btn" id="cwReset" style="display:none">Undo text edits</button></div>' +
+    '<div class="rmprev" id="cwPrev" style="max-height:44vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
+    '<div class="rmrow"><span class="dim small" id="cwFoot">To (per user), Cc and the signature are remembered in this browser. Send it from your own mailbox.</span><span style="flex:1"></span>' +
+      '<button type="button" class="btn" id="cwCopy">Copy email</button><button type="button" class="btn" id="cwEml" title="An unsent .eml: opens in Outlook as a draft, with the formatting">Download email draft</button>' +
+      '<button type="button" class="btn pri" id="cwOpen" title="Opens a new mail in your mail app (plain text)">Open in mail app</button></div>', "wide");
+  const q = (id) => m.ov.querySelector("#" + id);
+  q("cwTo").value = cwEmail(who); q("cwHi").value = cwDear(who); q("cwCc").value = bk.cc || ""; q("cwSign").value = bk.sign || rmSign();
+  if (q("cwClose")) { q("cwClose").checked = !!bk.closeOn; q("cwDays").value = bk.closeDays || 3; }
+  let subjEdited = false;
+  const opts = () => ({ hi: q("cwHi").value, sign: q("cwSign").value, note: q("cwNote").value, closeOn: q("cwClose") ? q("cwClose").checked : false, closeDays: q("cwDays") ? q("cwDays").value : 3 });
+  const cur = () => cwMail(i, opts());
+  const keep = () => { const b = cwBook(); b.cc = q("cwCc").value.trim(); b.sign = q("cwSign").value.trim(); if (q("cwClose")) { b.closeOn = q("cwClose").checked; b.closeDays = Math.max(1, parseInt(q("cwDays").value, 10) || 3); }
+    cwSaveBook(b); if (q("cwTo").value.trim()) cwSaveEmail(who, q("cwTo").value); rmSetSign(q("cwSign").value); };
+  const ed = mailEditor(q("cwPrev"), () => {});
+  ed.onEdit = () => { q("cwReset").style.display = ""; };
+  function paint() { const x = cur(); if (!subjEdited) q("cwSubj").value = x.subject; ed.render(x.html); q("cwReset").style.display = "none"; }
+  const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
+  ["cwHi", "cwNote", "cwSign", "cwDays"].forEach((id) => { if (q(id)) q(id).addEventListener("change", () => { keep(); setTimeout(reb, 120); }); });
+  if (q("cwClose")) q("cwClose").addEventListener("change", () => { keep(); reb(); });
+  q("cwTo").addEventListener("change", keep); q("cwCc").addEventListener("change", keep);
+  q("cwSubj").addEventListener("input", () => { subjEdited = true; });
+  q("cwReset").onclick = () => paint();
+  const done = (btn, msg) => { keep(); cwMark(t.key); if (btn && msg) { const l = btn.textContent; btn.textContent = msg; setTimeout(() => { btn.textContent = l; }, 1800); } if (onDone) onDone(); };
+  const subj = () => q("cwSubj").value.trim() || cur().subject, body = () => (ed.edited ? ed.text() : cur().text);
+  q("cwCopy").onclick = (e) => { copyRich(ed.html(), body(), e.target, "Copy email"); done(); };
+  q("cwEml").onclick = (e) => { emlDownload(subj(), ed.html(), "Swire-reminder-" + t.key + "-" + HC.dayKey(NOW) + ".eml", q("cwTo").value.trim(), q("cwCc").value.trim()); done(e.target, "Draft downloaded"); };
+  q("cwOpen").onclick = (e) => {
+    const list = (s) => String(s || "").split(/[;,]\s*/).map((x) => x.trim()).filter(Boolean).map(encodeURIComponent).join(",");
+    let b = body(); if (b.length > 1800) b = b.slice(0, 1800) + "\n…";
+    const a = document.createElement("a");
+    a.href = "mailto:" + list(q("cwTo").value) + "?" + (q("cwCc").value.trim() ? "cc=" + list(q("cwCc").value) + "&" : "") + "subject=" + encodeURIComponent(subj()) + "&body=" + encodeURIComponent(b);
+    document.body.appendChild(a); a.click(); a.remove(); done(e.target, "Opened in your mail app");
+  };
+  paint();
+  /* no address saved for this user yet: ask Jira for the reporter's email (works when the bridge is connected and Jira shows it) */
+  if (!q("cwTo").value && who.via === "Raised by" && (BR.ready || window._rmBridge)) {
+    q("cwTo").placeholder = "Looking up the email in Jira…";
+    call("/rest/api/3/issue/" + encodeURIComponent(t.key) + "?fields=reporter").then((d) => {
+      const r = d && d.fields && d.fields.reporter, em = r && r.emailAddress;
+      if (em && !q("cwTo").value) { q("cwTo").value = em; cwSaveEmail(who, em); }
+      q("cwTo").placeholder = em ? "user@swireshipping.com" : "Jira does not show this user’s email: type it once, it is remembered";
+    }, () => { q("cwTo").placeholder = "user@swireshipping.com"; });
+  }
+  (q("cwTo").value ? q("cwNote") : q("cwTo")).focus();
+}
+/* the window behind the "Waiting on Swire" tile: statuses first, then the tickets of one status */
+COLS.cwBy = { h: "Swire user", s: (t) => cwWho(t).name, c: (t) => { const w = cwWho(t); return w.name ? esc(w.name) + (w.via !== "Raised by" ? '<div class="dim small">' + esc(w.via) + "</div>" : "") : '<span class="small" style="color:var(--ss)">none</span>'; } };
+COLS.cwCreated = { h: "Raised on", s: (t) => t.created || 0, c: (t) => '<span class="nw">' + esc(fday(t.created)) + '</span><div class="dim small">' + esc(fmt(ageOf(t)).replace(/ \d+[hm]$/, "")) + " ago</div>" };
+COLS.cwSince = { h: "In status since", s: (t, e) => cwSinceTE(t, e).at || 0, c: (t, e) => { const s = cwSinceTE(t, e), d = Math.max(0, Math.floor((NOW - (s.at || NOW)) / DAY));
+  return '<span class="nw">' + esc(fday(s.at)) + "</span>" + (s.src !== "history" ? ' <span class="small" title="Status history not read yet: this is the ticket’s last update" style="color:var(--cr)">approx.</span>' : "") +
+    '<div class="small' + (d >= 7 ? '" style="color:var(--ss);font-weight:600' : d >= 3 ? '" style="color:var(--cr)' : ' dim') + '">' + (d < 1 ? "today" : d + " day" + (d === 1 ? "" : "s")) + "</div>"; } };
+function openClientWait(idxAll) {
+  const S = { st: null };
+  const ov = document.createElement("div"); ov.className = "ov lst";
+  ov.innerHTML = '<div class="lbox" role="dialog" aria-modal="true" aria-label="Waiting on Swire"></div>';
+  const box = ov.querySelector(".lbox");
+  let groups = [], cur = [];
+  const mailFront = [
+    { h: "", s: () => "", c: (i) => '<button type="button" class="btn pri" data-cm="' + i + '" style="padding:4px 12px;white-space:nowrap" title="Draft a reminder mail to the Swire user on ' + esc(T[i].key) + '">Mail</button>' },
+    { h: "Reminded", s: (i) => String(cwPrev(i).length).padStart(3, "0"), c: (i) => { const p = cwPrev(i); if (!p.length) return '<span class="dim small">not yet</span>';
+      const last = p[p.length - 1], today = HC.dayKey(last) === HC.dayKey(Date.now());
+      return '<b style="color:' + (today ? "var(--ok)" : "var(--ink)") + '">' + p.length + "×</b>" + '<div class="dim small nw">' + (today ? "today" : esc(fday(last))) + "</div>"; } }
+  ];
+  function build() {
+    const g = {}; idxAll.forEach((i) => { const s = T[i].status || "(blank)"; (g[s] = g[s] || []).push(i); });
+    groups = Object.keys(g).map((s) => ({ s, k: cwKind(s), idx: g[s].slice().sort(cwByCreated) })).sort((a, b) => cwOrder(a.k) - cwOrder(b.k) || b.idx.length - a.idx.length || a.s.localeCompare(b.s));
+  }
+  function paint() {
+    build();
+    const all = S.st === "*", grp = !all && S.st != null ? groups.find((x) => x.s === S.st) : null;
+    if (S.st != null && !all && !grp) S.st = null;
+    const notRem = (l) => l.filter((i) => !cwPrev(i).length).length, remToday = (l) => l.filter((i) => cwPrev(i).some((ms) => HC.dayKey(ms) === HC.dayKey(Date.now()))).length;
+    let body, head;
+    if (S.st == null) {
+      cur = idxAll;
+      head = "Waiting on Swire";
+      body = '<p class="sub" style="margin:4px 0 12px">' + idxAll.length.toLocaleString() + " open tickets waiting on Swire, in " + groups.length + " status" + (groups.length === 1 ? "" : "es") + " · <b>" + notRem(idxAll) + "</b> not reminded yet" +
+          (remToday(idxAll) ? " · " + remToday(idxAll) + " reminded today" : "") + ". Pick a status: its tickets open oldest first, each with a Mail button.</p>" +
+        '<div class="tiles">' + groups.map((x, n) => { const old = x.idx[0], w7 = x.idx.filter((i) => cwDays(i) >= 7).length, nr = notRem(x.idx);
+          return '<button type="button" class="tile ' + (w7 ? "t-cr" : "t-ink") + '" data-cst="' + n + '"><span class="ic">' + ICON[x.k.id === "approval" ? "bill" : x.k.id === "onhold" ? "pause" : x.k.id === "confirm" || x.k.id === "delivered" ? "check" : "toSwire"] + "</span>" +
+            '<span class="nm">' + x.idx.length.toLocaleString() + '</span><span class="tt">' + esc(x.s) + '</span><span class="ds">' + esc(x.k.label) + " · oldest raised " + esc(fday(T[old].created)) +
+            (w7 ? " · " + w7 + " in this status 7+ days" : "") + " · " + (nr ? nr + " not reminded" : "all reminded") + '</span><span class="mt"><span style="width:' + Math.round((x.idx.length - nr) / x.idx.length * 100) + '%" title="Share reminded"></span></span></button>'; }).join("") + "</div>";
+    } else {
+      cur = all ? groups.reduce((m, x) => m.concat(x.idx), []) : grp.idx;
+      head = all ? "Waiting on Swire, all statuses" : "Waiting on Swire: " + grp.s;
+      body = '<div class="small" style="margin:-2px 0 6px"><button type="button" class="lnk sm" data-cw="home">All statuses</button> › <b>' + esc(all ? "Every ticket" : grp.s) + "</b></div>" +
+        '<p class="sub" style="margin:0 0 10px">' + (all ? "By status, then oldest created first." : esc(grp.k.label) + ". Oldest created first.") + " <b>" + notRem(cur) + "</b> not reminded yet. Mail opens a draft worded for the status, to the Swire user who raised the ticket.</p>" +
+        table(cur, ["key", "type", "pri", "sum"].concat(all ? ["status"] : [], ["cwBy", "cwCreated", "cwSince"]), { sortable: false, limit: 2000, empty: "No tickets.", front: mailFront });
+    }
+    box.innerHTML = '<div class="lhead"><h3>' + esc(head) + ' <span class="dim num">' + cur.length.toLocaleString() + "</span></h3>" +
+      (S.st == null ? '<button type="button" class="btn" data-cw="all">All tickets</button>' : '<button type="button" class="btn" data-cw="back">Back</button>') +
+      '<button type="button" class="btn" data-cw="csv">Download CSV</button><button type="button" class="btn" data-cw="close">Close</button></div>' + body;
+  }
+  const prev = document.activeElement;
+  const close = () => { ov.remove(); document.removeEventListener("keydown", key); try { prev && prev.focus(); } catch (x) {} };
+  const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); if (S.st != null) { S.st = null; paint(); } else close(); } };
+  ov.addEventListener("click", (ev) => {
+    if (ev.target === ov) return close();
+    const m = ev.target.closest("[data-cm]"); if (m) { ev.stopPropagation(); return openCwMail(+m.dataset.cm, () => { const y = box.scrollTop; paint(); box.scrollTop = y; }); }
+    const b = ev.target.closest("[data-cw],[data-cst]");
+    if (b) {
+      if (b.dataset.cst != null) { S.st = groups[+b.dataset.cst].s; return paint(); }
+      const a = b.dataset.cw;
+      if (a === "close") return close();
+      if (a === "back" || a === "home") { S.st = null; return paint(); }
+      if (a === "all") { S.st = "*"; return paint(); }
+      if (a === "csv") return csv(cur, S.st == null || S.st === "*" ? "waiting on Swire" : "waiting on Swire " + S.st);
+      return;
+    }
+    const tr = ev.target.closest("tr.row"); if (tr) openTicket(+tr.dataset.i);
+  });
+  document.body.appendChild(ov); document.addEventListener("keydown", key); paint();
+  box.querySelector('[data-cw="close"]').focus();
 }
 /* PDF of the tickets with us: open box, Help Desk, Engineering, with the important columns (landscape) */
 /* PDF from the Now page: a one-glance status report first (counts, SLA, what needs attention, who has what), then a compact
