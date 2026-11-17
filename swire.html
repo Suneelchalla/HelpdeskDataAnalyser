@@ -6,7 +6,7 @@
 <title>Swire Hypercare</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237A1F3D'/%3E%3Cpath d='M6 20h20l-3 5H9z' fill='%23F3C6D4'/%3E%3Cpath d='M15 7v12M15 8l7 9h-7' stroke='%23fff' stroke-width='2' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="hd-store.js?v=20261107a"></script>
+<script src="hd-store.js?v=20261118a"></script>
 <script src="hd-engineers.js?v=20261107b"></script>
 <script src="sla-engine.js?v=20261031d"></script>
 <script src="sla-history.js?v=20261031d"></script>
@@ -2767,7 +2767,7 @@ const APPR_DEF = [
   { id: "db", name: "DB script approval", one: "data script", many: "data scripts", att1: "The data script and its release notes are attached to the ticket.", attN: "The data script and its release notes are attached to each ticket.", icon: "bill", st: ["CLIENT Approval (DB Script)"],
     ask1: "Kindly review and share your approval on the ticket, so that we can proceed with the execution in Phoenix production.",
     askN: "Kindly review and share your approval on each ticket, so that we can proceed with the execution in Phoenix production." },
-  { id: "rel", name: "Release approval", one: "release", many: "releases", att1: "The release notes are attached to the ticket.", attN: "The release notes are attached to each ticket.", icon: "toSwire", st: ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)"],
+  { id: "rel", name: "Release approval", one: "release", many: "releases", att1: "The release notes are attached to the ticket.", attN: "The release notes are attached to each ticket.", icon: "toSwire", st: ["CLIENT RELEASE APPROVAL", "Client Release Approval (PROD)", "Client Approval (PROD)"],
     ask1: "Kindly review and share your approval on the ticket, so that we can move the release to Phoenix production.",
     askN: "Kindly review and share your approval on each ticket, so that we can move the releases to Phoenix production." }
 ], APPR_MAIL = "hd-swire-apprmail";
