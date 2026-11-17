@@ -3010,7 +3010,8 @@ function cleanSum(s) {
   return x || orig;
 }
 function cwMail(i, o) {
-  const t = T[i], k = cwKind(t.status), s = cwSince(i), raised = fday(t.created), since = fday(s.at), st = stKey(t.status);
+  /* o.as = "confirm": a Waiting-for-customer ticket worded as Resolved With Clarification (the status may have been set wrongly) */
+  const t = T[i], k0 = cwKind(t.status), k = o.as === "confirm" && k0.id === "info" ? CW_KINDS.find((x) => x.id === "confirm") : k0, s = cwSince(i), raised = fday(t.created), since = fday(s.at), st = stKey(t.status);
   const prev = cwPrev(i).filter((ms) => HC.dayKey(ms) !== HC.dayKey(NOW)), num = prev.length + 1, last = prev[prev.length - 1];
   const script = /script/.test(st), g = k.g || apprGroups()[0], sr = /service/i.test(t.type || ""), noun = sr ? "service request " : "ticket ";
   /* service requests (access, setup, data requests …): "your request", not "the issue" */
@@ -3079,11 +3080,15 @@ function cwMail(i, o) {
 /* the mail window for one ticket */
 function openCwMail(i, onDone) {
   const t = T[i], who = cwWho(t), bk = cwBook(), k = cwKind(t.status), prev = cwPrev(i);
+  let AS = k.id === "info" ? ((bk.as || {})[t.key] || "info") : "";        // mail type for Waiting for customer, remembered per ticket
   const m = rmModal('<div class="lhead"><h3>Mail reminder <span class="dim">' + esc(t.key) + "</span></h3><button type=\"button\" class=\"btn\" data-rmx>Cancel</button></div>" +
     '<p class="small" style="margin:0 0 6px;color:var(--muted)"><b style="color:var(--ink)">' + esc(t.status) + "</b> · " + esc(k.label) + " · raised " + esc(fday(t.created)) + " · in this status since " + esc(fday(cwSince(i).at)) +
       (cwSince(i).src !== "history" ? ' <span title="Status history not read yet: this is the ticket’s last update" style="color:var(--cr)">(approx.)</span>' : "") +
       (who.name ? " · " + esc(who.via) + " <b style=\"color:var(--ink)\">" + esc(who.name) + "</b>" : ' · <span style="color:var(--ss)">no Swire user on the ticket</span>') +
       (prev.length ? " · reminded " + prev.length + "×, last " + esc(fday(prev[prev.length - 1])) : "") + "</p>" +
+    (k.id === "info" ? '<div class="rmrow" style="border:none;padding:0;margin:0 0 6px;gap:8px;flex-wrap:wrap"><span class="rmlbl" style="margin:0">Mail type</span><span class="segc" role="group" aria-label="Mail type">' +
+      '<button type="button" data-as="info" aria-pressed="' + (AS === "info") + '">Ask for information</button><button type="button" data-as="confirm" aria-pressed="' + (AS === "confirm") + '">Clarification shared, ask to confirm</button></span>' +
+      '<span class="dim small">Use the second when the clarification was already given and the status should have been Resolved With Clarification.</span></div>' : "") +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="cwTo">To</label><input class="inp" id="cwTo" placeholder="user@swireshipping.com" style="flex:1;min-width:240px">' +
       '<label class="rmlbl" for="cwHi">Dear</label><input class="inp" id="cwHi" style="width:220px"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="cwCc">Cc</label><input class="inp" id="cwCc" style="flex:1" placeholder="SVM Help Desk, Swire IT, …"></div>' +
@@ -3092,7 +3097,7 @@ function openCwMail(i, onDone) {
     '<label class="rmlbl" for="cwNote">Note (optional, shown after the ticket)</label><textarea class="inp" id="cwNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
     (CW_CLOSABLE[k.id] ? '<div class="rmrow" style="border:none;margin:6px 0 0;padding:0;gap:6px"><label class="small" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cwClose"> Say we will close the ticket if there is no reply within</label>' +
       '<input class="inp" id="cwDays" style="width:56px" inputmode="numeric"><span class="small">days</span></div>' : "") +
-    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Worded for <b>' + esc(k.label.toLowerCase()) + "</b>, dates only. Click into the mail to edit any text.</span><span style=\"flex:1\"></span>" +
+    '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Worded for <b id="cwKind">' + esc(k.label.toLowerCase()) + "</b>, dates only. Click into the mail to edit any text.</span><span style=\"flex:1\"></span>" +
       '<button type="button" class="btn" id="cwReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="cwPrev" style="max-height:44vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
     '<div class="rmrow"><span class="dim small" id="cwFoot">Copy the email, reply on the client’s own mail thread for this ticket, then click <b>Mark as sent</b>.</span><span style="flex:1"></span>' +
@@ -3102,19 +3107,23 @@ function openCwMail(i, onDone) {
   q("cwTo").value = cwEmail(who); q("cwHi").value = "Swire Team"; q("cwCc").value = bk.cc || ""; q("cwSign").value = bk.sign || rmSign();
   if (q("cwClose")) { q("cwClose").checked = !!bk.closeOn; q("cwDays").value = bk.closeDays || 3; }
   let subjEdited = false;
-  const opts = () => ({ hi: q("cwHi").value, sign: q("cwSign").value, note: q("cwNote").value, closeOn: q("cwClose") ? q("cwClose").checked : false, closeDays: q("cwDays") ? q("cwDays").value : 3 });
+  const opts = () => ({ as: AS, hi: q("cwHi").value, sign: q("cwSign").value, note: q("cwNote").value, closeOn: q("cwClose") ? q("cwClose").checked : false, closeDays: q("cwDays") ? q("cwDays").value : 3 });
   const cur = () => cwMail(i, opts());
   const keep = () => { const b = cwBook(); b.cc = q("cwCc").value.trim(); b.sign = q("cwSign").value.trim(); if (q("cwClose")) { b.closeOn = q("cwClose").checked; b.closeDays = Math.max(1, parseInt(q("cwDays").value, 10) || 3); }
     cwSaveBook(b); if (q("cwTo").value.trim()) cwSaveEmail(who, q("cwTo").value); rmSetSign(q("cwSign").value); };
   const ed = mailEditor(q("cwPrev"), () => {});
   ed.onEdit = () => { q("cwReset").style.display = ""; };
-  function paint() { const x = cur(); if (!subjEdited) q("cwSubj").value = x.subject; ed.render(x.html); q("cwReset").style.display = "none"; }
+  function paint() { const x = cur(); if (q("cwKind")) q("cwKind").textContent = x.kind.label.toLowerCase() + (AS === "confirm" ? " (status is Waiting for customer)" : ""); if (!subjEdited) q("cwSubj").value = x.subject; ed.render(x.html); q("cwReset").style.display = "none"; }
   const reb = () => { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
   ["cwHi", "cwNote", "cwSign", "cwDays"].forEach((id) => { if (q(id)) q(id).addEventListener("change", () => { keep(); setTimeout(reb, 120); }); });
   if (q("cwClose")) q("cwClose").addEventListener("change", () => { keep(); reb(); });
   q("cwTo").addEventListener("change", keep); q("cwCc").addEventListener("change", keep);
   q("cwSubj").addEventListener("input", () => { subjEdited = true; });
   q("cwReset").onclick = () => paint();
+  m.ov.querySelectorAll("[data-as]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.as === AS) return; if (ed.edited && !confirm("Switching the mail type rebuilds the mail and undoes your text edits. Continue?")) return;
+    AS = b.dataset.as; m.ov.querySelectorAll("[data-as]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.as === AS)));
+    const bb = cwBook(); bb.as = bb.as || {}; if (AS === "info") delete bb.as[t.key]; else bb.as[t.key] = AS; cwSaveBook(bb); paint(); }));
   const flash = (btn, msg) => { const l = btn.textContent; btn.textContent = msg; setTimeout(() => { btn.textContent = l; }, 1800); };
   const subj = () => q("cwSubj").value.trim() || cur().subject, body = () => (ed.edited ? ed.text() : cur().text);
   q("cwCopy").onclick = (e) => { keep(); copyRich(ed.html(), body(), e.target, "Copy email"); };
