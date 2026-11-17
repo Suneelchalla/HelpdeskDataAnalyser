@@ -3148,66 +3148,97 @@ COLS.cwCreated = { h: "Raised on", s: (t) => t.created || 0, c: (t) => '<span cl
 COLS.cwSince = { h: "In status since", s: (t, e) => cwSinceTE(t, e).at || 0, c: (t, e) => { const s = cwSinceTE(t, e), d = Math.max(0, Math.floor((NOW - (s.at || NOW)) / DAY));
   return '<span class="nw">' + esc(fday(s.at)) + "</span>" + (s.src !== "history" ? ' <span class="small" title="Status history not read yet: this is the ticket’s last update" style="color:var(--cr)">approx.</span>' : "") +
     '<div class="small' + (d >= 7 ? '" style="color:var(--ss);font-weight:600' : d >= 3 ? '" style="color:var(--cr)' : ' dim') + '">' + (d < 1 ? "today" : d + " day" + (d === 1 ? "" : "s")) + "</div>"; } };
-/* ══ Reminder report to the manager: every ticket waiting on Swire, whether today's reminder was sent, and a remark ══
-   Columns as the team's sheet: Jira Id · Summary · Status · Reminder Sent/Not · Remarks. "Sent" = marked as sent today.
-   Remarks are typed in the reminder list or in the report window and kept in this browser (shared with the Follow-up
-   Tracker). A ticket with no remark gets a factual one when it helps: when the last reminder went, or that it moved to
-   its status today / yesterday. The mail to the manager carries the same table; the Excel can be attached to an
-   Outlook draft (.eml) in one click. */
+/* ══ Reminder report to the manager: every ticket waiting on Swire, whether a reminder was sent in the chosen period, and a remark ══
+   Columns as the team's sheet: Jira Id · Summary · Status · Reminder Sent/Not · Remarks (+ "Sent on" when the period covers more
+   than one day). The period is chosen in the report window: Today, This shift (from the shift roster in Master data), Yesterday +
+   today, Last 7 days, or Custom dates; the choice is remembered. Remarks are typed in the reminder list or in the report window and
+   kept in this browser (shared with the Follow-up Tracker). A ticket with no remark gets a factual one when it helps: when the last
+   reminder went, or that it moved to its status today / yesterday. The mail to the manager carries the same table; the Excel can be
+   attached to an Outlook draft (.eml) in one click. */
 const CW_REM = "hd-client-remind-remarks", CW_RBOOK = "hd-swire-cwreport";
 function cwRemarks() { try { return JSON.parse(localStorage.getItem(CW_REM) || "{}") || {}; } catch (e) { return {}; } }
 function cwRemark(key) { const r = cwRemarks()[key]; return r ? r.t || "" : ""; }
 function cwSetRemark(key, text) { const r = cwRemarks(), v = String(text || "").trim(); if (v) r[key] = { t: v, at: Date.now() }; else delete r[key]; try { localStorage.setItem(CW_REM, JSON.stringify(r)); } catch (e) {} }
-const cwSentToday = (i) => (cwLog()[T[i].key] || []).some((ms) => HC.dayKey(ms) === HC.dayKey(Date.now()));
+/* report period → { id, from, to, phrase (for the mail), title (for the subject), multi (more than one day) } */
+const cwIstDay = (s) => { const p = String(s || "").split("-").map(Number); return p.length === 3 && p[0] ? Date.UTC(p[0], p[1] - 1, p[2]) - 330 * MIN : null; };
+const cwDateInput = (ms) => HC.dayKey(ms);
+function cwPeriod(id, cf, ct) {
+  const now = Date.now(), d0 = HC.istMidnight(now), span = (a, b) => (HC.dayKey(a) === HC.dayKey(b) ? fday(a) : fday(a) + " – " + fday(b));
+  if (id === "shift") {
+    const ins = HC.shiftInstances(CFG, now - 2 * DAY, now).filter((x) => x.start <= now), on = ins.filter((x) => x.end > now), sh = on[on.length - 1] || ins[ins.length - 1];
+    if (sh) return { id, from: sh.start, to: now, multi: HC.dayKey(sh.start) !== HC.dayKey(now), phrase: "during the current " + sh.name + " (since " + hhmm(HC.ist(sh.start).min) + " on " + fday(sh.start) + ")", title: sh.name + ", " + span(sh.start, now) };
+  }
+  if (id === "yday") return { id, from: d0 - DAY, to: now, multi: true, phrase: "since yesterday (" + fday(d0 - DAY) + ")", title: span(d0 - DAY, now) };
+  if (id === "7d") return { id, from: d0 - 6 * DAY, to: now, multi: true, phrase: "in the last 7 days (" + span(d0 - 6 * DAY, now) + ")", title: span(d0 - 6 * DAY, now) };
+  if (id === "custom") {
+    let a = cwIstDay(cf), b = cwIstDay(ct); if (a == null) a = d0; if (b == null) b = a; if (b < a) { const x = a; a = b; b = x; }
+    const one = a === b;
+    return { id, from: a, to: b + DAY - 1, multi: !one, phrase: one ? (a === d0 ? "today" : "on " + fday(a)) : "between " + fday(a) + " and " + fday(b), title: one ? fday(a) : span(a, b) };
+  }
+  return { id: "today", from: d0, to: now, multi: false, phrase: "today", title: fday(now) };
+}
+const cwSentList = (i, R) => (cwLog()[T[i].key] || []).filter((ms) => ms >= R.from && ms <= R.to).sort((a, b) => a - b);
+const cwSent = (i, R) => cwSentList(i, R).length > 0;
+const cwSentOn = (i, R) => { const l = cwSentList(i, R); return l.length ? fday(l[l.length - 1]) : ""; };
 /* the remark shown when none was typed (also the input's placeholder) */
-function cwAutoRemark(i) {
-  if (cwSentToday(i)) return "";
-  const p = cwPrev(i); if (p.length) return "Last reminder sent " + fday(p[p.length - 1]);
+function cwAutoRemark(i, R) {
+  R = R || cwPeriod("today");
+  if (cwSent(i, R)) return "";
+  const p = cwPrev(i).filter((ms) => ms < R.from); if (p.length) return "Last reminder sent " + fday(p[p.length - 1]);
   const s = cwSince(i); if (s.src !== "history") return "";
   const d = Math.floor((HC.istMidnight(NOW) - HC.istMidnight(s.at)) / DAY);
   return d <= 0 ? "Moved to " + T[i].status + " today" : d === 1 ? "Moved to " + T[i].status + " yesterday" : "";
 }
-const cwRemarkOf = (i) => cwRemark(T[i].key) || cwAutoRemark(i);
-const cwRemInput = (i, w) => '<input class="inp" data-cwr="' + esc(T[i].key) + '" value="' + esc(cwRemark(T[i].key)) + '" placeholder="' + esc(cwAutoRemark(i) || "Remarks") + '" style="width:' + (w || 230) + 'px;font-size:12px;padding:4px 8px" title="Remarks for the report to your manager (saved as you type)">';
+const cwRemarkOf = (i, R) => cwRemark(T[i].key) || cwAutoRemark(i, R);
+const cwRemInput = (i, w, R) => '<input class="inp" data-cwr="' + esc(T[i].key) + '" value="' + esc(cwRemark(T[i].key)) + '" placeholder="' + esc(cwAutoRemark(i, R) || "Remarks") + '" style="width:' + (w || 230) + 'px;font-size:12px;padding:4px 8px" title="Remarks for the report to your manager (saved as you type)">';
 /* report order: sent first, then status (as in the reminder window), then oldest created */
-function cwReportIdx(idxAll) {
-  const ord = {}; idxAll.forEach((i) => { ord[i] = cwOrder(cwKind(T[i].status)); });
-  return idxAll.slice().sort((a, b) => (cwSentToday(b) - cwSentToday(a)) || ord[a] - ord[b] || String(T[a].status).localeCompare(String(T[b].status)) || cwByCreated(a, b));
+function cwReportIdx(idxAll, R) {
+  const ord = {}, snt = {}; idxAll.forEach((i) => { ord[i] = cwOrder(cwKind(T[i].status)); snt[i] = cwSent(i, R) ? 1 : 0; });
+  return idxAll.slice().sort((a, b) => (snt[b] - snt[a]) || ord[a] - ord[b] || String(T[a].status).localeCompare(String(T[b].status)) || cwByCreated(a, b));
 }
-async function cwReportXlsx(list) {
-  const S = XL.S, H = ["Jira Id", "Summary", "Status", "Reminder Sent/Not", "Remarks"];
+async function cwReportXlsx(list, R) {
+  const S = XL.S, H = ["Jira Id", "Summary", "Status", "Reminder Sent/Not"].concat(R.multi ? ["Sent on"] : [], ["Remarks"]);
   const rows = [H.map((h) => ({ v: h, s: S.head }))].concat(list.map((i) => { const t = T[i];
-    return [{ f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: S.link }, { v: t.summary || "", s: S.wrap }, t.status || "", cwSentToday(i) ? "Yes" : "No", { v: cwRemarkOf(i), s: S.wrap }]; }));
-  const bytes = await XL.build([{ name: "Reminders", rows, cols: [16, 62, 28, 18, 60], freeze: 1, filter: "A1:E" + Math.max(2, list.length + 1), first: true }]);
-  return { bytes, file: "Swire-client-reminders-" + HC.dayKey(NOW) + ".xlsx" };
+    return [{ f: 'HYPERLINK("' + jiraUrl(t.key) + '","' + t.key + '")', v: t.key, s: S.link }, { v: t.summary || "", s: S.wrap }, t.status || "", cwSent(i, R) ? "Yes" : "No"]
+      .concat(R.multi ? [cwSentOn(i, R)] : [], [{ v: cwRemarkOf(i, R), s: S.wrap }]); }));
+  const cols = [16, 62, 28, 18].concat(R.multi ? [14] : [], [60]), last = String.fromCharCode(64 + cols.length);
+  const bytes = await XL.build([{ name: "Reminders", rows, cols, freeze: 1, filter: "A1:" + last + Math.max(2, list.length + 1), first: true }]);
+  const tag = R.id === "today" ? HC.dayKey(NOW) : HC.dayKey(R.from) === HC.dayKey(Math.min(R.to, Date.now())) ? HC.dayKey(R.from) : HC.dayKey(R.from) + "_to_" + HC.dayKey(Math.min(R.to, Date.now()));
+  return { bytes, file: "Swire-client-reminders-" + tag + ".xlsx", tag };
 }
 function cwReportMail(list, o) {
-  const sent = list.filter(cwSentToday).length, n = list.length, pend = n - sent, nt = (o.note || "").trim();
+  const R = o.R, sent = list.filter((i) => cwSent(i, R)).length, n = list.length, pend = n - sent, nt = (o.note || "").trim();
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#1E293B;margin:0 0 10px;line-height:1.55"';
   const CELL = "padding:6px 10px;border:1pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1pt;vertical-align:top;font-size:12.5px;color:#1E293B;" + F;
-  const HEADS = [["Jira Id", 110], ["Summary", 330], ["Status", 170], ["Reminder Sent/Not", 120], ["Remarks", 280]], W = HEADS.reduce((m, h) => m + h[1], 0);
+  const HEADS = [["Jira Id", 110], ["Summary", 330], ["Status", 170], ["Reminder Sent/Not", 120]].concat(R.multi ? [["Sent on", 100]] : [], [["Remarks", 280]]), W = HEADS.reduce((m, h) => m + h[1], 0);
   const asAt = fday(NOW) + ", " + hhmm(HC.ist(NOW).min) + " IST";
   const intro = "Please find below the status of the reminders to Swire for the tickets waiting on the client, as at " + asAt + ".";
-  const sum = "Of the " + n + " ticket" + (n === 1 ? "" : "s") + " waiting on Swire, the reminder was sent for " + sent + " today" + (pend ? "; for the other " + pend + ", the reason is given in the Remarks column." : ".");
+  const sum = "Of the " + n + " ticket" + (n === 1 ? "" : "s") + " waiting on Swire, the reminder was sent for " + sent + " " + R.phrase + (pend ? "; for the other " + pend + ", the reason is given in the Remarks column." : ".");
   const tbl = '<table width="' + W + '" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:' + W + "px;" + F + '"><tr>' +
     HEADS.map(([h, w]) => '<th width="' + w + '" style="' + CELL + "width:" + w + 'px;background:#F7EEF2;color:#5C1730;text-align:left;white-space:nowrap">' + h + "</th>").join("") + "</tr>" +
-    list.map((i, k) => { const t = T[i], y = cwSentToday(i);
+    list.map((i, k) => { const t = T[i], y = cwSent(i, R);
       return "<tr" + (k % 2 ? ' style="background:#FDF9FA"' : "") + '><td style="' + CELL + 'white-space:nowrap">' + esc(t.key) + '</td><td style="' + CELL + '">' + esc(t.summary) + '</td><td style="' + CELL + '">' + esc(t.status) +
-        '</td><td style="' + CELL + "text-align:center;color:" + (y ? "#15803D" : "#B4232F") + '">' + (y ? "Yes" : "No") + '</td><td style="' + CELL + '">' + esc(cwRemarkOf(i)) + "</td></tr>"; }).join("") + "</table>";
+        '</td><td style="' + CELL + "text-align:center;color:" + (y ? "#15803D" : "#B4232F") + '">' + (y ? "Yes" : "No") + "</td>" +
+        (R.multi ? '<td style="' + CELL + 'white-space:nowrap">' + esc(cwSentOn(i, R)) + "</td>" : "") + '<td style="' + CELL + '">' + esc(cwRemarkOf(i, R)) + "</td></tr>"; }).join("") + "</table>";
   const name = (o.hi || "").trim() || "Sir/Madam", sg = (o.sign || "").trim() || rmSign();
   const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p><p " + P + ">Greetings of the day.</p><p " + P + ">" + esc(intro) + "</p><p " + P + ">" + esc(sum) + "</p>" +
     (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") + tbl + '<div style="height:12px;line-height:12px;font-size:12px">&nbsp;</div>' +
     "<p " + P + ">The same details are attached in Excel.</p><p " + P + ">Regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
   const text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + intro + "\n\n" + sum + (nt ? "\n\n" + nt : "") + "\n\n" +
-    list.map((i) => T[i].key + " | " + T[i].summary + " | " + T[i].status + " | " + (cwSentToday(i) ? "Yes" : "No") + (cwRemarkOf(i) ? " | " + cwRemarkOf(i) : "")).join("\n") +
+    list.map((i) => [T[i].key, T[i].summary, T[i].status, cwSent(i, R) ? "Yes" : "No"].concat(R.multi && cwSentOn(i, R) ? [cwSentOn(i, R)] : [], cwRemarkOf(i, R) ? [cwRemarkOf(i, R)] : []).join(" | ")).join("\n") +
     "\n\nThe same details are attached in Excel.\n\nRegards,\n" + sg;
-  return { html, text, subject: "Swire Hypercare: client reminder status, " + fday(NOW), sent, n };
+  return { html, text, subject: "Swire Hypercare: client reminder status, " + R.title, sent, n };
 }
+const CW_PERIODS = [["today", "Today"], ["shift", "This shift"], ["yday", "Yesterday + today"], ["7d", "Last 7 days"], ["custom", "Custom"]];
 function openCwReport(idxAll) {
   const bk = (() => { try { return JSON.parse(localStorage.getItem(CW_RBOOK) || "{}") || {}; } catch (e) { return {}; } })();
   const m = rmModal('<div class="lhead"><h3>Reminder report to your manager <span class="dim" id="crN"></span></h3><button type="button" class="btn" data-rmx>Close</button></div>' +
-    '<p class="small" style="margin:0 0 8px;color:var(--muted)">Every ticket waiting on Swire in the filters at the top. <b>Reminder Sent</b> = marked as sent today. Type a remark for the ones not sent (saved as you type); a grey hint is used when you leave it empty.</p>' +
-    '<div class="tw" style="max-height:30vh;overflow:auto;margin-bottom:10px"><table><thead><tr><th>Jira Id</th><th>Summary</th><th>Status</th><th>Reminder Sent/Not</th><th>Remarks</th></tr></thead><tbody id="crRows"></tbody></table></div>' +
+    '<div class="rmrow" style="border:none;padding:0;margin:0 0 6px;gap:8px;flex-wrap:wrap"><span class="rmlbl" style="margin:0">Period</span><span class="segc" role="group" aria-label="Report period">' +
+      CW_PERIODS.map(([id, l]) => '<button type="button" data-rp="' + id + '">' + l + "</button>").join("") + "</span>" +
+      '<span id="crCustom" style="display:none;align-items:center;gap:6px"><input type="date" class="inp" id="crFrom" style="padding:4px 8px"><span class="dim">to</span><input type="date" class="inp" id="crToD" style="padding:4px 8px"></span>' +
+      '<span class="dim small" id="crRange"></span></div>' +
+    '<p class="small" style="margin:0 0 8px;color:var(--muted)">Every ticket waiting on Swire in the filters at the top. <b>Reminder Sent</b> = marked as sent in the period. Type a remark for the ones not sent (saved as you type); a grey hint is used when you leave it empty.</p>' +
+    '<div class="tw" style="max-height:30vh;overflow:auto;margin-bottom:10px"><table><thead id="crHead"></thead><tbody id="crRows"></tbody></table></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0;flex-wrap:wrap"><label class="rmlbl" for="crTo">To</label><input class="inp" id="crTo" placeholder="manager@solverminds.com" style="flex:1;min-width:220px">' +
       '<label class="rmlbl" for="crHi">Dear</label><input class="inp" id="crHi" style="width:200px" placeholder="Manager’s name"></div>' +
     '<div class="rmrow" style="border:none;padding-top:0;margin-top:0"><label class="rmlbl" for="crCc">Cc</label><input class="inp" id="crCc" style="flex:1"></div>' +
@@ -3215,35 +3246,50 @@ function openCwReport(idxAll) {
     '<label class="rmlbl" for="crNote">Note (optional, shown above the table)</label><textarea class="inp" id="crNote" rows="2" style="width:100%;resize:vertical"></textarea>' +
     '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Mail preview. Click into it to edit any text.</span><span style="flex:1"></span><button type="button" class="btn" id="crReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="crPrev" style="max-height:34vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
-    '<div class="rmrow"><span class="dim small">To, Cc and Dear are remembered in this browser.</span><span style="flex:1"></span>' +
+    '<div class="rmrow"><span class="dim small">To, Cc, Dear and the period are remembered in this browser.</span><span style="flex:1"></span>' +
       '<button type="button" class="btn" id="crXlsx">Download Excel</button><button type="button" class="btn" id="crCopy">Copy email</button><button type="button" class="btn pri" id="crEml" title="An unsent .eml with the Excel attached: opens in Outlook as a draft">Email draft + Excel</button></div>', "wide");
   const q = (id) => m.ov.querySelector("#" + id);
   q("crTo").value = bk.to || ""; q("crCc").value = bk.cc || ""; q("crHi").value = bk.hi || "";
-  const keep = () => { try { localStorage.setItem(CW_RBOOK, JSON.stringify({ to: q("crTo").value.trim(), cc: q("crCc").value.trim(), hi: q("crHi").value.trim() })); } catch (e) {} };
-  let subjEdited = false, list = cwReportIdx(idxAll);
-  const opts = () => ({ hi: q("crHi").value, note: q("crNote").value, sign: rmSign() });
+  let PID = CW_PERIODS.some((x) => x[0] === bk.period) ? bk.period : "today";
+  q("crFrom").value = bk.from || cwDateInput(Date.now() - DAY); q("crToD").value = bk.toD || cwDateInput(Date.now());
+  const keep = () => { try { localStorage.setItem(CW_RBOOK, JSON.stringify({ to: q("crTo").value.trim(), cc: q("crCc").value.trim(), hi: q("crHi").value.trim(), period: PID, from: q("crFrom").value, toD: q("crToD").value })); } catch (e) {} };
+  let subjEdited = false, R, list;
+  const opts = () => ({ R, hi: q("crHi").value, note: q("crNote").value, sign: rmSign() });
   const ed = mailEditor(q("crPrev"), () => {});
   ed.onEdit = () => { q("crReset").style.display = ""; };
   function rowsHtml() {
-    q("crRows").innerHTML = list.map((i) => { const t = T[i], y = cwSentToday(i);
-      return "<tr><td class=\"nw\">" + esc(t.key) + '</td><td><div class="sum">' + esc(t.summary) + '</div></td><td><span class="st">' + esc(t.status) + '</span></td><td style="text-align:center;font-weight:700;color:' + (y ? "var(--ok)" : "var(--ss)") + '">' + (y ? "Yes" : "No") + "</td><td>" + cwRemInput(i, 260) + "</td></tr>"; }).join("") ||
-      '<tr><td colspan="5" class="dim">No tickets are waiting on Swire in the filters.</td></tr>';
-    const s = list.filter(cwSentToday).length; q("crN").textContent = "· " + list.length + " tickets, " + s + " sent today";
+    q("crHead").innerHTML = "<tr><th>Jira Id</th><th>Summary</th><th>Status</th><th>Reminder Sent/Not</th>" + (R.multi ? "<th>Sent on</th>" : "") + "<th>Remarks</th></tr>";
+    q("crRows").innerHTML = list.map((i) => { const t = T[i], y = cwSent(i, R);
+      return "<tr><td class=\"nw\">" + esc(t.key) + '</td><td><div class="sum">' + esc(t.summary) + '</div></td><td><span class="st">' + esc(t.status) + '</span></td><td style="text-align:center;font-weight:700;color:' + (y ? "var(--ok)" : "var(--ss)") + '">' + (y ? "Yes" : "No") + "</td>" +
+        (R.multi ? '<td class="nw">' + esc(cwSentOn(i, R)) + "</td>" : "") + "<td>" + cwRemInput(i, 260, R) + "</td></tr>"; }).join("") ||
+      '<tr><td colspan="6" class="dim">No tickets are waiting on Swire in the filters.</td></tr>';
+    const s = list.filter((i) => cwSent(i, R)).length; q("crN").textContent = "· " + list.length + " tickets, " + s + " sent " + R.phrase;
   }
   function paint(force) { if (ed.edited && force !== true) return; const x = cwReportMail(list, opts()); if (!subjEdited) q("crSubj").value = x.subject; ed.render(x.html); q("crReset").style.display = "none"; }
+  /* (re)compute the period, the order and the table; the mail follows unless its text was edited */
+  function setPeriod(force) {
+    R = cwPeriod(PID, q("crFrom").value, q("crToD").value); list = cwReportIdx(idxAll, R);
+    m.ov.querySelectorAll("[data-rp]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.rp === PID)));
+    q("crCustom").style.display = PID === "custom" ? "inline-flex" : "none";
+    q("crRange").textContent = "Reminders marked as sent " + (R.multi || PID !== "today" ? "from " + fday(R.from) + (R.id === "shift" ? " " + hhmm(HC.ist(R.from).min) : "") + " to " + (R.to >= Date.now() - MIN ? "now" : fday(R.to)) : "today");
+    rowsHtml(); paint(force);
+  }
   let tm = null;
   q("crRows").addEventListener("input", (e) => { const r = e.target.closest("[data-cwr]"); if (!r) return; cwSetRemark(r.dataset.cwr, r.value); clearTimeout(tm); tm = setTimeout(() => paint(), 250); });
+  m.ov.querySelectorAll("[data-rp]").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.rp === PID) return; if (ed.edited && !confirm("Changing the period rebuilds the mail and undoes your text edits. Continue?")) return;
+    PID = b.dataset.rp; keep(); setPeriod(true); }));
+  ["crFrom", "crToD"].forEach((id) => q(id).addEventListener("change", () => { if (ed.edited && !confirm("Changing the dates rebuilds the mail and undoes your text edits. Continue?")) return; keep(); setPeriod(true); }));
   ["crHi", "crNote"].forEach((id) => q(id).addEventListener("input", () => { keep(); clearTimeout(tm); tm = setTimeout(() => paint(), 250); }));
   q("crTo").addEventListener("change", keep); q("crCc").addEventListener("change", keep);
   q("crSubj").addEventListener("input", () => { subjEdited = true; });
   q("crReset").onclick = () => paint(true);
-  const flash = (b, msg) => { const l = b.textContent; b.textContent = msg; setTimeout(() => { b.textContent = l; }, 2000); };
   const run = (b, fn) => { b.disabled = true; const l = b.textContent; b.textContent = "Building…"; return Promise.resolve().then(fn).then(() => { b.textContent = l; }, (x) => { b.textContent = "Failed: " + ((x && x.message) || x); setTimeout(() => { b.textContent = l; }, 4000); }).finally(() => { b.disabled = false; }); };
-  q("crXlsx").onclick = (e) => run(e.target, async () => { const x = await cwReportXlsx(list); saveBlob(new Blob([x.bytes], { type: XLSX_MIME }), x.file); });
+  q("crXlsx").onclick = (e) => run(e.target, async () => { const x = await cwReportXlsx(list, R); saveBlob(new Blob([x.bytes], { type: XLSX_MIME }), x.file); });
   q("crCopy").onclick = (e) => { keep(); copyRich(ed.html(), ed.edited ? ed.text() : cwReportMail(list, opts()).text, e.target, "Copy email"); };
-  q("crEml").onclick = (e) => run(e.target, async () => { keep(); const x = await cwReportXlsx(list);
-    emlWithAttachment(q("crSubj").value.trim() || cwReportMail(list, opts()).subject, ed.html(), x, "Swire-client-reminders-" + HC.dayKey(NOW) + ".eml", q("crTo").value.trim(), q("crCc").value.trim()); });
-  rowsHtml(); paint(true);
+  q("crEml").onclick = (e) => run(e.target, async () => { keep(); const x = await cwReportXlsx(list, R);
+    emlWithAttachment(q("crSubj").value.trim() || cwReportMail(list, opts()).subject, ed.html(), x, "Swire-client-reminders-" + x.tag + ".eml", q("crTo").value.trim(), q("crCc").value.trim()); });
+  setPeriod(true);
 }
 function openClientWait(idxAll) {
   const S = { st: null };
