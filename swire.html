@@ -2913,7 +2913,7 @@ function openApprMail(listAll, g) {
    user), worded for the kind of status (information needed, confirmation, delivered fix, testing, approval, on hold …),
    with dates only (raised on, in this status since). Every mail made here is logged in this browser: the list shows
    who was reminded and when, and the next mail for the same wait is worded as a follow-up ("Second reminder"). */
-const CW_LOG = "hd-swire-cwlog", CW_BOOK = "hd-swire-cwmail";
+const CW_LOG = "hd-client-remind-log", CW_OLD = "hd-swire-cwlog", CW_BOOK = "hd-swire-cwmail";   // the log is shared with the Follow-up Tracker
 const CW_KINDS = [
   { id: "info", label: "Information needed", st: ["Waiting for customer"] },
   { id: "clarify", label: "Clarification needed", st: ["Doubt Clarification", "Clarification (Dev)"] },
@@ -2954,7 +2954,13 @@ const cwSince = (i) => cwSinceTE(T[i], E[i]);
 const cwDays = (i) => Math.max(0, Math.floor((NOW - (cwSince(i).at || NOW)) / DAY));
 const cwByCreated = (a, b) => (T[a].created || 0) - (T[b].created || 0) || bySevAge(a, b);
 /* reminders already made for this wait (a ticket that went back to us and came back starts again) */
-function cwLog() { try { return JSON.parse(localStorage.getItem(CW_LOG) || "{}") || {}; } catch (e) { return {}; } }
+function cwLog() {
+  let l = {}; try { l = JSON.parse(localStorage.getItem(CW_LOG) || "{}") || {}; } catch (e) {}
+  /* reminders saved before the log was shared: merged in once */
+  try { const old = localStorage.getItem(CW_OLD); if (old) { const o = JSON.parse(old) || {}; Object.keys(o).forEach((k) => { l[k] = Array.from(new Set((l[k] || []).concat(o[k] || []))).sort((a, b) => a - b); });
+    localStorage.setItem(CW_LOG, JSON.stringify(l)); localStorage.removeItem(CW_OLD); } } catch (e) {}
+  return l;
+}
 function cwPrevTE(t, e) { const s = cwSinceTE(t, e), from = s.src === "history" ? s.at : 0; return (cwLog()[t.key] || []).filter((ms) => ms >= from).sort((a, b) => a - b); }
 const cwPrev = (i) => cwPrevTE(T[i], E[i]);
 function cwMark(key) {
