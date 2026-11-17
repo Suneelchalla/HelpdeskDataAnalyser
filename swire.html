@@ -2987,47 +2987,48 @@ function cwMail(i, o) {
   const t = T[i], k = cwKind(t.status), s = cwSince(i), raised = fday(t.created), since = fday(s.at), st = stKey(t.status);
   const prev = cwPrev(i).filter((ms) => HC.dayKey(ms) !== HC.dayKey(NOW)), num = prev.length + 1, last = prev[prev.length - 1];
   const script = /script/.test(st), g = k.g || apprGroups()[0];
+  /* formal wording. A sign-off in Jira is asked for only where Swire approves an attachment (DB script, release) */
+  const rel = g.id === "rel";
   const W = {
-    info:      { what: "awaiting information from you", line: "We are waiting for some information from you to continue working on this ticket. It has been with you since " + since + ".",
-                 ask: "Kindly share the requested details by replying on the ticket or to this email, so that we can proceed further." },
-    clarify:   { what: "awaiting your clarification", line: "We have raised a query on this ticket and have been waiting for your clarification since " + since + ".",
-                 ask: "Kindly go through the query on the ticket and share your clarification, so that we can proceed further." },
-    confirm:   { what: "awaiting your confirmation", line: "We shared the resolution on this ticket on " + since + " and are waiting for your confirmation.",
-                 ask: "Kindly review it and confirm whether the issue is resolved, so that we can close the ticket. If anything still needs attention, please let us know on the ticket." },
+    info:      { what: "awaiting information from your end", line: "To proceed further, we require some additional information from your end. The ticket has been awaiting your response since " + since + ".",
+                 ask: "We kindly request you to provide the required details by replying to this email or updating the ticket at your earliest convenience." },
+    clarify:   { what: "awaiting your clarification", line: "We have raised a query on this ticket and have been awaiting your clarification since " + since + ".",
+                 ask: "We kindly request you to review the query and provide your clarification at your earliest convenience, so that we may proceed further." },
+    confirm:   { what: "awaiting your confirmation", line: "The resolution for this ticket was shared on " + since + ", and we are awaiting your confirmation.",
+                 ask: "We kindly request you to review the resolution and confirm whether the issue has been resolved, so that we may proceed with the closure of the ticket. Should any point still require attention, please let us know." },
     delivered: { what: (script ? "data script" : "fix") + " delivered, awaiting your confirmation",
                  line: (/prod/.test(st) ? "The fix was moved to Phoenix production on " : script ? "The data script was delivered on " : "The fix was delivered on ") + since + ".",
-                 ask: "Kindly verify it at your end and confirm that it works as expected, so that we can close the ticket. If you notice anything, please let us know on the ticket." },
-    test:      { what: "awaiting your testing", line: "The fix has been available for your testing since " + since + ".",
-                 ask: "Kindly complete the testing and share the results or your sign-off on the ticket, so that we can proceed with the move to Phoenix production." },
+                 ask: "We kindly request you to verify it at your end and confirm that it is working as expected, so that we may proceed with the closure of the ticket. Should you observe any issue, please let us know." },
+    test:      { what: "awaiting your testing", line: "The fix has been made available for your testing since " + since + ".",
+                 ask: "We kindly request you to complete the testing and share the results at your earliest convenience, so that we may proceed with the move to Phoenix production." },
     deploy:    { what: "awaiting deployment at your end", line: "The release has been ready for deployment in production at your end since " + since + ".",
-                 ask: "Kindly confirm once it is deployed, or share the planned deployment date, so that we can follow up accordingly." },
-    approval:  { what: g.one + " pending your approval", line: "The " + g.one + " on this ticket has been awaiting your approval since " + since + ". " + g.att1, ask: g.ask1 },
-    rejected:  { what: (script ? "data script" : "delivery") + " rejected, awaiting your feedback", line: "The " + (script ? "data script" : "delivery") + " on this ticket was marked as rejected on " + since + ".",
-                 ask: "Kindly share the reason or the corrections needed, so that we can revise it and send it back for your approval." },
-    onhold:    { what: "on hold, awaiting your go-ahead", line: "This ticket has been on hold since " + since + ".",
-                 ask: "Kindly let us know whether we may resume work on it, or whether it can be closed." },
-    other:     { what: "awaiting your response", line: "The ticket has been waiting for your response since " + since + " (status: " + t.status + ").",
-                 ask: "Kindly share an update on the ticket, so that we can proceed further." }
+                 ask: "We kindly request you to confirm once the deployment is completed, or to share the planned deployment date, so that we may follow up accordingly." },
+    approval:  { what: g.one + " pending your approval sign-off in Jira",
+                 line: "The " + g.one + " for this ticket has been awaiting your approval since " + since + ". " + (rel ? "The release notes are attached to the ticket in Jira." : "The data script and its release notes are attached to the ticket in Jira."),
+                 ask: "We kindly request you to review the attachment and provide your approval sign-off in Jira, so that we may proceed with " + (rel ? "moving the release to Phoenix production." : "the execution in Phoenix production.") },
+    rejected:  { what: (script ? "data script" : "delivery") + " rejected, awaiting your feedback", line: "The " + (script ? "data script" : "delivery") + " for this ticket was marked as rejected on " + since + ".",
+                 ask: "We kindly request you to share the reason for the rejection or the corrections required, so that we may revise it and resubmit it for your approval." },
+    onhold:    { what: "on hold, awaiting your advice", line: "This ticket has been on hold since " + since + ".",
+                 ask: "We kindly request you to advise whether we may resume work on it, or whether it may be closed." },
+    other:     { what: "awaiting your response", line: "The ticket has been awaiting your response since " + since + " (status: " + t.status + ").",
+                 ask: "We kindly request you to provide an update at your earliest convenience, so that we may proceed further." }
   }[k.id] || null;
   const w = W || { what: "awaiting your response", line: "", ask: "" };
-  const intro = num === 1 ? "This is a gentle reminder regarding the ticket below, raised on " + raised + "."
-    : "We are following up on our earlier reminder of " + fday(last) + " regarding the ticket below, raised on " + raised + ".";
-  const close = o.closeOn && CW_CLOSABLE[k.id] ? "If we do not hear from you by " + fday(HC.istMidnight(NOW) + Math.max(1, +o.closeDays || 3) * DAY) + ", we will proceed to close the ticket." : "";
+  /* the ticket is named in the opening line (no details table): key (customer portal link), ME ID, summary, raised date */
+  const refTxt = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + t.summary + "\u201d" : "");
+  const refHtml = '<a href="' + esc(portalUrl(t.key)) + '" style="color:#7A1F3D;font-weight:600;text-decoration:underline">' + esc(t.key) + "</a>" + (t.meId ? " (ME ID <b>" + esc(t.meId) + "</b>)" : "") + (t.summary ? ", \u201c" + esc(t.summary) + "\u201d" : "");
+  const lead = num === 1 ? "We would like to bring to your kind attention that ticket " : "Further to our earlier reminder dated " + fday(last) + ", we would like to follow up on ticket ";
+  const tail = num === 1 ? ", raised on " + raised + ", is currently pending at your end." : ", raised on " + raised + ", which is still pending at your end.";
+  const intro = lead + refTxt + tail, introHtml = esc(lead) + refHtml + esc(tail);
+  const close = o.closeOn && CW_CLOSABLE[k.id] ? "Kindly note that if we do not receive a response by " + fday(HC.istMidnight(NOW) + Math.max(1, +o.closeDays || 3) * DAY) + ", we shall proceed with the closure of the ticket." : "";
   const name = (o.hi || "").trim() || "Sir/Madam", sg = (o.sign || "").trim() || rmSign(), nt = (o.note || "").trim();
   const F = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.55"';
-  const CELL = "padding:6px 10px;border:1.5pt solid #C7AEB9;mso-border-alt:solid #C7AEB9 1.5pt;vertical-align:top;font-size:12.5px;color:#2A161D;" + F;
   const gap = (h) => '<div style="height:' + h + "px;line-height:" + h + "px;font-size:" + h + 'px">&nbsp;</div>';
-  const facts = [["ME ID", t.meId ? "<b>" + esc(t.meId) + "</b>" : "—"],
-    ["Ticket", '<a href="' + esc(portalUrl(t.key)) + '" style="color:#7A1F3D;font-weight:600;text-decoration:underline">' + esc(t.key) + "</a>"],
-    ["Summary", esc(t.summary)], ["Priority", esc(t.priority || "—")], ["Raised on", esc(raised)], ["Status", esc(t.status || "—")], ["In this status since", esc(since)]];
-  const tbl = '<table width="560" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;width:560px;' + F + '">' +
-    facts.map(([a, b]) => '<tr><td width="150" style="' + CELL + 'width:150px;background:#F7EEF2;color:#5C1730;font-weight:700;white-space:nowrap">' + a + '</td><td style="' + CELL + '">' + b + "</td></tr>").join("") + "</table>";
   const html = '<div style="' + F + '"><p ' + P + ">Dear " + esc(name) + ",</p>" + gap(4) + "<p " + P + ">Greetings from the SVM Help Desk.</p>" +
-    "<p " + P + ">" + esc(intro) + "</p>" + gap(4) + tbl + gap(10) + "<p " + P + ">" + esc(w.line) + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
-    "<p " + P + ">" + esc(w.ask) + (close ? " " + esc(close) : "") + "</p><p " + P + ">Thank you for your continued support.</p>" + gap(4) +
+    "<p " + P + ">" + introHtml + "</p><p " + P + ">" + esc(w.line) + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
+    "<p " + P + ">" + esc(w.ask) + "</p>" + (close ? "<p " + P + ">" + esc(close) + "</p>" : "") + "<p " + P + ">Thank you for your continued support and cooperation.</p>" + gap(4) +
     "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
-  const text = "Dear " + name + ",\n\nGreetings from the SVM Help Desk.\n\n" + intro + "\n\n" + facts.map(([a]) => a).map((a, n) => a + ": " + [t.meId || "-", t.key + " (" + portalUrl(t.key) + ")", t.summary, t.priority || "-", raised, t.status || "-", since][n]).join("\n") +
-    "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? " " + close : "") + "\n\nThank you for your continued support.\n\nWarm regards,\n" + sg;
+  const text = "Dear " + name + ",\n\nGreetings from the SVM Help Desk.\n\n" + intro + "\nTicket link: " + portalUrl(t.key) + "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? "\n\n" + close : "") + "\n\nThank you for your continued support and cooperation.\n\nWarm regards,\n" + sg;
   const subject = (CW_ORD[num - 1] || "Reminder " + num) + ": Swire Phoenix " + t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + ", " + w.what + ", raised " + raised;
   return { html, text, subject, num, last, kind: k };
 }
