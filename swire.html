@@ -2962,6 +2962,11 @@ function cwMark(key) {
   if (!a.some((ms) => HC.dayKey(ms) === today)) a.push(Date.now());
   try { localStorage.setItem(CW_LOG, JSON.stringify(l)); } catch (e) {}
 }
+function cwUnmark(key) {
+  const l = cwLog(), today = HC.dayKey(Date.now()); if (!l[key]) return;
+  l[key] = l[key].filter((ms) => HC.dayKey(ms) !== today); if (!l[key].length) delete l[key];
+  try { localStorage.setItem(CW_LOG, JSON.stringify(l)); } catch (e) {}
+}
 function cwBook() { const d = { to: {}, cc: "", sign: "", closeOn: false, closeDays: 3 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(CW_BOOK) || "{}")); } catch (e) { return d; } }
 function cwSaveBook(b) { try { localStorage.setItem(CW_BOOK, JSON.stringify(b)); } catch (e) {} }
 const cwIsMail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
@@ -3016,7 +3021,7 @@ function cwMail(i, o) {
   const w = W || { what: "awaiting your response", line: "", ask: "" };
   /* the ticket is named in the opening line (no details table): key (customer portal link), ME ID, summary, raised date */
   const refTxt = t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + (t.summary ? ", \u201c" + t.summary + "\u201d" : "");
-  const refHtml = '<a href="' + esc(portalUrl(t.key)) + '" style="color:#7A1F3D;font-weight:600;text-decoration:underline">' + esc(t.key) + "</a>" + (t.meId ? " (ME ID <b>" + esc(t.meId) + "</b>)" : "") + (t.summary ? ", \u201c" + esc(t.summary) + "\u201d" : "");
+  const refHtml = esc(refTxt);                       // plain text: no link, no bold (the mail goes on the client's own thread)
   const lead = num === 1 ? "We would like to bring to your kind attention that ticket " : "Further to our earlier reminder dated " + fday(last) + ", we would like to follow up on ticket ";
   const tail = num === 1 ? ", raised on " + raised + ", is currently pending at your end." : ", raised on " + raised + ", which is still pending at your end.";
   const intro = lead + refTxt + tail, introHtml = esc(lead) + refHtml + esc(tail);
@@ -3028,7 +3033,7 @@ function cwMail(i, o) {
     "<p " + P + ">" + introHtml + "</p><p " + P + ">" + esc(w.line) + "</p>" + (nt ? "<p " + P + ">" + esc(nt).replace(/\n/g, "<br>") + "</p>" : "") +
     "<p " + P + ">" + esc(w.ask) + "</p>" + (close ? "<p " + P + ">" + esc(close) + "</p>" : "") + "<p " + P + ">Thank you for your continued support and cooperation.</p>" + gap(4) +
     "<p " + P + ">Warm regards,<br>" + esc(sg).replace(/\n/g, "<br>") + "</p></div>";
-  const text = "Dear " + name + ",\n\nGreetings from the SVM Help Desk.\n\n" + intro + "\nTicket link: " + portalUrl(t.key) + "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? "\n\n" + close : "") + "\n\nThank you for your continued support and cooperation.\n\nWarm regards,\n" + sg;
+  const text = "Dear " + name + ",\n\nGreetings from the SVM Help Desk.\n\n" + intro + "\n\n" + w.line + (nt ? "\n\n" + nt : "") + "\n\n" + w.ask + (close ? "\n\n" + close : "") + "\n\nThank you for your continued support and cooperation.\n\nWarm regards,\n" + sg;
   const subject = (CW_ORD[num - 1] || "Reminder " + num) + ": Swire Phoenix " + t.key + (t.meId ? " (ME ID " + t.meId + ")" : "") + ", " + w.what + ", raised " + raised;
   return { html, text, subject, num, last, kind: k };
 }
@@ -3051,9 +3056,9 @@ function openCwMail(i, onDone) {
     '<div class="rmrow" style="border:none;margin:6px 0 4px;padding:0"><span class="dim small">Worded for <b>' + esc(k.label.toLowerCase()) + "</b>, dates only. Click into the mail to edit any text.</span><span style=\"flex:1\"></span>" +
       '<button type="button" class="btn" id="cwReset" style="display:none">Undo text edits</button></div>' +
     '<div class="rmprev" id="cwPrev" style="max-height:44vh;overflow:auto;background:#fff;box-shadow:none"></div>' +
-    '<div class="rmrow"><span class="dim small" id="cwFoot">To (per user), Cc and the signature are remembered in this browser. Send it from your own mailbox.</span><span style="flex:1"></span>' +
+    '<div class="rmrow"><span class="dim small" id="cwFoot">Copy the email, reply on the client’s own mail thread for this ticket, then click <b>Mark as sent</b>.</span><span style="flex:1"></span>' +
       '<button type="button" class="btn" id="cwCopy">Copy email</button><button type="button" class="btn" id="cwEml" title="An unsent .eml: opens in Outlook as a draft, with the formatting">Download email draft</button>' +
-      '<button type="button" class="btn pri" id="cwOpen" title="Opens a new mail in your mail app (plain text)">Open in mail app</button></div>', "wide");
+      '<button type="button" class="btn pri" id="cwSent" title="Record that this reminder was sent today">Mark as sent</button></div>', "wide");
   const q = (id) => m.ov.querySelector("#" + id);
   q("cwTo").value = cwEmail(who); q("cwHi").value = cwDear(who); q("cwCc").value = bk.cc || ""; q("cwSign").value = bk.sign || rmSign();
   if (q("cwClose")) { q("cwClose").checked = !!bk.closeOn; q("cwDays").value = bk.closeDays || 3; }
@@ -3071,17 +3076,11 @@ function openCwMail(i, onDone) {
   q("cwTo").addEventListener("change", keep); q("cwCc").addEventListener("change", keep);
   q("cwSubj").addEventListener("input", () => { subjEdited = true; });
   q("cwReset").onclick = () => paint();
-  const done = (btn, msg) => { keep(); cwMark(t.key); if (btn && msg) { const l = btn.textContent; btn.textContent = msg; setTimeout(() => { btn.textContent = l; }, 1800); } if (onDone) onDone(); };
+  const flash = (btn, msg) => { const l = btn.textContent; btn.textContent = msg; setTimeout(() => { btn.textContent = l; }, 1800); };
   const subj = () => q("cwSubj").value.trim() || cur().subject, body = () => (ed.edited ? ed.text() : cur().text);
-  q("cwCopy").onclick = (e) => { copyRich(ed.html(), body(), e.target, "Copy email"); done(); };
-  q("cwEml").onclick = (e) => { emlDownload(subj(), ed.html(), "Swire-reminder-" + t.key + "-" + HC.dayKey(NOW) + ".eml", q("cwTo").value.trim(), q("cwCc").value.trim()); done(e.target, "Draft downloaded"); };
-  q("cwOpen").onclick = (e) => {
-    const list = (s) => String(s || "").split(/[;,]\s*/).map((x) => x.trim()).filter(Boolean).map(encodeURIComponent).join(",");
-    let b = body(); if (b.length > 1800) b = b.slice(0, 1800) + "\n…";
-    const a = document.createElement("a");
-    a.href = "mailto:" + list(q("cwTo").value) + "?" + (q("cwCc").value.trim() ? "cc=" + list(q("cwCc").value) + "&" : "") + "subject=" + encodeURIComponent(subj()) + "&body=" + encodeURIComponent(b);
-    document.body.appendChild(a); a.click(); a.remove(); done(e.target, "Opened in your mail app");
-  };
+  q("cwCopy").onclick = (e) => { keep(); copyRich(ed.html(), body(), e.target, "Copy email"); };
+  q("cwEml").onclick = (e) => { keep(); emlDownload(subj(), ed.html(), "Swire-reminder-" + t.key + "-" + HC.dayKey(NOW) + ".eml", q("cwTo").value.trim(), q("cwCc").value.trim()); flash(e.target, "Draft downloaded"); };
+  q("cwSent").onclick = () => { keep(); cwMark(t.key); m.close(); if (onDone) onDone(); };
   paint();
   /* no address saved for this user yet: ask Jira for the reporter's email (works when the bridge is connected and Jira shows it) */
   if (!q("cwTo").value && who.via === "Raised by" && (BR.ready || window._rmBridge)) {
@@ -3110,7 +3109,7 @@ function openClientWait(idxAll) {
     { h: "", s: () => "", c: (i) => '<button type="button" class="btn pri" data-cm="' + i + '" style="padding:4px 12px;white-space:nowrap" title="Draft a reminder mail to the Swire user on ' + esc(T[i].key) + '">Mail</button>' },
     { h: "Reminded", s: (i) => String(cwPrev(i).length).padStart(3, "0"), c: (i) => { const p = cwPrev(i); if (!p.length) return '<span class="dim small">not yet</span>';
       const last = p[p.length - 1], today = HC.dayKey(last) === HC.dayKey(Date.now());
-      return '<b style="color:' + (today ? "var(--ok)" : "var(--ink)") + '">' + p.length + "×</b>" + '<div class="dim small nw">' + (today ? "today" : esc(fday(last))) + "</div>"; } }
+      return '<b style="color:' + (today ? "var(--ok)" : "var(--ink)") + '">' + p.length + "×</b>" + '<div class="dim small nw">' + (today ? 'sent today · <button type="button" class="lnk sm" data-cwu="' + esc(T[i].key) + '" title="Remove today’s Mark as sent">undo</button>' : esc(fday(last))) + "</div>"; } }
   ];
   function build() {
     const g = {}; idxAll.forEach((i) => { const s = T[i].status || "(blank)"; (g[s] = g[s] || []).push(i); });
@@ -3147,6 +3146,7 @@ function openClientWait(idxAll) {
   const key = (ev) => { if (ev.key === "Escape" && isTop(ov)) { ev.stopImmediatePropagation(); if (S.st != null) { S.st = null; paint(); } else close(); } };
   ov.addEventListener("click", (ev) => {
     if (ev.target === ov) return close();
+    const u = ev.target.closest("[data-cwu]"); if (u) { ev.stopPropagation(); cwUnmark(u.dataset.cwu); const y = box.scrollTop; paint(); box.scrollTop = y; return; }
     const m = ev.target.closest("[data-cm]"); if (m) { ev.stopPropagation(); return openCwMail(+m.dataset.cm, () => { const y = box.scrollTop; paint(); box.scrollTop = y; }); }
     const b = ev.target.closest("[data-cw],[data-cst]");
     if (b) {
