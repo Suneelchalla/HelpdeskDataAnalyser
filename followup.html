@@ -1087,7 +1087,8 @@
   }
   
   function crMail(t, o) {
-    var k = crKind(t.status), s = crSince(t), raised = crDay(t.created), since = crDay(s.at), st = stKey(t.status), now = Date.now();
+    /* o.as = "confirm": a Waiting-for-customer ticket worded as Resolved With Clarification (the status may have been set wrongly) */
+    var k0 = crKind(t.status), k = o.as === "confirm" && k0.id === "info" ? crBy("confirm") : k0, s = crSince(t), raised = crDay(t.created), since = crDay(s.at), st = stKey(t.status), now = Date.now();
     var prev = crPrev(t).filter(function (x) { return dayKey(x) !== dayKey(now); }), num = prev.length + 1, last = prev[prev.length - 1];
     var sr = /service/i.test(t.type || ""), noun = sr ? "service request " : "ticket ";
     var script = /script/.test(st), rel = CR_REL.some(function (x) { return stKey(x) === st; }) || /release/.test(st);
@@ -1147,34 +1148,42 @@
   }
   function openCrMail(t, onDone) {
     var m = modal("narrow"), k = crKind(t.status), s = crSince(t), prev = crPrev(t), bk = crBook();
+    var AS = k.id === "info" ? ((bk.as || {})[t.key] || "info") : "";       // mail type for Waiting for customer, remembered per ticket
     m.box.innerHTML = '<div class="hdx-hd"><h3>Mail reminder<span class="n">' + esc(t.key) + '</span></h3><button type="button" class="hdx-btn" data-c="close">Cancel</button></div>' +
       '<p class="hdx-sub" style="margin-top:0"><b style="color:#0F172A">' + esc(t.status) + "</b> · " + esc(k.label) + " · " + esc(t.project) + " · raised " + esc(crDay(t.created)) + " · in this status since " + esc(crDay(s.at)) +
         (s.src !== "history" ? ' <span style="color:#C2410C" title="Status history not read yet: this is the ticket’s last update">(approx.)</span>' : "") +
         (prev.length ? " · reminded " + prev.length + "×, last " + esc(crDay(prev[prev.length - 1])) : "") + "</p>" +
+      (k.id === "info" ? '<div class="hdx-row" style="margin:0 0 6px"><label>Mail type</label><button type="button" class="hdx-btn sm" data-as="info">Ask for information</button><button type="button" class="hdx-btn sm" data-as="confirm">Clarification shared, ask to confirm</button>' +
+        '<span class="hdx-note">Use the second when the clarification was already given and the status should have been Resolved With Clarification.</span></div>' : "") +
       '<div class="hdx-row"><label for="crHi">Dear</label><input class="hdx-inp" id="crHi" style="width:260px"><span class="hdx-note">remembered for ' + esc(t.project) + "</span></div>" +
       '<div class="hdx-row"><label for="crSubj">Subject</label><input class="hdx-inp" id="crSubj" style="flex:1"></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="crSign" style="padding-top:7px">Signature</label><textarea class="hdx-inp" id="crSign" rows="2" style="flex:1;resize:vertical" placeholder="Name, SVM Help Desk, Solverminds"></textarea></div>' +
       '<div class="hdx-row" style="align-items:flex-start"><label for="crNote" style="padding-top:7px">Note</label><textarea class="hdx-inp" id="crNote" rows="2" style="flex:1;resize:vertical" placeholder="Optional, shown after the status line"></textarea></div>' +
       (CR_CLOSABLE[k.id] ? '<div class="hdx-row"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600"><input type="checkbox" id="crClose"> Say we will close the ticket if there is no reply within</label><input class="hdx-inp" id="crDays" style="width:56px" inputmode="numeric"><span class="hdx-note">days</span></div>' : "") +
-      '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Worded for <b>' + esc(k.label.toLowerCase()) + '</b>, dates only. Click into the mail to edit any text.</span><span style="flex:1"></span><button type="button" class="hdx-btn sm" data-c="reset" id="crReset" style="display:none">Undo text edits</button></div>' +
+      '<div class="hdx-row" style="margin:4px 0 6px"><span class="hdx-note">Worded for <b id="crKind">' + esc(k.label.toLowerCase()) + '</b>, dates only. Click into the mail to edit any text.</span><span style="flex:1"></span><button type="button" class="hdx-btn sm" data-c="reset" id="crReset" style="display:none">Undo text edits</button></div>' +
       '<div class="hdx-prev" id="crPrev" style="max-height:42vh"></div>' +
       '<div class="hdx-row" style="margin-top:10px"><span class="hdx-note">Copy the email, reply on the client’s own mail thread for this ticket, then click <b>Mark as sent</b>.</span><span style="flex:1"></span>' +
         '<button type="button" class="hdx-btn" data-c="copy">Copy email</button><button type="button" class="hdx-btn" data-c="eml" title="An unsent .eml: opens in Outlook as a draft">Download email draft</button><button type="button" class="hdx-btn pri" data-c="sent" title="Record that this reminder was sent today">Mark as sent</button></div>';
     var q = function (id) { return m.box.querySelector("#" + id); }, subjEdited = false;
     q("crHi").value = crDear(t.project); q("crSign").value = crSign();
     if (q("crClose")) { q("crClose").checked = !!bk.closeOn; q("crDays").value = bk.closeDays || 3; }
-    var opts = function () { return { hi: q("crHi").value, sign: q("crSign").value, note: q("crNote").value, closeOn: q("crClose") ? q("crClose").checked : false, closeDays: q("crDays") ? q("crDays").value : 3 }; };
+    var opts = function () { return { as: AS, hi: q("crHi").value, sign: q("crSign").value, note: q("crNote").value, closeOn: q("crClose") ? q("crClose").checked : false, closeDays: q("crDays") ? q("crDays").value : 3 }; };
     var cur = function () { return crMail(t, opts()); };
     var keep = function () { var b = crBook(); b.dear = b.dear || {}; var hi = q("crHi").value.trim(); if (hi) b.dear[t.project || ""] = hi;
       if (q("crClose")) { b.closeOn = q("crClose").checked; b.closeDays = Math.max(1, parseInt(q("crDays").value, 10) || 3); } crSaveBook(b); crSetSign(q("crSign").value); };
     var ed = mailEditor(q("crPrev"), function () {});
     ed.onEdit = function () { q("crReset").style.display = ""; };
-    function paint() { var x = cur(); if (!subjEdited) q("crSubj").value = x.subject; ed.render(x.html); q("crReset").style.display = "none"; }
+    function asBtns() { m.box.querySelectorAll("[data-as]").forEach(function (x) { x.classList.toggle("pri", x.dataset.as === AS); }); }
+    function paint() { var x = cur(); asBtns(); if (q("crKind")) q("crKind").textContent = x.kind.label.toLowerCase() + (AS === "confirm" ? " (status is Waiting for customer)" : ""); if (!subjEdited) q("crSubj").value = x.subject; ed.render(x.html); q("crReset").style.display = "none"; }
     var reb = function () { if (ed.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; paint(); };
     ["crHi", "crNote", "crSign", "crDays"].forEach(function (id) { if (q(id)) q(id).addEventListener("change", function () { keep(); setTimeout(reb, 120); }); });
     if (q("crClose")) q("crClose").addEventListener("change", function () { keep(); reb(); });
     q("crSubj").addEventListener("input", function () { subjEdited = true; });
-    m.box.addEventListener("click", function (e) { var b = e.target.closest("[data-c]"); if (!b) return; var c = b.dataset.c;
+    m.box.addEventListener("click", function (e) {
+      var a = e.target.closest("[data-as]");
+      if (a) { if (a.dataset.as === AS) return; if (ed.edited && !confirm("Switching the mail type rebuilds the mail and undoes your text edits. Continue?")) return;
+        AS = a.dataset.as; var bb = crBook(); bb.as = bb.as || {}; if (AS === "info") delete bb.as[t.key]; else bb.as[t.key] = AS; crSaveBook(bb); return paint(); }
+      var b = e.target.closest("[data-c]"); if (!b) return; var c = b.dataset.c;
       if (c === "close") return m.close();
       if (c === "reset") return paint();
       keep();
