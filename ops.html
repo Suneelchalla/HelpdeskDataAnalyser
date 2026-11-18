@@ -351,6 +351,37 @@ body.oi-sv #view{margin-top:6px}
 body.ssprint-win{margin:0;background:#fff}body.ssprint-win #ssPrintHost{display:block;width:1240px;margin:0 auto}
 @media print{body.ssprint-win #ssPrintHost{width:auto;zoom:.84}}
 @media print{body.ssprint{background:#fff!important}}
+/* Root cause review tab */
+.rc-head{margin-bottom:14px}
+.rc-tiles{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;margin-bottom:16px}
+@media(max-width:1100px){.rc-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.rc-tile{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--c);border-radius:var(--r);box-shadow:var(--sh);padding:11px 13px;text-align:left;display:flex;flex-direction:column;gap:1px}
+.rc-tile:hover{border-color:var(--line2);border-top-color:var(--c)}.rc-tile.on{outline:2px solid var(--c);outline-offset:-1px}
+.rc-tile .n{font:700 22px var(--mono);letter-spacing:-.5px;color:var(--c)}.rc-tile .l{font-size:12.5px;font-weight:600}.rc-tile .s{font-size:11px;color:var(--muted)}
+.rc-fr.on{background:var(--paper);border-radius:6px}
+.rc-cls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:1100px){.rc-cls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rc-cl{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px;background:#fff}
+.rc-cl:hover,.rc-cl.on{border-color:var(--em);background:var(--em-bg)}.rc-cl b{font:700 13px var(--mono)}.rc-cl span{font-size:12.5px;font-weight:600}.rc-cl em{font-style:normal;font-size:11px;color:var(--muted)}
+.rc-ctl{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-bottom:12px;padding:12px 16px}
+.rc-ctl label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}.rc-ctl .chip button{margin-left:4px;font-weight:700}
+.rc-t td{vertical-align:top}.rc-t .small,.rc-card .small{font-size:11px}.rc-tx{font-size:12px;line-height:1.45;color:var(--ink2);max-width:340px}
+.rc-row{cursor:pointer}.rc-row:hover td{background:#FAFBFC}tr.rc-sel td{background:var(--em-bg)}
+.rc-vb{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden;white-space:nowrap}
+.rc-vb button{padding:4px 9px;font-size:11.5px;font-weight:600;color:var(--muted);background:#fff}.rc-vb button+button{border-left:1px solid var(--line2)}
+.rc-vb button:hover{color:var(--ink)}.rc-vb button.on.ok{background:var(--em);color:#fff}.rc-vb button.on.no{background:var(--rose);color:#fff}
+.rc-card{max-width:1100px}.rc-body{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:22px;padding:16px 20px;overflow:auto}
+@media(max-width:900px){.rc-body{grid-template-columns:1fr}}
+.rc-sum{font:600 15px var(--sans);color:var(--ink)}
+.rc-lbl{font:700 11px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 4px}
+.rc-box{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--paper);font-size:13px;line-height:1.55;color:var(--ink)}
+.rc-fl{border-left:3px solid var(--line2);padding:5px 9px;margin-bottom:6px;border-radius:0 6px 6px 0;background:var(--paper)}
+.rc-fl b{display:block;font-size:12.5px}.rc-fl span{font-size:12px;color:var(--ink2)}
+.rc-fl.s3{border-color:var(--rose)}.rc-fl.s2{border-color:#F59E0B}.rc-fl.s1{border-color:#93A4B8}.rc-fl.s0{border-color:var(--em)}
+.rc-note{width:100%;margin-top:8px;border:1px solid var(--line2);border-radius:8px;padding:8px;font:12.5px var(--sans);resize:vertical}
+.rc-mail{max-width:980px}.rc-mb{padding:14px 18px;overflow:auto}
+.rc-r{display:flex;align-items:center;gap:10px;margin-bottom:8px}.rc-r label{font-size:12px;color:var(--muted);min-width:54px}
+.rc-pv{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff;max-height:42vh;overflow:auto;font-size:13px}
 </style>
 </head>
 <body>
@@ -394,6 +425,7 @@ body.ssprint-win{margin:0;background:#fff}body.ssprint-win #ssPrintHost{display:
       <button class="tab" data-tab="team">Team <span class="n" id="nTm"></span></button>
       <button class="tab" data-tab="risks">Risks <span class="n" id="nRk"></span></button>
       <button class="tab" data-tab="quality">Quality</button>
+      <button class="tab" data-tab="rcr">Root cause review <span class="n" id="nRc"></span></button>
     </nav>
     <div id="view"></div>
   </div>
@@ -802,6 +834,7 @@ function render() {
   el("nCl").textContent = Object.keys(countBy(m.open, "project")).length;
   el("nTm").textContent = Object.keys(countBy(m.ours, "svm")).length;
   if (F.tab !== "risks") tabRisks(m);          // fills the Risks count on the tab
+  rcBadge(m);                                  // fills the Root cause review count on its tab
   renderTab();
 }
 function renderSlaBar(m) {
@@ -874,6 +907,7 @@ function renderTab() {
   else if (F.tab === "clients") v.innerHTML = tabClients(M);
   else if (F.tab === "team") v.innerHTML = tabTeam(M);
   else if (F.tab === "risks") v.innerHTML = tabRisks(M);
+  else if (F.tab === "rcr") v.innerHTML = tabRcr(M);
   else if (F.tab === "stats") v.innerHTML = tabStats();
   else v.innerHTML = tabQuality(M);
 }
@@ -2271,6 +2305,405 @@ function csv(list, title) {
   a.href = URL.createObjectURL(b); a.download = "ops-" + String(title).toLowerCase().replace(/[^\w]+/g, "-").slice(0, 40) + ".csv"; document.body.appendChild(a); a.click();
   setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
+
+/* ══════════ Root cause review ══════════
+   The tickets that were fixed by Engineering (client tickets with a linked LRPS ticket): is the written root cause
+   (Reason for Occurrence - Text) and resolution (Resolution Details) clear enough for someone who has not seen the ticket?
+   Everything is read from the client tickets already loaded (the same fields the Quality tab counts), nothing is fetched.
+     • automatic text checks, each with the question to put to the SVM In Charge (rules, no AI: the reviewer decides)
+     • my review per ticket: Understood / Not clear, with a note
+     • per SVM In Charge: a mail (copy or .eml draft) and an Excel with only their tickets and what to fix
+     • follow-up: when the request went out is kept with a fingerprint of the text at that moment; after the next data
+       refresh a ticket whose text changed shows "Updated, re-review"
+     • causes that keep coming back, found by comparing the causes of the tickets in view
+   Review marks, notes and "asked on" dates are kept in this browser. */
+
+/* RCR-PURE-START (no DOM: tested on its own) */
+var RC_STOP = {};
+("a an the of to in on at for from by with and or is was were be been are it its this that these those as has have had will would not no their " +
+ "there which when then also please note kindly given user users provided provide providing script scripts same one two into out up per via any all can " +
+ "may only but they them due because caused cause issue issues ticket tickets past correction corrected workaround datafix update updated updates insert inserted additional backend data given giving check checked reported report").split(" ").forEach(function (w) { RC_STOP[w] = 1; });
+var RC_ORIG = {};
+function rcClean(s) {
+  s = String(s == null ? "" : s).replace(/\r/g, "");
+  s = s.replace(/\{adf\}[\s\S]*?\{adf\}/g, " ").replace(/\{\/?color[^}]*\}/g, "").replace(/!\S+?\|[^!\n]*!/g, " ").replace(/![^\s!]+\.(?:png|jpe?g|gif)[^!\n]*!/gi, " ")
+       .replace(/\[\^[^\]]*\]/g, " ").replace(/\[([^\]|\n]+)\|[^\]\n]*\]/g, "$1").replace(/\*([^*\n]+)\*/g, "$1").replace(/^\s*\*+\s*|\s*\*+\s*$/g, "");
+  return s.replace(/[ \t\u00a0]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+/* "-", "N/A", "nil", "none", "TBD" typed into a field mean nothing was written */
+function rcReal(v) { var x = rcClean(v); return /^[\s\-–—_.:;,\/\\*#?]*$/.test(x) || /^(n\/?a|nil|none|null|na|tbd|tba|no|nothing|not applicable|not available|pending)\.?$/i.test(x) ? "" : x; }
+function rcWords(s) { return s ? s.split(/\s+/).filter(Boolean).length : 0; }
+function rcNorm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); }
+function rcStem(w) { return w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "") : w; }
+function rcTok(s) {
+  var out = []; rcNorm(s).split(" ").forEach(function (w) { if (w.length < 3 || RC_STOP[w] || /\d/.test(w)) return; var st = rcStem(w); if (!RC_ORIG[st]) RC_ORIG[st] = w; out.push(st); });
+  return out;
+}
+function rcJac(a, b) { var A = {}, n = 0, u = 0; a.forEach(function (w) { A[w] = 1; }); var B = {}; b.forEach(function (w) { B[w] = 1; }); Object.keys(A).forEach(function (w) { u++; if (B[w]) n++; }); Object.keys(B).forEach(function (w) { if (!A[w]) u++; }); return u ? n / u : 0; }
+function rcHash(s) { var h = 5381, i = s.length; while (i) h = (h * 33) ^ s.charCodeAt(--i); return (h >>> 0).toString(36); }
+
+/* a category used as the cause ("Past data correction"), a cause that is really the fix, or the user's request again */
+var RC_LABELS = /^(past data correction|data correction|data fix|datafix|data issue|data patch|workaround|workaround datafix|workaround data fix|system bug|coding issue|code issue|user request|bug|issue|script|script provided|code fix)$/;
+var RC_FIXSTART = /^(?:we (?:have |had )?(?:now )?(?:provided|given|updated|inserted|executed|applied|created|deployed)|provid(?:e|ed|ing)|given|giving|a script|the script|script|updated|inserted|reverted|deactivated|executed|applied)\b/i;
+var RC_RESTATE = /^(?:as per )?(?:the )?(?:user|client|customer|swire)s?\b[^.]{0,40}?\b(?:report(?:ed)?|request(?:ed)?|rais(?:ed)|ask(?:ed)|unable|cannot|can't|wants?|wanted)\b/i;
+/* words that carry a reason: "due to", "because", "caused", "as a result", "hence", "since the …", "which led to …" */
+var RC_CAUSAL = /\b(?:due to|because|caused|causing|as a result|resulted|result of|owing to|led to|hence|therefore|reason (?:is|was|being)|since (?:the|it|this|they|there|a|an)\b|which (?:prevented|caused|led|resulted|made|stopped))/i;
+var RC_OPEN = /\b(?:will|to be|yet to|going to)\s+(?:be\s+)?(?:investigat|analy[sz]|provid|share|check|follow|implement|fix)|(?:provided|shared|implemented|delivered|given) subsequently|subsequent (?:release|fix)|further (?:investigation|analysis)|temporary workaround/i;
+var RC_USER = /\bby (?:the )?(?:end[- ])?user\b|\buser (?:has |had |have )?(?:\w+ )?(?:selected|entered|created|changed|moved|deleted|mapped|matched)\b|selected (?:the )?wrong|wrong(?:ly)? (?:payment|mode|data)|user (?:error|mistake)/i;
+var RC_PERM = /permanent|code fix|fixed in|will be fixed|patch|hotfix|change request|\bCR[- ]?\d|enhancement|next release|upcoming release|LRPS-\d+|fix will/i;
+var RC_FLAGS = {
+  nocause: { l: "No cause written", s: 3, ask: "Reason for Occurrence - Text is empty: write why this happened." },
+  nores:   { l: "No resolution written", s: 3, ask: "Resolution Details is empty: write what was done to fix it." },
+  label:   { l: "Cause is only a label", s: 3, ask: "The cause only repeats a category (for example “Past data correction”): say what went wrong and why." },
+  same:    { l: "Cause = resolution", s: 3, ask: "Cause and resolution carry the same text: separate why it happened from what was done." },
+  shortc:  { l: "Cause too short", s: 2, ask: "The cause is too short to follow without the ticket: add what happened and why." },
+  shortr:  { l: "Resolution too short", s: 2, ask: "The resolution is too short to follow without the ticket: add what was done." },
+  fixcause:{ l: "Cause describes the fix", s: 2, ask: "The cause describes the fix: write why the problem occurred." },
+  restate: { l: "Cause repeats the request", s: 2, ask: "The cause repeats what the user reported: write what caused it." },
+  nowhy:   { l: "What, not why", s: 2, ask: "The cause says what was found but not why it happened (what triggered it, which step or check was missing)." },
+  swapped: { l: "Cause is under Resolution", s: 2, ask: "The reason is written in Resolution Details: move it to Reason for Occurrence - Text." },
+  vague:   { l: "Resolution too vague", s: 2, ask: "Say what the script changed (which data or field, for which records) and why that fixes it." },
+  open:    { l: "Cause not final", s: 2, ask: "The text says the cause or permanent fix is still to come: add the confirmed cause, or the follow-up ticket." },
+  mismatch:{ l: "Category vs text", s: 2, ask: "The text describes a user action but Type of Fix is System Bug: confirm the category, or explain the missing check in the system." },
+  script:  { l: "Script only", s: 1, ask: "Fixed by a script or workaround: say whether a permanent fix is planned (ticket or release)." },
+  markup:  { l: "Stray formatting", s: 1, ask: "Remove stray formatting characters (asterisks, colour or image tags)." }
+};
+/* the judgement for one ticket's text. hasRel = the client ticket already carries a fix version / release number */
+function rcJudge(rawC, rawR, cat, fix, hasRel) {
+  var cause = rcReal(rawC), res = rcReal(rawR), f = [], wc = rcWords(cause), wr = rcWords(res), nc = rcNorm(cause), nr = rcNorm(res);
+  function add(id) { f.push({ id: id, s: RC_FLAGS[id].s, l: RC_FLAGS[id].l, ask: RC_FLAGS[id].ask }); }
+  var tc = rcTok(cause), tr = rcTok(res);
+  var isLabel = !!cause && (RC_LABELS.test(nc) || (!!cat && nc === rcNorm(cat)));
+  var same = !!cause && !!res && (nc === nr || (tc.length >= 3 && tr.length >= 3 && rcJac(tc, tr) >= 0.8));
+  var fixc = !!cause && !isLabel && RC_FIXSTART.test(cause), rest = !!cause && !isLabel && !fixc && RC_RESTATE.test(cause);
+  var why = RC_CAUSAL.test(cause), whyR = RC_CAUSAL.test(res);
+  if (!cause) add("nocause"); if (!res) add("nores");
+  if (isLabel) add("label"); if (same) add("same"); if (fixc) add("fixcause"); if (rest) add("restate");
+  if (cause && !isLabel && wc < 6) add("shortc");
+  if (cause && !isLabel && !fixc && !rest && !same && !why && wc >= 6) { if (whyR && wr > wc) add("swapped"); else add("nowhy"); }
+  if (res && wr < 6) add("shortr"); else if (res && !same && wr <= 9 && /\bscripts?\b/i.test(res)) add("vague");
+  if (RC_OPEN.test(cause + " " + res)) add("open");
+  if (/system bug/i.test(fix || "") && RC_USER.test(cause)) add("mismatch");
+  if ((/workaround|past data|data ?fix|data correction/i.test(cat || "") || /\bscripts?\b/i.test(res)) && !hasRel && !RC_PERM.test(cause + " " + res)) add("script");
+  if (/\{color|\{adf\}|!\S+\.(?:png|jpe?g|gif)|\[\^|\*[^*\n]+\*/i.test(String(rawC || "") + "\n" + String(rawR || ""))) add("markup");
+  var hi = f.filter(function (x) { return x.s === 3; }).length, md = f.filter(function (x) { return x.s === 2; }).length;
+  return { cause: cause, res: res, f: f, st: hi ? "bad" : md ? "weak" : "ok", score: Math.max(0, 100 - 35 * hi - 18 * md),
+           asks: f.filter(function (x) { return x.s >= 2; }).map(function (x) { return x.ask; }), h: rcHash(nc + "|" + nr) };
+}
+/* causes that keep coming back: TF-IDF cosine over the cause and resolution text, then average-linkage grouping (a ticket joins a
+   group only when it is close to the group as a whole, so one shared phrase cannot chain two topics together).
+   docs = [{ id, tok }]; returns groups of 3 or more, biggest first: [{ ids, terms, mean }] */
+function rcCluster(docs, thr, maxN) {
+  var n = docs.length, df = {}, i, j, k; thr = thr || 0.2; maxN = maxN || 500;
+  if (n < 3) return []; if (n > maxN) { docs = docs.slice(0, maxN); n = maxN; }
+  docs.forEach(function (d) { d.set = {}; d.tok.forEach(function (w) { d.set[w] = (d.set[w] || 0) + 1; }); Object.keys(d.set).forEach(function (w) { df[w] = (df[w] || 0) + 1; }); });
+  docs.forEach(function (d) { var v = {}, s = 0; Object.keys(d.set).forEach(function (w) { var x = (1 + Math.log(d.set[w])) * Math.log((n + 1) / (df[w] + 0.5)); v[w] = x; s += x * x; }); d.v = v; d.nn = Math.sqrt(s) || 1; d.nk = Object.keys(v).length; });
+  function sim(A, B) { var s = 0, k2, sm = A.nk <= B.nk ? A : B, bg = sm === A ? B : A; for (k2 in sm.v) if (bg.v[k2]) s += sm.v[k2] * bg.v[k2]; return s / (A.nn * B.nn); }
+  var S = new Float32Array(n * n); for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) { var x = sim(docs[i], docs[j]); S[i * n + j] = x; S[j * n + i] = x; }
+  var size = [], alive = [], mem = []; for (i = 0; i < n; i++) { size.push(1); alive.push(true); mem.push([i]); }
+  for (;;) {
+    var bi = -1, bj = -1, best = thr;
+    for (i = 0; i < n; i++) if (alive[i]) for (j = i + 1; j < n; j++) if (alive[j] && S[i * n + j] >= best) { best = S[i * n + j]; bi = i; bj = j; }
+    if (bi < 0) break;
+    for (k = 0; k < n; k++) if (alive[k] && k !== bi && k !== bj) { var v2 = (size[bi] * S[bi * n + k] + size[bj] * S[bj * n + k]) / (size[bi] + size[bj]); S[bi * n + k] = v2; S[k * n + bi] = v2; }
+    size[bi] += size[bj]; alive[bj] = false; mem[bi] = mem[bi].concat(mem[bj]);
+  }
+  var out = [];
+  for (i = 0; i < n; i++) if (alive[i] && mem[i].length >= 3) {
+    var m = mem[i], tot = 0, cnt = 0, p, q; for (p = 0; p < m.length; p++) for (q = p + 1; q < m.length; q++) { tot += S[m[p] * n + m[q]]; cnt++; }
+    var w = {}; m.forEach(function (ix) { Object.keys(docs[ix].v).forEach(function (kk) { w[kk] = (w[kk] || 0) + docs[ix].v[kk]; }); });
+    var terms = Object.keys(w).filter(function (kk) { return df[kk] >= 2; }).sort(function (a2, b2) { return w[b2] - w[a2]; }).slice(0, 4).map(function (kk) { return RC_ORIG[kk] || kk; });
+    out.push({ ids: m.map(function (ix) { return docs[ix].id; }), terms: terms, mean: cnt ? tot / cnt : 0 });
+  }
+  return out.sort(function (a2, b2) { return b2.ids.length - a2.ids.length || b2.mean - a2.mean; });
+}
+/* RCR-PURE-END */
+
+var RCR_KEY = "hd-ops-rcr", RCR_MAIL = "hd-ops-rcr-mail", RC_FIXED = /move(?:d)? to prod|closed|done|resolved|deliver|complet|released/i;
+var RCR = { lrps: "fixed", flag: "", rev: "", q: "", lim: 100, svm: "", cl: -1 }, RV = null, RCA = {}, RC_LIST = [], RC_CL = [], RC_ALL = [], RCC = null;
+function rcRV() { if (RV) return RV; try { RV = JSON.parse(localStorage.getItem(RCR_KEY) || "{}") || {}; } catch (e) { RV = {}; } return RV; }
+function rcSaveRV() { try { localStorage.setItem(RCR_KEY, JSON.stringify(RV || {})); } catch (e) {} }
+function rcBook() { var d = { to: {}, cc: "", sign: "", by: "" }; try { return Object.assign(d, JSON.parse(localStorage.getItem(RCR_MAIL) || "{}")); } catch (e) { return d; } }
+function rcSaveBook(b) { try { localStorage.setItem(RCR_MAIL, JSON.stringify(b)); } catch (e) {} }
+
+/* the fields as the loaded rows name them (Jira fetch or an Excel export with "Custom field (…)" headers) */
+var _rcKm = null;
+function rcRaw(t, name) {
+  if (!_rcKm) { _rcKm = {}; for (var i = 0; i < ALL.length && i < 80; i++) Object.keys(ALL[i]._raw).forEach(function (k) { var n = k.trim().toLowerCase(), m = n.match(/^custom field \((.+)\)$/); if (_rcKm[n] === undefined) _rcKm[n] = k; if (m && _rcKm[m[1]] === undefined) _rcKm[m[1]] = k; }); }
+  var k = _rcKm[name], v = t._raw[k !== undefined ? k : name]; return v == null || v instanceof Date ? "" : String(v);
+}
+function rcLinks(t) {
+  if (t._rl) return t._rl;
+  var lk = rcRaw(t, "linked issues").split(/[;,]/).map(function (x) { return x.trim(); }).filter(Boolean), ls = rcRaw(t, "linked ticket status").split(/[;,]/).map(function (x) { return x.trim(); }).filter(Boolean), out = [];
+  lk.forEach(function (k, i) { if (/^LRPS-\d+$/i.test(k)) out.push({ k: k.toUpperCase(), s: ls[i] || "" }); });
+  return (t._rl = out);
+}
+function rcAnalyse(t) {
+  var c = rcRaw(t, "reason for occurrence - text") || rcRaw(t, "reason for occurrence – text"), r = rcRaw(t, "resolution details");
+  var rel = rcRaw(t, "fix versions") || rcRaw(t, "release number") || rcRaw(t, "release number (data fix)") || rcRaw(t, "parent release no");
+  var key = t.key + "|" + c.length + "|" + r.length + "|" + rcHash(c + "\u0001" + r + "\u0001" + (t.rootCause || "") + (t.fix || "") + (rel ? "R" : ""));
+  var hit = RCA[t.key]; if (hit && hit.k === key) return hit.a;
+  var a = rcJudge(c, r, t.rootCause, t.fix, !!String(rel).replace(/^[-–.\s]+$/, ""));
+  a.sol = rcClean(rcRaw(t, "solution summary")); a.desc = rcClean(rcRaw(t, "description")); a.catOcc = rcClean(rcRaw(t, "reason for occurrence"));
+  RCA[t.key] = { k: key, a: a }; return a;
+}
+function rcSvmFirst(n) { var p = String(n || "").split(/[\s.]+/).filter(Boolean)[0] || ""; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : "Team"; }
+function rcSum(t) { return String(t.summary || "").replace(/^(?:(?:re|fw|fwd)\s*:\s*)+/i, "").replace(/[\(\[]\s*(?:request\s*)?id\s*:?\s*#*\s*\d*\s*#*\s*[\)\]]/gi, " ").replace(/\s{2,}/g, " ").trim() || t.summary; }
+
+/* scope: client tickets created in the period (and the filters at the top) that have a linked LRPS ticket */
+function rcScope(m) { return m.created.filter(function (t) { return rcLinks(t).length; }); }
+function rcLrpsOpts(list) { var c = {}; list.forEach(function (t) { var seen = {}; rcLinks(t).forEach(function (l) { var s = l.s || "(unknown)"; if (!seen[s]) { seen[s] = 1; c[s] = (c[s] || 0) + 1; } }); }); return c; }
+function rcLrpsOk(t) { if (RCR.lrps === "all") return true; var L2 = rcLinks(t); if (RCR.lrps === "fixed") return L2.some(function (l) { return RC_FIXED.test(l.s); }); return L2.some(function (l) { return (l.s || "(unknown)") === RCR.lrps; }); }
+function rcEff(a, rv) { return rv && rv.v === "ok" ? "ok" : rv && rv.v === "no" ? "bad" : a.st; }
+function rcFollow(a, rv) { if (!rv || !rv.ask) return null; if (rv.ask.h !== a.h) return { s: "upd", at: rv.ask.at }; return { s: "wait", at: rv.ask.at, days: Math.floor((NOW - rv.ask.at) / DAY) }; }
+/* ready to ask the SVM In Charge: I marked it Not clear, or I have not reviewed it and the checks found a problem; not while a request is still waiting */
+function rcNeeds(a, rv, inclAsked) {
+  var f = rcFollow(a, rv); if (f && f.s === "wait" && !inclAsked) return false;
+  if (rv && rv.v === "ok") return false; if (rv && rv.v === "no") return true; return a.st !== "ok";
+}
+function rcAsksOf(a, rv) { var l = a.asks.slice(); if (rv && rv.note && rv.note.trim()) l.push("Reviewer’s note: " + rv.note.trim()); if (!l.length) l.push("Please make the root cause and the resolution understandable without opening the ticket."); return l; }
+
+function rcBadge(m) {
+  var b = el("nRc"); if (!b) return; var rv = rcRV();
+  b.textContent = num(rcScope(m).filter(rcLrpsOk).filter(function (t) { return rcNeeds(rcAnalyse(t), rv[t.key]); }).length);
+}
+
+/* ── the tab ── */
+function rcFilterList(scope) {
+  var rv = rcRV(), q = RCR.q.trim().toLowerCase(), cls = RCR.cl >= 0 && RC_CL[RCR.cl] ? {} : null;
+  if (cls) RC_CL[RCR.cl].ids.forEach(function (k) { cls[k] = 1; });
+  return scope.filter(function (t) {
+    var a = rcAnalyse(t), r = rv[t.key], e = rcEff(a, r), fo = rcFollow(a, r);
+    if (RCR.svm && (t.svm || "(none)") !== RCR.svm) return false;
+    if (cls && !cls[t.key]) return false;
+    var f = RCR.flag;
+    if (f === "needs" && e === "ok") return false; if (f === "bad" && e !== "bad") return false; if (f === "weak" && e !== "weak") return false; if (f === "ok" && e !== "ok") return false;
+    if (/^f:/.test(f) && !a.f.some(function (x) { return x.id === f.slice(2); })) return false;
+    var v = RCR.rev;
+    if (v === "none" && r && r.v) return false; if (v === "ok" && !(r && r.v === "ok")) return false; if (v === "no" && !(r && r.v === "no")) return false;
+    if (v === "ask" && !rcNeeds(a, r)) return false; if (v === "wait" && !(fo && fo.s === "wait")) return false; if (v === "upd" && !(fo && fo.s === "upd")) return false;
+    if (q && (t.key + " " + rcLinks(t).map(function (l) { return l.k; }).join(" ") + " " + t.summary + " " + a.cause + " " + a.res + " " + t.project + " " + (t.svm || "")).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+}
+function rcChips(a) { return a.f.filter(function (x) { return x.s >= 2; }).map(function (x) { return '<span class="chip ' + (x.s === 3 ? "r" : "a") + '" title="' + esc(x.ask) + '">' + esc(x.l) + '</span>'; }).join("") || '<span class="chip g" title="' + esc(a.f.map(function (x) { return x.l + ": " + x.ask; }).join(" · ") || "No problem found by the checks") + '">Clear</span>'; }
+function rcLinkHtml(t) { return rcLinks(t).map(function (l) { return '<a class="jk" href="' + JIRA + encodeURIComponent(l.k) + '" target="_blank" rel="noreferrer">' + esc(l.k) + '</a>' + (l.s ? ' <span class="z">' + esc(l.s) + '</span>' : ""); }).join("<br>"); }
+function rcClip(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n - 1).trim() + "…" : s; }
+function rcFollowHtml(a, rv) {
+  var f = rcFollow(a, rv); if (!f) return '<span class="z">—</span>';
+  return f.s === "upd" ? '<span class="chip g" title="The cause or resolution text changed after the request of ' + esc(fd(f.at)) + '">Updated, re-review</span>'
+    : '<span class="chip n" title="Asked ' + esc(fd(f.at)) + ', the text has not changed since">Asked ' + esc(fd(f.at, false)) + ' · ' + f.days + 'd</span>';
+}
+function rcVerdictBtns(key, rv) {
+  var v = rv && rv.v; return '<span class="rc-vb"><button type="button" class="' + (v === "ok" ? "on ok" : "") + '" data-rcv="ok" data-k="' + esc(key) + '" title="I understand the cause and the resolution">Understood</button>' +
+    '<button type="button" class="' + (v === "no" ? "on no" : "") + '" data-rcv="no" data-k="' + esc(key) + '" title="I cannot follow this: ask the SVM In Charge">Not clear</button></span>';
+}
+function tabRcr(m) {
+  var rv = rcRV(), scopeAll = rcScope(m), lo = rcLrpsOpts(scopeAll), scope = scopeAll.filter(rcLrpsOk);
+  RC_ALL = scope;
+  /* clusters over everything in scope (not the filtered list), so the numbers stay put while filtering */
+  var sig = scope.map(function (t) { return t.key + rcAnalyse(t).h; }).join("|");
+  if (!RCC || RCC.sig !== sig) RCC = { sig: sig, cl: rcCluster(scope.slice().sort(function (a, b) { return (b.created || 0) - (a.created || 0); }).map(function (t) { var a = rcAnalyse(t); return { id: t.key, tok: rcTok(a.cause + " " + a.res) }; }).filter(function (d) { return d.tok.length >= 3; }), 0.2, 500) };
+  RC_CL = RCC.cl;
+  if (RCR.cl >= RC_CL.length) RCR.cl = -1;
+  var an = {}; scope.forEach(function (t) { an[t.key] = rcAnalyse(t); });
+  var list = rcFilterList(scope).sort(function (a, b) { var A = an[a.key], B = an[b.key], r1 = rv[a.key], r2 = rv[b.key]; return (rcEff(A, r1) === "ok") - (rcEff(B, r2) === "ok") || A.score - B.score || (b.created || 0) - (a.created || 0); });
+  RC_LIST = list.map(function (t) { return t.key; });
+  var h = '<div class="card pad rc-head"><div><h2 class="sh" style="margin-bottom:4px">Root cause review <span>is the written cause and resolution clear enough for someone who has not seen the ticket?</span></h2>' +
+    '<p class="note">Client tickets created in the period that have a linked LRPS ticket, read from their Reason for Occurrence - Text and Resolution Details. The checks are rules, not AI: they point at what to look at, and <b>you</b> decide with Understood / Not clear. Tickets marked Not clear (or flagged and not reviewed yet) are what goes to the SVM In Charge.</p></div></div>';
+  var noLink = m.created.length - scopeAll.length;
+  h = h.replace('</p></div></div>', '</p><p class="note" style="margin-top:4px"><b>' + num(noLink) + '</b> ticket' + (noLink === 1 ? "" : "s") + ' in this period ' + (noLink === 1 ? "has" : "have") + ' no linked LRPS ticket and ' + (noLink === 1 ? "is" : "are") + ' not listed here.</p></div></div>');
+  if (!scopeAll.length) return h + '<div class="card"><div class="empty">No client ticket in this period and filters has a linked LRPS ticket. Pick a longer period (This year, All time) or check the Request type filter.</div></div>';
+  /* tiles */
+  var cnt = { ok: 0, weak: 0, bad: 0, rOk: 0, rNo: 0, rNone: 0, ask: 0, wait: 0, upd: 0 };
+  scope.forEach(function (t) { var a = an[t.key], r = rv[t.key], fo = rcFollow(a, r); cnt[a.st]++; if (r && r.v === "ok") cnt.rOk++; else if (r && r.v === "no") cnt.rNo++; else cnt.rNone++; if (rcNeeds(a, r)) cnt.ask++; if (fo && fo.s === "wait") cnt.wait++; if (fo && fo.s === "upd") cnt.upd++; });
+  function tile(lbl, n, sub, col, f, v, f2) { var on = (f !== null && RCR.flag === f && (v === null || RCR.rev === v)) || (f === null && v !== null && RCR.rev === v && !RCR.flag); return '<button type="button" class="rc-tile' + (on ? " on" : "") + '" data-rcset="' + (f === null ? "" : f) + '|' + (v === null ? "" : v) + '" style="--c:' + col + '"><span class="n">' + num(n) + '</span><span class="l">' + esc(lbl) + '</span><span class="s">' + esc(sub) + '</span></button>'; }
+  h += '<div class="rc-tiles">' + tile("In review", scope.length, "tickets with a fixed LRPS", "var(--ink2)", "", "") +
+    tile("Clear", cnt.ok, pct(cnt.ok, scope.length) + "% pass the checks", "var(--em)", "ok", null) + tile("Weak", cnt.weak, "something to tighten", "#F59E0B", "weak", null) + tile("Unclear", cnt.bad, "missing or no cause", "var(--rose)", "bad", null) +
+    tile("Ready to ask", cnt.ask, "for the SVM In Charge", "var(--violet)", "", "ask") + tile("Waiting", cnt.wait, "asked, no change yet", "#93A4B8", "", "wait") + tile("Updated", cnt.upd, "changed after asking", "var(--blue)", "", "upd") + '</div>';
+  /* where the text falls short + by SVM */
+  var fc = {}; scope.forEach(function (t) { an[t.key].f.forEach(function (x) { fc[x.id] = (fc[x.id] || 0) + 1; }); });
+  var fk = Object.keys(fc).sort(function (a, b) { return RC_FLAGS[b].s - RC_FLAGS[a].s || fc[b] - fc[a]; }), mx = Math.max.apply(null, fk.map(function (k) { return fc[k]; }).concat([1]));
+  var occBlank = scope.filter(function (t) { return !an[t.key].catOcc; }).length;
+  h += '<div class="grid2" style="margin-bottom:16px"><div class="card pad"><h2 class="sh">Where the text falls short <span>tickets with each finding · click to filter</span></h2>' +
+    (fk.length ? fk.map(function (k) { var c = RC_FLAGS[k].s === 3 ? "var(--rose)" : RC_FLAGS[k].s === 2 ? "#F59E0B" : "#93A4B8";
+      return '<div class="agerow rc-fr' + (RCR.flag === "f:" + k ? " on" : "") + '" data-rcset="f:' + k + '|" style="grid-template-columns:190px minmax(0,1fr) 60px" title="' + esc(RC_FLAGS[k].ask) + '"><span>' + esc(RC_FLAGS[k].l) + '</span><span class="bar" style="width:100%"><i style="width:' + Math.max(2, fc[k] / mx * 100) + '%;background:' + c + '"></i></span><b>' + num(fc[k]) + '</b></div>'; }).join("") : '<div class="empty">Nothing flagged.</div>') +
+    '<p class="note" style="margin-top:10px">Red: the text cannot be understood. Amber: it can, with effort. Grey: a tip. The Reason for Occurrence <i>category</i> field is empty on <b>' + num(occBlank) + '</b> of ' + num(scope.length) + ' tickets.</p></div>';
+  var sv = {}; scope.forEach(function (t) { var k = t.svm || "(none)"; (sv[k] = sv[k] || []).push(t); });
+  var svk = Object.keys(sv).sort(function (a, b) { return sv[b].length - sv[a].length || a.localeCompare(b); });
+  h += '<div class="card"><div class="pad" style="padding-bottom:6px"><h2 class="sh">By SVM In Charge <span>the text of their tickets · Ask opens the mail</span></h2></div><div class="tw"><table><thead><tr><th>SVM In Charge</th><th class="num">Tickets</th><th class="num">Clear</th><th class="num">Needs work</th><th class="num">Waiting</th><th class="num">Updated</th><th></th></tr></thead><tbody>' +
+    svk.map(function (k) { var l = sv[k], c = { ok: 0, no: 0, w: 0, u: 0, ask: 0 }; l.forEach(function (t) { var a = an[t.key], r = rv[t.key], e = rcEff(a, r), fo = rcFollow(a, r); if (e === "ok") c.ok++; else c.no++; if (fo && fo.s === "wait") c.w++; if (fo && fo.s === "upd") c.u++; if (rcNeeds(a, r)) c.ask++; });
+      return '<tr class="click' + (RCR.svm === k ? " rc-sel" : "") + '" data-rcsvm="' + esc(k) + '"><td style="font-weight:600">' + esc(k) + '</td><td class="num">' + num(l.length) + '</td><td class="num" style="color:var(--em)">' + num(c.ok) + ' <span class="z">(' + pct(c.ok, l.length) + '%)</span></td><td class="num" style="' + (c.no ? "color:var(--rose);font-weight:700" : "") + '">' + num(c.no) + '</td><td class="num">' + num(c.w) + '</td><td class="num">' + num(c.u) + '</td>' +
+        '<td style="text-align:right;white-space:nowrap"><button type="button" class="btn' + (c.ask && k !== "(none)" ? " pri2" : "") + '" data-rcask="' + esc(k) + '"' + (c.ask && k !== "(none)" ? "" : " disabled") + '>Ask (' + c.ask + ')</button> <button type="button" class="btn" data-rcxl="' + esc(k) + '">Excel</button></td></tr>'; }).join("") + '</tbody></table></div></div></div>';
+  /* causes that keep coming back */
+  if (RC_CL.length) {
+    h += '<div class="card pad" style="margin-bottom:16px"><h2 class="sh">Causes that keep coming back <span>tickets with similar causes · most fixed by a script each time, which is the case for a permanent fix</span></h2><div class="rc-cls">' +
+      RC_CL.slice(0, 8).map(function (c, i) { var ts = c.ids.map(function (k) { return scope.filter(function (t) { return t.key === k; })[0]; }).filter(Boolean), sc = ts.filter(function (t) { return an[t.key].f.some(function (x) { return x.id === "script"; }); }).length, svs = {}; ts.forEach(function (t) { svs[t.svm || "(none)"] = 1; });
+        return '<button type="button" class="rc-cl' + (RCR.cl === i ? " on" : "") + '" data-rccl="' + i + '"><b>' + c.ids.length + ' tickets</b><span>' + esc(c.terms.join(" · ")) + '</span><em>' + esc(Object.keys(svs).slice(0, 3).join(", ")) + (sc ? " · " + sc + " script only" : "") + '</em></button>'; }).join("") + '</div></div>';
+  }
+  /* controls */
+  var lopt = [["fixed", "Fixed (Release Move to Production, Closed, Done…)"], ["all", "Any LRPS status"]].concat(Object.keys(lo).sort(function (a, b) { return lo[b] - lo[a]; }).map(function (k) { return [k, k + " (" + lo[k] + ")"]; }));
+  var sel = function (id, opts, cur) { return '<select id="' + id + '" class="dinput">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>'; };
+  h += '<div class="card pad rc-ctl"><label>LRPS status ' + sel("rcLrps", lopt, RCR.lrps) + '</label><label>Text check ' + sel("rcFlag", [["", "All"], ["needs", "Needs attention"], ["bad", "Unclear"], ["weak", "Weak"], ["ok", "Clear"]].concat(fk.map(function (k) { return ["f:" + k, RC_FLAGS[k].l + " (" + fc[k] + ")"]; })), RCR.flag) + '</label>' +
+    '<label>My review ' + sel("rcRev", [["", "All"], ["none", "Not reviewed"], ["ok", "Understood"], ["no", "Not clear"], ["ask", "Ready to ask"], ["wait", "Asked, waiting"], ["upd", "Updated, re-review"]], RCR.rev) + '</label>' +
+    '<input id="rcQ" class="dinput" type="search" placeholder="Search ticket, summary, cause, resolution" value="' + esc(RCR.q) + '" style="min-width:260px">' +
+    (RCR.svm ? '<span class="chip n">SVM: ' + esc(RCR.svm) + ' <button type="button" data-rcclr="svm" aria-label="Remove">×</button></span>' : "") + (RCR.cl >= 0 ? '<span class="chip n">Recurring cause <button type="button" data-rcclr="cl" aria-label="Remove">×</button></span>' : "") +
+    '<span style="flex:1"></span><span class="note"><b>' + num(list.length) + '</b> of ' + num(scope.length) + '</span><button type="button" class="btn" id="rcXlsx">Download Excel</button></div>';
+  /* the table */
+  h += '<div class="card"><div class="tw"><table class="rc-t"><thead><tr><th>Ticket</th><th>SVM In Charge</th><th style="min-width:260px">Root cause (Reason for Occurrence)</th><th style="min-width:260px">Resolution</th><th>Text check</th><th>My review</th><th>Follow-up</th></tr></thead><tbody>' +
+    list.slice(0, RCR.lim).map(function (t) { var a = an[t.key], r = rv[t.key];
+      return '<tr class="rc-row" data-rcopen="' + esc(t.key) + '"><td style="white-space:nowrap"><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a><div class="z small">' + esc(t.project) + '</div><div style="margin-top:3px">' + rcLinkHtml(t) + '</div></td>' +
+        '<td>' + esc(t.svm || "—") + '</td><td class="rc-tx" title="' + esc(a.cause) + '">' + (a.cause ? esc(rcClip(a.cause, 210)) : '<span class="z">— empty —</span>') + '</td><td class="rc-tx" title="' + esc(a.res) + '">' + (a.res ? esc(rcClip(a.res, 210)) : '<span class="z">— empty —</span>') + '</td>' +
+        '<td>' + rcChips(a) + '</td><td>' + rcVerdictBtns(t.key, r) + (r && r.note ? '<div class="z small" title="' + esc(r.note) + '">note</div>' : "") + '</td><td>' + rcFollowHtml(a, r) + '</td></tr>'; }).join("") +
+    '</tbody></table></div>' + (list.length ? "" : '<div class="empty">No ticket matches these choices.</div>') +
+    (list.length > RCR.lim ? '<div class="risk-f"><span>Showing ' + RCR.lim + ' of ' + num(list.length) + '</span><button type="button" class="btn" id="rcMore">Show 100 more</button></div>' : "") + '</div>';
+  return h;
+}
+
+/* ── one ticket, full size, with Previous / Next so a whole list can be reviewed in a row ── */
+function rcCard(key) {
+  var t = ALL.filter(function (x) { return x.key === key; })[0]; if (!t) return;
+  var rv = rcRV(), a = rcAnalyse(t), r = rv[key] || {}, pos = RC_LIST.indexOf(key), o = el("rcov");
+  var html = '<div class="ovb rc-card"><div class="ovh"><h3><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a> <span style="font-weight:400">' + esc(t.project) + '</span></h3><span>' + (pos > -1 ? (pos + 1) + ' of ' + RC_LIST.length : "") + '</span><span class="sp"></span>' +
+    '<button type="button" class="btn" data-rcnav="-1"' + (pos <= 0 ? " disabled" : "") + '>← Previous</button><button type="button" class="btn" data-rcnav="1"' + (pos < 0 || pos >= RC_LIST.length - 1 ? " disabled" : "") + '>Next →</button><button class="ovx" id="rcX" aria-label="Close">✕</button></div>' +
+    '<div class="rc-body"><div><div class="rc-sum">' + esc(rcSum(t)) + '</div><div class="note" style="margin:3px 0 10px">' + rcLinkHtml(t).replace(/<br>/g, " &nbsp;·&nbsp; ") + ' · SVM In Charge <b>' + esc(t.svm || "—") + '</b> · Root cause <b>' + esc(t.rootCause || "—") + '</b> · Type of fix <b>' + esc(t.fix || "—") + '</b> · created ' + esc(fd(t.created)) + '</div>' +
+    '<div class="rc-lbl">Root cause (Reason for Occurrence - Text)</div><div class="rc-box">' + (a.cause ? esc(a.cause).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div>' +
+    '<div class="rc-lbl">Resolution (Resolution Details)</div><div class="rc-box">' + (a.res ? esc(a.res).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div>' +
+    (a.sol ? '<div class="rc-lbl">Solution summary (other field)</div><div class="rc-box">' + esc(rcClip(a.sol, 900)).replace(/\n/g, "<br>") + '</div>' : "") +
+    '<details><summary class="rc-lbl" style="cursor:pointer">What the client wrote (description)</summary><div class="rc-box" style="max-height:200px;overflow:auto">' + (a.desc ? esc(rcClip(a.desc, 2500)).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div></details></div>' +
+    '<div class="rc-side"><div class="rc-lbl">Text checks</div>' + (a.f.length ? a.f.map(function (x) { return '<div class="rc-fl s' + x.s + '"><b>' + esc(x.l) + '</b><span>' + esc(x.ask) + '</span></div>'; }).join("") : '<div class="rc-fl s0"><b>Clear</b><span>No problem found by the checks.</span></div>') +
+    '<div class="rc-lbl" style="margin-top:12px">My review</div>' + rcVerdictBtns(key, r) + '<textarea id="rcNote" class="rc-note" rows="3" placeholder="Note for the SVM In Charge (optional): what you could not follow" data-k="' + esc(key) + '">' + esc(r.note || "") + '</textarea>' +
+    '<div style="margin-top:10px">' + (rcFollow(a, rv[key]) ? rcFollowHtml(a, rv[key]) : '<span class="note">Not asked yet</span>') + '</div></div></div></div>';
+  if (!o) { o = document.createElement("div"); o.id = "rcov"; o.className = "ov"; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true"); document.body.appendChild(o); }
+  o.innerHTML = html; o.dataset.k = key;
+}
+function rcCloseCard() { var o = el("rcov"); if (o) o.remove(); }
+function rcSetVerdict(key, v) {
+  var rv = rcRV(), r = rv[key] = rv[key] || {}; r.v = r.v === v ? "" : v; r.at = Date.now(); if (!r.v && !r.note && !r.ask) delete rv[key]; rcSaveRV();
+}
+function rcRedraw(keepFocus) {
+  if (F.tab !== "rcr") return; var f = document.activeElement && document.activeElement.id, pos = null;
+  if (f === "rcQ") pos = document.activeElement.selectionStart;
+  var y = window.scrollY; el("view").innerHTML = tabRcr(M); window.scrollTo(0, y); rcBadge(M);
+  if (keepFocus && f === "rcQ" && el("rcQ")) { var x = el("rcQ"); x.focus(); try { x.setSelectionRange(pos, pos); } catch (e) {} }
+}
+
+/* ── mail and Excel for one SVM In Charge ── */
+function rcItems(svm, inclAsked) {
+  var rv = rcRV(), l = RC_ALL.filter(function (t) { return (t.svm || "(none)") === svm; });
+  return l.filter(function (t) { return rcNeeds(rcAnalyse(t), rv[t.key], inclAsked); }).sort(function (x, y) { return rcAnalyse(x).score - rcAnalyse(y).score; })
+    .map(function (t) { var a = rcAnalyse(t), r = rv[t.key]; return { t: t, a: a, asks: rcAsksOf(a, r), lr: rcLinks(t) }; });
+}
+function rcMailBuild(o) {
+  var F1 = "font-family:Segoe UI,Calibri,Arial,sans-serif;", P = 'style="' + F1 + 'font-size:13px;color:#2A161D;margin:0 0 8px;line-height:1.55"', TD = 'style="' + F1 + 'font-size:12.5px;color:#2A161D;padding:6px 8px;border:1px solid #D2DAE3;vertical-align:top"';
+  var name = rcSvmFirst(o.svm), n = o.items.length, by = o.by ? " by " + o.by : "";
+  var intro = "As part of the review of root cause and resolution on the tickets raised with Engineering, we went through the " + n + " LRPS ticket" + (n === 1 ? "" : "s") + " below, where you are the SVM In Charge. The text should be clear to someone who has not seen the ticket.";
+  var ask = "Please update Reason for Occurrence - Text and Resolution Details in the LRPS ticket as noted" + by + ". A good entry answers: what happened, why it happened (and why it was not caught earlier), what was done, and whether a permanent fix is planned.";
+  var rows = o.items.map(function (x) {
+    var lr = x.lr.map(function (l) { return '<a href="' + JIRA + encodeURIComponent(l.k) + '">' + esc(l.k) + '</a>'; }).join("<br>");
+    return '<tr><td ' + TD.replace('padding:6px 8px;', 'padding:6px 8px;white-space:nowrap;') + '>' + lr + '</td><td ' + TD.replace('padding:6px 8px;', 'padding:6px 8px;white-space:nowrap;') + '>' + esc(x.t.key) + '<br><span style="color:#6B7A90">' + esc(x.t.project) + '</span></td><td ' + TD + '>' + esc(rcClip(rcSum(x.t), 110)) + '</td><td ' + TD + '><ul style="margin:0 0 0 16px;padding:0">' + x.asks.map(function (s) { return "<li>" + esc(s) + "</li>"; }).join("") + '</ul></td></tr>'; }).join("");
+  var html = '<div style="' + F1 + '"><p ' + P + '>Dear ' + esc(name) + ',</p><p ' + P + '>Greetings of the day.</p><p ' + P + '>' + esc(intro) + '</p>' +
+    '<table style="border-collapse:collapse;margin:6px 0 12px"><tr>' + ["LRPS ticket", "Client ticket", "Summary", "What to fix"].map(function (h) { return '<th style="' + F1 + 'font-size:12px;text-align:left;background:#F0F4F8;padding:6px 8px;border:1px solid #D2DAE3">' + h + '</th>'; }).join("") + '</tr>' + rows + '</table>' +
+    '<p ' + P + '>' + esc(ask) + '</p><p ' + P + '>Thank you for your continued support.</p><p ' + P + '>Warm regards,<br>' + esc(o.sign || "SVM Help Desk").replace(/\n/g, "<br>") + '</p></div>';
+  var text = "Dear " + name + ",\n\nGreetings of the day.\n\n" + intro + "\n\n" + o.items.map(function (x, i) { return (i + 1) + ". " + x.lr.map(function (l) { return l.k; }).join(", ") + " (client ticket " + x.t.key + ", " + x.t.project + ") " + rcClip(rcSum(x.t), 110) + "\n   - " + x.asks.join("\n   - "); }).join("\n\n") + "\n\n" + ask + "\n\nThank you for your continued support.\n\nWarm regards,\n" + (o.sign || "SVM Help Desk");
+  return { html: html, text: text, subject: "Root cause and resolution review: " + n + " LRPS ticket" + (n === 1 ? "" : "s") + " to update" };
+}
+function rcCopy(html, text, btn, label) {
+  var done = function (m) { btn.textContent = m; setTimeout(function () { btn.textContent = label; }, 1800); };
+  var box = document.createElement("div"); box.style.cssText = "position:fixed;left:-9999px;top:0;background:#fff;color:#000"; box.innerHTML = html; document.body.appendChild(box);
+  var sel = getSelection(), r = document.createRange(); r.selectNodeContents(box); sel.removeAllRanges(); sel.addRange(r);
+  var ok = false; try { ok = document.execCommand("copy"); } catch (x) {} sel.removeAllRanges(); box.remove();
+  if (ok) return done("Copied, paste into Outlook");
+  if (navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([text], { type: "text/plain" }) })]).then(function () { done("Copied, paste into Outlook"); }, function () { done("Copy blocked by the browser"); });
+  else done("Copy blocked by the browser");
+}
+function rcEml(subject, html, file, to, cc) {
+  var b64 = function (s) { return btoa(unescape(encodeURIComponent(s))); }, body = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>' + html + "</body></html>";
+  var eml = ["X-Unsent: 1"].concat(to ? ["To: " + String(to).replace(/[\r\n]/g, " ")] : [], cc ? ["Cc: " + String(cc).replace(/[\r\n]/g, " ")] : []).concat(["Subject: =?UTF-8?B?" + b64(subject) + "?=", "MIME-Version: 1.0", "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(body).replace(/.{76}/g, "$&\r\n")]).join("\r\n");
+  var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([eml], { type: "message/rfc822" })); a.download = file; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+/* a PO's email from the Swire module's Master data, when the SVM In Charge is a Product Owner there (same browser) */
+function rcPoEmail(name) {
+  try { var c = JSON.parse(localStorage.getItem("hd-swire-cfg") || "null"), k = function (s) { return String(s || "").toLowerCase().replace(/[^a-z]/g, ""); }, n = k(name), hit = null;
+    ((c && c.modules) || []).forEach(function (m) { if (!hit && m.email && n && (k(m.po) === n || k(m.po).indexOf(n) === 0 || n.indexOf(k(m.po)) === 0)) hit = m.email; }); return hit || ""; } catch (e) { return ""; }
+}
+function rcOpenMail(svm) {
+  var bk = rcBook(), S = { incl: false, edited: false };
+  var o = document.createElement("div"); o.className = "ov"; o.id = "rcmail"; o.setAttribute("role", "dialog"); o.setAttribute("aria-modal", "true");
+  o.innerHTML = '<div class="ovb rc-mail"><div class="ovh"><h3>Ask ' + esc(svm) + ' to update their tickets</h3><span id="rcmN"></span><span class="sp"></span><button class="ovx" id="rcmX" aria-label="Close">✕</button></div><div class="rc-mb">' +
+    '<div class="rc-r"><label for="rcmTo">To</label><input id="rcmTo" class="dinput" style="flex:1" placeholder="email of ' + esc(svm) + '"><label for="rcmBy">Update by</label><input id="rcmBy" class="dinput" type="date"></div>' +
+    '<div class="rc-r"><label for="rcmCc">Cc</label><input id="rcmCc" class="dinput" style="flex:1" placeholder="Sathya’s email, Venkatasamy, Premalatha"></div>' +
+    '<div class="rc-r"><label for="rcmSj">Subject</label><input id="rcmSj" class="dinput" style="flex:1"></div>' +
+    '<div class="rc-r"><label for="rcmSg">Signature</label><textarea id="rcmSg" class="dinput" rows="2" style="flex:1;height:auto;padding:6px 8px"></textarea></div>' +
+    '<label class="note" style="display:flex;gap:6px;align-items:center;margin:2px 0 6px"><input type="checkbox" id="rcmInc"> Include tickets already asked and not changed since</label>' +
+    '<div class="rc-pv" id="rcmPv" contenteditable="true" spellcheck="true"></div>' +
+    '<div class="rc-r" style="margin-top:10px"><span class="note" id="rcmFoot">Copy the email or download the draft, send it from your mailbox, then click <b>Mark as asked</b> so the follow-up starts.</span><span style="flex:1"></span>' +
+    '<button class="btn" id="rcmCopy">Copy email</button><button class="btn" id="rcmEml">Download email draft</button><button class="btn" id="rcmXl">Download Excel</button><button class="btn pri2" id="rcmMark">Mark as asked</button></div></div></div>';
+  document.body.appendChild(o);
+  var q = function (id) { return o.querySelector("#" + id); }, items = [], sjEdited = false;
+  q("rcmTo").value = (bk.to || {})[svm.toLowerCase()] || rcPoEmail(svm) || ""; q("rcmCc").value = bk.cc || "venkats@solverminds.com, prema@solverminds.com"; q("rcmSg").value = bk.sign || "SVM Help Desk"; q("rcmBy").value = "";
+  function build() {
+    items = rcItems(svm, q("rcmInc").checked);
+    var by = q("rcmBy").value ? fd(new Date(q("rcmBy").value + "T00:00:00Z").getTime() - IST, true) : "";
+    var x = rcMailBuild({ svm: svm, items: items, sign: q("rcmSg").value, by: by }); S.x = x;
+    q("rcmPv").innerHTML = items.length ? x.html : '<p class="note">Nothing to ask ' + esc(svm) + ' right now: every ticket is Understood, clear, or already asked and unchanged.</p>';
+    if (!sjEdited) q("rcmSj").value = x.subject; q("rcmN").textContent = items.length + " ticket" + (items.length === 1 ? "" : "s"); S.edited = false;
+    ["rcmCopy", "rcmEml", "rcmXl", "rcmMark"].forEach(function (id) { q(id).disabled = !items.length; });
+  }
+  function keep() { var b = rcBook(); b.cc = q("rcmCc").value.trim(); b.sign = q("rcmSg").value.trim(); if (q("rcmTo").value.trim()) { b.to = b.to || {}; b.to[svm.toLowerCase()] = q("rcmTo").value.trim(); } rcSaveBook(b); }
+  function rebuild() { if (S.edited && !confirm("This rebuilds the mail and undoes your text edits. Continue?")) return; build(); }
+  q("rcmPv").addEventListener("input", function () { S.edited = true; }); q("rcmSj").addEventListener("input", function () { sjEdited = true; });
+  ["rcmInc", "rcmBy", "rcmSg"].forEach(function (id) { q(id).addEventListener("change", function () { keep(); rebuild(); }); });
+  q("rcmTo").addEventListener("change", keep); q("rcmCc").addEventListener("change", keep);
+  var close = function () { o.remove(); document.removeEventListener("keydown", esck, true); }, esck = function (e) { if (e.key === "Escape") { e.stopImmediatePropagation(); close(); } };
+  document.addEventListener("keydown", esck, true); q("rcmX").onclick = close; o.addEventListener("click", function (e) { if (e.target === o) close(); });
+  q("rcmCopy").onclick = function (e) { keep(); rcCopy(q("rcmPv").innerHTML, S.edited ? q("rcmPv").innerText : S.x.text, e.target, "Copy email"); };
+  q("rcmEml").onclick = function (e) { keep(); rcEml(q("rcmSj").value.trim() || S.x.subject, q("rcmPv").innerHTML, "Root-cause-review-" + svm.replace(/[^\w]+/g, "-") + "-" + new Date(NOW + IST).toISOString().slice(0, 10) + ".eml", q("rcmTo").value.trim(), q("rcmCc").value.trim()); e.target.textContent = "Draft downloaded"; setTimeout(function () { e.target.textContent = "Download email draft"; }, 1800); };
+  q("rcmXl").onclick = function () { rcExcel(items.map(function (x) { return x.t; }), "Root cause review " + svm); };
+  q("rcmMark").onclick = function () { keep(); var rv = rcRV(); items.forEach(function (x) { var r = rv[x.t.key] = rv[x.t.key] || {}; r.ask = { at: Date.now(), h: x.a.h, to: svm, n: (r.ask && r.ask.n || 0) + 1 }; }); rcSaveRV(); close(); rcRedraw(); };
+  build();
+}
+function rcExcel(list, name) {
+  if (typeof XLSX === "undefined") { alert("The Excel library did not load (needs internet access)."); return; }
+  var rv = rcRV(), rows = [["LRPS ticket", "LRPS status", "Client ticket", "Client", "SVM In Charge", "Summary", "Root Cause (category)", "Type of Fix", "Reason for Occurrence - Text", "Resolution Details", "Text check", "Findings", "What to ask", "My review", "My note", "Asked on", "Follow-up"]], by = {};
+  list.forEach(function (t) { var a = rcAnalyse(t), r = rv[t.key] || {}, fo = rcFollow(a, r), k = t.svm || "(none)";
+    by[k] = by[k] || { n: 0, ok: 0, bad: 0, weak: 0, ask: 0 }; by[k].n++; by[k][a.st]++; if (rcNeeds(a, r, true)) by[k].ask++;
+    rows.push([rcLinks(t).map(function (l) { return l.k; }).join(", "), rcLinks(t).map(function (l) { return l.s; }).join(", "), t.key, t.project, t.svm || "", rcSum(t), t.rootCause || "", t.fix || "", a.cause, a.res, { ok: "Clear", weak: "Weak", bad: "Unclear" }[a.st],
+      a.f.map(function (x) { return x.l; }).join("; "), rcAsksOf(a, r).join("\n"), r.v === "ok" ? "Understood" : r.v === "no" ? "Not clear" : "", r.note || "", r.ask ? fd(r.ask.at) : "", fo ? (fo.s === "upd" ? "Updated since asked" : "Waiting, " + fo.days + " days") : ""]); });
+  var sm = [["SVM In Charge", "Tickets", "Clear", "Weak", "Unclear", "To ask"]]; Object.keys(by).sort().forEach(function (k) { sm.push([k, by[k].n, by[k].ok, by[k].weak, by[k].bad, by[k].ask]); });
+  var wb = XLSX.utils.book_new(), s1 = XLSX.utils.aoa_to_sheet(sm), s2 = XLSX.utils.aoa_to_sheet(rows);
+  s1["!cols"] = [{ wch: 26 }, { wch: 9 }, { wch: 8 }, { wch: 8 }, { wch: 9 }, { wch: 8 }]; s2["!cols"] = [14, 20, 14, 18, 18, 46, 20, 14, 60, 60, 10, 32, 60, 12, 30, 12, 20].map(function (w) { return { wch: w }; });
+  XLSX.utils.book_append_sheet(wb, s1, "By SVM In Charge"); XLSX.utils.book_append_sheet(wb, s2, "Tickets"); XLSX.writeFile(wb, String(name).replace(/[\\\/:*?"<>|]+/g, "-") + " " + new Date(NOW + IST).toISOString().slice(0, 10) + ".xlsx");
+}
+
+/* ── wiring (own listeners: nothing here uses the attributes of the other tabs) ── */
+document.addEventListener("click", function (e) {
+  var t = e.target, b; if (!t.closest) return;
+  if ((b = t.closest("[data-rcv]"))) { e.stopPropagation(); rcSetVerdict(b.dataset.k, b.dataset.rcv); if (el("rcov")) rcCard(b.dataset.k); rcRedraw(); return; }
+  if ((b = t.closest("[data-rcset]"))) { var p = b.dataset.rcset.split("|"); var same = RCR.flag === p[0] && RCR.rev === p[1]; RCR.flag = same ? "" : p[0]; RCR.rev = same ? "" : p[1]; RCR.lim = 100; rcRedraw(); return; }
+  if ((b = t.closest("[data-rcask]"))) { e.stopPropagation(); rcOpenMail(b.dataset.rcask); return; }
+  if ((b = t.closest("[data-rcxl]"))) { e.stopPropagation(); var sv = b.dataset.rcxl; rcExcel(RC_ALL.filter(function (x) { return (x.svm || "(none)") === sv; }), "Root cause review " + sv); return; }
+  if ((b = t.closest("[data-rcsvm]"))) { RCR.svm = RCR.svm === b.dataset.rcsvm ? "" : b.dataset.rcsvm; RCR.lim = 100; rcRedraw(); return; }
+  if ((b = t.closest("[data-rccl]"))) { var i = +b.dataset.rccl; RCR.cl = RCR.cl === i ? -1 : i; RCR.lim = 100; rcRedraw(); return; }
+  if ((b = t.closest("[data-rcclr]"))) { if (b.dataset.rcclr === "svm") RCR.svm = ""; else RCR.cl = -1; rcRedraw(); return; }
+  if (t.id === "rcMore") { RCR.lim += 100; rcRedraw(); return; }
+  if (t.id === "rcXlsx") { rcExcel(rcFilterList(RC_ALL), "Root cause review"); return; }
+  if (t.id === "rcX" || (t.id === "rcov")) { rcCloseCard(); return; }
+  if ((b = t.closest("[data-rcnav]"))) { var k = el("rcov") && el("rcov").dataset.k, ix = RC_LIST.indexOf(k) + (+b.dataset.rcnav); if (RC_LIST[ix]) rcCard(RC_LIST[ix]); return; }
+  if (t.closest("a, button, summary, details, textarea, input, select")) return;
+  if ((b = t.closest("[data-rcopen]"))) rcCard(b.dataset.rcopen);
+}, true);
+document.addEventListener("change", function (e) {
+  var t = e.target; if (!t || !t.id) return;
+  if (t.id === "rcLrps") { RCR.lrps = t.value; RCR.lim = 100; rcRedraw(); } else if (t.id === "rcFlag") { RCR.flag = t.value; RCR.lim = 100; rcRedraw(); } else if (t.id === "rcRev") { RCR.rev = t.value; RCR.lim = 100; rcRedraw(); }
+  else if (t.id === "rcNote") { var rv = rcRV(), k = t.dataset.k, r = rv[k] = rv[k] || {}; r.note = t.value.trim(); if (!r.v && !r.note && !r.ask) delete rv[k]; rcSaveRV(); rcRedraw(); }
+});
+document.addEventListener("input", function (e) { var t = e.target; if (t && t.id === "rcQ") { RCR.q = t.value; RCR.lim = 100; clearTimeout(rcRedraw._t); rcRedraw._t = setTimeout(function () { rcRedraw(true); }, 220); } });
+document.addEventListener("keydown", function (e) {
+  var o = el("rcov"); if (!o) return;
+  if (e.key === "Escape" && !el("rcmail")) { e.stopImmediatePropagation(); rcCloseCard(); return; }
+  if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && !/^(TEXTAREA|INPUT)$/.test((e.target && e.target.tagName) || "")) { var ix = RC_LIST.indexOf(o.dataset.k) + (e.key === "ArrowRight" ? 1 : -1); if (RC_LIST[ix]) rcCard(RC_LIST[ix]); }
+}, true);
 
 /* ══════════ wiring ══════════ */
 document.addEventListener("click", function (e) {
