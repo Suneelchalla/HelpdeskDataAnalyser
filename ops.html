@@ -397,6 +397,9 @@ body.oi-rc #view{margin-top:6px}
 .rc-rf{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:10px 16px}
 .rc-ra{margin:0 16px 12px 34px;font-size:12px;color:var(--ink2);line-height:1.6}
 .rc-lst{background:#EEF1F4;color:var(--ink2)}
+.rc-ph{display:inline-block;background:var(--rose-bg);color:var(--rose);font-weight:700;font-size:11.5px;padding:2px 7px;border-radius:5px;border:1px solid var(--rose-soft)}
+tr.rc-dash td:first-child{box-shadow:inset 4px 0 0 var(--rose)}
+.rc-alert{margin:0 0 12px;padding:10px 14px;border:1px solid var(--rose-soft);border-left:4px solid var(--rose);border-radius:10px;background:var(--rose-bg);font-size:12.5px;color:var(--ink2);line-height:1.5}.rc-alert b{color:var(--rose)}
 .rc-svm th,.rc-svm td{white-space:nowrap;padding:8px 8px}.rc-svm td:last-child{text-align:right}
 @media(max-width:1300px){.rc-two{grid-template-columns:1fr}}
 button.rc-dl{font:600 12.5px var(--mono);color:var(--blue);padding:1px 5px;border-radius:5px;text-align:inherit}button.rc-dl:hover{background:var(--blue-bg);text-decoration:underline}
@@ -2363,7 +2366,10 @@ function rcClean(s) {
   return s.replace(/[ \t\u00a0]+/g, " ").replace(/ ?\n ?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 /* "-", "N/A", "nil", "none", "TBD" typed into a field mean nothing was written */
-function rcReal(v) { var x = rcClean(v); return /^[\s\-–—_.:;,\/\\*#?]*$/.test(x) || /^(n\/?a|nil|none|null|na|tbd|tba|no|nothing|not applicable|not available|pending)\.?$/i.test(x) ? "" : x; }
+var RC_PH = /^(?:n\/?a|n\.a\.?|nil|none|null|na|tbd|tba|no|nothing|not applicable|not available|pending|test|x+|same|as above|will (?:be )?update(?:d)?(?: later)?|to be (?:updated|filled|added|provided)|update (?:later|soon)|\[attachment\])\.?$/i;
+function rcReal(v) { var x = rcClean(v); return /^[\s\-–—_.:;,\/\\*#?•·●▪]*$/.test(x) || RC_PH.test(x) ? "" : x; }
+/* something was typed, but only a dash or a placeholder: returns what was typed ("-", "NA", "TBD"…), else "" */
+function rcPh(v) { var raw = rcClean(v); return raw && !rcReal(v) ? raw : ""; }
 function rcWords(s) { return s ? s.split(/\s+/).filter(Boolean).length : 0; }
 function rcNorm(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim(); }
 function rcStem(w) { return w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "") : w; }
@@ -2379,13 +2385,15 @@ var RC_LABELS = /^(past data correction|data correction|data fix|datafix|data is
 var RC_FIXSTART = /^(?:we (?:have |had )?(?:now )?(?:provided|given|updated|inserted|executed|applied|created|deployed)|provid(?:e|ed|ing)|given|giving|a script|the script|script|updated|inserted|reverted|deactivated|executed|applied)\b/i;
 var RC_RESTATE = /^(?:as per )?(?:the )?(?:user|client|customer|swire)s?\b[^.]{0,40}?\b(?:report(?:ed)?|request(?:ed)?|rais(?:ed)|ask(?:ed)|unable|cannot|can't|wants?|wanted)\b/i;
 /* words that carry a reason: "due to", "because", "caused", "as a result", "hence", "since the …", "which led to …" */
-var RC_CAUSAL = /\b(?:due to|because|caused|causing|as a result|resulted|result of|owing to|led to|hence|therefore|reason (?:is|was|being)|since (?:the|it|this|they|there|a|an)\b|which (?:prevented|caused|led|resulted|made|stopped))/i;
+var RC_CAUSAL = /\b(?:due to|because|caused|causing|as a result|resulted|result of|owing to|led to|hence|therefore|reason (?:is|was|being)|since (?:the|it|this|they|there|a|an)\b|which (?:prevented|caused|led|resulted|made|stopped)|\bif (?:the|a|an|user|users|it|they)\b|\bwhen (?:the|a|an|user|users|it|they)\b)/i;
 var RC_OPEN = /\b(?:will|to be|yet to|going to)\s+(?:be\s+)?(?:investigat|analy[sz]|provid|share|check|follow|implement|fix)|(?:provided|shared|implemented|delivered|given) subsequently|subsequent (?:release|fix)|further (?:investigation|analysis)|temporary workaround/i;
 var RC_USER = /\bby (?:the )?(?:end[- ])?user\b|\buser (?:has |had |have )?(?:\w+ )?(?:selected|entered|created|changed|moved|deleted|mapped|matched)\b|selected (?:the )?wrong|wrong(?:ly)? (?:payment|mode|data)|user (?:error|mistake)/i;
 var RC_PERM = /permanent|code fix|fixed in|will be fixed|patch|hotfix|change request|\bCR[- ]?\d|enhancement|next release|upcoming release|LRPS-\d+|fix will/i;
 var RC_FLAGS = {
   nocause: { l: "No cause written", s: 3, ask: "Reason for Occurrence - Text is empty: write why this happened." },
   nores:   { l: "No resolution written", s: 3, ask: "Resolution Details is empty: write what was done to fix it." },
+  dashc:   { l: "Cause is only a dash", s: 3, ask: "Reason for Occurrence - Text holds only a dash or a placeholder (“-”, NA, TBD): write the cause." },
+  dashr:   { l: "Resolution is only a dash", s: 3, ask: "Resolution Details holds only a dash or a placeholder (“-”, NA, TBD): write what was done." },
   label:   { l: "Cause is only a label", s: 3, ask: "The cause only repeats a category (for example “Past data correction”): say what went wrong and why." },
   same:    { l: "Cause = resolution", s: 3, ask: "Cause and resolution carry the same text: separate why it happened from what was done." },
   shortc:  { l: "Cause too short", s: 2, ask: "The cause is too short to follow without the ticket: add what happened and why." },
@@ -2401,6 +2409,8 @@ var RC_FLAGS = {
   markup:  { l: "Stray formatting", s: 1, ask: "Remove stray formatting characters (asterisks, colour or image tags)." }
 };
 var RC_DESC = {
+  dashc: "Something was typed in Reason for Occurrence - Text, but only a dash or a placeholder such as “-”, “--”, NA, TBD, “will update later” or a bullet. It looks filled in Jira, but says nothing.",
+  dashr: "Something was typed in Resolution Details, but only a dash or a placeholder such as “-”, “--”, NA, TBD, “will update later” or a bullet. It looks filled in Jira, but says nothing.",
   nocause: "Reason for Occurrence - Text is empty, or holds only a placeholder such as “-”, “NA” or “TBD”.",
   nores: "Resolution Details is empty, or holds only a placeholder.",
   label: "The cause is only a category name such as “Past data correction” or “System bug”, or repeats the Root Cause category.",
@@ -2425,7 +2435,8 @@ function rcJudge(rawC, rawR, cat, fix, hasRel) {
   var same = !!cause && !!res && (nc === nr || (tc.length >= 3 && tr.length >= 3 && rcJac(tc, tr) >= 0.8));
   var fixc = !!cause && !isLabel && RC_FIXSTART.test(cause), rest = !!cause && !isLabel && !fixc && RC_RESTATE.test(cause);
   var why = RC_CAUSAL.test(cause), whyR = RC_CAUSAL.test(res);
-  if (!cause) add("nocause"); if (!res) add("nores");
+  var phC = rcPh(rawC), phR = rcPh(rawR);
+  if (!cause) add(phC ? "dashc" : "nocause"); if (!res) add(phR ? "dashr" : "nores");
   if (isLabel) add("label"); if (same) add("same"); if (fixc) add("fixcause"); if (rest) add("restate");
   if (cause && !isLabel && wc < 6) add("shortc");
   if (cause && !isLabel && !fixc && !rest && !same && !why && wc >= 6) { if (whyR && wr > wc) add("swapped"); else add("nowhy"); }
@@ -2435,7 +2446,7 @@ function rcJudge(rawC, rawR, cat, fix, hasRel) {
   if ((/workaround|past data|data ?fix|data correction/i.test(cat || "") || /\bscripts?\b/i.test(res)) && !hasRel && !RC_PERM.test(cause + " " + res)) add("script");
   if (/\{color|\{adf\}|!\S+\.(?:png|jpe?g|gif)|\[\^|\*[^*\n]+\*/i.test(String(rawC || "") + "\n" + String(rawR || ""))) add("markup");
   var hi = f.filter(function (x) { return x.s === 3; }).length, md = f.filter(function (x) { return x.s === 2; }).length;
-  return { cause: cause, res: res, f: f, st: hi ? "bad" : md ? "weak" : "ok", score: Math.max(0, 100 - 35 * hi - 18 * md),
+  return { cause: cause, res: res, phC: phC, phR: phR, f: f, st: hi ? "bad" : md ? "weak" : "ok", score: Math.max(0, 100 - 35 * hi - 18 * md),
            asks: f.filter(function (x) { return x.s >= 2; }).map(function (x) { return x.ask; }), h: rcHash(nc + "|" + nr) };
 }
 /* causes that keep coming back: TF-IDF cosine over the cause and resolution text, then average-linkage grouping (a ticket joins a
@@ -2492,7 +2503,7 @@ function rcAnalyse(t) {
   var key = t.key + "|" + c.length + "|" + r.length + "|" + rcHash(c + "\u0001" + r + "\u0001" + (t.rootCause || "") + (t.fix || "") + (rel ? "R" : ""));
   var hit = RCA[t.key]; if (hit && hit.k === key) return hit.a;
   var a = rcJudge(c, r, t.rootCause, t.fix, !!String(rel).replace(/^[-–.\s]+$/, ""));
-  a.sol = rcClean(rcRaw(t, "solution summary")); a.desc = rcClean(rcRaw(t, "description")); a.catOcc = rcClean(rcRaw(t, "reason for occurrence"));
+  a.sol = rcClean(rcRaw(t, "solution summary")); a.desc = rcClean(rcRaw(t, "description")); a.catOcc = rcReal(rcRaw(t, "reason for occurrence"));
   RCA[t.key] = { k: key, a: a }; return a;
 }
 function rcSvmFirst(n) { var p = String(n || "").split(/[\s.]+/).filter(Boolean)[0] || ""; return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : "Team"; }
@@ -2577,10 +2588,10 @@ function tabRcrMain(m) {
   h = h.replace('</p></div><button', '</p><p class="note" style="margin-top:4px"><b>' + num(noLink) + '</b> ticket' + (noLink === 1 ? "" : "s") + ' in this period ' + (noLink === 1 ? "has" : "have") + ' no linked LRPS ticket and ' + (noLink === 1 ? "is" : "are") + ' not listed here.</p></div><button');
   if (!scopeAll.length) return h + '<div class="card"><div class="empty">No client ticket in this period and filters has a linked LRPS ticket. Pick a longer period (This year, All time) or check the Request type filter.</div></div>';
   /* tiles */
-  var cnt = { ok: 0, weak: 0, bad: 0, rOk: 0, rNo: 0, rNone: 0, ask: 0, wait: 0, upd: 0 };
-  scope.forEach(function (t) { var a = an[t.key], r = rv[t.key], fo = rcFollow(a, r); cnt[rcEff(a, r)]++; if (r && r.v === "ok") cnt.rOk++; else if (r && r.v === "no") cnt.rNo++; else cnt.rNone++; if (rcNeeds(a, r)) cnt.ask++; if (fo && fo.s === "wait") cnt.wait++; if (fo && fo.s === "upd") cnt.upd++; });
+  var cnt = { ok: 0, weak: 0, bad: 0, rOk: 0, rNo: 0, rNone: 0, ask: 0, wait: 0, upd: 0, dash: 0 };
+  scope.forEach(function (t) { var a = an[t.key], r = rv[t.key], fo = rcFollow(a, r); cnt[rcEff(a, r)]++; if (a.phC || a.phR) cnt.dash++; if (r && r.v === "ok") cnt.rOk++; else if (r && r.v === "no") cnt.rNo++; else cnt.rNone++; if (rcNeeds(a, r)) cnt.ask++; if (fo && fo.s === "wait") cnt.wait++; if (fo && fo.s === "upd") cnt.upd++; });
   function tile(lbl, n, sub, col, kind) { return '<button type="button" class="rc-tile" data-rcdrill="' + kind + '" style="--c:' + col + '" title="Click to list these ' + n + ' tickets"><span class="n">' + num(n) + '</span><span class="l">' + esc(lbl) + '</span><span class="s">' + esc(sub) + '</span></button>'; }
-  h += '<div class="rc-tiles">' + tile("In review", scope.length, "tickets in view", "var(--ink2)", "all") +
+  h += (cnt.dash ? '<div class="rc-alert"><b>' + num(cnt.dash) + ' ticket' + (cnt.dash === 1 ? " has" : "s have") + ' only a dash or placeholder</b> (“-”, NA, TBD…) in the cause or the resolution. They look filled in on the ticket but say nothing. ' + rcDl("dash", cnt.dash, "List them") + '</div>' : "") + '<div class="rc-tiles">' + tile("In review", scope.length, "tickets in view", "var(--ink2)", "all") +
     tile("Clear", cnt.ok, pct(cnt.ok, scope.length) + "% pass or are Understood", "var(--em)", "ok") + tile("Weak", cnt.weak, "something to tighten", "#F59E0B", "weak") + tile("Unclear", cnt.bad, "missing, label-only or Not clear", "var(--rose)", "bad") +
     tile("Ready to ask", cnt.ask, "for the SVM In Charge", "var(--violet)", "ask") + tile("Waiting", cnt.wait, "asked, no change yet", "#93A4B8", "wait") + tile("Updated", cnt.upd, "changed after asking", "var(--blue)", "upd") + '</div>' +
     '<div class="rc-mine">My review: ' + rcDl("rOk", cnt.rOk, "Understood " + num(cnt.rOk)) + ' · ' + rcDl("rNo", cnt.rNo, "Not clear " + num(cnt.rNo)) + ' · ' + rcDl("rNone", cnt.rNone, "Not reviewed yet " + num(cnt.rNone)) + '</div>';
@@ -2654,8 +2665,8 @@ function rcResultCard(t, why) {
     '<button type="button" class="btn" data-rcfull="' + esc(t.key) + '">Open full view</button></div>' +
     '<div class="note rc-rm">' + esc(t.project) + ' · <span class="side-pill sp-' + (t.side || "hd") + '">' + esc(t.status) + '</span> · created ' + esc(fd(t.created)) + ' · SVM In Charge <b>' + esc(t.svm || "—") + '</b> · ' + rcLinkHtml(t).replace(/<br>/g, " &nbsp;·&nbsp; ") +
     ' <span class="z">· matched ' + esc(why.join(", ")) + '</span></div>' +
-    '<div class="rc-rg"><div><div class="rc-lbl">Root cause (Reason for Occurrence - Text)</div><div class="rc-box">' + (a.cause ? esc(a.cause).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div></div>' +
-    '<div><div class="rc-lbl">Resolution (Resolution Details)</div><div class="rc-box">' + (a.res ? esc(a.res).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div></div></div>' +
+    '<div class="rc-rg"><div><div class="rc-lbl">Root cause (Reason for Occurrence - Text)</div><div class="rc-box">' + (a.cause ? esc(a.cause).replace(/\n/g, "<br>") : rcEmpty(a.phC)) + '</div></div>' +
+    '<div><div class="rc-lbl">Resolution (Resolution Details)</div><div class="rc-box">' + (a.res ? esc(a.res).replace(/\n/g, "<br>") : rcEmpty(a.phR)) + '</div></div></div>' +
     '<div class="rc-rf"><span class="note">Root cause <b>' + esc(t.rootCause || "—") + '</b> · Type of fix <b>' + esc(t.fix || "—") + '</b></span>' + rcChipsAll(a) + '<span style="flex:1"></span>' + (rcFollow(a, r) ? rcFollowHtml(a, r) : "") + rcVerdictBtns(t.key, r) + rcMailBtn(t, "Mail SVM In Charge") + '</div>' +
     (asks.length ? '<ul class="rc-ra">' + asks.map(function (x) { return '<li>' + esc(x.ask) + '</li>'; }).join("") + '</ul>' : "") + '</div>';
 }
@@ -2678,8 +2689,8 @@ function rcCard(key) {
   var html = '<div class="ovb rc-card"><div class="ovh"><h3><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a> <span style="font-weight:400">' + esc(t.project) + '</span></h3><span>' + (pos > -1 ? (pos + 1) + ' of ' + RC_LIST.length : "") + '</span><span class="sp"></span>' +
     '<button type="button" class="btn" data-rcnav="-1"' + (pos <= 0 ? " disabled" : "") + '>← Previous</button><button type="button" class="btn" data-rcnav="1"' + (pos < 0 || pos >= RC_LIST.length - 1 ? " disabled" : "") + '>Next →</button><button class="ovx" id="rcX" aria-label="Close">✕</button></div>' +
     '<div class="rc-body"><div><div class="rc-sum">' + esc(rcSum(t)) + '</div><div class="note" style="margin:3px 0 10px">' + rcLinkHtml(t).replace(/<br>/g, " &nbsp;·&nbsp; ") + ' · SVM In Charge <b>' + esc(t.svm || "—") + '</b> · Root cause <b>' + esc(t.rootCause || "—") + '</b> · Type of fix <b>' + esc(t.fix || "—") + '</b> · created ' + esc(fd(t.created)) + '</div>' +
-    '<div class="rc-lbl">Root cause (Reason for Occurrence - Text)</div><div class="rc-box">' + (a.cause ? esc(a.cause).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div>' +
-    '<div class="rc-lbl">Resolution (Resolution Details)</div><div class="rc-box">' + (a.res ? esc(a.res).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div>' +
+    '<div class="rc-lbl">Root cause (Reason for Occurrence - Text)</div><div class="rc-box">' + (a.cause ? esc(a.cause).replace(/\n/g, "<br>") : rcEmpty(a.phC)) + '</div>' +
+    '<div class="rc-lbl">Resolution (Resolution Details)</div><div class="rc-box">' + (a.res ? esc(a.res).replace(/\n/g, "<br>") : rcEmpty(a.phR)) + '</div>' +
     (a.sol ? '<div class="rc-lbl">Solution summary (other field)</div><div class="rc-box">' + esc(rcClip(a.sol, 900)).replace(/\n/g, "<br>") + '</div>' : "") +
     '<details><summary class="rc-lbl" style="cursor:pointer">What the client wrote (description)</summary><div class="rc-box" style="max-height:200px;overflow:auto">' + (a.desc ? esc(rcClip(a.desc, 2500)).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div></details></div>' +
     '<div class="rc-side"><div class="rc-lbl">Text checks</div>' + (a.f.length ? a.f.map(function (x) { return '<div class="rc-fl s' + x.s + '"><b>' + esc(x.l) + '</b><span>' + esc(x.ask) + '</span></div>'; }).join("") : '<div class="rc-fl s0"><b>Clear</b><span>No problem found by the checks.</span></div>') +
@@ -2802,11 +2813,12 @@ function rcDl(attr, n, label) {
   return '<button type="button" class="rc-dl" data-rcdrill="' + esc(attr) + '" title="List these tickets">' + (label != null ? esc(label) : num(n)) + '</button>';
 }
 /* one table row, for the page list and for every pop-up list */
+function rcEmpty(ph) { return ph ? '<span class="rc-ph" title="Only this was typed, so the field says nothing">only “' + esc(ph) + '” written</span>' : '<span class="z">— empty —</span>'; }
 function rcStPill(t) { var sl = SIDE_L[t.side] || ""; return '<span class="side-pill sp-' + (t.side || "hd") + '" title="' + esc(sl) + '">' + esc(t.status || "—") + '</span>' + (sl ? '<div class="z small">' + esc(sl) + '</div>' : ""); }
 function rcLrpsPills(t) { return rcLinks(t).map(function (l) { return '<div style="white-space:nowrap"><a class="jk" href="' + JIRA + encodeURIComponent(l.k) + '" target="_blank" rel="noreferrer">' + esc(l.k) + '</a></div><div style="margin-bottom:3px"><span class="side-pill rc-lst">' + esc(l.s || "unknown") + '</span></div>'; }).join(""); }
 function rcTr(t, a, r) {
-  return '<tr class="rc-row" data-rcopen="' + esc(t.key) + '"><td style="white-space:nowrap"><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a><div class="z small">' + esc(t.project) + '</div></td>' +
-    '<td>' + esc(t.svm || "—") + '</td><td>' + rcStPill(t) + '</td><td>' + rcLrpsPills(t) + '</td><td class="rc-tx" title="' + esc(a.cause) + '">' + (a.cause ? esc(rcClip(a.cause, 210)) : '<span class="z">— empty —</span>') + '</td><td class="rc-tx" title="' + esc(a.res) + '">' + (a.res ? esc(rcClip(a.res, 210)) : '<span class="z">— empty —</span>') + '</td>' +
+  return '<tr class="rc-row' + (a.phC || a.phR ? " rc-dash" : "") + '" data-rcopen="' + esc(t.key) + '"><td style="white-space:nowrap"><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a><div class="z small">' + esc(t.project) + '</div></td>' +
+    '<td>' + esc(t.svm || "—") + '</td><td>' + rcStPill(t) + '</td><td>' + rcLrpsPills(t) + '</td><td class="rc-tx" title="' + esc(a.cause) + '">' + (a.cause ? esc(rcClip(a.cause, 210)) : rcEmpty(a.phC)) + '</td><td class="rc-tx" title="' + esc(a.res) + '">' + (a.res ? esc(rcClip(a.res, 210)) : rcEmpty(a.phR)) + '</td>' +
     '<td>' + rcChips(a) + '</td><td>' + rcVerdictBtns(t.key, r) + (r && r.note ? '<div class="z small" title="' + esc(r.note) + '">note</div>' : "") + '</td><td>' + rcFollowHtml(a, r) + '</td><td>' + rcMailBtn(t) + '</td></tr>';
 }
 function rcMailBtn(t, label, cls) { return '<button type="button" class="btn ' + (cls || "") + '" data-rcmail="' + esc(t.key) + '"' + (t.svm ? "" : " disabled") + ' title="' + (t.svm ? "Draft a mail to " + esc(t.svm) + " (SVM In Charge) about this ticket" : "No SVM In Charge on this ticket") + '">' + (label || "Mail") + '</button>'; }
@@ -2835,6 +2847,7 @@ function rcSet(kind, a1, a2) {
   if (kind === "cl") { var c = RC_CL[+a1]; if (!c) return { title: "Recurring cause", why: "", list: [] }; var ids = {}; c.ids.forEach(function (k) { ids[k] = 1; });
     return { title: "Recurring cause: " + c.terms.join(" · "), why: "These tickets have similar cause and resolution wording (shared words: " + c.terms.join(", ") + "). When the same cause keeps coming back and is fixed by a script each time, it is a candidate for a permanent fix by Engineering.", list: all.filter(function (t) { return ids[t.key]; }) }; }
   if (kind === "svm") { var sub = a2 || "all", S = RC_SETS[sub] || RC_SETS.all; return { title: a1 + ": " + (sub === "all" ? "all tickets" : S[0]), why: "Tickets where " + a1 + " is the SVM In Charge. " + (sub === "all" ? "" : S[1]), list: all.filter(function (t) { return (t.svm || "(none)") === a1; }).filter(rcPred(sub, rv)) }; }
+  if (kind === "dash") return { title: "Only a dash or placeholder", why: "Tickets where the cause, the resolution or both hold just a dash or a placeholder (“-”, NA, TBD, “will update later”…). They look filled in on the ticket but say nothing, so they count as missing and are Unclear. The Text check column shows which of the two it is.", list: all.filter(function (t) { var a = rcAnalyse(t); return !!(a.phC || a.phR); }) };
   var S2 = RC_SETS[kind] || RC_SETS.all; return { title: S2[0], why: S2[1], list: all.filter(rcPred(kind, rv)) };
 }
 function rcSortList(list, s) {
