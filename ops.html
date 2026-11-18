@@ -382,6 +382,22 @@ body.ssprint-win{margin:0;background:#fff}body.ssprint-win #ssPrintHost{display:
 .rc-mail{max-width:980px}.rc-mb{padding:14px 18px;overflow:auto}
 .rc-r{display:flex;align-items:center;gap:10px;margin-bottom:8px}.rc-r label{font-size:12px;color:var(--muted);min-width:54px}
 .rc-pv{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:#fff;max-height:42vh;overflow:auto;font-size:13px}
+body.oi-rc #slaBar,body.oi-rc #kpis,body.oi-rc .brief-wrap,body.oi-rc #tabs{display:none!important}
+body.oi-rc #view{margin-top:6px}
+.oi-views button .n{margin-left:6px;font:600 11px var(--mono);opacity:.75}
+.rc-gs{display:flex;align-items:center;gap:8px;border:1px solid var(--line2);border-radius:10px;background:#fff;padding:0 10px;height:36px;flex:1;min-width:300px;max-width:560px;margin-left:10px}
+.rc-gs:focus-within{border-color:var(--em);box-shadow:0 0 0 3px rgba(5,150,105,.14)}.rc-gs svg{flex:none;color:var(--muted)}
+.rc-gs input{border:0;outline:0;flex:1;min-width:0;font:500 13px var(--sans);background:transparent;color:var(--ink)}.rc-gs button{font-size:16px;color:var(--muted);padding:0 4px}
+.rc-hint{margin-bottom:12px;padding:10px 14px;border:1px dashed var(--line2);border-radius:10px;background:#fff;font-size:12.5px;color:var(--ink2);line-height:1.5}
+.rc-gh{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.rc-res{margin-bottom:12px;overflow:hidden;border-left:4px solid var(--em)}
+.rc-rh{display:flex;align-items:center;gap:12px;padding:12px 16px 4px}.rc-rn{font:600 14.5px var(--sans);color:var(--ink)}
+.rc-rm{padding:0 16px 6px;line-height:1.7}
+.rc-rg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:0 16px}@media(max-width:900px){.rc-rg{grid-template-columns:1fr}}
+.rc-rf{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;padding:10px 16px}
+.rc-ra{margin:0 16px 12px 34px;font-size:12px;color:var(--ink2);line-height:1.6}
+.rc-svm th,.rc-svm td{white-space:nowrap;padding:8px 8px}.rc-svm td:last-child{text-align:right}
+@media(max-width:1300px){.rc-two{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -407,7 +423,8 @@ body.ssprint-win{margin:0;background:#fff}body.ssprint-win #ssPrintHost{display:
       <div class="fgrp"><label>Request type</label><span id="slType"></span></div>
       <div class="fgrp"><label>Priority</label><span id="slPri"></span></div>
       <button class="oi-reset" id="fReset">Reset</button>
-      <div class="oi-views" role="tablist" aria-label="View"><button type="button" class="on" data-view="ops" role="tab">Operations</button><button type="button" data-view="stats" role="tab">Support stats</button></div>
+      <div class="oi-views" role="tablist" aria-label="View"><button type="button" class="on" data-view="ops" role="tab">Operations</button><button type="button" data-view="stats" role="tab">Support stats</button><button type="button" data-view="rcr" role="tab">Root cause review <span class="n" id="nRc"></span></button></div>
+      <div class="rc-gs hidden" id="rcGbox"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="rcG" type="text" autocomplete="off" spellcheck="false" placeholder="Paste ticket number(s): SWIPHX-15653, LRPS-24727 or 15653" aria-label="Find a ticket by number"><button type="button" id="rcGx" aria-label="Clear">×</button></div>
       <div class="oi-cmp" id="cmp"></div>
     </div>
   </header>
@@ -425,7 +442,6 @@ body.ssprint-win{margin:0;background:#fff}body.ssprint-win #ssPrintHost{display:
       <button class="tab" data-tab="team">Team <span class="n" id="nTm"></span></button>
       <button class="tab" data-tab="risks">Risks <span class="n" id="nRk"></span></button>
       <button class="tab" data-tab="quality">Quality</button>
-      <button class="tab" data-tab="rcr">Root cause review <span class="n" id="nRc"></span></button>
     </nav>
     <div id="view"></div>
   </div>
@@ -574,11 +590,13 @@ var ALL = [], S = [], NOW = Date.now(), HIST = {}, HIST_OK = false;
 var F = { per: "30d", from: "", to: "", clients: [], svms: [], types: [], pris: [], tab: "flow", sort: {}, briefAll: false };
 /* main views: Operations (the dashboard with its tabs) or Support stats (the client report on its own page) */
 var VIEW_KEY = "hd-ops-view", OPS_TAB = "flow";
-try { if (localStorage.getItem(VIEW_KEY) === "stats") F.tab = "stats"; } catch (e) {}
+try { var _v0 = localStorage.getItem(VIEW_KEY); if (_v0 === "stats" || _v0 === "rcr") F.tab = _v0; } catch (e) {}
 function setView(v) {
-  if (v === "stats") { if (F.tab !== "stats") OPS_TAB = F.tab; F.tab = "stats"; } else if (F.tab === "stats") F.tab = OPS_TAB || "flow";
+  var sub = function (x) { return x === "stats" || x === "rcr"; };
+  if (sub(v)) { if (!sub(F.tab)) OPS_TAB = F.tab; F.tab = v; } else if (sub(F.tab)) F.tab = OPS_TAB || "flow";
   try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
   renderTab(); window.scrollTo(0, 0);
+  if (v === "rcr" && el("rcG")) el("rcG").focus();
 }
 var PRI = ["Show Stopper", "Critical", "High", "Medium", "Low"], PRI_C = { s: "#BE123C", c: "#7C3AED", h: "#E11D48", m: "#D97706", l: "#64748B", "": "#C3CCD8" };
 var SIDE_C = { hd: "var(--hd)", engg: "var(--engg)", client: "var(--client)" }, SIDE_L = { hd: "Help Desk", engg: "Engineering", client: "With client", closed: "Closed" };
@@ -899,8 +917,9 @@ function renderBacklog(m) {
 /* ══════════ tabs ══════════ */
 function renderTab() {
   document.querySelectorAll("#tabs .tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === F.tab); });
-  var sv = F.tab === "stats"; document.body.classList.toggle("oi-sv", sv);
-  document.querySelectorAll(".oi-views [data-view]").forEach(function (b) { var on = (b.dataset.view === "stats") === sv; b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
+  var sv = F.tab === "stats", rc = F.tab === "rcr"; document.body.classList.toggle("oi-sv", sv); document.body.classList.toggle("oi-rc", rc);
+  el("rcGbox").classList.toggle("hidden", !rc); if (rc && el("rcG").value !== RCR.g) el("rcG").value = RCR.g;
+  document.querySelectorAll(".oi-views [data-view]").forEach(function (b) { var on = b.dataset.view === (sv ? "stats" : rc ? "rcr" : "ops"); b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
   var v = el("view");
   if (F.tab === "flow") v.innerHTML = tabFlow(M);
   else if (F.tab === "shifts") v.innerHTML = tabShifts(M);
@@ -2420,7 +2439,7 @@ function rcCluster(docs, thr, maxN) {
 /* RCR-PURE-END */
 
 var RCR_KEY = "hd-ops-rcr", RCR_MAIL = "hd-ops-rcr-mail", RC_FIXED = /move(?:d)? to prod|closed|done|resolved|deliver|complet|released/i;
-var RCR = { lrps: "fixed", flag: "", rev: "", q: "", lim: 100, svm: "", cl: -1 }, RV = null, RCA = {}, RC_LIST = [], RC_CL = [], RC_ALL = [], RCC = null;
+var RCR = { lrps: "fixed", flag: "", rev: "", q: "", lim: 100, svm: "", cl: -1, g: "" }, RV = null, RCA = {}, RC_LIST = [], RC_CL = [], RC_ALL = [], RCC = null;
 function rcRV() { if (RV) return RV; try { RV = JSON.parse(localStorage.getItem(RCR_KEY) || "{}") || {}; } catch (e) { RV = {}; } return RV; }
 function rcSaveRV() { try { localStorage.setItem(RCR_KEY, JSON.stringify(RV || {})); } catch (e) {} }
 function rcBook() { var d = { to: {}, cc: "", sign: "", by: "" }; try { return Object.assign(d, JSON.parse(localStorage.getItem(RCR_MAIL) || "{}")); } catch (e) { return d; } }
@@ -2498,7 +2517,8 @@ function rcVerdictBtns(key, rv) {
   var v = rv && rv.v; return '<span class="rc-vb"><button type="button" class="' + (v === "ok" ? "on ok" : "") + '" data-rcv="ok" data-k="' + esc(key) + '" title="I understand the cause and the resolution">Understood</button>' +
     '<button type="button" class="' + (v === "no" ? "on no" : "") + '" data-rcv="no" data-k="' + esc(key) + '" title="I cannot follow this: ask the SVM In Charge">Not clear</button></span>';
 }
-function tabRcr(m) {
+function tabRcr(m) { return '<div id="rcGres">' + rcGHtml() + '</div>' + tabRcrMain(m); }
+function tabRcrMain(m) {
   var rv = rcRV(), scopeAll = rcScope(m), lo = rcLrpsOpts(scopeAll), scope = scopeAll.filter(rcLrpsOk);
   RC_ALL = scope;
   /* clusters over everything in scope (not the filtered list), so the numbers stay put while filtering */
@@ -2525,13 +2545,13 @@ function tabRcr(m) {
   var fc = {}; scope.forEach(function (t) { an[t.key].f.forEach(function (x) { fc[x.id] = (fc[x.id] || 0) + 1; }); });
   var fk = Object.keys(fc).sort(function (a, b) { return RC_FLAGS[b].s - RC_FLAGS[a].s || fc[b] - fc[a]; }), mx = Math.max.apply(null, fk.map(function (k) { return fc[k]; }).concat([1]));
   var occBlank = scope.filter(function (t) { return !an[t.key].catOcc; }).length;
-  h += '<div class="grid2" style="margin-bottom:16px"><div class="card pad"><h2 class="sh">Where the text falls short <span>tickets with each finding · click to filter</span></h2>' +
+  h += '<div class="grid2 rc-two" style="margin-bottom:16px"><div class="card pad"><h2 class="sh">Where the text falls short <span>tickets with each finding · click to filter</span></h2>' +
     (fk.length ? fk.map(function (k) { var c = RC_FLAGS[k].s === 3 ? "var(--rose)" : RC_FLAGS[k].s === 2 ? "#F59E0B" : "#93A4B8";
       return '<div class="agerow rc-fr' + (RCR.flag === "f:" + k ? " on" : "") + '" data-rcset="f:' + k + '|" style="grid-template-columns:190px minmax(0,1fr) 60px" title="' + esc(RC_FLAGS[k].ask) + '"><span>' + esc(RC_FLAGS[k].l) + '</span><span class="bar" style="width:100%"><i style="width:' + Math.max(2, fc[k] / mx * 100) + '%;background:' + c + '"></i></span><b>' + num(fc[k]) + '</b></div>'; }).join("") : '<div class="empty">Nothing flagged.</div>') +
     '<p class="note" style="margin-top:10px">Red: the text cannot be understood. Amber: it can, with effort. Grey: a tip. The Reason for Occurrence <i>category</i> field is empty on <b>' + num(occBlank) + '</b> of ' + num(scope.length) + ' tickets.</p></div>';
   var sv = {}; scope.forEach(function (t) { var k = t.svm || "(none)"; (sv[k] = sv[k] || []).push(t); });
   var svk = Object.keys(sv).sort(function (a, b) { return sv[b].length - sv[a].length || a.localeCompare(b); });
-  h += '<div class="card"><div class="pad" style="padding-bottom:6px"><h2 class="sh">By SVM In Charge <span>the text of their tickets · Ask opens the mail</span></h2></div><div class="tw"><table><thead><tr><th>SVM In Charge</th><th class="num">Tickets</th><th class="num">Clear</th><th class="num">Needs work</th><th class="num">Waiting</th><th class="num">Updated</th><th></th></tr></thead><tbody>' +
+  h += '<div class="card"><div class="pad" style="padding-bottom:6px"><h2 class="sh">By SVM In Charge <span>the text of their tickets · Ask opens the mail</span></h2></div><div class="tw"><table class="rc-svm"><thead><tr><th>SVM In Charge</th><th class="num">Tickets</th><th class="num">Clear</th><th class="num">Needs work</th><th class="num">Waiting</th><th class="num">Updated</th><th></th></tr></thead><tbody>' +
     svk.map(function (k) { var l = sv[k], c = { ok: 0, no: 0, w: 0, u: 0, ask: 0 }; l.forEach(function (t) { var a = an[t.key], r = rv[t.key], e = rcEff(a, r), fo = rcFollow(a, r); if (e === "ok") c.ok++; else c.no++; if (fo && fo.s === "wait") c.w++; if (fo && fo.s === "upd") c.u++; if (rcNeeds(a, r)) c.ask++; });
       return '<tr class="click' + (RCR.svm === k ? " rc-sel" : "") + '" data-rcsvm="' + esc(k) + '"><td style="font-weight:600">' + esc(k) + '</td><td class="num">' + num(l.length) + '</td><td class="num" style="color:var(--em)">' + num(c.ok) + ' <span class="z">(' + pct(c.ok, l.length) + '%)</span></td><td class="num" style="' + (c.no ? "color:var(--rose);font-weight:700" : "") + '">' + num(c.no) + '</td><td class="num">' + num(c.w) + '</td><td class="num">' + num(c.u) + '</td>' +
         '<td style="text-align:right;white-space:nowrap"><button type="button" class="btn' + (c.ask && k !== "(none)" ? " pri2" : "") + '" data-rcask="' + esc(k) + '"' + (c.ask && k !== "(none)" ? "" : " disabled") + '>Ask (' + c.ask + ')</button> <button type="button" class="btn" data-rcxl="' + esc(k) + '">Excel</button></td></tr>'; }).join("") + '</tbody></table></div></div></div>';
@@ -2546,7 +2566,7 @@ function tabRcr(m) {
   var sel = function (id, opts, cur) { return '<select id="' + id + '" class="dinput">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>'; };
   h += '<div class="card pad rc-ctl"><label>LRPS status ' + sel("rcLrps", lopt, RCR.lrps) + '</label><label>Text check ' + sel("rcFlag", [["", "All"], ["needs", "Needs attention"], ["bad", "Unclear"], ["weak", "Weak"], ["ok", "Clear"]].concat(fk.map(function (k) { return ["f:" + k, RC_FLAGS[k].l + " (" + fc[k] + ")"]; })), RCR.flag) + '</label>' +
     '<label>My review ' + sel("rcRev", [["", "All"], ["none", "Not reviewed"], ["ok", "Understood"], ["no", "Not clear"], ["ask", "Ready to ask"], ["wait", "Asked, waiting"], ["upd", "Updated, re-review"]], RCR.rev) + '</label>' +
-    '<input id="rcQ" class="dinput" type="search" placeholder="Search ticket, summary, cause, resolution" value="' + esc(RCR.q) + '" style="min-width:260px">' +
+    '<input id="rcQ" class="dinput" type="search" placeholder="Filter the list below: ticket, summary, cause…" value="' + esc(RCR.q) + '" style="min-width:260px">' +
     (RCR.svm ? '<span class="chip n">SVM: ' + esc(RCR.svm) + ' <button type="button" data-rcclr="svm" aria-label="Remove">×</button></span>' : "") + (RCR.cl >= 0 ? '<span class="chip n">Recurring cause <button type="button" data-rcclr="cl" aria-label="Remove">×</button></span>' : "") +
     '<span style="flex:1"></span><span class="note"><b>' + num(list.length) + '</b> of ' + num(scope.length) + '</span><button type="button" class="btn" id="rcXlsx">Download Excel</button></div>';
   /* the table */
@@ -2559,6 +2579,57 @@ function tabRcr(m) {
     (list.length > RCR.lim ? '<div class="risk-f"><span>Showing ' + RCR.lim + ' of ' + num(list.length) + '</span><button type="button" class="btn" id="rcMore">Show 100 more</button></div>' : "") + '</div>';
   return h;
 }
+
+
+/* ── global search: paste ticket numbers; the root cause, resolution and checks come up, whatever the period and filters ──
+   Understands SWIPHX-15653, LRPS-24727, a bare number (client key, LRPS number or ME ID), several at once, or a Jira link. */
+var _rcIx = null, _rcGT = null;
+function rcIdx() {
+  if (_rcIx && _rcIx.n === ALL.length) return _rcIx;
+  var k = {}, l = {}, me = {};
+  ALL.forEach(function (t) { k[t.key.toUpperCase()] = t; rcLinks(t).forEach(function (x) { (l[x.k] = l[x.k] || []).push(t); });
+    var m = rcRaw(t, "client reference").replace(/\s+/g, "").toUpperCase(); if (m) (me[m] = me[m] || []).push(t); });
+  return (_rcIx = { n: ALL.length, k: k, l: l, me: me });
+}
+function rcFind(q) {
+  var ix = rcIdx(), keys = {}, nums = {}, res = [], seen = {}, miss = [];
+  var rest = String(q || "").replace(/\b[A-Za-z][A-Za-z0-9]*-\d+\b/g, function (m) { keys[m.toUpperCase()] = 1; return " "; });
+  (rest.match(/\b\d{3,}\b/g) || []).forEach(function (n) { nums[n] = 1; });
+  function add(t, why) { if (seen[t.key]) { seen[t.key].why.push(why); return; } seen[t.key] = { t: t, why: [why] }; res.push(seen[t.key]); }
+  Object.keys(keys).forEach(function (k) {
+    if (/^LRPS-/.test(k)) { var l = ix.l[k]; if (l && l.length) l.forEach(function (t) { add(t, k); }); else miss.push(k + " is not linked from any loaded client ticket"); }
+    else if (ix.k[k]) add(ix.k[k], k); else miss.push(k + " is not in the loaded data");
+  });
+  Object.keys(nums).forEach(function (n) {
+    var f = 0; ALL.forEach(function (t) { if (t.key.slice(-(n.length + 1)) === "-" + n) { add(t, n); f++; } });
+    (ix.l["LRPS-" + n] || []).forEach(function (t) { add(t, "LRPS-" + n); f++; }); (ix.me[n] || []).forEach(function (t) { add(t, "ME ID " + n); f++; });
+    if (!f) miss.push(n + " matches no ticket");
+  });
+  return { res: res, miss: miss, any: Object.keys(keys).length + Object.keys(nums).length > 0 };
+}
+function rcChipsAll(a) { return a.f.map(function (x) { return '<span class="chip ' + (x.s === 3 ? "r" : x.s === 2 ? "a" : "n") + '" title="' + esc(x.ask) + '">' + esc(x.l) + '</span>'; }).join("") || '<span class="chip g">Clear</span>'; }
+function rcResultCard(t, why) {
+  var rv = rcRV(), a = rcAnalyse(t), r = rv[t.key], asks = a.f.filter(function (x) { return x.s >= 2; });
+  return '<div class="card rc-res"><div class="rc-rh"><a class="jk" href="' + JIRA + encodeURIComponent(t.key) + '" target="_blank" rel="noreferrer">' + esc(t.key) + '</a><span class="rc-rn">' + esc(rcClip(rcSum(t), 130)) + '</span><span style="flex:1"></span>' +
+    '<button type="button" class="btn" data-rcfull="' + esc(t.key) + '">Open full view</button></div>' +
+    '<div class="note rc-rm">' + esc(t.project) + ' · <span class="side-pill sp-' + (t.side || "hd") + '">' + esc(t.status) + '</span> · created ' + esc(fd(t.created)) + ' · SVM In Charge <b>' + esc(t.svm || "—") + '</b> · ' + rcLinkHtml(t).replace(/<br>/g, " &nbsp;·&nbsp; ") +
+    ' <span class="z">· matched ' + esc(why.join(", ")) + '</span></div>' +
+    '<div class="rc-rg"><div><div class="rc-lbl">Root cause (Reason for Occurrence - Text)</div><div class="rc-box">' + (a.cause ? esc(a.cause).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div></div>' +
+    '<div><div class="rc-lbl">Resolution (Resolution Details)</div><div class="rc-box">' + (a.res ? esc(a.res).replace(/\n/g, "<br>") : '<span class="z">empty</span>') + '</div></div></div>' +
+    '<div class="rc-rf"><span class="note">Root cause <b>' + esc(t.rootCause || "—") + '</b> · Type of fix <b>' + esc(t.fix || "—") + '</b></span>' + rcChipsAll(a) + '<span style="flex:1"></span>' + (rcFollow(a, r) ? rcFollowHtml(a, r) : "") + rcVerdictBtns(t.key, r) + '</div>' +
+    (asks.length ? '<ul class="rc-ra">' + asks.map(function (x) { return '<li>' + esc(x.ask) + '</li>'; }).join("") + '</ul>' : "") + '</div>';
+}
+function rcGHtml() {
+  var q = RCR.g || ""; if (!q.trim()) return '<div class="rc-hint">Paste a ticket number in the search box above to see its root cause, resolution and text checks, whatever the period and filters. A client ticket (<b>SWIPHX-15653</b>), an LRPS ticket (<b>LRPS-24727</b>), just the number (<b>15653</b>), several at once, or a Jira link all work.</div>';
+  var f = rcFind(q); if (!f.any) return '<div class="rc-hint">No ticket number found in what was typed. Try <b>SWIPHX-15653</b>, <b>LRPS-24727</b> or <b>15653</b>.</div>';
+  var linked = f.res.filter(function (x) { return rcLinks(x.t).length; }), unl = f.res.filter(function (x) { return !rcLinks(x.t).length; });
+  var h = '<div class="rc-gh"><b>' + linked.length + '</b> ticket' + (linked.length === 1 ? "" : "s") + ' found' + (f.res.length > 25 ? " (showing 25)" : "") + '</div>';
+  h += linked.slice(0, 25).map(function (x) { return rcResultCard(x.t, x.why); }).join("");
+  unl.slice(0, 10).forEach(function (x) { h += '<div class="rc-hint"><b>' + esc(x.t.key) + '</b> (' + esc(x.t.project) + ', ' + esc(x.t.status) + ') has no linked LRPS ticket, so it is not part of this review.</div>'; });
+  f.miss.forEach(function (m) { h += '<div class="rc-hint">' + esc(m) + '.</div>'; });
+  return h;
+}
+function rcGUpdate() { var r = el("rcGres"); if (r) r.innerHTML = rcGHtml(); }
 
 /* ── one ticket, full size, with Previous / Next so a whole list can be reviewed in a row ── */
 function rcCard(key) {
@@ -2679,6 +2750,8 @@ function rcExcel(list, name) {
 /* ── wiring (own listeners: nothing here uses the attributes of the other tabs) ── */
 document.addEventListener("click", function (e) {
   var t = e.target, b; if (!t.closest) return;
+  if (t.id === "rcGx") { RCR.g = ""; var gi = el("rcG"); if (gi) { gi.value = ""; gi.focus(); } rcGUpdate(); return; }
+  if ((b = t.closest("[data-rcfull]"))) { rcCard(b.dataset.rcfull); return; }
   if ((b = t.closest("[data-rcv]"))) { e.stopPropagation(); rcSetVerdict(b.dataset.k, b.dataset.rcv); if (el("rcov")) rcCard(b.dataset.k); rcRedraw(); return; }
   if ((b = t.closest("[data-rcset]"))) { var p = b.dataset.rcset.split("|"); var same = RCR.flag === p[0] && RCR.rev === p[1]; RCR.flag = same ? "" : p[0]; RCR.rev = same ? "" : p[1]; RCR.lim = 100; rcRedraw(); return; }
   if ((b = t.closest("[data-rcask]"))) { e.stopPropagation(); rcOpenMail(b.dataset.rcask); return; }
@@ -2698,7 +2771,9 @@ document.addEventListener("change", function (e) {
   if (t.id === "rcLrps") { RCR.lrps = t.value; RCR.lim = 100; rcRedraw(); } else if (t.id === "rcFlag") { RCR.flag = t.value; RCR.lim = 100; rcRedraw(); } else if (t.id === "rcRev") { RCR.rev = t.value; RCR.lim = 100; rcRedraw(); }
   else if (t.id === "rcNote") { var rv = rcRV(), k = t.dataset.k, r = rv[k] = rv[k] || {}; r.note = t.value.trim(); if (!r.v && !r.note && !r.ask) delete rv[k]; rcSaveRV(); rcRedraw(); }
 });
-document.addEventListener("input", function (e) { var t = e.target; if (t && t.id === "rcQ") { RCR.q = t.value; RCR.lim = 100; clearTimeout(rcRedraw._t); rcRedraw._t = setTimeout(function () { rcRedraw(true); }, 220); } });
+document.addEventListener("input", function (e) { var t = e.target; if (t && t.id === "rcG") { RCR.g = t.value; clearTimeout(_rcGT); _rcGT = setTimeout(rcGUpdate, 180); return; }
+  if (t && t.id === "rcQ") { RCR.q = t.value; RCR.lim = 100; clearTimeout(rcRedraw._t); rcRedraw._t = setTimeout(function () { rcRedraw(true); }, 220); } });
+document.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target && e.target.id === "rcG") { clearTimeout(_rcGT); RCR.g = e.target.value; rcGUpdate(); } });
 document.addEventListener("keydown", function (e) {
   var o = el("rcov"); if (!o) return;
   if (e.key === "Escape" && !el("rcmail")) { e.stopImmediatePropagation(); rcCloseCard(); return; }
